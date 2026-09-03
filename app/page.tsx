@@ -326,14 +326,18 @@ export default function Home() {
             onBook={() => notify('3 betalinger er sendt til bogføring')}
           />
         )}
-        {view === 'invoices' && <Invoices onGenerated={() => notify('Fakturaen er genereret')} />}
+        {view === 'invoices' && (
+          <Invoices onGenerated={() => notify('Fakturaen er genereret')} />
+        )}
         {view === 'refunds' && (
           <Refunds
             onBook={() => notify('Tilbagebetalingen er sendt til bogføring')}
           />
         )}
         {view === 'payouts' && (
-          <Payouts onBook={() => notify('Udbetalingen er sendt til bogføring')} />
+          <Payouts
+            onBook={() => notify('Udbetalingen er sendt til bogføring')}
+          />
         )}
         {view === 'settings' && (
           <Settings
@@ -447,10 +451,152 @@ function OrderRow({ order }: { order: (typeof orders)[number] }) {
 }
 
 function Invoices({ onGenerated }: { onGenerated: () => void }) {
-  const [statuses, setStatuses] = useState<Record<string, string>>({ '#3841': 'Genereret', '#3840': 'Genereret', '#3839': 'Afventer', '#3838': 'Fejlet', '#3837': 'Genereret' });
-  const generate = (id: string) => { setStatuses(current => ({ ...current, [id]: 'Genererer…' })); window.setTimeout(() => { setStatuses(current => ({ ...current, [id]: 'Genereret' })); onGenerated(); }, 900); };
-  const generateAll = () => orders.filter(order => statuses[order.id] !== 'Genereret').forEach((order, index) => window.setTimeout(() => generate(order.id), index * 160));
-  return <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9"><div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="eyebrow">Ordrer · Dokumenter</p><h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">Fakturaer</h1><p className="mt-2 text-sm text-muted-foreground">Generér og administrér en faktura for hver webshopordre.</p></div><Button className="h-10 rounded-xl px-4" onClick={generateAll}><FileText />Generér alle manglende</Button></div><div className="mb-6 grid gap-3 sm:grid-cols-3"><Stat label="Fakturaer i september" value="21 fakturaer" note="18 er genereret" tone="lime" /><Stat label="Afventer generering" value="2 fakturaer" note="2.644,00 kr. i alt" /><Stat label="Kræver handling" value="1 faktura" note="Ordre #3838" tone="warn" /></div><section className="overflow-hidden rounded-2xl border bg-white"><div className="border-b p-4"><div className="relative max-w-[320px]"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="h-10 bg-muted/50 pl-9" placeholder="Søg ordrenummer" /></div></div><Table><TableHeader><TableRow className="bg-muted/45"><TableHead className="pl-5">Ordrenummer</TableHead><TableHead>Ordredato</TableHead><TableHead className="text-right">Beløb DKK</TableHead><TableHead>Fakturastatus</TableHead><TableHead><span className="sr-only">Handling</span></TableHead></TableRow></TableHeader><TableBody>{orders.map(order => { const status = statuses[order.id]; return <TableRow key={order.id} className={status === 'Fejlet' ? 'bg-red-50/35' : ''}><TableCell className="pl-5 font-semibold text-[#8a6636]">{order.id}</TableCell><TableCell className="text-muted-foreground">{order.date}</TableCell><TableCell className="text-right font-medium tabular-nums">{order.amount}</TableCell><TableCell><Badge variant={status === 'Fejlet' ? 'destructive' : 'secondary'} className={status === 'Genereret' ? 'badge-booked' : 'badge-pending'}>{status === 'Genereret' && <Check />}{status}</Badge></TableCell><TableCell className="pr-5 text-right">{status === 'Genereret' ? <Button variant="ghost" size="sm"><ArrowUpRight />Åbn</Button> : <Button variant="outline" size="sm" onClick={() => generate(order.id)} disabled={status === 'Genererer…'}><FileText />{status === 'Fejlet' ? 'Generér igen' : 'Generér'}</Button>}</TableCell></TableRow>; })}</TableBody></Table></section></div>;
+  const [selectedInvoice, setSelectedInvoice] = useState<(typeof orders)[number] | null>(null);
+  const [statuses, setStatuses] = useState<Record<string, string>>({
+    '#3841': 'Genereret',
+    '#3840': 'Genereret',
+    '#3839': 'Afventer',
+    '#3838': 'Fejlet',
+    '#3837': 'Genereret',
+  });
+  const generate = (id: string) => {
+    setStatuses((current) => ({ ...current, [id]: 'Genererer…' }));
+    window.setTimeout(() => {
+      setStatuses((current) => ({ ...current, [id]: 'Genereret' }));
+      onGenerated();
+    }, 900);
+  };
+  const generateAll = () =>
+    orders
+      .filter((order) => statuses[order.id] !== 'Genereret')
+      .forEach((order, index) =>
+        window.setTimeout(() => generate(order.id), index * 160),
+      );
+  return (
+    <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
+      <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+        <div>
+          <p className="eyebrow">Ordrer · Dokumenter</p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">
+            Fakturaer
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Generér og administrér en faktura for hver webshopordre.
+          </p>
+        </div>
+        <Button className="h-10 rounded-xl px-4" onClick={generateAll}>
+          <FileText />
+          Generér alle manglende
+        </Button>
+      </div>
+      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+        <Stat
+          label="Fakturaer i september"
+          value="21 fakturaer"
+          note="18 er genereret"
+          tone="lime"
+        />
+        <Stat
+          label="Afventer generering"
+          value="2 fakturaer"
+          note="2.644,00 kr. i alt"
+        />
+        <Stat
+          label="Kræver handling"
+          value="1 faktura"
+          note="Ordre #3838"
+          tone="warn"
+        />
+      </div>
+      <section className="overflow-hidden rounded-2xl border bg-white">
+        <div className="border-b p-4">
+          <div className="relative max-w-[320px]">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-10 bg-muted/50 pl-9"
+              placeholder="Søg ordrenummer"
+            />
+          </div>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/45">
+              <TableHead className="pl-5">Ordrenummer</TableHead>
+              <TableHead>Ordredato</TableHead>
+              <TableHead className="text-right">Beløb DKK</TableHead>
+              <TableHead>Fakturastatus</TableHead>
+              <TableHead>
+                <span className="sr-only">Handling</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {orders.map((order) => {
+              const status = statuses[order.id];
+              return (
+                <TableRow
+                  key={order.id}
+                  className={status === 'Fejlet' ? 'bg-red-50/35' : ''}
+                >
+                  <TableCell className="pl-5 font-semibold text-[#8a6636]">
+                    {order.id}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {order.date}
+                  </TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">
+                    {order.amount}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        status === 'Fejlet' ? 'destructive' : 'secondary'
+                      }
+                      className={
+                        status === 'Genereret'
+                          ? 'badge-booked'
+                          : 'badge-pending'
+                      }
+                    >
+                      {status === 'Genereret' && <Check />}
+                      {status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="pr-5 text-right">
+                    {status === 'Genereret' ? (
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedInvoice(order)}>
+                        <ArrowUpRight />
+                        Åbn
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => generate(order.id)}
+                        disabled={status === 'Genererer…'}
+                      >
+                        <FileText />
+                        {status === 'Fejlet' ? 'Generér igen' : 'Generér'}
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </section>
+      {selectedInvoice && <InvoicePreview order={selectedInvoice} onClose={() => setSelectedInvoice(null)} />}
+    </div>
+  );
+}
+
+function InvoicePreview({ order, onClose }: { order: (typeof orders)[number]; onClose: () => void }) {
+  const total = Number(order.amount.replaceAll('.', '').replace(',', '.'));
+  const beforeVat = total / 1.25;
+  const vat = total - beforeVat;
+  const money = (value: number) => value.toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return <section className="mt-6 rounded-2xl border bg-[#eceae6] p-4 md:p-8"><div className="mb-4 flex items-center justify-between"><div><p className="eyebrow">Fakturaforhåndsvisning</p><p className="mt-1 text-sm text-muted-foreground">Skabelon baseret på det vedhæftede fakturaeksempel</p></div><Button variant="outline" onClick={onClose}>Luk</Button></div><article className="mx-auto min-h-[820px] max-w-[780px] bg-white px-10 py-12 shadow-[0_18px_50px_rgba(35,35,35,.12)] md:px-16"><div className="flex items-start justify-between"><address className="not-italic text-sm leading-6"><strong className="text-base">Emma Sofie Riis</strong><br />Tvedvej 155<br />6000 Kolding<br />Danmark</address><img src="/sablen-logo.webp" alt="Sablen" className="w-40" /></div><div className="mt-16 flex items-end justify-between"><div><h2 className="text-2xl">Faktura</h2><p className="mt-1 text-sm">Ordrenr. <strong>{order.id}</strong></p></div><div className="text-right text-sm leading-6"><p>Fakturanr. <strong>{order.id}</strong></p><p>Fakturadato: <strong>03/09/2026</strong></p></div></div><table className="mt-5 w-full text-sm"><thead><tr className="border-y-2 border-[#232b38]"><th className="py-2 text-left font-normal">Beskrivelse</th><th className="py-2 text-right font-normal">Antal</th><th className="py-2 text-right font-normal">Stk. pris</th><th className="py-2 text-right font-normal">Pris</th></tr></thead><tbody><tr><td className="py-3">Shopify-ordre {order.id}</td><td className="py-3 text-right">1</td><td className="py-3 text-right">{money(total)}</td><td className="py-3 text-right">{money(total)}</td></tr><tr className="border-b"><td className="pb-3">Levering</td><td className="pb-3 text-right">1</td><td className="pb-3 text-right">0,00</td><td className="pb-3 text-right">0,00</td></tr></tbody></table><div className="ml-auto mt-5 w-full max-w-[380px] text-sm"><div className="flex justify-between py-1"><span>Total ekskl. moms</span><span>{money(beforeVat)}</span></div><div className="flex justify-between py-1"><span>Moms</span><span>{money(vat)}</span></div><div className="mt-1 flex justify-between border-b-4 border-[#555f70] py-2 text-base font-bold"><span>Total inkl. moms DKK</span><span>{money(total)}</span></div></div><footer className="mt-[340px] border-t pt-4 text-center text-[11px] leading-5 text-slate-500"><p>LA Trading ApS / Egetoften 13 / 7500 Holstebro / Danmark</p><p>CVR-nr. 45036871 / Tlf. +45 2621 9318 / Web https://sablen.dk / E-mail kontakt@sablen.dk</p></footer></article></section>;
 }
 
 const payments = [
@@ -517,11 +663,19 @@ function Payments({ onBook }: { onBook: () => void }) {
               <TableHead>Betalingsudbyder</TableHead>
               <TableHead className="text-right">Beløb</TableHead>
               <TableHead>Bogføringsstatus</TableHead>
-              <TableHead><span className="sr-only">Handling</span></TableHead>
+              <TableHead>
+                <span className="sr-only">Handling</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {payments.map((payment) => <BookingTransactionRow key={payment.order} transaction={payment} onBook={onBook} />)}
+            {payments.map((payment) => (
+              <BookingTransactionRow
+                key={payment.order}
+                transaction={payment}
+                onBook={onBook}
+              />
+            ))}
           </TableBody>
         </Table>
       </section>
@@ -607,11 +761,20 @@ function Refunds({ onBook }: { onBook: () => void }) {
               <TableHead>Betalingsudbyder</TableHead>
               <TableHead className="text-right">Beløb</TableHead>
               <TableHead>Bogføringsstatus</TableHead>
-              <TableHead><span className="sr-only">Handling</span></TableHead>
+              <TableHead>
+                <span className="sr-only">Handling</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {refunds.map((refund) => <BookingTransactionRow key={refund.order} transaction={refund} onBook={onBook} accent />)}
+            {refunds.map((refund) => (
+              <BookingTransactionRow
+                key={refund.order}
+                transaction={refund}
+                onBook={onBook}
+                accent
+              />
+            ))}
           </TableBody>
         </Table>
       </section>
@@ -619,27 +782,222 @@ function Refunds({ onBook }: { onBook: () => void }) {
   );
 }
 
-function BookingTransactionRow({ transaction, onBook, accent = false }: { transaction: { order: string; captured: string; provider: string; amount: string; status: string }; onBook: () => void; accent?: boolean }) {
+function BookingTransactionRow({
+  transaction,
+  onBook,
+  accent = false,
+}: {
+  transaction: {
+    order: string;
+    captured: string;
+    provider: string;
+    amount: string;
+    status: string;
+  };
+  onBook: () => void;
+  accent?: boolean;
+}) {
   const [status, setStatus] = useState(transaction.status);
-  const book = () => { setStatus('Bogfører…'); window.setTimeout(() => { setStatus('Bogført'); onBook(); }, 900); };
-  return <TableRow className={status === 'Fejlet' ? 'bg-red-50/35' : ''}><TableCell className={`pl-5 font-semibold ${accent ? 'text-[#a84f40]' : 'text-[#8a6636]'}`}>{transaction.order}</TableCell><TableCell className="text-muted-foreground">{transaction.captured}</TableCell><TableCell>{transaction.provider}</TableCell><TableCell className="text-right font-medium tabular-nums">{transaction.amount}</TableCell><TableCell><Badge variant={status === 'Fejlet' ? 'destructive' : 'secondary'} className={status === 'Bogført' ? 'badge-booked' : 'badge-pending'}>{status === 'Bogført' && <BookOpenCheck />}{status}</Badge></TableCell><TableCell className="pr-5 text-right">{status !== 'Bogført' && <Button size="sm" variant="outline" className={status === 'Fejlet' ? 'border-red-200 text-red-700' : ''} onClick={book} disabled={status === 'Bogfører…'}><RefreshCw />{status === 'Fejlet' ? 'Bogfør igen' : 'Bogfør'}</Button>}</TableCell></TableRow>;
+  const book = () => {
+    setStatus('Bogfører…');
+    window.setTimeout(() => {
+      setStatus('Bogført');
+      onBook();
+    }, 900);
+  };
+  return (
+    <TableRow className={status === 'Fejlet' ? 'bg-red-50/35' : ''}>
+      <TableCell
+        className={`pl-5 font-semibold ${accent ? 'text-[#a84f40]' : 'text-[#8a6636]'}`}
+      >
+        {transaction.order}
+      </TableCell>
+      <TableCell className="text-muted-foreground">
+        {transaction.captured}
+      </TableCell>
+      <TableCell>{transaction.provider}</TableCell>
+      <TableCell className="text-right font-medium tabular-nums">
+        {transaction.amount}
+      </TableCell>
+      <TableCell>
+        <Badge
+          variant={status === 'Fejlet' ? 'destructive' : 'secondary'}
+          className={status === 'Bogført' ? 'badge-booked' : 'badge-pending'}
+        >
+          {status === 'Bogført' && <BookOpenCheck />}
+          {status}
+        </Badge>
+      </TableCell>
+      <TableCell className="pr-5 text-right">
+        {status !== 'Bogført' && (
+          <Button
+            size="sm"
+            variant="outline"
+            className={status === 'Fejlet' ? 'border-red-200 text-red-700' : ''}
+            onClick={book}
+            disabled={status === 'Bogfører…'}
+          >
+            <RefreshCw />
+            {status === 'Fejlet' ? 'Bogfør igen' : 'Bogfør'}
+          </Button>
+        )}
+      </TableCell>
+    </TableRow>
+  );
 }
 
 const payouts = [
-  { acquirer: 'Shopify Payments', id: 'DK-PO-29831', date: '3. sep. 2026, 06.15', amount: '14.709,86', status: 'Bogført' },
-  { acquirer: 'Flatpay', id: 'FP-904218', date: '2. sep. 2026, 23.58', amount: '5.372,71', status: 'Afventer' },
-  { acquirer: 'ViaBill', id: 'VB-118402', date: '2. sep. 2026, 18.04', amount: '3.093,73', status: 'Fejlet' },
-  { acquirer: 'Shopify Payments', id: 'DK-PO-29818', date: '1. sep. 2026, 06.12', amount: '8.461,20', status: 'Bogført' },
+  {
+    acquirer: 'Shopify Payments',
+    id: 'DK-PO-29831',
+    date: '3. sep. 2026, 06.15',
+    amount: '14.709,86',
+    status: 'Bogført',
+  },
+  {
+    acquirer: 'Flatpay',
+    id: 'FP-904218',
+    date: '2. sep. 2026, 23.58',
+    amount: '5.372,71',
+    status: 'Afventer',
+  },
+  {
+    acquirer: 'ViaBill',
+    id: 'VB-118402',
+    date: '2. sep. 2026, 18.04',
+    amount: '3.093,73',
+    status: 'Fejlet',
+  },
+  {
+    acquirer: 'Shopify Payments',
+    id: 'DK-PO-29818',
+    date: '1. sep. 2026, 06.12',
+    amount: '8.461,20',
+    status: 'Bogført',
+  },
 ];
 
 function Payouts({ onBook }: { onBook: () => void }) {
-  return <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9"><div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="eyebrow">Indløsere · Dinero</p><h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">Udbetalinger</h1><p className="mt-2 text-sm text-muted-foreground">Følg udbetalinger fra betalingsudbyderne og deres bogføringsstatus.</p></div><Button className="h-10 rounded-xl px-4"><RefreshCw />Synkronisér nu</Button></div><div className="mb-6 grid gap-3 sm:grid-cols-3"><Stat label="Udbetalt i september" value="31.637,50 kr." note="4 udbetalinger" tone="lime" /><Stat label="Afventer bogføring" value="5.372,71 kr." note="1 udbetaling" /><Stat label="Kræver handling" value="3.093,73 kr." note="ViaBill · VB-118402" tone="warn" /></div><section className="overflow-hidden rounded-2xl border bg-white"><div className="border-b p-4"><div className="relative max-w-[320px]"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="h-10 bg-muted/50 pl-9" placeholder="Søg udbetalings-id eller indløser" /></div></div><Table><TableHeader><TableRow className="bg-muted/45"><TableHead className="pl-5">Indløser</TableHead><TableHead>Udbetalings-id</TableHead><TableHead>Transaktionsdato</TableHead><TableHead className="text-right">Beløb</TableHead><TableHead>Bogføringsstatus</TableHead><TableHead><span className="sr-only">Handling</span></TableHead></TableRow></TableHeader><TableBody>{payouts.map(payout => <PayoutRow key={payout.id} payout={payout} onBook={onBook} />)}</TableBody></Table></section></div>;
+  return (
+    <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
+      <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+        <div>
+          <p className="eyebrow">Indløsere · Dinero</p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">
+            Udbetalinger
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Følg udbetalinger fra betalingsudbyderne og deres bogføringsstatus.
+          </p>
+        </div>
+        <Button className="h-10 rounded-xl px-4">
+          <RefreshCw />
+          Synkronisér nu
+        </Button>
+      </div>
+      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+        <Stat
+          label="Udbetalt i september"
+          value="31.637,50 kr."
+          note="4 udbetalinger"
+          tone="lime"
+        />
+        <Stat
+          label="Afventer bogføring"
+          value="5.372,71 kr."
+          note="1 udbetaling"
+        />
+        <Stat
+          label="Kræver handling"
+          value="3.093,73 kr."
+          note="ViaBill · VB-118402"
+          tone="warn"
+        />
+      </div>
+      <section className="overflow-hidden rounded-2xl border bg-white">
+        <div className="border-b p-4">
+          <div className="relative max-w-[320px]">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-10 bg-muted/50 pl-9"
+              placeholder="Søg udbetalings-id eller indløser"
+            />
+          </div>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/45">
+              <TableHead className="pl-5">Indløser</TableHead>
+              <TableHead>Udbetalings-id</TableHead>
+              <TableHead>Transaktionsdato</TableHead>
+              <TableHead className="text-right">Beløb</TableHead>
+              <TableHead>Bogføringsstatus</TableHead>
+              <TableHead>
+                <span className="sr-only">Handling</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {payouts.map((payout) => (
+              <PayoutRow key={payout.id} payout={payout} onBook={onBook} />
+            ))}
+          </TableBody>
+        </Table>
+      </section>
+    </div>
+  );
 }
 
-function PayoutRow({ payout, onBook }: { payout: (typeof payouts)[number]; onBook: () => void }) {
+function PayoutRow({
+  payout,
+  onBook,
+}: {
+  payout: (typeof payouts)[number];
+  onBook: () => void;
+}) {
   const [status, setStatus] = useState(payout.status);
-  const retry = () => { setStatus('Bogfører…'); window.setTimeout(() => { setStatus('Bogført'); onBook(); }, 900); };
-  return <TableRow className={status === 'Fejlet' ? 'bg-red-50/35' : ''}><TableCell className="pl-5 font-medium">{payout.acquirer}</TableCell><TableCell className="font-semibold text-[#8a6636]">{payout.id}</TableCell><TableCell className="text-muted-foreground">{payout.date}</TableCell><TableCell className="text-right font-medium tabular-nums">{payout.amount}</TableCell><TableCell><Badge variant={status === 'Fejlet' ? 'destructive' : 'secondary'} className={status === 'Bogført' ? 'badge-booked' : 'badge-pending'}>{status === 'Bogført' && <BookOpenCheck />}{status}</Badge></TableCell><TableCell className="pr-5 text-right">{status === 'Fejlet' && <Button size="sm" variant="outline" className="border-red-200 text-red-700" onClick={retry} disabled={status === 'Bogfører…'}><RefreshCw />Bogfør igen</Button>}</TableCell></TableRow>;
+  const retry = () => {
+    setStatus('Bogfører…');
+    window.setTimeout(() => {
+      setStatus('Bogført');
+      onBook();
+    }, 900);
+  };
+  return (
+    <TableRow className={status === 'Fejlet' ? 'bg-red-50/35' : ''}>
+      <TableCell className="pl-5 font-medium">{payout.acquirer}</TableCell>
+      <TableCell className="font-semibold text-[#8a6636]">
+        {payout.id}
+      </TableCell>
+      <TableCell className="text-muted-foreground">{payout.date}</TableCell>
+      <TableCell className="text-right font-medium tabular-nums">
+        {payout.amount}
+      </TableCell>
+      <TableCell>
+        <Badge
+          variant={status === 'Fejlet' ? 'destructive' : 'secondary'}
+          className={status === 'Bogført' ? 'badge-booked' : 'badge-pending'}
+        >
+          {status === 'Bogført' && <BookOpenCheck />}
+          {status}
+        </Badge>
+      </TableCell>
+      <TableCell className="pr-5 text-right">
+        {status === 'Fejlet' && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-red-200 text-red-700"
+            onClick={retry}
+            disabled={status === 'Bogfører…'}
+          >
+            <RefreshCw />
+            Bogfør igen
+          </Button>
+        )}
+      </TableCell>
+    </TableRow>
+  );
 }
 
 type Accounts = {
@@ -675,9 +1033,26 @@ function Settings({
   >([]);
   const [loadingChart, setLoadingChart] = useState(false);
   const [chartMessage, setChartMessage] = useState('');
-  const [automation, setAutomation] = useState({ attachments: true, sales: true, payments: true, refunds: true, payouts: true });
-  useEffect(() => { const saved = localStorage.getItem('sablen-integrationshub-automation'); if (saved) setAutomation(current => ({ ...current, ...JSON.parse(saved) })); }, []);
-  const toggleAutomation = (key: keyof typeof automation, value: boolean) => { const next = { ...automation, [key]: value }; setAutomation(next); localStorage.setItem('sablen-integrationshub-automation', JSON.stringify(next)); };
+  const [automation, setAutomation] = useState({
+    attachments: true,
+    sales: true,
+    payments: true,
+    refunds: true,
+    payouts: true,
+  });
+  useEffect(() => {
+    const saved = localStorage.getItem('sablen-integrationshub-automation');
+    if (saved)
+      setAutomation((current) => ({ ...current, ...JSON.parse(saved) }));
+  }, []);
+  const toggleAutomation = (key: keyof typeof automation, value: boolean) => {
+    const next = { ...automation, [key]: value };
+    setAutomation(next);
+    localStorage.setItem(
+      'sablen-integrationshub-automation',
+      JSON.stringify(next),
+    );
+  };
   const integrations = [
     {
       name: 'Shopify',
@@ -805,8 +1180,71 @@ function Settings({
       </div>
       <h2 className="mb-3 text-sm font-semibold">Automatik og bilag</h2>
       <section className="mb-8 overflow-hidden rounded-2xl border bg-white">
-        <div className="flex items-center justify-between border-b p-5"><div><p className="text-sm font-semibold">Upload bilag til regnskabsprogram</p><p className="mt-1 text-xs text-muted-foreground">Vedhæft automatisk faktura eller dokumentation til posteringen i Dinero.</p></div><Switch checked={automation.attachments} onCheckedChange={(value) => toggleAutomation('attachments', value)} aria-label="Upload bilag til regnskabsprogram" /></div>
-        <div className="p-5"><p className="mb-4 text-sm font-semibold">Automatiske moduler</p><div className="grid gap-3 sm:grid-cols-2">{[{ key: 'sales', label: 'Salg', description: 'Bogfør realiserede ordrer' }, { key: 'payments', label: 'Betalinger', description: 'Bogfør captured betalinger' }, { key: 'refunds', label: 'Tilbagebetalinger', description: 'Bogfør gennemførte refunderinger' }, { key: 'payouts', label: 'Udbetalinger', description: 'Bogfør udbetalinger fra indløsere' }].map(module => <div key={module.key} className="flex items-center justify-between rounded-xl border bg-muted/30 p-4"><div><p className="text-sm font-medium">{module.label}</p><p className="mt-1 text-xs text-muted-foreground">{module.description}</p></div><Switch checked={automation[module.key as keyof typeof automation]} onCheckedChange={(value) => toggleAutomation(module.key as keyof typeof automation, value)} aria-label={`Automatisk ${module.label}`} /></div>)}</div></div>
+        <div className="flex items-center justify-between border-b p-5">
+          <div>
+            <p className="text-sm font-semibold">
+              Upload bilag til regnskabsprogram
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Vedhæft automatisk faktura eller dokumentation til posteringen i
+              Dinero.
+            </p>
+          </div>
+          <Switch
+            checked={automation.attachments}
+            onCheckedChange={(value) => toggleAutomation('attachments', value)}
+            aria-label="Upload bilag til regnskabsprogram"
+          />
+        </div>
+        <div className="p-5">
+          <p className="mb-4 text-sm font-semibold">Automatiske moduler</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[
+              {
+                key: 'sales',
+                label: 'Salg',
+                description: 'Bogfør realiserede ordrer',
+              },
+              {
+                key: 'payments',
+                label: 'Betalinger',
+                description: 'Bogfør captured betalinger',
+              },
+              {
+                key: 'refunds',
+                label: 'Tilbagebetalinger',
+                description: 'Bogfør gennemførte refunderinger',
+              },
+              {
+                key: 'payouts',
+                label: 'Udbetalinger',
+                description: 'Bogfør udbetalinger fra indløsere',
+              },
+            ].map((module) => (
+              <div
+                key={module.key}
+                className="flex items-center justify-between rounded-xl border bg-muted/30 p-4"
+              >
+                <div>
+                  <p className="text-sm font-medium">{module.label}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {module.description}
+                  </p>
+                </div>
+                <Switch
+                  checked={automation[module.key as keyof typeof automation]}
+                  onCheckedChange={(value) =>
+                    toggleAutomation(
+                      module.key as keyof typeof automation,
+                      value,
+                    )
+                  }
+                  aria-label={`Automatisk ${module.label}`}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
       <section className="rounded-2xl border bg-white">
         <div className="border-b p-5">
