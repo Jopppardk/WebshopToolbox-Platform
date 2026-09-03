@@ -9,6 +9,7 @@ import {
   ChevronDown,
   CircleDollarSign,
   CreditCard,
+  FileText,
   HandCoins,
   Landmark,
   LayoutDashboard,
@@ -85,7 +86,7 @@ const orders = [
 export default function Home() {
   const [query, setQuery] = useState('');
   const [view, setView] = useState<
-    'orders' | 'refunds' | 'payments' | 'payouts' | 'settings'
+    'orders' | 'invoices' | 'refunds' | 'payments' | 'payouts' | 'settings'
   >('orders');
   const [notice, setNotice] = useState('');
   const [accounts, setAccounts] = useState({
@@ -153,6 +154,13 @@ export default function Home() {
             <span className="ml-auto rounded-md bg-black/10 px-1.5 py-0.5 text-[10px]">
               24
             </span>
+          </button>
+          <button
+            className={`nav-item w-full ${view === 'invoices' ? 'active' : ''}`}
+            onClick={() => setView('invoices')}
+          >
+            <FileText />
+            Fakturaer
           </button>
           <button
             className={`nav-item w-full ${view === 'payments' ? 'active' : ''}`}
@@ -317,6 +325,7 @@ export default function Home() {
             onBook={() => notify('3 betalinger er sendt til bogføring')}
           />
         )}
+        {view === 'invoices' && <Invoices onGenerated={() => notify('Fakturaen er genereret')} />}
         {view === 'refunds' && (
           <Refunds
             onBook={() => notify('Tilbagebetalingen er sendt til bogføring')}
@@ -434,6 +443,13 @@ function OrderRow({ order }: { order: (typeof orders)[number] }) {
       </TableCell>
     </TableRow>
   );
+}
+
+function Invoices({ onGenerated }: { onGenerated: () => void }) {
+  const [statuses, setStatuses] = useState<Record<string, string>>({ '#3841': 'Genereret', '#3840': 'Genereret', '#3839': 'Afventer', '#3838': 'Fejlet', '#3837': 'Genereret' });
+  const generate = (id: string) => { setStatuses(current => ({ ...current, [id]: 'Genererer…' })); window.setTimeout(() => { setStatuses(current => ({ ...current, [id]: 'Genereret' })); onGenerated(); }, 900); };
+  const generateAll = () => orders.filter(order => statuses[order.id] !== 'Genereret').forEach((order, index) => window.setTimeout(() => generate(order.id), index * 160));
+  return <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9"><div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="eyebrow">Ordrer · Dokumenter</p><h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">Fakturaer</h1><p className="mt-2 text-sm text-muted-foreground">Generér og administrér en faktura for hver webshopordre.</p></div><Button className="h-10 rounded-xl px-4" onClick={generateAll}><FileText />Generér alle manglende</Button></div><div className="mb-6 grid gap-3 sm:grid-cols-3"><Stat label="Fakturaer i september" value="21 fakturaer" note="18 er genereret" tone="lime" /><Stat label="Afventer generering" value="2 fakturaer" note="2.644,00 kr. i alt" /><Stat label="Kræver handling" value="1 faktura" note="Ordre #3838" tone="warn" /></div><section className="overflow-hidden rounded-2xl border bg-white"><div className="border-b p-4"><div className="relative max-w-[320px]"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="h-10 bg-muted/50 pl-9" placeholder="Søg ordrenummer" /></div></div><Table><TableHeader><TableRow className="bg-muted/45"><TableHead className="pl-5">Ordrenummer</TableHead><TableHead>Ordredato</TableHead><TableHead className="text-right">Beløb DKK</TableHead><TableHead>Fakturastatus</TableHead><TableHead><span className="sr-only">Handling</span></TableHead></TableRow></TableHeader><TableBody>{orders.map(order => { const status = statuses[order.id]; return <TableRow key={order.id} className={status === 'Fejlet' ? 'bg-red-50/35' : ''}><TableCell className="pl-5 font-semibold text-[#8a6636]">{order.id}</TableCell><TableCell className="text-muted-foreground">{order.date}</TableCell><TableCell className="text-right font-medium tabular-nums">{order.amount}</TableCell><TableCell><Badge variant={status === 'Fejlet' ? 'destructive' : 'secondary'} className={status === 'Genereret' ? 'badge-booked' : 'badge-pending'}>{status === 'Genereret' && <Check />}{status}</Badge></TableCell><TableCell className="pr-5 text-right">{status === 'Genereret' ? <Button variant="ghost" size="sm"><ArrowUpRight />Åbn</Button> : <Button variant="outline" size="sm" onClick={() => generate(order.id)} disabled={status === 'Genererer…'}><FileText />{status === 'Fejlet' ? 'Generér igen' : 'Generér'}</Button>}</TableCell></TableRow>; })}</TableBody></Table></section></div>;
 }
 
 const payments = [
@@ -658,6 +674,9 @@ function Settings({
   >([]);
   const [loadingChart, setLoadingChart] = useState(false);
   const [chartMessage, setChartMessage] = useState('');
+  const [automation, setAutomation] = useState({ attachments: true, sales: true, payments: true, refunds: true, payouts: true });
+  useEffect(() => { const saved = localStorage.getItem('sablen-integrationshub-automation'); if (saved) setAutomation(current => ({ ...current, ...JSON.parse(saved) })); }, []);
+  const toggleAutomation = (key: keyof typeof automation, value: boolean) => { const next = { ...automation, [key]: value }; setAutomation(next); localStorage.setItem('sablen-integrationshub-automation', JSON.stringify(next)); };
   const integrations = [
     {
       name: 'Shopify',
@@ -783,6 +802,11 @@ function Settings({
           </div>
         ))}
       </div>
+      <h2 className="mb-3 text-sm font-semibold">Automatik og bilag</h2>
+      <section className="mb-8 overflow-hidden rounded-2xl border bg-white">
+        <div className="flex items-center justify-between border-b p-5"><div><p className="text-sm font-semibold">Upload bilag til regnskabsprogram</p><p className="mt-1 text-xs text-muted-foreground">Vedhæft automatisk faktura eller dokumentation til posteringen i Dinero.</p></div><Switch checked={automation.attachments} onCheckedChange={(value) => toggleAutomation('attachments', value)} aria-label="Upload bilag til regnskabsprogram" /></div>
+        <div className="p-5"><p className="mb-4 text-sm font-semibold">Automatiske moduler</p><div className="grid gap-3 sm:grid-cols-2">{[{ key: 'sales', label: 'Salg', description: 'Bogfør realiserede ordrer' }, { key: 'payments', label: 'Betalinger', description: 'Bogfør captured betalinger' }, { key: 'refunds', label: 'Tilbagebetalinger', description: 'Bogfør gennemførte refunderinger' }, { key: 'payouts', label: 'Udbetalinger', description: 'Bogfør udbetalinger fra indløsere' }].map(module => <div key={module.key} className="flex items-center justify-between rounded-xl border bg-muted/30 p-4"><div><p className="text-sm font-medium">{module.label}</p><p className="mt-1 text-xs text-muted-foreground">{module.description}</p></div><Switch checked={automation[module.key as keyof typeof automation]} onCheckedChange={(value) => toggleAutomation(module.key as keyof typeof automation, value)} aria-label={`Automatisk ${module.label}`} /></div>)}</div></div>
+      </section>
       <section className="rounded-2xl border bg-white">
         <div className="border-b p-5">
           <div className="flex items-center gap-3">
