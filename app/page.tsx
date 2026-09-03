@@ -86,6 +86,8 @@ const orders = [
 
 export default function Home() {
   const [query, setQuery] = useState('');
+  const [salesOrders, setSalesOrders] = useState<typeof orders>([]);
+  const [syncingOrders, setSyncingOrders] = useState(false);
   const [view, setView] = useState<
     'orders' | 'invoices' | 'refunds' | 'payments' | 'payouts' | 'settings'
   >('orders');
@@ -109,7 +111,7 @@ export default function Home() {
     clearing: '55000 - Mellemregning',
     start: '2026-09-01',
   });
-  const filtered = orders.filter(
+  const filtered = salesOrders.filter(
     (order) =>
       order.id.includes(query) ||
       order.status.toLowerCase().includes(query.toLowerCase()),
@@ -117,7 +119,27 @@ export default function Home() {
   useEffect(() => {
     const saved = localStorage.getItem('sablen-integrationshub-settings');
     if (saved) setAccounts((current) => ({ ...current, ...JSON.parse(saved) }));
+    fetch('/api/shopify/orders')
+      .then((response) => response.json())
+      .then((data) => {
+        if (Array.isArray(data.orders)) setSalesOrders(data.orders);
+      })
+      .catch(() => undefined);
   }, []);
+  const syncOrders = async () => {
+    setSyncingOrders(true);
+    try {
+      const response = await fetch('/api/shopify/orders', { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setSalesOrders(data.orders);
+      notify(`${data.synced} Shopify-ordrer er synkroniseret`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Shopify-ordrer kunne ikke synkroniseres');
+    } finally {
+      setSyncingOrders(false);
+    }
+  };
   const notify = (message: string) => {
     setNotice(message);
     window.setTimeout(() => setNotice(''), 2600);
@@ -244,27 +266,27 @@ export default function Home() {
                   Følg salg, realisering og bogføring ét sted.
                 </p>
               </div>
-              <Button className="h-10 rounded-xl px-4 shadow-sm">
-                <RefreshCw data-icon="inline-start" />
-                Synkronisér nu
+              <Button className="h-10 rounded-xl px-4 shadow-sm" onClick={syncOrders} disabled={syncingOrders}>
+                <RefreshCw data-icon="inline-start" className={syncingOrders ? 'animate-spin' : ''} />
+                {syncingOrders ? 'Synkroniserer…' : 'Synkronisér nu'}
               </Button>
             </div>
             <div className="mb-6 grid gap-3 sm:grid-cols-3">
               <Stat
-                label="Omsætning i september"
-                value="42.684,00 kr."
-                note="↑ 12,4% fra august"
+                label="Hentede Shopify-ordrer"
+                value={`${salesOrders.length} ordrer`}
+                note="Seneste 100 ordrer"
                 tone="lime"
               />
               <Stat
                 label="Klar til bogføring"
-                value="8 ordrer"
-                note="6.842,00 kr. i alt"
+                value={`${salesOrders.filter((order) => order.status === 'Afventer').length} ordrer`}
+                note="Afventer Dinero-workflow"
               />
               <Stat
                 label="Kræver handling"
-                value="1 ordre"
-                note="Senest fejlet kl. 16.32"
+                value={`${salesOrders.filter((order) => order.status === 'Fejlet').length} ordrer`}
+                note="Se fejl under Administration"
                 tone="warn"
               />
             </div>
@@ -309,7 +331,7 @@ export default function Home() {
                 </TableBody>
               </Table>
               <div className="flex items-center justify-between border-t border-border px-5 py-4 text-xs text-muted-foreground">
-                <span>Viser {filtered.length} af 24 ordrer</span>
+                <span>Viser {filtered.length} af {salesOrders.length} ordrer</span>
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" disabled>
                     Forrige
@@ -345,6 +367,7 @@ export default function Home() {
             accounts={accounts}
             setAccounts={setAccounts}
             onSave={saveSettings}
+            onShopifyConnected={syncOrders}
           />
         )}
       </section>
@@ -1024,10 +1047,12 @@ function Settings({
   accounts,
   setAccounts,
   onSave,
+  onShopifyConnected,
 }: {
   accounts: Accounts;
   setAccounts: React.Dispatch<React.SetStateAction<Accounts>>;
   onSave: () => void;
+  onShopifyConnected: () => Promise<void>;
 }) {
   const [chart, setChart] = useState<
     Array<{ number: string; name: string; vatCode?: string }>
@@ -1095,6 +1120,7 @@ function Settings({
       if (provider === 'shopify') setShopify((current) => ({ ...current, clientSecret: '' }));
       else setDinero((current) => ({ ...current, clientSecret: '', apiKey: '' }));
       setConnectionMessage(`${provider === 'shopify' ? 'Shopify' : 'Dinero'} er testet og forbundet med læseadgang`);
+      if (provider === 'shopify') await onShopifyConnected();
     } catch (error) {
       setConnectionMessage(error instanceof Error ? error.message : 'Forbindelsen kunne ikke oprettes');
     } finally {
