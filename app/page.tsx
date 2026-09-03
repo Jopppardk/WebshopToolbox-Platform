@@ -156,13 +156,6 @@ export default function Home() {
             </span>
           </button>
           <button
-            className={`nav-item w-full ${view === 'invoices' ? 'active' : ''}`}
-            onClick={() => setView('invoices')}
-          >
-            <FileText />
-            Fakturaer
-          </button>
-          <button
             className={`nav-item w-full ${view === 'payments' ? 'active' : ''}`}
             onClick={() => setView('payments')}
           >
@@ -193,6 +186,14 @@ export default function Home() {
           >
             <Settings2 />
             Administration
+          </button>
+          <p className="nav-label mt-7">Dokumenter</p>
+          <button
+            className={`nav-item w-full ${view === 'invoices' ? 'active' : ''}`}
+            onClick={() => setView('invoices')}
+          >
+            <FileText />
+            Fakturaer
           </button>
         </nav>
         <div className="m-3 rounded-xl border border-white/8 bg-white/[.035] p-4">
