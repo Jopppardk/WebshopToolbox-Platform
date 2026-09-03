@@ -62,15 +62,17 @@ export async function buildInvoicePdf(order: InvoiceOrder, logoBytes?: ArrayBuff
 }
 
 export async function createInvoicePdf(db: D1Database, order: InvoiceOrder, expiresAt: string) {
-  const existing = await db.prepare(`SELECT id FROM integration_records WHERE tenant = ? AND record_type = 'invoice' AND external_id = ?`).bind(tenant, order.id).first();
-  if (existing) return false;
   const { env } = await import('cloudflare:workers');
   const runtime = env as unknown as PdfEnv;
+  const existing = await db.prepare(`SELECT payload_json FROM integration_records WHERE tenant = ? AND record_type = 'invoice' AND external_id = ?`).bind(tenant, order.id).first<{ payload_json: string }>();
+  if (existing) {
+    try { const saved = JSON.parse(existing.payload_json) as { r2Key?: string }; if (saved.r2Key && await runtime.INVOICES.head(saved.r2Key)) return false; } catch {}
+  }
   let logoBytes: ArrayBuffer | undefined;
   try { const response = await runtime.ASSETS.fetch(new Request('https://assets.local/sablen-logo.png')); if (response.ok) logoBytes = await response.arrayBuffer(); } catch {}
   const bytes = await buildInvoicePdf(order, logoBytes);
   await runtime.INVOICES.put(keyFor(order.id), bytes, { httpMetadata: { contentType: 'application/pdf', contentDisposition: `inline; filename="faktura-${order.name.replace('#', '')}.pdf"` }, customMetadata: { expiresAt } });
-  await db.prepare(`INSERT INTO integration_records (id, tenant, record_type, external_id, occurred_at, amount_minor, currency, booking_status, payload_json, expires_at) VALUES (?, ?, 'invoice', ?, ?, ?, ?, 'generated', ?, ?)`).bind(`invoice:${order.id}`, tenant, order.id, order.createdAt, Math.round(Number(order.currentTotalPriceSet.shopMoney.amount) * 100), order.currentTotalPriceSet.shopMoney.currencyCode, JSON.stringify({ order, generatedAt: new Date().toISOString(), r2Key: keyFor(order.id) }), expiresAt).run();
+  await db.prepare(`INSERT INTO integration_records (id, tenant, record_type, external_id, occurred_at, amount_minor, currency, booking_status, payload_json, expires_at) VALUES (?, ?, 'invoice', ?, ?, ?, ?, 'generated', ?, ?) ON CONFLICT(tenant, record_type, external_id) DO UPDATE SET booking_status = 'generated', payload_json = excluded.payload_json, expires_at = excluded.expires_at`).bind(`invoice:${order.id}`, tenant, order.id, order.createdAt, Math.round(Number(order.currentTotalPriceSet.shopMoney.amount) * 100), order.currentTotalPriceSet.shopMoney.currencyCode, JSON.stringify({ order, generatedAt: new Date().toISOString(), r2Key: keyFor(order.id) }), expiresAt).run();
   return true;
 }
 
