@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react';
 import {
   ArrowDownToLine,
   ArrowUpRight,
+  AlertTriangle,
   BookOpenCheck,
   Check,
   ChevronDown,
   CircleDollarSign,
   CreditCard,
+  Database,
   FileText,
   HandCoins,
   Landmark,
@@ -18,6 +20,7 @@ import {
   RotateCcw,
   Save,
   Search,
+  ShieldCheck,
   Settings2,
   ShoppingBag,
   SlidersHorizontal,
@@ -1147,6 +1150,39 @@ function Settings({
           Forbind dine systemer, og bestem hvordan posteringerne skal lande i
           Dinero.
         </p>
+      </div>
+      {chartMessage && !chart.length && (
+        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950" role="alert">
+          <AlertTriangle className="mt-0.5 size-5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold">Der kræves handling</p>
+            <p className="mt-1 text-xs">{chartMessage}</p>
+          </div>
+        </div>
+      )}
+      <h2 className="mb-3 text-sm font-semibold">Drift og sikkerhed</h2>
+      <div className="mb-8 grid gap-3 md:grid-cols-3">
+        <div className="rounded-2xl border bg-white p-4">
+          <ShieldCheck className="size-5 text-[#6a8d31]" />
+          <p className="mt-3 text-sm font-semibold">Privat adgang</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Kun godkendte brugere kan åbne integrationshubben.
+          </p>
+        </div>
+        <div className="rounded-2xl border bg-white p-4">
+          <Database className="size-5 text-[#6a8d31]" />
+          <p className="mt-3 text-sm font-semibold">24 måneders historik</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Ordrer og bogføringsdata slettes automatisk efter 24 måneder.
+          </p>
+        </div>
+        <div className="rounded-2xl border bg-white p-4">
+          <ShoppingBag className="size-5 text-[#6a8d31]" />
+          <p className="mt-3 text-sm font-semibold">Kun Sablen.dk</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Produktionsskrivninger aktiveres først efter en kontrolleret læsetest.
+          </p>
+        </div>
       </div>
       <h2 className="mb-3 text-sm font-semibold">Integrationer</h2>
       <div className="mb-8 grid gap-3 md:grid-cols-2">
