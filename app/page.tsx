@@ -24,7 +24,7 @@ import {
   ShoppingBag,
   SlidersHorizontal,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -144,7 +144,7 @@ export default function Home() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setSalesOrders(data.orders);
-      notify(`${data.synced} Shopify-ordrer er synkroniseret`);
+      notify(`${data.synced} Shopify-ordrer er synkroniseret · ${data.invoicesCreated || 0} nye PDF-fakturaer`);
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Shopify-ordrer kunne ikke synkroniseres');
     } finally {
@@ -599,10 +599,7 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
                   </TableCell>
                   <TableCell className="pr-5 text-right">
                     {status === 'Genereret' ? (
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedInvoice(order)}>
-                        <ArrowUpRight />
-                        Åbn
-                      </Button>
+                      <div className="flex justify-end gap-1"><Button variant="ghost" size="sm" onClick={() => setSelectedInvoice(order)}><ArrowUpRight />Vis</Button><a className={buttonVariants({ variant: 'outline', size: 'sm' })} href={`/api/invoices/pdf?externalId=${encodeURIComponent(order.externalId || '')}`} target="_blank" rel="noreferrer"><FileText />PDF</a></div>
                     ) : (
                       <Button
                         variant="outline"

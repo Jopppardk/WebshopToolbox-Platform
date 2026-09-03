@@ -5,8 +5,15 @@
   "compatibility_date": "2026-05-15",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
-    "directory": "dist/client"
+    "directory": "dist/client",
+    "binding": "ASSETS"
   },
+  "r2_buckets": [
+    {
+      "binding": "INVOICES",
+      "bucket_name": "sablen-invoices"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prepareDatabase } from '@/db/database';
 import { getShopifyAccess } from '@/db/shopify';
+import { createInvoicePdf } from '@/lib/invoice-pdf';
 
 type ShopifyOrder = {
   id: string;
@@ -72,7 +73,12 @@ export async function POST() {
       return db.prepare(`INSERT INTO integration_records (id, tenant, record_type, external_id, occurred_at, amount_minor, currency, booking_status, payload_json, expires_at) VALUES (?, ?, 'order', ?, ?, ?, ?, 'pending', ?, ?) ON CONFLICT(tenant, record_type, external_id) DO UPDATE SET occurred_at = excluded.occurred_at, amount_minor = excluded.amount_minor, currency = excluded.currency, payload_json = excluded.payload_json, expires_at = excluded.expires_at`).bind(order.id, 'sablen.dk', order.id, order.createdAt, Math.round(Number(money.amount) * 100), money.currencyCode, JSON.stringify(order), expires.toISOString());
     });
     if (statements.length) await db.batch(statements);
-    return NextResponse.json({ orders: await storedOrders(), synced: statements.length });
+    let invoicesCreated = 0;
+    for (const order of payload.data.orders.nodes) {
+      const expires = new Date(order.createdAt); expires.setUTCMonth(expires.getUTCMonth() + 24);
+      if (await createInvoicePdf(db, order, expires.toISOString())) invoicesCreated++;
+    }
+    return NextResponse.json({ orders: await storedOrders(), synced: statements.length, invoicesCreated });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Shopify-ordrer kunne ikke hentes';
     try {
