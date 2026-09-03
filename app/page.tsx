@@ -9,6 +9,7 @@ import {
   ChevronDown,
   CircleDollarSign,
   CreditCard,
+  HandCoins,
   Landmark,
   LayoutDashboard,
   PackageCheck,
@@ -84,7 +85,7 @@ const orders = [
 export default function Home() {
   const [query, setQuery] = useState('');
   const [view, setView] = useState<
-    'orders' | 'refunds' | 'payments' | 'settings'
+    'orders' | 'refunds' | 'payments' | 'payouts' | 'settings'
   >('orders');
   const [notice, setNotice] = useState('');
   const [accounts, setAccounts] = useState({
@@ -169,6 +170,13 @@ export default function Home() {
             <span className="ml-auto rounded-md bg-white/10 px-1.5 py-0.5 text-[10px]">
               3
             </span>
+          </button>
+          <button
+            className={`nav-item w-full ${view === 'payouts' ? 'active' : ''}`}
+            onClick={() => setView('payouts')}
+          >
+            <HandCoins />
+            Udbetalinger
           </button>
           <p className="nav-label mt-7">System</p>
           <button
@@ -313,6 +321,9 @@ export default function Home() {
           <Refunds
             onBook={() => notify('Tilbagebetalingen er sendt til bogføring')}
           />
+        )}
+        {view === 'payouts' && (
+          <Payouts onBook={() => notify('Udbetalingen er sendt til bogføring')} />
         )}
         {view === 'settings' && (
           <Settings
@@ -595,6 +606,23 @@ function BookingTransactionRow({ transaction, onBook, accent = false }: { transa
   const [status, setStatus] = useState(transaction.status);
   const book = () => { setStatus('Bogfører…'); window.setTimeout(() => { setStatus('Bogført'); onBook(); }, 900); };
   return <TableRow className={status === 'Fejlet' ? 'bg-red-50/35' : ''}><TableCell className={`pl-5 font-semibold ${accent ? 'text-[#a84f40]' : 'text-[#8a6636]'}`}>{transaction.order}</TableCell><TableCell className="text-muted-foreground">{transaction.captured}</TableCell><TableCell>{transaction.provider}</TableCell><TableCell className="text-right font-medium tabular-nums">{transaction.amount}</TableCell><TableCell><Badge variant={status === 'Fejlet' ? 'destructive' : 'secondary'} className={status === 'Bogført' ? 'badge-booked' : 'badge-pending'}>{status === 'Bogført' && <BookOpenCheck />}{status}</Badge></TableCell><TableCell className="pr-5 text-right">{status !== 'Bogført' && <Button size="sm" variant="outline" className={status === 'Fejlet' ? 'border-red-200 text-red-700' : ''} onClick={book} disabled={status === 'Bogfører…'}><RefreshCw />{status === 'Fejlet' ? 'Bogfør igen' : 'Bogfør'}</Button>}</TableCell></TableRow>;
+}
+
+const payouts = [
+  { acquirer: 'Shopify Payments', id: 'DK-PO-29831', date: '3. sep. 2026, 06.15', amount: '14.709,86', status: 'Bogført' },
+  { acquirer: 'Flatpay', id: 'FP-904218', date: '2. sep. 2026, 23.58', amount: '5.372,71', status: 'Afventer' },
+  { acquirer: 'ViaBill', id: 'VB-118402', date: '2. sep. 2026, 18.04', amount: '3.093,73', status: 'Fejlet' },
+  { acquirer: 'Shopify Payments', id: 'DK-PO-29818', date: '1. sep. 2026, 06.12', amount: '8.461,20', status: 'Bogført' },
+];
+
+function Payouts({ onBook }: { onBook: () => void }) {
+  return <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9"><div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="eyebrow">Indløsere · Dinero</p><h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">Udbetalinger</h1><p className="mt-2 text-sm text-muted-foreground">Følg udbetalinger fra betalingsudbyderne og deres bogføringsstatus.</p></div><Button className="h-10 rounded-xl px-4"><RefreshCw />Synkronisér nu</Button></div><div className="mb-6 grid gap-3 sm:grid-cols-3"><Stat label="Udbetalt i september" value="31.637,50 kr." note="4 udbetalinger" tone="lime" /><Stat label="Afventer bogføring" value="5.372,71 kr." note="1 udbetaling" /><Stat label="Kræver handling" value="3.093,73 kr." note="ViaBill · VB-118402" tone="warn" /></div><section className="overflow-hidden rounded-2xl border bg-white"><div className="border-b p-4"><div className="relative max-w-[320px]"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="h-10 bg-muted/50 pl-9" placeholder="Søg udbetalings-id eller indløser" /></div></div><Table><TableHeader><TableRow className="bg-muted/45"><TableHead className="pl-5">Indløser</TableHead><TableHead>Udbetalings-id</TableHead><TableHead>Transaktionsdato</TableHead><TableHead className="text-right">Beløb</TableHead><TableHead>Bogføringsstatus</TableHead><TableHead><span className="sr-only">Handling</span></TableHead></TableRow></TableHeader><TableBody>{payouts.map(payout => <PayoutRow key={payout.id} payout={payout} onBook={onBook} />)}</TableBody></Table></section></div>;
+}
+
+function PayoutRow({ payout, onBook }: { payout: (typeof payouts)[number]; onBook: () => void }) {
+  const [status, setStatus] = useState(payout.status);
+  const retry = () => { setStatus('Bogfører…'); window.setTimeout(() => { setStatus('Bogført'); onBook(); }, 900); };
+  return <TableRow className={status === 'Fejlet' ? 'bg-red-50/35' : ''}><TableCell className="pl-5 font-medium">{payout.acquirer}</TableCell><TableCell className="font-semibold text-[#8a6636]">{payout.id}</TableCell><TableCell className="text-muted-foreground">{payout.date}</TableCell><TableCell className="text-right font-medium tabular-nums">{payout.amount}</TableCell><TableCell><Badge variant={status === 'Fejlet' ? 'destructive' : 'secondary'} className={status === 'Bogført' ? 'badge-booked' : 'badge-pending'}>{status === 'Bogført' && <BookOpenCheck />}{status}</Badge></TableCell><TableCell className="pr-5 text-right">{status === 'Fejlet' && <Button size="sm" variant="outline" className="border-red-200 text-red-700" onClick={retry} disabled={status === 'Bogfører…'}><RefreshCw />Bogfør igen</Button>}</TableCell></TableRow>;
 }
 
 type Accounts = {
