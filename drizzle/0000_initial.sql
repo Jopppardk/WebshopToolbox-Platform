@@ -32,3 +32,5 @@ CREATE TABLE IF NOT EXISTS app_settings (
   PRIMARY KEY (tenant, setting_key)
 );
 PRAGMA optimize;
+
+
