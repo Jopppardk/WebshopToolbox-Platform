@@ -427,34 +427,25 @@ function OrderRow({ order }: { order: (typeof orders)[number] }) {
 
 const payments = [
   {
-    date: '2. sep. 2026',
+    order: '#3841',
+    captured: '2. sep. 2026, 09.44',
     provider: 'Shopify Payments',
-    reference: 'Payout #DK29831',
-    count: 18,
-    gross: '14.982,00',
-    fees: '– 272,14',
-    net: '14.709,86',
-    status: 'Klar',
-  },
-  {
-    date: '1. sep. 2026',
-    provider: 'Flatpay',
-    reference: 'FP-904218',
-    count: 7,
-    gross: '5.449,00',
-    fees: '– 76,29',
-    net: '5.372,71',
-    status: 'Klar',
-  },
-  {
-    date: '31. aug. 2026',
-    provider: 'ViaBill',
-    reference: 'VB-118402',
-    count: 4,
-    gross: '3.196,00',
-    fees: '– 102,27',
-    net: '3.093,73',
+    amount: '1.249,00',
     status: 'Bogført',
+  },
+  {
+    order: '#3840',
+    captured: '2. sep. 2026, 09.20',
+    provider: 'Flatpay',
+    amount: '698,00',
+    status: 'Afventer',
+  },
+  {
+    order: '#3838',
+    captured: '1. sep. 2026, 16.32',
+    provider: 'ViaBill',
+    amount: '449,00',
+    status: 'Fejlet',
   },
 ];
 function Payments({ onBook }: { onBook: () => void }) {
@@ -462,17 +453,17 @@ function Payments({ onBook }: { onBook: () => void }) {
     <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
       <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <p className="eyebrow">Afstemning · Udbetalinger</p>
+          <p className="eyebrow">Shopify · Flatpay · ViaBill</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">
             Betalinger
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Afstem gebyrer og bogfør udbetalinger fra dine betalingsudbydere.
+            Følg captured betalinger og deres bogføringsstatus.
           </p>
         </div>
         <Button className="h-10 rounded-xl px-4" onClick={onBook}>
           <BookOpenCheck />
-          Bogfør 3 betalinger
+          Bogfør alle
         </Button>
       </div>
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
@@ -493,46 +484,16 @@ function Payments({ onBook }: { onBook: () => void }) {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/45">
-              <TableHead className="pl-5">Udbetalingsdato</TableHead>
-              <TableHead>Udbyder</TableHead>
-              <TableHead>Reference</TableHead>
-              <TableHead>Transaktioner</TableHead>
-              <TableHead className="text-right">Brutto</TableHead>
-              <TableHead className="text-right">Gebyrer</TableHead>
-              <TableHead className="text-right">Netto DKK</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead className="pl-5">Ordrenummer</TableHead>
+              <TableHead>Captured</TableHead>
+              <TableHead>Betalingsudbyder</TableHead>
+              <TableHead className="text-right">Beløb</TableHead>
+              <TableHead>Bogføringsstatus</TableHead>
+              <TableHead><span className="sr-only">Handling</span></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {payments.map((p) => (
-              <TableRow key={p.reference}>
-                <TableCell className="pl-5">{p.date}</TableCell>
-                <TableCell className="font-medium">{p.provider}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {p.reference}
-                </TableCell>
-                <TableCell>{p.count}</TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {p.gross}
-                </TableCell>
-                <TableCell className="text-right tabular-nums text-muted-foreground">
-                  {p.fees}
-                </TableCell>
-                <TableCell className="text-right font-medium tabular-nums">
-                  {p.net}
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    className={
-                      p.status === 'Bogført' ? 'badge-booked' : 'badge-pending'
-                    }
-                    variant="secondary"
-                  >
-                    {p.status}
-                  </Badge>
-                </TableCell>
-              </TableRow>
-            ))}
+            {payments.map((payment) => <BookingTransactionRow key={payment.order} transaction={payment} onBook={onBook} />)}
           </TableBody>
         </Table>
       </section>
@@ -542,30 +503,24 @@ function Payments({ onBook }: { onBook: () => void }) {
 
 const refunds = [
   {
-    id: '#R-3840',
     order: '#3840',
-    date: '2. sep. 2026, 13.14',
+    captured: '2. sep. 2026, 13.14',
     amount: '– 349,00',
-    method: 'Shopify Payments',
-    realized: '2. sep. 2026',
+    provider: 'Shopify Payments',
     status: 'Bogført',
   },
   {
-    id: '#R-3822',
     order: '#3822',
-    date: '1. sep. 2026, 11.08',
+    captured: '1. sep. 2026, 11.08',
     amount: '– 795,00',
-    method: 'ViaBill',
-    realized: '1. sep. 2026',
+    provider: 'ViaBill',
     status: 'Fejlet',
   },
   {
-    id: '#R-3816',
     order: '#3816',
-    date: '31. aug. 2026, 15.42',
+    captured: '31. aug. 2026, 15.42',
     amount: '– 199,00',
-    method: 'Flatpay',
-    realized: '—',
+    provider: 'Flatpay',
     status: 'Afventer',
   },
 ];
@@ -619,72 +574,27 @@ function Refunds({ onBook }: { onBook: () => void }) {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/45">
-              <TableHead className="pl-5">Refundering</TableHead>
-              <TableHead>Ordre</TableHead>
-              <TableHead>Dato</TableHead>
-              <TableHead>Betalingsmetode</TableHead>
-              <TableHead className="text-right">Beløb DKK</TableHead>
-              <TableHead>Realiseret</TableHead>
-              <TableHead>Bogføring</TableHead>
-              <TableHead />
+              <TableHead className="pl-5">Ordrenummer</TableHead>
+              <TableHead>Captured</TableHead>
+              <TableHead>Betalingsudbyder</TableHead>
+              <TableHead className="text-right">Beløb</TableHead>
+              <TableHead>Bogføringsstatus</TableHead>
+              <TableHead><span className="sr-only">Handling</span></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {refunds.map((r) => (
-              <TableRow
-                key={r.id}
-                className={r.status === 'Fejlet' ? 'bg-red-50/35' : ''}
-              >
-                <TableCell className="pl-5 font-semibold text-[#a84f40]">
-                  {r.id}
-                </TableCell>
-                <TableCell>{r.order}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {r.date}
-                </TableCell>
-                <TableCell>{r.method}</TableCell>
-                <TableCell className="text-right font-medium tabular-nums">
-                  {r.amount}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {r.realized}
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant={
-                      r.status === 'Fejlet' ? 'destructive' : 'secondary'
-                    }
-                    className={
-                      r.status === 'Bogført'
-                        ? 'badge-booked'
-                        : r.status === 'Afventer'
-                          ? 'badge-pending'
-                          : ''
-                    }
-                  >
-                    {r.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="pr-5 text-right">
-                  {r.status === 'Fejlet' && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-red-200 text-red-700"
-                      onClick={onBook}
-                    >
-                      <RefreshCw />
-                      Bogfør igen
-                    </Button>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
+            {refunds.map((refund) => <BookingTransactionRow key={refund.order} transaction={refund} onBook={onBook} accent />)}
           </TableBody>
         </Table>
       </section>
     </div>
   );
+}
+
+function BookingTransactionRow({ transaction, onBook, accent = false }: { transaction: { order: string; captured: string; provider: string; amount: string; status: string }; onBook: () => void; accent?: boolean }) {
+  const [status, setStatus] = useState(transaction.status);
+  const book = () => { setStatus('Bogfører…'); window.setTimeout(() => { setStatus('Bogført'); onBook(); }, 900); };
+  return <TableRow className={status === 'Fejlet' ? 'bg-red-50/35' : ''}><TableCell className={`pl-5 font-semibold ${accent ? 'text-[#a84f40]' : 'text-[#8a6636]'}`}>{transaction.order}</TableCell><TableCell className="text-muted-foreground">{transaction.captured}</TableCell><TableCell>{transaction.provider}</TableCell><TableCell className="text-right font-medium tabular-nums">{transaction.amount}</TableCell><TableCell><Badge variant={status === 'Fejlet' ? 'destructive' : 'secondary'} className={status === 'Bogført' ? 'badge-booked' : 'badge-pending'}>{status === 'Bogført' && <BookOpenCheck />}{status}</Badge></TableCell><TableCell className="pr-5 text-right">{status !== 'Bogført' && <Button size="sm" variant="outline" className={status === 'Fejlet' ? 'border-red-200 text-red-700' : ''} onClick={book} disabled={status === 'Bogfører…'}><RefreshCw />{status === 'Fejlet' ? 'Bogfør igen' : 'Bogfør'}</Button>}</TableCell></TableRow>;
 }
 
 type Accounts = {
