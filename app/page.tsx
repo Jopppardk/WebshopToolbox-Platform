@@ -1036,6 +1036,11 @@ function Settings({
   >([]);
   const [loadingChart, setLoadingChart] = useState(false);
   const [chartMessage, setChartMessage] = useState('');
+  const [connectionMessage, setConnectionMessage] = useState('');
+  const [connecting, setConnecting] = useState<'shopify' | 'dinero' | null>(null);
+  const [connected, setConnected] = useState<Record<string, string>>({});
+  const [shopify, setShopify] = useState({ shop: '', accessToken: '' });
+  const [dinero, setDinero] = useState({ clientId: '', clientSecret: '', apiKey: '', organizationId: '' });
   const [automation, setAutomation] = useState({
     attachments: true,
     sales: true,
@@ -1047,6 +1052,10 @@ function Settings({
     const saved = localStorage.getItem('sablen-integrationshub-automation');
     if (saved)
       setAutomation((current) => ({ ...current, ...JSON.parse(saved) }));
+    fetch('/api/integrations')
+      .then((response) => response.json())
+      .then((data) => setConnected(Object.fromEntries((data.integrations ?? []).map((item: { provider: string; display_name: string }) => [item.provider, item.display_name]))))
+      .catch(() => setConnectionMessage('Forbindelsesstatus kunne ikke hentes'));
   }, []);
   const toggleAutomation = (key: keyof typeof automation, value: boolean) => {
     const next = { ...automation, [key]: value };
@@ -1061,13 +1070,13 @@ function Settings({
       name: 'Shopify',
       detail: 'Ordrer og refunderinger',
       icon: ShoppingBag,
-      connected: true,
+      connected: Boolean(connected.shopify),
     },
     {
       name: 'Dinero',
       detail: 'Regnskab og bilag',
       icon: Landmark,
-      connected: true,
+      connected: Boolean(connected.dinero),
     },
     {
       name: 'Flatpay',
@@ -1082,6 +1091,27 @@ function Settings({
       connected: false,
     },
   ];
+  const connect = async (provider: 'shopify' | 'dinero') => {
+    setConnecting(provider);
+    setConnectionMessage('');
+    try {
+      const response = await fetch('/api/integrations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, ...(provider === 'shopify' ? shopify : dinero) }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setConnected((current) => ({ ...current, [provider]: data.name }));
+      if (provider === 'shopify') setShopify((current) => ({ ...current, accessToken: '' }));
+      else setDinero((current) => ({ ...current, clientSecret: '', apiKey: '' }));
+      setConnectionMessage(`${provider === 'shopify' ? 'Shopify' : 'Dinero'} er testet og forbundet med læseadgang`);
+    } catch (error) {
+      setConnectionMessage(error instanceof Error ? error.message : 'Forbindelsen kunne ikke oprettes');
+    } finally {
+      setConnecting(null);
+    }
+  };
   const loadChart = async () => {
     setLoadingChart(true);
     setChartMessage('');
@@ -1214,6 +1244,33 @@ function Settings({
           </div>
         ))}
       </div>
+      <section className="mb-8 grid gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl border bg-white p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div><p className="font-semibold">Forbind Shopify</p><p className="text-xs text-muted-foreground">Testen læser kun butikkens navn.</p></div>
+            <Badge className={connected.shopify ? 'badge-booked' : ''} variant="secondary">{connected.shopify ? connected.shopify : 'Ikke forbundet'}</Badge>
+          </div>
+          <div className="space-y-3">
+            <Input value={shopify.shop} onChange={(event) => setShopify((current) => ({ ...current, shop: event.target.value }))} placeholder="butik.myshopify.com" aria-label="Shopify butiksadresse" />
+            <Input type="password" autoComplete="off" value={shopify.accessToken} onChange={(event) => setShopify((current) => ({ ...current, accessToken: event.target.value }))} placeholder="Admin API-adgangsnøgle" aria-label="Shopify adgangsnøgle" />
+            <Button className="w-full" onClick={() => connect('shopify')} disabled={connecting !== null}>{connecting === 'shopify' ? 'Tester…' : 'Test og forbind'}</Button>
+          </div>
+        </div>
+        <div className="rounded-2xl border bg-white p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div><p className="font-semibold">Forbind Dinero</p><p className="text-xs text-muted-foreground">Personlig integration med læsetest.</p></div>
+            <Badge className={connected.dinero ? 'badge-booked' : ''} variant="secondary">{connected.dinero ? connected.dinero : 'Ikke forbundet'}</Badge>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input value={dinero.clientId} onChange={(event) => setDinero((current) => ({ ...current, clientId: event.target.value }))} placeholder="Client ID" aria-label="Dinero Client ID" />
+            <Input type="password" autoComplete="off" value={dinero.clientSecret} onChange={(event) => setDinero((current) => ({ ...current, clientSecret: event.target.value }))} placeholder="Client secret" aria-label="Dinero Client secret" />
+            <Input type="password" autoComplete="off" value={dinero.apiKey} onChange={(event) => setDinero((current) => ({ ...current, apiKey: event.target.value }))} placeholder="API-nøgle" aria-label="Dinero API-nøgle" />
+            <Input value={dinero.organizationId} onChange={(event) => setDinero((current) => ({ ...current, organizationId: event.target.value }))} placeholder="Organisation-ID" aria-label="Dinero organisation-ID" />
+            <Button className="sm:col-span-2" onClick={() => connect('dinero')} disabled={connecting !== null}>{connecting === 'dinero' ? 'Tester…' : 'Test og forbind'}</Button>
+          </div>
+        </div>
+        {connectionMessage && <p className="text-sm text-[#5d712f] lg:col-span-2" role="status">{connectionMessage}</p>}
+      </section>
       <h2 className="mb-3 text-sm font-semibold">Automatik og bilag</h2>
       <section className="mb-8 overflow-hidden rounded-2xl border bg-white">
         <div className="flex items-center justify-between border-b p-5">

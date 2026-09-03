@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prepareDatabase } from '@/db/database';
+import { loadCredentials } from '@/db/credentials';
 
 async function recordError(message: string) {
   try {
@@ -16,14 +17,32 @@ async function recordError(message: string) {
 }
 
 export async function GET() {
-  const token = process.env.DINERO_ACCESS_TOKEN;
-  const organizationId = process.env.DINERO_ORGANIZATION_ID;
-  if (!token || !organizationId) {
+  const credentials = await loadCredentials('dinero');
+  if (!credentials) {
     const message = 'Dinero er endnu ikke forbundet';
     await recordError(message);
     return NextResponse.json({ error: message }, { status: 503 });
   }
-  const response = await fetch(`https://api.dinero.dk/v1/${organizationId}/accounts?pageSize=1000`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, cache: 'no-store' });
+  const tokenResponse = await fetch('https://authz.dinero.dk/dineroapi/oauth/token', {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${btoa(`${credentials.clientId}:${credentials.clientSecret}`)}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      grant_type: 'password',
+      scope: 'read',
+      username: credentials.apiKey,
+      password: credentials.apiKey,
+    }),
+  });
+  const tokenPayload = (await tokenResponse.json()) as { access_token?: string };
+  if (!tokenResponse.ok || !tokenPayload.access_token) {
+    const message = 'Dinero-adgangen kunne ikke fornyes';
+    await recordError(message);
+    return NextResponse.json({ error: message }, { status: 401 });
+  }
+  const response = await fetch(`https://api.dinero.dk/v1/${credentials.organizationId}/accounts?pageSize=1000`, { headers: { Authorization: `Bearer ${tokenPayload.access_token}`, Accept: 'application/json' }, cache: 'no-store' });
   if (!response.ok) {
     const message = 'Kontoplanen kunne ikke hentes fra Dinero';
     await recordError(message);
