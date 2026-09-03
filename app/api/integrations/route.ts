@@ -31,18 +31,38 @@ export async function POST(request: NextRequest) {
       const shop = body.shop?.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
       if (!shop || !/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop))
         throw new Error('Indtast butikkens .myshopify.com-adresse');
-      if (!body.accessToken) throw new Error('Shopify-adgangsnøglen mangler');
+      if (!body.clientId?.trim() || !body.clientSecret?.trim())
+        throw new Error('Udfyld både Shopify Client ID og Client Secret');
+      const tokenResponse = await fetch(`https://${shop}/admin/oauth/access_token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'client_credentials',
+          client_id: body.clientId,
+          client_secret: body.clientSecret,
+        }),
+      });
+      const tokenPayload = (await tokenResponse.json()) as {
+        access_token?: string;
+        expires_in?: number;
+      };
+      if (!tokenResponse.ok || !tokenPayload.access_token)
+        throw new Error('Shopify afviste Client ID eller Client Secret');
       const response = await fetch(`https://${shop}/admin/api/2026-07/graphql.json`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Shopify-Access-Token': body.accessToken,
+          'X-Shopify-Access-Token': tokenPayload.access_token,
         },
         body: JSON.stringify({ query: 'query ConnectionTest { shop { name myshopifyDomain } }' }),
       });
       const payload = (await response.json()) as { data?: { shop?: { name?: string } }; errors?: unknown };
       if (!response.ok || !payload.data?.shop?.name) throw new Error('Shopify afviste forbindelsen eller nøglen');
-      await saveCredentials('shopify', { shop, accessToken: body.accessToken }, payload.data.shop.name);
+      await saveCredentials(
+        'shopify',
+        { shop, clientId: body.clientId, clientSecret: body.clientSecret },
+        payload.data.shop.name,
+      );
       return NextResponse.json({ provider: 'shopify', connected: true, name: payload.data.shop.name });
     }
 

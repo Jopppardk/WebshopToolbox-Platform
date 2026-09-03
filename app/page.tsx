@@ -1038,7 +1038,7 @@ function Settings({
   const [connecting, setConnecting] = useState<'shopify' | 'dinero' | null>(null);
   const [expandedIntegration, setExpandedIntegration] = useState<'shopify' | 'dinero' | null>(null);
   const [connected, setConnected] = useState<Record<string, string>>({});
-  const [shopify, setShopify] = useState({ shop: '', accessToken: '' });
+  const [shopify, setShopify] = useState({ shop: '', clientId: '', clientSecret: '' });
   const [dinero, setDinero] = useState({ clientId: '', clientSecret: '', apiKey: '', organizationId: '' });
   const [automation, setAutomation] = useState({
     attachments: true,
@@ -1092,7 +1092,7 @@ function Settings({
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setConnected((current) => ({ ...current, [provider]: data.name }));
-      if (provider === 'shopify') setShopify((current) => ({ ...current, accessToken: '' }));
+      if (provider === 'shopify') setShopify((current) => ({ ...current, clientSecret: '' }));
       else setDinero((current) => ({ ...current, clientSecret: '', apiKey: '' }));
       setConnectionMessage(`${provider === 'shopify' ? 'Shopify' : 'Dinero'} er testet og forbundet med læseadgang`);
     } catch (error) {
@@ -1224,11 +1224,12 @@ function Settings({
             </button>
             {expandedIntegration === provider && (
               <div id={`${provider}-connection-panel`} className="border-t bg-muted/20 p-5">
-                <p className="mb-4 text-xs text-muted-foreground">{provider === 'shopify' ? 'Testen læser kun butikkens navn.' : 'Personlig integration med læsetest.'}</p>
+                <p className="mb-4 text-xs text-muted-foreground">{provider === 'shopify' ? 'Den installerede app udveksler automatisk oplysningerne til et kortlivet adgangstoken. Testen læser kun butikkens navn.' : 'Personlig integration med læsetest.'}</p>
                 {provider === 'shopify' ? (
                   <div className="space-y-3">
                     <Input value={shopify.shop} onChange={(event) => setShopify((current) => ({ ...current, shop: event.target.value }))} placeholder="butik.myshopify.com" aria-label="Shopify butiksadresse" />
-                    <Input type="password" autoComplete="off" value={shopify.accessToken} onChange={(event) => setShopify((current) => ({ ...current, accessToken: event.target.value }))} placeholder="Admin API-adgangsnøgle" aria-label="Shopify adgangsnøgle" />
+                    <Input value={shopify.clientId} onChange={(event) => setShopify((current) => ({ ...current, clientId: event.target.value }))} placeholder="Client ID" aria-label="Shopify Client ID" />
+                    <Input type="password" autoComplete="off" value={shopify.clientSecret} onChange={(event) => setShopify((current) => ({ ...current, clientSecret: event.target.value }))} placeholder="Client Secret" aria-label="Shopify Client Secret" />
                     <Button className="w-full" onClick={() => connect('shopify')} disabled={connecting !== null}>{connecting === 'shopify' ? 'Tester…' : isConnected ? 'Test og opdatér forbindelse' : 'Test og forbind'}</Button>
                   </div>
                 ) : (
