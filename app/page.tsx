@@ -9,7 +9,6 @@ import {
   Check,
   ChevronDown,
   CircleDollarSign,
-  CreditCard,
   Database,
   FileText,
   HandCoins,
@@ -24,7 +23,6 @@ import {
   Settings2,
   ShoppingBag,
   SlidersHorizontal,
-  WalletCards,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -613,14 +611,14 @@ const payments = [
   {
     order: '#3840',
     captured: '2. sep. 2026, 09.20',
-    provider: 'Flatpay',
+    provider: 'Shopify Payments',
     amount: '698,00',
     status: 'Afventer',
   },
   {
     order: '#3838',
     captured: '1. sep. 2026, 16.32',
-    provider: 'ViaBill',
+    provider: 'Shopify Payments',
     amount: '449,00',
     status: 'Fejlet',
   },
@@ -630,7 +628,7 @@ function Payments({ onBook }: { onBook: () => void }) {
     <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
       <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <p className="eyebrow">Shopify · Flatpay · ViaBill</p>
+          <p className="eyebrow">Shopify · Betalinger</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">
             Betalinger
           </h1>
@@ -698,14 +696,14 @@ const refunds = [
     order: '#3822',
     captured: '1. sep. 2026, 11.08',
     amount: '– 795,00',
-    provider: 'ViaBill',
+    provider: 'Shopify Payments',
     status: 'Fejlet',
   },
   {
     order: '#3816',
     captured: '31. aug. 2026, 15.42',
     amount: '– 199,00',
-    provider: 'Flatpay',
+    provider: 'Shopify Payments',
     status: 'Afventer',
   },
 ];
@@ -742,7 +740,7 @@ function Refunds({ onBook }: { onBook: () => void }) {
         <Stat
           label="Kræver handling"
           value="1 tilbagebetaling"
-          note="ViaBill · #R-3822"
+          note="Tilbagebetaling #R-3822"
           tone="warn"
         />
       </div>
@@ -858,14 +856,14 @@ const payouts = [
     status: 'Bogført',
   },
   {
-    acquirer: 'Flatpay',
+    acquirer: 'Shopify Payments',
     id: 'FP-904218',
     date: '2. sep. 2026, 23.58',
     amount: '5.372,71',
     status: 'Afventer',
   },
   {
-    acquirer: 'ViaBill',
+    acquirer: 'Shopify Payments',
     id: 'VB-118402',
     date: '2. sep. 2026, 18.04',
     amount: '3.093,73',
@@ -913,7 +911,7 @@ function Payouts({ onBook }: { onBook: () => void }) {
         <Stat
           label="Kræver handling"
           value="3.093,73 kr."
-          note="ViaBill · VB-118402"
+          note="Udbetaling SP-118402"
           tone="warn"
         />
       </div>
@@ -1077,18 +1075,6 @@ function Settings({
       detail: 'Regnskab og bilag',
       icon: Landmark,
       connected: Boolean(connected.dinero),
-    },
-    {
-      name: 'Flatpay',
-      detail: 'Kortbetalinger og gebyrer',
-      icon: CreditCard,
-      connected: true,
-    },
-    {
-      name: 'ViaBill',
-      detail: 'Delbetalinger og afstemning',
-      icon: WalletCards,
-      connected: false,
     },
   ];
   const connect = async (provider: 'shopify' | 'dinero') => {
