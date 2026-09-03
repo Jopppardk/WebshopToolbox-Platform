@@ -1036,6 +1036,7 @@ function Settings({
   const [chartMessage, setChartMessage] = useState('');
   const [connectionMessage, setConnectionMessage] = useState('');
   const [connecting, setConnecting] = useState<'shopify' | 'dinero' | null>(null);
+  const [expandedIntegration, setExpandedIntegration] = useState<'shopify' | 'dinero' | null>(null);
   const [connected, setConnected] = useState<Record<string, string>>({});
   const [shopify, setShopify] = useState({ shop: '', accessToken: '' });
   const [dinero, setDinero] = useState({ clientId: '', clientSecret: '', apiKey: '', organizationId: '' });
@@ -1066,12 +1067,14 @@ function Settings({
   const integrations = [
     {
       name: 'Shopify',
+      provider: 'shopify' as const,
       detail: 'Ordrer og refunderinger',
       icon: ShoppingBag,
       connected: Boolean(connected.shopify),
     },
     {
       name: 'Dinero',
+      provider: 'dinero' as const,
       detail: 'Regnskab og bilag',
       icon: Landmark,
       connected: Boolean(connected.dinero),
@@ -1201,62 +1204,48 @@ function Settings({
         </div>
       </div>
       <h2 className="mb-3 text-sm font-semibold">Integrationer</h2>
-      <div className="mb-8 grid gap-3 md:grid-cols-2">
-        {integrations.map(({ name, detail, icon: Icon, connected }) => (
+      <div className="mb-8 grid items-start gap-3 md:grid-cols-2">
+        {integrations.map(({ name, provider, detail, icon: Icon, connected: isConnected }) => (
           <div
             key={name}
-            className="flex items-center gap-4 rounded-2xl border bg-white p-4"
+            className="overflow-hidden rounded-2xl border bg-white"
           >
-            <span className="grid size-11 place-items-center rounded-xl bg-muted">
-              <Icon className="size-5" />
-            </span>
-            <div className="flex-1">
-              <p className="font-semibold">{name}</p>
-              <p className="text-xs text-muted-foreground">{detail}</p>
-            </div>
-            <Badge
-              className={connected ? 'badge-booked' : ''}
-              variant="secondary"
+            <button
+              type="button"
+              className="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-muted/30"
+              onClick={() => setExpandedIntegration((current) => current === provider ? null : provider)}
+              aria-expanded={expandedIntegration === provider}
+              aria-controls={`${provider}-connection-panel`}
             >
-              {connected ? 'Forbundet' : 'Ikke forbundet'}
-            </Badge>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Indstil ${name}`}
-            >
-              <ArrowUpRight />
-            </Button>
+              <span className="grid size-11 place-items-center rounded-xl bg-muted"><Icon className="size-5" /></span>
+              <span className="min-w-0 flex-1"><span className="block font-semibold">{name}</span><span className="block text-xs text-muted-foreground">{detail}</span></span>
+              <Badge className={isConnected ? 'badge-booked' : ''} variant="secondary">{isConnected ? 'Forbundet' : 'Ikke forbundet'}</Badge>
+              <ChevronDown className={`size-4 text-muted-foreground transition-transform ${expandedIntegration === provider ? 'rotate-180' : ''}`} />
+            </button>
+            {expandedIntegration === provider && (
+              <div id={`${provider}-connection-panel`} className="border-t bg-muted/20 p-5">
+                <p className="mb-4 text-xs text-muted-foreground">{provider === 'shopify' ? 'Testen læser kun butikkens navn.' : 'Personlig integration med læsetest.'}</p>
+                {provider === 'shopify' ? (
+                  <div className="space-y-3">
+                    <Input value={shopify.shop} onChange={(event) => setShopify((current) => ({ ...current, shop: event.target.value }))} placeholder="butik.myshopify.com" aria-label="Shopify butiksadresse" />
+                    <Input type="password" autoComplete="off" value={shopify.accessToken} onChange={(event) => setShopify((current) => ({ ...current, accessToken: event.target.value }))} placeholder="Admin API-adgangsnøgle" aria-label="Shopify adgangsnøgle" />
+                    <Button className="w-full" onClick={() => connect('shopify')} disabled={connecting !== null}>{connecting === 'shopify' ? 'Tester…' : isConnected ? 'Test og opdatér forbindelse' : 'Test og forbind'}</Button>
+                  </div>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input value={dinero.clientId} onChange={(event) => setDinero((current) => ({ ...current, clientId: event.target.value }))} placeholder="Client ID" aria-label="Dinero Client ID" />
+                    <Input type="password" autoComplete="off" value={dinero.clientSecret} onChange={(event) => setDinero((current) => ({ ...current, clientSecret: event.target.value }))} placeholder="Client secret" aria-label="Dinero Client secret" />
+                    <Input type="password" autoComplete="off" value={dinero.apiKey} onChange={(event) => setDinero((current) => ({ ...current, apiKey: event.target.value }))} placeholder="API-nøgle" aria-label="Dinero API-nøgle" />
+                    <Input value={dinero.organizationId} onChange={(event) => setDinero((current) => ({ ...current, organizationId: event.target.value }))} placeholder="Organisation-ID" aria-label="Dinero organisation-ID" />
+                    <Button className="sm:col-span-2" onClick={() => connect('dinero')} disabled={connecting !== null}>{connecting === 'dinero' ? 'Tester…' : isConnected ? 'Test og opdatér forbindelse' : 'Test og forbind'}</Button>
+                  </div>
+                )}
+                {connectionMessage && <p className="mt-3 text-sm text-[#5d712f]" role="status">{connectionMessage}</p>}
+              </div>
+            )}
           </div>
         ))}
       </div>
-      <section className="mb-8 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border bg-white p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <div><p className="font-semibold">Forbind Shopify</p><p className="text-xs text-muted-foreground">Testen læser kun butikkens navn.</p></div>
-            <Badge className={connected.shopify ? 'badge-booked' : ''} variant="secondary">{connected.shopify ? connected.shopify : 'Ikke forbundet'}</Badge>
-          </div>
-          <div className="space-y-3">
-            <Input value={shopify.shop} onChange={(event) => setShopify((current) => ({ ...current, shop: event.target.value }))} placeholder="butik.myshopify.com" aria-label="Shopify butiksadresse" />
-            <Input type="password" autoComplete="off" value={shopify.accessToken} onChange={(event) => setShopify((current) => ({ ...current, accessToken: event.target.value }))} placeholder="Admin API-adgangsnøgle" aria-label="Shopify adgangsnøgle" />
-            <Button className="w-full" onClick={() => connect('shopify')} disabled={connecting !== null}>{connecting === 'shopify' ? 'Tester…' : 'Test og forbind'}</Button>
-          </div>
-        </div>
-        <div className="rounded-2xl border bg-white p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <div><p className="font-semibold">Forbind Dinero</p><p className="text-xs text-muted-foreground">Personlig integration med læsetest.</p></div>
-            <Badge className={connected.dinero ? 'badge-booked' : ''} variant="secondary">{connected.dinero ? connected.dinero : 'Ikke forbundet'}</Badge>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Input value={dinero.clientId} onChange={(event) => setDinero((current) => ({ ...current, clientId: event.target.value }))} placeholder="Client ID" aria-label="Dinero Client ID" />
-            <Input type="password" autoComplete="off" value={dinero.clientSecret} onChange={(event) => setDinero((current) => ({ ...current, clientSecret: event.target.value }))} placeholder="Client secret" aria-label="Dinero Client secret" />
-            <Input type="password" autoComplete="off" value={dinero.apiKey} onChange={(event) => setDinero((current) => ({ ...current, apiKey: event.target.value }))} placeholder="API-nøgle" aria-label="Dinero API-nøgle" />
-            <Input value={dinero.organizationId} onChange={(event) => setDinero((current) => ({ ...current, organizationId: event.target.value }))} placeholder="Organisation-ID" aria-label="Dinero organisation-ID" />
-            <Button className="sm:col-span-2" onClick={() => connect('dinero')} disabled={connecting !== null}>{connecting === 'dinero' ? 'Tester…' : 'Test og forbind'}</Button>
-          </div>
-        </div>
-        {connectionMessage && <p className="text-sm text-[#5d712f] lg:col-span-2" role="status">{connectionMessage}</p>}
-      </section>
       <h2 className="mb-3 text-sm font-semibold">Automatik og bilag</h2>
       <section className="mb-8 overflow-hidden rounded-2xl border bg-white">
         <div className="flex items-center justify-between border-b p-5">
