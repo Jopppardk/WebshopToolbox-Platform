@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sablen-integrationshub",
+  "main": "dist/server/index.js",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "dist/client"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sablen-integrationshub",
+      "database_id": "154e8b5d-7f6c-42d7-b751-1defa0dd2549"
+    }
+  ],
+  "routes": [
+    {
+      "pattern": "integration.sablen.dk",
+      "custom_domain": true
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
