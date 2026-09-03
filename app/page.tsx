@@ -84,9 +84,20 @@ const orders = [
   },
 ];
 
+type OrderView = (typeof orders)[number] & {
+  externalId?: string;
+  createdAt?: string;
+  currency?: string;
+  customer?: { name?: string | null; address1?: string | null; address2?: string | null; zip?: string | null; city?: string | null; country?: string | null } | null;
+  lines?: Array<{ name: string; quantity: number; discountedTotalSet: { shopMoney: { amount: string; currencyCode: string } } }>;
+  shippingLines?: Array<{ title: string; discountedPriceSet: { shopMoney: { amount: string; currencyCode: string } } }>;
+  subtotal?: string;
+  tax?: string;
+};
+
 export default function Home() {
   const [query, setQuery] = useState('');
-  const [salesOrders, setSalesOrders] = useState<typeof orders>([]);
+  const [salesOrders, setSalesOrders] = useState<OrderView[]>([]);
   const [syncingOrders, setSyncingOrders] = useState(false);
   const [view, setView] = useState<
     'orders' | 'invoices' | 'refunds' | 'payments' | 'payouts' | 'settings'
@@ -350,7 +361,7 @@ export default function Home() {
           />
         )}
         {view === 'invoices' && (
-          <Invoices onGenerated={() => notify('Fakturaen er genereret')} />
+          <Invoices orders={salesOrders} onGenerated={(count) => notify(`${count} faktura${count === 1 ? '' : 'er'} er genereret`)} onSync={syncOrders} syncing={syncingOrders} />
         )}
         {view === 'refunds' && (
           <Refunds
@@ -474,28 +485,26 @@ function OrderRow({ order }: { order: (typeof orders)[number] }) {
   );
 }
 
-function Invoices({ onGenerated }: { onGenerated: () => void }) {
-  const [selectedInvoice, setSelectedInvoice] = useState<(typeof orders)[number] | null>(null);
-  const [statuses, setStatuses] = useState<Record<string, string>>({
-    '#3841': 'Genereret',
-    '#3840': 'Genereret',
-    '#3839': 'Afventer',
-    '#3838': 'Fejlet',
-    '#3837': 'Genereret',
-  });
-  const generate = (id: string) => {
-    setStatuses((current) => ({ ...current, [id]: 'Genererer…' }));
-    window.setTimeout(() => {
-      setStatuses((current) => ({ ...current, [id]: 'Genereret' }));
-      onGenerated();
-    }, 900);
+function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[]; onGenerated: (count: number) => void; onSync: () => Promise<void>; syncing: boolean }) {
+  const [selectedInvoice, setSelectedInvoice] = useState<OrderView | null>(null);
+  const [statuses, setStatuses] = useState<Record<string, string>>({});
+  const [query, setQuery] = useState('');
+  const [generating, setGenerating] = useState(false);
+  useEffect(() => { fetch('/api/invoices').then((r) => r.json()).then((data) => setStatuses(data.statuses || {})).catch(() => undefined); }, []);
+  const generate = async (order: OrderView) => {
+    if (!order.externalId) return;
+    setStatuses((current) => ({ ...current, [order.externalId!]: 'Genererer…' }));
+    const response = await fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ externalId: order.externalId }) });
+    const data = await response.json();
+    if (!response.ok) { setStatuses((current) => ({ ...current, [order.externalId!]: 'Fejlet' })); return; }
+    setStatuses(data.statuses || {}); onGenerated(1);
   };
-  const generateAll = () =>
-    orders
-      .filter((order) => statuses[order.id] !== 'Genereret')
-      .forEach((order, index) =>
-        window.setTimeout(() => generate(order.id), index * 160),
-      );
+  const generateAll = async () => {
+    setGenerating(true);
+    try { const response = await fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ all: true }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error); setStatuses(data.statuses || {}); onGenerated(data.generated || 0); } finally { setGenerating(false); }
+  };
+  const visibleOrders = orders.filter((order) => order.id.toLowerCase().includes(query.toLowerCase()));
+  const generatedCount = orders.filter((order) => order.externalId && statuses[order.externalId] === 'Genereret').length;
   return (
     <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
       <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
@@ -508,27 +517,27 @@ function Invoices({ onGenerated }: { onGenerated: () => void }) {
             Generér og administrér en faktura for hver webshopordre.
           </p>
         </div>
-        <Button className="h-10 rounded-xl px-4" onClick={generateAll}>
+        <div className="flex gap-2"><Button variant="outline" className="h-10 rounded-xl px-4" onClick={onSync} disabled={syncing}><RefreshCw className={syncing ? 'animate-spin' : ''} />{syncing ? 'Henter…' : 'Hent fra Shopify'}</Button><Button className="h-10 rounded-xl px-4" onClick={generateAll} disabled={generating || !orders.length}>
           <FileText />
-          Generér alle manglende
-        </Button>
+          {generating ? 'Genererer…' : 'Generér alle manglende'}
+        </Button></div>
       </div>
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
         <Stat
           label="Fakturaer i september"
-          value="21 fakturaer"
-          note="18 er genereret"
+          value={`${orders.length} ordrer`}
+          note={`${generatedCount} er genereret`}
           tone="lime"
         />
         <Stat
           label="Afventer generering"
-          value="2 fakturaer"
-          note="2.644,00 kr. i alt"
+          value={`${orders.length - generatedCount} fakturaer`}
+          note="Baseret på live Shopify-data"
         />
         <Stat
           label="Kræver handling"
-          value="1 faktura"
-          note="Ordre #3838"
+          value={`${Object.values(statuses).filter((status) => status === 'Fejlet').length} fakturaer`}
+          note="Fejl vises under Administration"
           tone="warn"
         />
       </div>
@@ -537,6 +546,8 @@ function Invoices({ onGenerated }: { onGenerated: () => void }) {
           <div className="relative max-w-[320px]">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
               className="h-10 bg-muted/50 pl-9"
               placeholder="Søg ordrenummer"
             />
@@ -555,8 +566,8 @@ function Invoices({ onGenerated }: { onGenerated: () => void }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {orders.map((order) => {
-              const status = statuses[order.id];
+            {visibleOrders.map((order) => {
+              const status = order.externalId ? statuses[order.externalId] || 'Afventer' : 'Afventer';
               return (
                 <TableRow
                   key={order.id}
@@ -596,7 +607,7 @@ function Invoices({ onGenerated }: { onGenerated: () => void }) {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => generate(order.id)}
+                        onClick={() => generate(order)}
                         disabled={status === 'Genererer…'}
                       >
                         <FileText />
@@ -610,17 +621,21 @@ function Invoices({ onGenerated }: { onGenerated: () => void }) {
           </TableBody>
         </Table>
       </section>
+      {!orders.length && <div className="mt-4 rounded-xl border border-dashed bg-white p-8 text-center text-sm text-muted-foreground">Ingen Shopify-ordrer er hentet endnu. Forbind Shopify under Administration, og vælg derefter “Hent fra Shopify”.</div>}
       {selectedInvoice && <InvoicePreview order={selectedInvoice} onClose={() => setSelectedInvoice(null)} />}
     </div>
   );
 }
 
-function InvoicePreview({ order, onClose }: { order: (typeof orders)[number]; onClose: () => void }) {
+function InvoicePreview({ order, onClose }: { order: OrderView; onClose: () => void }) {
   const total = Number(order.amount.replaceAll('.', '').replace(',', '.'));
   const beforeVat = total / 1.25;
   const vat = total - beforeVat;
   const money = (value: number) => value.toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return <section className="mt-6 rounded-2xl border bg-[#eceae6] p-4 md:p-8"><div className="mb-4 flex items-center justify-between"><div><p className="eyebrow">Fakturaforhåndsvisning</p><p className="mt-1 text-sm text-muted-foreground">Skabelon baseret på det vedhæftede fakturaeksempel</p></div><Button variant="outline" onClick={onClose}>Luk</Button></div><article className="mx-auto min-h-[820px] max-w-[780px] bg-white px-10 py-12 shadow-[0_18px_50px_rgba(35,35,35,.12)] md:px-16"><div className="flex items-start justify-between"><address className="not-italic text-sm leading-6"><strong className="text-base">Emma Sofie Riis</strong><br />Tvedvej 155<br />6000 Kolding<br />Danmark</address><img src="/sablen-logo.webp" alt="Sablen" className="w-40" /></div><div className="mt-16 flex items-end justify-between"><div><h2 className="text-2xl">Faktura</h2><p className="mt-1 text-sm">Ordrenr. <strong>{order.id}</strong></p></div><div className="text-right text-sm leading-6"><p>Fakturanr. <strong>{order.id}</strong></p><p>Fakturadato: <strong>03/09/2026</strong></p></div></div><table className="mt-5 w-full text-sm"><thead><tr className="border-y-2 border-[#232b38]"><th className="py-2 text-left font-normal">Beskrivelse</th><th className="py-2 text-right font-normal">Antal</th><th className="py-2 text-right font-normal">Stk. pris</th><th className="py-2 text-right font-normal">Pris</th></tr></thead><tbody><tr><td className="py-3">Shopify-ordre {order.id}</td><td className="py-3 text-right">1</td><td className="py-3 text-right">{money(total)}</td><td className="py-3 text-right">{money(total)}</td></tr><tr className="border-b"><td className="pb-3">Levering</td><td className="pb-3 text-right">1</td><td className="pb-3 text-right">0,00</td><td className="pb-3 text-right">0,00</td></tr></tbody></table><div className="ml-auto mt-5 w-full max-w-[380px] text-sm"><div className="flex justify-between py-1"><span>Total ekskl. moms</span><span>{money(beforeVat)}</span></div><div className="flex justify-between py-1"><span>Moms</span><span>{money(vat)}</span></div><div className="mt-1 flex justify-between border-b-4 border-[#555f70] py-2 text-base font-bold"><span>Total inkl. moms DKK</span><span>{money(total)}</span></div></div><footer className="mt-[340px] border-t pt-4 text-center text-[11px] leading-5 text-slate-500"><p>LA Trading ApS / Egetoften 13 / 7500 Holstebro / Danmark</p><p>CVR-nr. 45036871 / Tlf. +45 2621 9318 / Web https://sablen.dk / E-mail kontakt@sablen.dk</p></footer></article></section>;
+  const customer = order.customer;
+  const invoiceDate = order.createdAt ? new Intl.DateTimeFormat('da-DK').format(new Date(order.createdAt)) : order.date;
+  const lines = order.lines?.length ? order.lines : [{ name: `Shopify-ordre ${order.id}`, quantity: 1, discountedTotalSet: { shopMoney: { amount: String(total), currencyCode: order.currency || 'DKK' } } }];
+  return <section className="mt-6 rounded-2xl border bg-[#eceae6] p-4 md:p-8"><div className="mb-4 flex items-center justify-between"><div><p className="eyebrow">Fakturaforhåndsvisning</p><p className="mt-1 text-sm text-muted-foreground">Live-data fra Shopify</p></div><Button variant="outline" onClick={onClose}>Luk</Button></div><article className="mx-auto min-h-[820px] max-w-[780px] bg-white px-10 py-12 shadow-[0_18px_50px_rgba(35,35,35,.12)] md:px-16"><div className="flex items-start justify-between"><address className="not-italic text-sm leading-6"><strong className="text-base">{customer?.name || 'Kunde'}</strong><br />{customer?.address1 || ''}{customer?.address2 && <><br />{customer.address2}</>}<br />{customer?.zip || ''} {customer?.city || ''}<br />{customer?.country || ''}</address><img src="/sablen-logo.webp" alt="Sablen" className="w-40" /></div><div className="mt-16 flex items-end justify-between"><div><h2 className="text-2xl">Faktura</h2><p className="mt-1 text-sm">Ordrenr. <strong>{order.id}</strong></p></div><div className="text-right text-sm leading-6"><p>Fakturanr. <strong>{order.id}</strong></p><p>Fakturadato: <strong>{invoiceDate}</strong></p></div></div><table className="mt-5 w-full text-sm"><thead><tr className="border-y-2 border-[#232b38]"><th className="py-2 text-left font-normal">Beskrivelse</th><th className="py-2 text-right font-normal">Antal</th><th className="py-2 text-right font-normal">Stk. pris</th><th className="py-2 text-right font-normal">Pris</th></tr></thead><tbody>{lines.map((line, index) => { const lineTotal = Number(line.discountedTotalSet.shopMoney.amount); return <tr className="border-b" key={`${line.name}-${index}`}><td className="py-3">{line.name}</td><td className="py-3 text-right">{line.quantity}</td><td className="py-3 text-right">{money(lineTotal / Math.max(line.quantity, 1))}</td><td className="py-3 text-right">{money(lineTotal)}</td></tr>; })}{order.shippingLines?.map((line, index) => <tr className="border-b" key={`shipping-${index}`}><td className="py-3">{line.title || 'Levering'}</td><td className="py-3 text-right">1</td><td className="py-3 text-right">{money(Number(line.discountedPriceSet.shopMoney.amount))}</td><td className="py-3 text-right">{money(Number(line.discountedPriceSet.shopMoney.amount))}</td></tr>)}</tbody></table><div className="ml-auto mt-5 w-full max-w-[380px] text-sm"><div className="flex justify-between py-1"><span>Total ekskl. moms</span><span>{money(Number(order.subtotal || beforeVat))}</span></div><div className="flex justify-between py-1"><span>Moms</span><span>{money(Number(order.tax || vat))}</span></div><div className="mt-1 flex justify-between border-b-4 border-[#555f70] py-2 text-base font-bold"><span>Total inkl. moms {order.currency || 'DKK'}</span><span>{money(total)}</span></div></div><footer className="mt-[220px] border-t pt-4 text-center text-[11px] leading-5 text-slate-500"><p>LA Trading ApS / Egetoften 13 / 7500 Holstebro / Danmark</p><p>CVR-nr. 45036871 / Tlf. +45 2621 9318 / Web https://sablen.dk / E-mail kontakt@sablen.dk</p></footer></article></section>;
 }
 
 const payments = [
