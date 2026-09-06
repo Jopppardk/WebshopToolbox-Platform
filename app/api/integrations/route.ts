@@ -69,28 +69,42 @@ export async function POST(request: NextRequest) {
     if (body.provider === 'dinero') {
       for (const key of ['clientId', 'clientSecret', 'apiKey', 'organizationId'])
         if (!body[key]?.trim()) throw new Error('Udfyld alle Dinero-felter');
-      if (!/^[a-zA-Z0-9-]+$/.test(body.organizationId)) throw new Error('Dinero organisation-ID er ugyldigt');
+      if (!/^[a-zA-Z0-9-]+$/.test(body.organizationId.trim())) throw new Error('Dinero organisation-ID er ugyldigt');
+      const organizationId = body.organizationId.trim();
       const tokenResponse = await fetch('https://authz.dinero.dk/dineroapi/oauth/token', {
         method: 'POST',
         headers: {
-          Authorization: `Basic ${btoa(`${body.clientId}:${body.clientSecret}`)}`,
+          Authorization: `Basic ${btoa(`${body.clientId.trim()}:${body.clientSecret.trim()}`)}`,
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: new URLSearchParams({ grant_type: 'password', scope: 'read', username: body.apiKey, password: body.apiKey }),
+        body: new URLSearchParams({
+          grant_type: 'password',
+          scope: 'read write',
+          username: body.apiKey.trim(),
+          password: body.apiKey.trim(),
+        }),
       });
       const tokenPayload = (await tokenResponse.json()) as { access_token?: string };
       if (!tokenResponse.ok || !tokenPayload.access_token) throw new Error('Dinero afviste adgangsoplysningerne');
-      const accountResponse = await fetch(`https://api.dinero.dk/v1/${body.organizationId}/accounts?pageSize=1`, {
+      const accountResponse = await fetch(`https://api.dinero.dk/v1/${organizationId}/accounts/entry?fields=AccountNumber,Name`, {
         headers: { Authorization: `Bearer ${tokenPayload.access_token}`, Accept: 'application/json' },
       });
-      if (!accountResponse.ok) throw new Error('Dinero kunne ikke læse den valgte organisation');
+      if (!accountResponse.ok) {
+        if (accountResponse.status === 401)
+          throw new Error('Dinero godkendte nøglerne, men API-nøglen har ikke adgang til det valgte organisation-ID');
+        if (accountResponse.status === 403)
+          throw new Error('Dinero godkendte nøglerne, men organisationen mangler API-adgang (kræver Pro eller Total)');
+        if (accountResponse.status === 404)
+          throw new Error('Dinero kunne ikke finde det valgte organisation-ID');
+        throw new Error(`Dinero kunne ikke læse organisationen (HTTP ${accountResponse.status})`);
+      }
       await saveCredentials('dinero', {
-        clientId: body.clientId,
-        clientSecret: body.clientSecret,
-        apiKey: body.apiKey,
-        organizationId: body.organizationId,
-      }, `Organisation ${body.organizationId}`);
-      return NextResponse.json({ provider: 'dinero', connected: true, name: `Organisation ${body.organizationId}` });
+        clientId: body.clientId.trim(),
+        clientSecret: body.clientSecret.trim(),
+        apiKey: body.apiKey.trim(),
+        organizationId,
+      }, `Organisation ${organizationId}`);
+      return NextResponse.json({ provider: 'dinero', connected: true, name: `Organisation ${organizationId}` });
     }
     throw new Error('Ukendt integration');
   } catch (error) {

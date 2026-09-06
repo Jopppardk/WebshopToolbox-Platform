@@ -38,6 +38,19 @@ export const schemaStatements = [
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (tenant, setting_key)
   )`,
+  `CREATE TABLE IF NOT EXISTS invoice_email_deliveries (
+    id TEXT PRIMARY KEY,
+    tenant TEXT NOT NULL DEFAULT 'sablen.dk',
+    external_id TEXT NOT NULL,
+    recipient TEXT NOT NULL,
+    delivery_mode TEXT NOT NULL CHECK (delivery_mode IN ('test', 'customer')),
+    status TEXT NOT NULL CHECK (status IN ('sending', 'sent', 'failed')),
+    provider_message_id TEXT,
+    error_message TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tenant, external_id, recipient, delivery_mode)
+  )`,
   `CREATE TABLE IF NOT EXISTS integration_credentials (
     tenant TEXT NOT NULL,
     provider TEXT NOT NULL CHECK (provider IN ('shopify', 'dinero')),
@@ -48,4 +61,20 @@ export const schemaStatements = [
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (tenant, provider)
   )`,
+  `CREATE TABLE IF NOT EXISTS job_runs (
+    id TEXT PRIMARY KEY,
+    tenant TEXT NOT NULL DEFAULT 'sablen.dk',
+    job_key TEXT NOT NULL,
+    job_name TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('running', 'succeeded', 'failed', 'skipped')),
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    duration_ms INTEGER,
+    message TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_job_runs_tenant_started
+    ON job_runs(tenant, started_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_job_runs_tenant_job
+    ON job_runs(tenant, job_key, started_at DESC)`,
 ];

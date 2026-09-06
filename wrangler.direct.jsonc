@@ -1,7 +1,21 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "sablen-integrationshub",
-  "main": "dist/server/index.js",
+  "workers_dev": false,
+  "preview_urls": false,
+  "vars": {
+    "DINERO_SALES_WRITES_ENABLED": "true",
+    "DINERO_SALES_AUTOMATION_ENABLED": "true",
+    "DINERO_SALES_START_AFTER": "2026-09-04T22:00:00Z",
+    "DINERO_REFUND_WRITES_ENABLED": "true",
+    "DINERO_REFUND_AUTOMATION_ENABLED": "true",
+    "DINERO_DRAFT_TEST_ORDER_ID": ""
+    ,"DINERO_PAYOUT_TEST_ID": "gid://shopify/ShopifyPaymentsPayout/157649895748",
+    "DINERO_PAYOUT_WRITES_ENABLED": "true",
+    "DINERO_PAYOUT_AUTOMATION_ENABLED": "true",
+    "DINERO_PAYOUT_START_AFTER": "2026-09-03T00:00:00Z"
+  },
+  "main": "worker-entry.ts",
   "compatibility_date": "2026-05-15",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
@@ -12,6 +26,12 @@
     {
       "binding": "INVOICES",
       "bucket_name": "sablen-invoices"
+    }
+  ],
+  "send_email": [
+    {
+      "name": "INVOICE_EMAIL",
+      "allowed_sender_addresses": ["faktura@sablen.dk"]
     }
   ],
   "d1_databases": [
@@ -27,7 +47,6 @@
       "custom_domain": true
     }
   ],
-  "observability": {
-    "enabled": true
-  }
+  "observability": { "enabled": true },
+  "triggers": { "crons": ["* * * * *"] }
 }

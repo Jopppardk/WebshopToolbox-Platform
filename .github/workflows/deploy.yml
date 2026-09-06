@@ -1,0 +1,47 @@
+name: Test og deploy Sablen Toolbox
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sablen-toolbox-production
+  cancel-in-progress: false
+
+jobs:
+  test-and-deploy:
+    name: Test, build og deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Hent kildekoden
+        uses: actions/checkout@v6
+
+      - name: Klargør Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.13.0
+          cache: npm
+
+      - name: Installer afhængigheder
+        run: npm ci
+
+      - name: Kør automatiske tests
+        run: npm test
+
+      - name: Byg applikationen
+        run: npm run build
+
+      - name: Deploy til Cloudflare Workers
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.92.0"
+          command: deploy --config wrangler.direct.jsonc

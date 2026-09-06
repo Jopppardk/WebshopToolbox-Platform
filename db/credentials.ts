@@ -1,4 +1,4 @@
-import { prepareDatabase } from './database';
+import { database, prepareDatabase } from './database';
 
 const tenant = 'sablen.dk';
 
@@ -26,7 +26,7 @@ async function encryptionKey() {
 }
 
 export async function saveCredentials(
-  provider: 'shopify' | 'dinero',
+  provider: 'shopify' | 'dinero' | 'viabill',
   credentials: Record<string, string>,
   displayName: string,
 ) {
@@ -38,6 +38,15 @@ export async function saveCredentials(
     plaintext,
   );
   const db = await prepareDatabase();
+  // The legacy credentials table only permits Shopify/Dinero. Keep the new
+  // provider's encrypted envelope in the existing server-only settings store.
+  if (provider === 'viabill') {
+    await db.prepare(`INSERT INTO app_settings (tenant, setting_key, setting_value)
+      VALUES (?, 'viabill_credentials', ?) ON CONFLICT(tenant, setting_key)
+      DO UPDATE SET setting_value = excluded.setting_value, updated_at = CURRENT_TIMESTAMP`)
+      .bind(tenant, JSON.stringify({ ciphertext: bytesToBase64(new Uint8Array(ciphertext)), iv: bytesToBase64(iv), displayName, verifiedAt: new Date().toISOString() })).run();
+    return;
+  }
   await db
     .prepare(
       `INSERT INTO integration_credentials
@@ -60,9 +69,10 @@ export async function saveCredentials(
     .run();
 }
 
-export async function loadCredentials(provider: 'shopify' | 'dinero') {
-  const db = await prepareDatabase();
-  const row = await db
+export async function loadCredentials(provider: 'shopify' | 'dinero' | 'viabill', readOnly = false) {
+  const db = readOnly ? database() : await prepareDatabase();
+  const envelope = provider === 'viabill' ? await db.prepare("SELECT setting_value FROM app_settings WHERE tenant = ? AND setting_key = 'viabill_credentials'").bind(tenant).first<{ setting_value: string }>() : null;
+  const row = provider === 'viabill' ? (envelope ? JSON.parse(envelope.setting_value) as { ciphertext: string; iv: string } : null) : await db
     .prepare(
       'SELECT ciphertext, iv FROM integration_credentials WHERE tenant = ? AND provider = ?',
     )

@@ -1,20 +1,41 @@
 'use client';
+import { ProviderLedger } from '@/components/provider-ledger';
+import { ViaBillConnection } from '@/components/viabill-connection';
+import { HistorySettings } from '@/components/history-settings';
+import { ErrorOverview } from '@/components/error-overview';
+import { SalesPreview } from '@/components/sales-preview';
+import { SalesTransfer } from '@/components/sales-transfer';
+import { Documents } from '@/components/documents';
+import { Inventory } from '@/components/inventory';
+import { Packaging } from '@/components/packaging';
+import { JobInsights } from '@/components/job-insights';
+import { vatCodeOptions } from '@/lib/vat-code-options';
+import { emptyAccounts, defaultAutomation, defaultInvoiceEmail, validateSettings, type Accounts, type Automation, type AdminSettings, type InvoiceEmailSettings } from '@/lib/admin-settings';
+import { millisecondsToNextRun, syncIntervals } from '@/lib/sync-schedule';
+import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { useEffect, useState } from 'react';
+import { Payments } from '@/components/payments';
 import {
+  Activity,
   ArrowDownToLine,
   ArrowUpRight,
   AlertTriangle,
+  Bell,
   BookOpenCheck,
+  Boxes,
   Check,
   ChevronDown,
-  CircleDollarSign,
+  Clock3,
   Database,
   FileText,
   HandCoins,
   Landmark,
-  LayoutDashboard,
+  Menu,
+  Mail,
   PackageCheck,
+  Warehouse,
   RefreshCw,
   RotateCcw,
   Save,
@@ -22,10 +43,10 @@ import {
   ShieldCheck,
   Settings2,
   ShoppingBag,
-  SlidersHorizontal,
 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -41,126 +62,127 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-const orders = [
-  {
-    id: '#3841',
-    date: '2. sep. 2026, 09.42',
-    shipped: 'Afsendt',
-    amount: '1.249,00',
-    realized: '2. sep. 2026',
-    status: 'Bogført',
-  },
-  {
-    id: '#3840',
-    date: '2. sep. 2026, 09.18',
-    shipped: 'Afsendt',
-    amount: '698,00',
-    realized: '2. sep. 2026',
-    status: 'Bogført',
-  },
-  {
-    id: '#3839',
-    date: '1. sep. 2026, 22.06',
-    shipped: 'Ikke afsendt',
-    amount: '2.195,00',
-    realized: '—',
-    status: 'Afventer',
-  },
-  {
-    id: '#3838',
-    date: '1. sep. 2026, 16.31',
-    shipped: 'Afsendt',
-    amount: '449,00',
-    realized: '1. sep. 2026',
-    status: 'Fejlet',
-  },
-  {
-    id: '#3837',
-    date: '1. sep. 2026, 14.12',
-    shipped: 'Afsendt',
-    amount: '899,00',
-    realized: '1. sep. 2026',
-    status: 'Bogført',
-  },
-];
-
-type OrderView = (typeof orders)[number] & {
-  externalId?: string;
-  createdAt?: string;
-  currency?: string;
+type OrderView = {
+  id: string; date: string; shipped: string; amount: string; realized: string; status: string;
+  externalId?: string; createdAt?: string; currency?: string; total?: string;
   customer?: { name?: string | null; address1?: string | null; address2?: string | null; zip?: string | null; city?: string | null; country?: string | null } | null;
   lines?: Array<{ name: string; quantity: number; discountedTotalSet: { shopMoney: { amount: string; currencyCode: string } } }>;
   shippingLines?: Array<{ title: string; discountedPriceSet: { shopMoney: { amount: string; currencyCode: string } } }>;
-  subtotal?: string;
-  tax?: string;
+  subtotal?: string; tax?: string; paymentStatus?: string | null;
 };
+
+function SyncCountdown({ intervalMinutes, mobile = false }: { intervalMinutes: number; mobile?: boolean }) {
+  const [remaining, setRemaining] = useState<number | null>(null);
+  useEffect(() => {
+    const update = () => {
+      setRemaining(millisecondsToNextRun(Date.now(), intervalMinutes));
+    };
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [intervalMinutes]);
+  const seconds = remaining === null ? null : Math.max(0, Math.ceil(remaining / 1000));
+  const value = seconds === null ? '–:––' : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  return <div className={mobile ? 'fixed bottom-4 left-4 z-40 flex items-center gap-2 rounded-full border bg-[#232323] px-3 py-2 text-xs text-white shadow-xl lg:hidden' : 'mx-4 mb-4 flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-3'} title="Cloudflare-jobbet kører hvert femte minut">
+    <Clock3 className="size-4 shrink-0 text-[#c09960]" />
+    <div><p className={mobile ? 'sr-only' : 'text-[10px] uppercase tracking-[.12em] text-[#817c75]'}>Næste synkronisering</p><p className="font-medium tabular-nums">om {value}</p></div>
+  </div>;
+}
 
 export default function Home() {
   const [query, setQuery] = useState('');
   const [salesOrders, setSalesOrders] = useState<OrderView[]>([]);
+  const [orderOffset, setOrderOffset] = useState(0);
+  const [orderTotal, setOrderTotal] = useState(0);
+  const [orderRevision, setOrderRevision] = useState(0);
   const [syncingOrders, setSyncingOrders] = useState(false);
   const [view, setView] = useState<
-    'orders' | 'invoices' | 'refunds' | 'payments' | 'payouts' | 'settings'
+    'orders' | 'invoices' | 'documents' | 'refunds' | 'payouts' | 'inventory' | 'packaging' | 'insights' | 'settings'
   >('orders');
+  const [settingsTab, setSettingsTab] = useState<'dashboard' | 'integrations' | 'invoice-email' | 'inventory'>('dashboard');
   const [notice, setNotice] = useState('');
-  const [accounts, setAccounts] = useState({
-    vatCode: 'U25 - Dansk salgsmoms (25%)',
-    noVatCode: 'U0 - Momsfrit (0%)',
-    goodsVat: '1000 - Salg af varer/ydelser m/moms',
-    goodsNoVat: '1050 - Salg af varer/ydelser u/moms',
-    shippingVat: '1350 - Salg af fragt - momspligtig',
-    shippingNoVat: '1300 - Salg af fragt - momsfri',
-    servicesVat: '1000 - Salg af varer/ydelser m/moms',
-    servicesNoVat: '1050 - Salg af varer/ydelser u/moms',
-    refundGoodsVat: '1000 - Salg af varer/ydelser m/moms',
-    refundGoodsNoVat: '1050 - Salg af varer/ydelser u/moms',
-    refundShippingVat: '1350 - Salg af fragt - momspligtig',
-    refundShippingNoVat: '1300 - Salg af fragt - momsfri',
-    refundServicesVat: '1000 - Salg af varer/ydelser m/moms',
-    refundServicesNoVat: '1050 - Salg af varer/ydelser u/moms',
-    fees: '3628 - Betalingsgebyrer',
-    clearing: '55000 - Mellemregning',
-    start: '2026-09-01',
-  });
+  const [accounts, setAccounts] = useState<Accounts>(emptyAccounts);
+  const [automation, setAutomation] = useState<Automation>(defaultAutomation);
+  const [invoiceEmail, setInvoiceEmail] = useState<InvoiceEmailSettings>(defaultInvoiceEmail);
+  const [syncIntervalMinutes, setSyncIntervalMinutes] = useState(5);
+  const [settingsReady, setSettingsReady] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsRevision, setSettingsRevision] = useState<string | null>(null);
+  const [settingsMessage, setSettingsMessage] = useState('');
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [orderError, setOrderError] = useState('');
+  const [openErrorCount, setOpenErrorCount] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => fetch('/api/admin/errors', { cache: 'no-store' }).then(async response => await response.json() as { errors?: unknown[]; openCount?: number }).then(data => { if (active) setOpenErrorCount(data.openCount ?? data.errors?.length ?? 0); }).catch(() => undefined);
+    void refresh(); const timer = window.setInterval(refresh, 60000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+  useEffect(() => {
+    fetch('/api/admin/settings').then(async response => {
+      const data = await response.json() as { settings: AdminSettings | null; revision: string | null; error?: string };
+      if (!response.ok) throw new Error(data.error);
+      if (data.settings) { setAccounts(data.settings.accounts); setAutomation(data.settings.automation); setInvoiceEmail(data.settings.invoiceEmail); setSyncIntervalMinutes(data.settings.syncIntervalMinutes); }
+      else {
+        try {
+          const legacyAccounts = localStorage.getItem('sablen-integrationshub-settings');
+          const legacyAutomation = localStorage.getItem('sablen-integrationshub-automation');
+          if (legacyAccounts || legacyAutomation) {
+            const legacy = validateSettings({ accounts: { ...emptyAccounts, ...JSON.parse(legacyAccounts || '{}') }, automation: { ...defaultAutomation, ...JSON.parse(legacyAutomation || '{}') } });
+            setAccounts(legacy.accounts); setAutomation(legacy.automation); setInvoiceEmail(legacy.invoiceEmail);
+            setSettingsMessage('Tidligere browserindstillinger er indlæst som forslag. Kontrollér dem og vælg Gem indstillinger for at gemme dem fælles. Automatik er ikke aktiveret.');
+          }
+        } catch { setSettingsMessage('Gamle browserindstillinger kunne ikke læses. Vælg konti og moduler igen.'); }
+      }
+      setSettingsRevision(data.revision); setSettingsReady(true);
+    }).catch(error => setSettingsMessage(error.message || 'Indstillinger kunne ikke indlæses. Genindlæs siden.'));
+  }, []);
   const filtered = salesOrders.filter(
     (order) =>
       order.id.includes(query) ||
       order.status.toLowerCase().includes(query.toLowerCase()),
   );
   useEffect(() => {
-    const saved = localStorage.getItem('sablen-integrationshub-settings');
-    if (saved) setAccounts((current) => ({ ...current, ...JSON.parse(saved) }));
-    fetch('/api/shopify/orders')
-      .then((response) => response.json())
+    fetch(`/api/shopify/orders?offset=${orderOffset}`)
+      .then(async response => { const data = await response.json() as { orders: OrderView[]; total: number; error?: string }; if (!response.ok) throw new Error(data.error || 'Ordrer kunne ikke indlæses'); return data; })
       .then((data) => {
-        if (Array.isArray(data.orders)) setSalesOrders(data.orders);
+        if (Array.isArray(data.orders)) { setSalesOrders(data.orders); setOrderTotal(data.total || 0); setOrderError(''); }
       })
-      .catch(() => undefined);
-  }, []);
+      .catch(error => setOrderError(error.message || 'Ordrer kunne ikke indlæses'));
+  }, [orderOffset, orderRevision]);
   const syncOrders = async () => {
     setSyncingOrders(true);
     try {
-      const response = await fetch('/api/shopify/orders', { method: 'POST' });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      setSalesOrders(data.orders);
-      notify(`${data.synced} Shopify-ordrer er synkroniseret · ${data.invoicesCreated || 0} nye PDF-fakturaer`);
+      let after: string | null = null; let synced = 0; let invoices = 0; let warnings = 0;
+      do {
+        const response: Response = await fetch('/api/shopify/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ after }) });
+        const data: { orders: OrderView[]; synced: number; invoicesCreated: number; invoiceWarnings?: string[]; hasNextPage: boolean; endCursor: string | null; error?: string } = await response.json();
+        if (!response.ok) throw new Error(data.error);
+        setSalesOrders(data.orders); synced += data.synced; invoices += data.invoicesCreated || 0;
+        warnings += data.invoiceWarnings?.length || 0;
+        after = data.hasNextPage ? data.endCursor : null;
+        notify(`${synced} Shopify-ordrer hentet · ${invoices} PDF-fakturaer${warnings ? ` · ${warnings} fakturaer kræver kontrol under Administration` : ''}${after ? ' · henter flere…' : ''}`);
+      } while (after);
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Shopify-ordrer kunne ikke synkroniseres');
     } finally {
       setSyncingOrders(false);
+      setOrderOffset(0); setOrderRevision(value => value + 1);
     }
   };
   const notify = (message: string) => {
     setNotice(message);
     window.setTimeout(() => setNotice(''), 2600);
   };
-  const saveSettings = () => {
-    localStorage.setItem(
-      'sablen-integrationshub-settings',
-      JSON.stringify(accounts),
-    );
-    notify('Indstillingerne er gemt');
+  const saveSettings = async () => {
+    setSettingsSaving(true); setSettingsMessage('');
+    try {
+      const response = await fetch('/api/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ settings: { accounts, automation, invoiceEmail, syncIntervalMinutes }, revision: settingsRevision }) });
+      const data = await response.json() as { revision: string; error?: string };
+      if (!response.ok) throw new Error(data.error);
+      setSettingsRevision(data.revision); setSettingsMessage('Indstillingerne er gemt fælles for alle enheder. Bogføring er fortsat ikke aktiveret.');
+    } catch (error) { setSettingsMessage(error instanceof Error ? error.message : 'Kunne ikke gemme'); }
+    finally { setSettingsSaving(false); }
   };
   return (
     <main className="min-h-screen bg-background text-foreground lg:grid lg:grid-cols-[246px_1fr]">
@@ -173,38 +195,20 @@ export default function Home() {
           />
         </div>
         <nav className="flex-1 px-3 py-4" aria-label="Primær navigation">
-          <p className="nav-label">Overblik</p>
-          <a className="nav-item" href="#">
-            <LayoutDashboard />
-            Dashboard
-          </a>
           <p className="nav-label mt-7">Bogføring</p>
           <button
             className={`nav-item w-full ${view === 'orders' ? 'active' : ''}`}
             onClick={() => setView('orders')}
           >
             <PackageCheck />
-            Salg{' '}
-            <span className="ml-auto rounded-md bg-black/10 px-1.5 py-0.5 text-[10px]">
-              24
-            </span>
-          </button>
-          <button
-            className={`nav-item w-full ${view === 'payments' ? 'active' : ''}`}
-            onClick={() => setView('payments')}
-          >
-            <CircleDollarSign />
-            Betalinger
+            Salg
           </button>
           <button
             className={`nav-item w-full ${view === 'refunds' ? 'active' : ''}`}
             onClick={() => setView('refunds')}
           >
             <RotateCcw />
-            Tilbagebetalinger{' '}
-            <span className="ml-auto rounded-md bg-white/10 px-1.5 py-0.5 text-[10px]">
-              3
-            </span>
+            Tilbagebetalinger
           </button>
           <button
             className={`nav-item w-full ${view === 'payouts' ? 'active' : ''}`}
@@ -213,14 +217,8 @@ export default function Home() {
             <HandCoins />
             Udbetalinger
           </button>
-          <p className="nav-label mt-7">System</p>
-          <button
-            className={`nav-item w-full ${view === 'settings' ? 'active' : ''}`}
-            onClick={() => setView('settings')}
-          >
-            <Settings2 />
-            Administration
-          </button>
+          <button className={`nav-item w-full ${view === 'inventory' ? 'active' : ''}`} onClick={() => setView('inventory')}><Warehouse />Lager</button>
+          <button className={`nav-item w-full ${view === 'packaging' ? 'active' : ''}`} onClick={() => setView('packaging')}><Boxes />Emballage</button>
           <p className="nav-label mt-7">Dokumenter</p>
           <button
             className={`nav-item w-full ${view === 'invoices' ? 'active' : ''}`}
@@ -229,23 +227,78 @@ export default function Home() {
             <FileText />
             Fakturaer
           </button>
+          <button className={`nav-item w-full ${view === 'documents' ? 'active' : ''}`} onClick={() => setView('documents')}><BookOpenCheck />Udbetalingsrapporter</button>
+          <p className="nav-label mt-7">System</p>
+          <button className={`nav-item w-full ${view === 'insights' ? 'active' : ''}`} onClick={() => setView('insights')}><Activity />Indsigt</button>
+          <button
+            className={`nav-item w-full ${view === 'settings' ? 'active' : ''}`}
+            onClick={() => setView('settings')}
+          >
+            <Settings2 />
+            Indstillinger
+          </button>
         </nav>
-        <div className="m-3 rounded-xl border border-white/8 bg-white/[.035] p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs text-slate-400">Systemstatus</span>
-            <span className="size-2 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399]" />
-          </div>
-          <p className="text-xs font-medium text-white">
-            Alle forbindelser kører
-          </p>
-          <p className="mt-1 text-[11px] text-slate-500">
-            Synkroniseret for 2 min. siden
-          </p>
+        <div className="mx-4 mb-3 overflow-hidden rounded-xl border border-white/10 bg-black/30 shadow-lg">
+          <img src="/og.png" alt="Sablen Toolbox" className="h-auto w-full" />
         </div>
+        <SyncCountdown intervalMinutes={syncIntervalMinutes} />
       </aside>
       <section className="min-w-0">
+        {(view === 'orders' || view === 'invoices') && <nav aria-label="Ordrehistorik" className="flex flex-wrap items-center justify-between gap-3 border-b bg-white px-5 py-3 text-sm"><span>{orderTotal ? `${orderOffset + 1}–${Math.min(orderOffset + 100, orderTotal)} af ${orderTotal} ordrer i historikken` : 'Ingen ordrer i historikken'}</span><div className="flex gap-2"><Button variant="outline" disabled={syncingOrders || orderOffset === 0} onClick={() => setOrderOffset(value => Math.max(0, value - 100))}>Forrige</Button><Button variant="outline" disabled={syncingOrders || orderOffset + 100 >= orderTotal} onClick={() => setOrderOffset(value => value + 100)}>Næste</Button></div></nav>}
         <header className="flex h-20 items-center justify-between border-b border-border bg-white px-5 md:px-8">
           <div className="flex items-center gap-3 lg:hidden">
+            <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+              <SheetTrigger render={<Button variant="outline" size="icon" aria-label="Åbn menu" />}><Menu /></SheetTrigger>
+              <SheetContent side="left" className="sidebar-shell overflow-y-auto p-4" showCloseButton={false}>
+                <div className="flex items-center justify-between"><SheetTitle className="text-white">Menu</SheetTitle><Button variant="outline" onClick={() => setMobileOpen(false)}>Luk</Button></div>
+                <SheetDescription className="text-slate-300">Sablen Toolbox</SheetDescription>
+                <nav className="flex-1 px-3 py-4" aria-label="Primær navigation">
+          <p className="nav-label mt-7">Bogføring</p>
+          <button
+            className={`nav-item w-full ${view === 'orders' ? 'active' : ''}`}
+            onClick={() => { setMobileOpen(false); setView('orders'); }}
+          >
+            <PackageCheck />
+            Salg
+          </button>
+          <button
+            className={`nav-item w-full ${view === 'refunds' ? 'active' : ''}`}
+            onClick={() => { setMobileOpen(false); setView('refunds'); }}
+          >
+            <RotateCcw />
+            Tilbagebetalinger
+          </button>
+          <button
+            className={`nav-item w-full ${view === 'payouts' ? 'active' : ''}`}
+            onClick={() => { setMobileOpen(false); setView('payouts'); }}
+          >
+            <HandCoins />
+            Udbetalinger
+          </button>
+          <button className={`nav-item w-full ${view === 'inventory' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('inventory'); }}><Warehouse />Lager</button>
+          <button className={`nav-item w-full ${view === 'packaging' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('packaging'); }}><Boxes />Emballage</button>
+          <p className="nav-label mt-7">Dokumenter</p>
+          <button
+            className={`nav-item w-full ${view === 'invoices' ? 'active' : ''}`}
+            onClick={() => { setMobileOpen(false); setView('invoices'); }}
+          >
+            <FileText />
+            Fakturaer
+          </button>
+          <button className={`nav-item w-full ${view === 'documents' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('documents'); }}><BookOpenCheck />Udbetalingsrapporter</button>
+          <p className="nav-label mt-7">System</p>
+          <button className={`nav-item w-full ${view === 'insights' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('insights'); }}><Activity />Indsigt</button>
+          <button
+            className={`nav-item w-full ${view === 'settings' ? 'active' : ''}`}
+            onClick={() => { setMobileOpen(false); setView('settings'); }}
+          >
+            <Settings2 />
+            Indstillinger
+          </button>
+        </nav>
+                <div className="mx-3 mb-3 overflow-hidden rounded-xl border border-white/10 bg-black/30"><img src="/og.png" alt="Sablen Toolbox" className="h-auto w-full" /></div>
+              </SheetContent>
+            </Sheet>
             <img src="/sablen-logo.webp" alt="Sablen" className="w-[105px]" />
           </div>
           <div className="hidden items-center gap-2 text-sm text-muted-foreground lg:flex">
@@ -253,8 +306,12 @@ export default function Home() {
             <ChevronDown className="size-4" />
           </div>
           <div className="ml-auto flex items-center gap-3">
+            <button type="button" className="relative grid size-10 place-items-center rounded-full border bg-white text-foreground transition-colors hover:bg-muted" onClick={() => { setSettingsTab('dashboard'); setView('settings'); }} aria-label={openErrorCount ? `${openErrorCount} åbne fejl – åbn fejloversigten` : 'Ingen åbne fejl'}>
+              <Bell className="size-5" />
+              {openErrorCount > 0 && <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[11px] font-bold leading-none text-white">{openErrorCount > 99 ? '99+' : openErrorCount}</span>}
+            </button>
             <div className="hidden text-right sm:block">
-              <p className="text-sm font-medium">Rune Jensen</p>
+              <p className="text-sm font-medium">rene@sablen.dk</p>
               <p className="text-xs text-muted-foreground">Administrator</p>
             </div>
             <span className="grid size-9 place-items-center rounded-full bg-[#f1e7d7] text-xs font-bold text-[#6d5430]">
@@ -286,11 +343,11 @@ export default function Home() {
               <Stat
                 label="Hentede Shopify-ordrer"
                 value={`${salesOrders.length} ordrer`}
-                note="Seneste 100 ordrer"
+                note="På den valgte side"
                 tone="lime"
               />
               <Stat
-                label="Klar til bogføring"
+                label="Ikke bogført"
                 value={`${salesOrders.filter((order) => order.status === 'Afventer').length} ordrer`}
                 note="Afventer Dinero-workflow"
               />
@@ -301,6 +358,8 @@ export default function Home() {
                 tone="warn"
               />
             </div>
+            {orderError && <p role="alert" className="mb-4 text-red-700">{orderError}</p>}
+            <p className="mb-4 text-sm text-muted-foreground">Bogføring i Dinero er ikke aktiveret. Bogføringsstatus ændres ikke ved at genindlæse siden.</p>
             <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_40px_rgba(23,31,27,.045)]">
               <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="relative w-full sm:max-w-[320px]">
@@ -313,13 +372,6 @@ export default function Home() {
                     aria-label="Søg i ordrer"
                   />
                 </div>
-                <Button variant="outline" className="h-10 rounded-xl px-3">
-                  <SlidersHorizontal data-icon="inline-start" />
-                  Filtre{' '}
-                  <Badge variant="secondary" className="ml-1">
-                    2
-                  </Badge>
-                </Button>
               </div>
               <Table>
                 <TableHeader>
@@ -327,7 +379,7 @@ export default function Home() {
                     <TableHead className="pl-5">Ordre</TableHead>
                     <TableHead>Dato</TableHead>
                     <TableHead>Afsendelse</TableHead>
-                    <TableHead className="text-right">Beløb DKK</TableHead>
+                    <TableHead className="text-right">Beløb</TableHead>
                     <TableHead>Realiseret</TableHead>
                     <TableHead>Bogføring</TableHead>
                     <TableHead>
@@ -336,50 +388,56 @@ export default function Home() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {!filtered.length && <TableRow><TableCell colSpan={7} className="p-8 text-center">{orderError ? 'Ordrerne kunne ikke vises.' : 'Ingen ordrer i det valgte udsnit.'}</TableCell></TableRow>}
                   {filtered.map((order) => (
-                    <OrderRow key={order.id} order={order} />
+                    <OrderRow key={order.id} order={order} onBooked={() => setOrderRevision(value => value + 1)} />
                   ))}
                 </TableBody>
               </Table>
               <div className="flex items-center justify-between border-t border-border px-5 py-4 text-xs text-muted-foreground">
                 <span>Viser {filtered.length} af {salesOrders.length} ordrer</span>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" disabled>
-                    Forrige
-                  </Button>
-                  <Button size="sm" variant="outline">
-                    Næste
-                  </Button>
-                </div>
               </div>
             </section>
           </div>
         )}
-        {view === 'payments' && (
-          <Payments
-            onBook={() => notify('3 betalinger er sendt til bogføring')}
-          />
-        )}
         {view === 'invoices' && (
           <Invoices orders={salesOrders} onGenerated={(count) => notify(`${count} faktura${count === 1 ? '' : 'er'} er genereret`)} onSync={syncOrders} syncing={syncingOrders} />
         )}
+        {view === 'documents' && <Documents />}
         {view === 'refunds' && (
-          <Refunds
-            onBook={() => notify('Tilbagebetalingen er sendt til bogføring')}
-          />
+          <Payments kind="refund" />
         )}
         {view === 'payouts' && (
-          <Payouts
-            onBook={() => notify('Udbetalingen er sendt til bogføring')}
-          />
+          <ProviderLedger kind="payout" />
         )}
+        {view === 'inventory' && <Inventory />}
+        {view === 'packaging' && <Packaging />}
+        {view === 'insights' && <JobInsights />}
         {view === 'settings' && (
-          <Settings
+          <div>
+            <div className="mx-auto w-full max-w-[1440px] px-5 pt-6 md:px-8">
+              <Tabs value={settingsTab} onValueChange={value => setSettingsTab(value as typeof settingsTab)}>
+                <div className="overflow-x-auto pb-1">
+                  <TabsList aria-label="Indstillinger">
+                    <TabsTrigger value="dashboard" className="px-4">Dashboard</TabsTrigger>
+                    <TabsTrigger value="integrations" className="px-4">Integrationer og kontoplan</TabsTrigger>
+                    <TabsTrigger value="invoice-email" className="px-4">Faktura-afsendelse</TabsTrigger>
+                    <TabsTrigger value="inventory" className="px-4">Lager</TabsTrigger>
+                  </TabsList>
+                </div>
+              </Tabs>
+            </div>
+            <Settings
+            mode={settingsTab}
             accounts={accounts}
             setAccounts={setAccounts}
             onSave={saveSettings}
+            automation={automation} setAutomation={setAutomation} invoiceEmail={invoiceEmail} setInvoiceEmail={setInvoiceEmail} syncIntervalMinutes={syncIntervalMinutes} setSyncIntervalMinutes={setSyncIntervalMinutes}
+            ready={settingsReady} saving={settingsSaving} message={settingsMessage}
             onShopifyConnected={syncOrders}
+            onErrorCountChange={setOpenErrorCount}
           />
+          </div>
         )}
       </section>
       {notice && (
@@ -393,6 +451,7 @@ export default function Home() {
           {notice}
         </div>
       )}
+      <SyncCountdown intervalMinutes={syncIntervalMinutes} mobile />
     </main>
   );
 }
@@ -427,9 +486,9 @@ function Stat({
     </div>
   );
 }
-function OrderRow({ order }: { order: (typeof orders)[number] }) {
-  const isError = order.status === 'Fejlet';
-  const [state, setState] = useState(order.status);
+function OrderRow({ order, onBooked }: { order: OrderView; onBooked: () => void }) {
+  const state = order.status;
+  const booked = state === 'Bogført';
   return (
     <TableRow className={state === 'Fejlet' ? 'bg-red-50/35' : ''}>
       <TableCell className="pl-5 font-semibold text-[#365f08]">
@@ -443,7 +502,7 @@ function OrderRow({ order }: { order: (typeof orders)[number] }) {
         {order.shipped}
       </TableCell>
       <TableCell className="text-right font-medium tabular-nums">
-        {order.amount}
+        {order.amount} {order.currency || 'DKK'}
       </TableCell>
       <TableCell className="text-muted-foreground">{order.realized}</TableCell>
       <TableCell>
@@ -462,46 +521,60 @@ function OrderRow({ order }: { order: (typeof orders)[number] }) {
         </Badge>
       </TableCell>
       <TableCell className="pr-5 text-right">
-        {state === 'Fejlet' ? (
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-red-200 text-red-700 hover:bg-red-50"
-            onClick={() => {
-              setState('Bogfører…');
-              window.setTimeout(() => setState('Bogført'), 1200);
-            }}
-          >
-            <RefreshCw />
-            Bogfør igen
-          </Button>
-        ) : (
-          <Button size="icon-sm" variant="ghost" aria-label={`Åbn ${order.id}`}>
-            <ArrowUpRight />
-          </Button>
-        )}
+        {order.externalId && <div className="flex flex-wrap justify-end gap-2"><SalesPreview externalId={order.externalId} disabled={booked} /><SalesTransfer externalId={order.externalId} disabled={booked} onBooked={onBooked} /></div>}
       </TableCell>
     </TableRow>
   );
 }
 
 function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[]; onGenerated: (count: number) => void; onSync: () => Promise<void>; syncing: boolean }) {
-  const [selectedInvoice, setSelectedInvoice] = useState<OrderView | null>(null);
   const [statuses, setStatuses] = useState<Record<string, string>>({});
+  const [emailing, setEmailing] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState('');
   const [generating, setGenerating] = useState(false);
-  useEffect(() => { fetch('/api/invoices').then((r) => r.json()).then((data) => setStatuses(data.statuses || {})).catch(() => undefined); }, []);
-  const generate = async (order: OrderView) => {
+  const [invoiceError, setInvoiceError] = useState('');
+  const [invoiceMessage, setInvoiceMessage] = useState('');
+  useEffect(() => { fetch('/api/invoices').then(async response => { if (!response.ok) throw new Error('Fakturastatus kunne ikke indlæses'); return response.json() as Promise<{ statuses: Record<string, string> }>; }).then(data => setStatuses(data.statuses || {})).catch(error => setInvoiceError(error.message)); }, []);
+  const generate = async (order: OrderView, regenerate = false) => {
     if (!order.externalId) return;
-    setStatuses((current) => ({ ...current, [order.externalId!]: 'Genererer…' }));
-    const response = await fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ externalId: order.externalId }) });
-    const data = await response.json();
-    if (!response.ok) { setStatuses((current) => ({ ...current, [order.externalId!]: 'Fejlet' })); return; }
-    setStatuses(data.statuses || {}); onGenerated(1);
+    const previousStatus = statuses[order.externalId];
+    setInvoiceError(''); setGenerating(true);
+    setStatuses(current => ({ ...current, [order.externalId!]: regenerate ? 'Regenererer…' : 'Genererer…' }));
+    try {
+      const response = await fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ externalId: order.externalId, regenerate }) });
+      const data = await response.json() as { statuses: Record<string, string>; generated: number; error?: string };
+      if (!response.ok) throw new Error(data.error || 'Fakturaen kunne ikke genereres');
+      setStatuses(data.statuses || {}); onGenerated(data.generated);
+    } catch (error) {
+      setInvoiceError(error instanceof Error ? error.message : 'Fakturaen kunne ikke genereres');
+      setStatuses(current => ({ ...current, [order.externalId!]: previousStatus === 'Genereret' ? 'Genereret' : 'Fejlet' }));
+    } finally { setGenerating(false); }
   };
   const generateAll = async () => {
-    setGenerating(true);
-    try { const response = await fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ all: true }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error); setStatuses(data.statuses || {}); onGenerated(data.generated || 0); } finally { setGenerating(false); }
+    setGenerating(true); setInvoiceError('');
+    try {
+      let offset = 0; let count = 0; let more = true; const warnings: string[] = [];
+      while (more) {
+        const response = await fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ all: true, offset }) });
+        const data = await response.json() as { statuses: Record<string, string>; generated: number; warnings?: string[]; hasMore: boolean; nextOffset: number; error?: string }; if (!response.ok) throw new Error(data.error);
+        warnings.push(...(data.warnings || []));
+        setStatuses(data.statuses || {}); count += data.generated || 0; more = data.hasMore; offset = data.nextOffset;
+      }
+      onGenerated(count);
+      if (warnings.length) setInvoiceError(`${warnings.length} fakturaer kræver gennemgang. ${warnings.slice(0, 3).join(' ')} Se alle meddelelser under Administration.`);
+    } catch (error) { setInvoiceError(error instanceof Error ? error.message : 'Fakturaerne kunne ikke genereres'); } finally { setGenerating(false); }
+  };
+  const sendInvoice = async (order: OrderView) => {
+    if (!order.externalId) return;
+    setInvoiceError(''); setInvoiceMessage('');
+    setEmailing(current => ({ ...current, [order.externalId!]: true }));
+    try {
+      const response = await fetch('/api/invoices/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ externalId: order.externalId }) });
+      const data = await response.json() as { sent?: boolean; recipient?: string; invoiceNumber?: string; error?: string };
+      if (!response.ok || !data.sent) throw new Error(data.error || 'Fakturaen kunne ikke sendes');
+      setInvoiceMessage(`Faktura ${data.invoiceNumber || order.id.replace(/^#/, '')} er sendt til ${data.recipient}.`);
+    } catch (error) { setInvoiceError(error instanceof Error ? error.message : 'Fakturaen kunne ikke sendes'); }
+    finally { setEmailing(current => ({ ...current, [order.externalId!]: false })); }
   };
   const visibleOrders = orders.filter((order) => order.id.toLowerCase().includes(query.toLowerCase()));
   const generatedCount = orders.filter((order) => order.externalId && statuses[order.externalId] === 'Genereret').length;
@@ -514,7 +587,7 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
             Fakturaer
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Generér og administrér en faktura for hver webshopordre.
+            Fakturaer oprettes først, når hele ordren er markeret som afsendt i Shopify. Opdateringen sker ved hentning fra Shopify.
           </p>
         </div>
         <div className="flex gap-2"><Button variant="outline" className="h-10 rounded-xl px-4" onClick={onSync} disabled={syncing}><RefreshCw className={syncing ? 'animate-spin' : ''} />{syncing ? 'Henter…' : 'Hent fra Shopify'}</Button><Button className="h-10 rounded-xl px-4" onClick={generateAll} disabled={generating || !orders.length}>
@@ -522,9 +595,12 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
           {generating ? 'Genererer…' : 'Generér alle manglende'}
         </Button></div>
       </div>
+      {invoiceError && <p role="alert" className="mb-4 rounded-xl border border-red-200 p-4 text-sm text-red-700">{invoiceError}</p>}
+      {invoiceMessage && <p role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{invoiceMessage}</p>}
+      <p className="mb-4 text-sm text-muted-foreground">En genereret faktura kan sendes manuelt til kundens mailadresse fra Shopify. Eksisterende PDF’er bevares, og ændrede fakturaer kræver særskilt gennemgang.</p>
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
         <Stat
-          label="Fakturaer i september"
+          label="Fakturaer på denne side"
           value={`${orders.length} ordrer`}
           note={`${generatedCount} er genereret`}
           tone="lime"
@@ -558,7 +634,7 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
             <TableRow className="bg-muted/45">
               <TableHead className="pl-5">Ordrenummer</TableHead>
               <TableHead>Ordredato</TableHead>
-              <TableHead className="text-right">Beløb DKK</TableHead>
+              <TableHead className="text-right">Beløb</TableHead>
               <TableHead>Fakturastatus</TableHead>
               <TableHead>
                 <span className="sr-only">Handling</span>
@@ -567,7 +643,7 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
           </TableHeader>
           <TableBody>
             {visibleOrders.map((order) => {
-              const status = order.externalId ? statuses[order.externalId] || 'Afventer' : 'Afventer';
+              const status = (order.externalId ? statuses[order.externalId] : null) || (order.shipped === 'Afsendt' ? 'Afventer' : 'Afventer afsendelse');
               return (
                 <TableRow
                   key={order.id}
@@ -580,7 +656,7 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
                     {order.date}
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums">
-                    {order.amount}
+                    {order.amount} {order.currency || 'DKK'}
                   </TableCell>
                   <TableCell>
                     <Badge
@@ -599,17 +675,17 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
                   </TableCell>
                   <TableCell className="pr-5 text-right">
                     {status === 'Genereret' ? (
-                      <div className="flex justify-end gap-1"><Button variant="ghost" size="sm" onClick={() => setSelectedInvoice(order)}><ArrowUpRight />Vis</Button><a className={buttonVariants({ variant: 'outline', size: 'sm' })} href={`/api/invoices/pdf?externalId=${encodeURIComponent(order.externalId || '')}`} target="_blank" rel="noreferrer"><FileText />PDF</a></div>
+                      <div className="flex flex-wrap justify-end gap-1"><a className={buttonVariants({ variant: 'outline', size: 'sm' })} href={`/api/invoices/pdf?externalId=${encodeURIComponent(order.externalId || '')}`} target="_blank" rel="noreferrer"><FileText />PDF</a><Button variant="outline" size="sm" disabled={Boolean(emailing[order.externalId || ''])} onClick={() => sendInvoice(order)}><Mail />{emailing[order.externalId || ''] ? 'Sender…' : 'Send til kunde'}</Button><Button variant="outline" size="sm" disabled={generating} onClick={() => generate(order, true)}><RefreshCw />Regenerér</Button></div>
                     ) : (
-                      <Button
+                      <div className="flex justify-end gap-1"><Button
                         variant="outline"
                         size="sm"
                         onClick={() => generate(order)}
-                        disabled={status === 'Genererer…'}
+                        disabled={generating || order.shipped !== 'Afsendt' || status === 'Genererer…' || status === 'Regenererer…'}
                       >
                         <FileText />
                         {status === 'Fejlet' ? 'Generér igen' : 'Generér'}
-                      </Button>
+                      </Button></div>
                     )}
                   </TableCell>
                 </TableRow>
@@ -619,452 +695,29 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
         </Table>
       </section>
       {!orders.length && <div className="mt-4 rounded-xl border border-dashed bg-white p-8 text-center text-sm text-muted-foreground">Ingen Shopify-ordrer er hentet endnu. Forbind Shopify under Administration, og vælg derefter “Hent fra Shopify”.</div>}
-      {selectedInvoice && <InvoicePreview order={selectedInvoice} onClose={() => setSelectedInvoice(null)} />}
     </div>
   );
 }
 
-function InvoicePreview({ order, onClose }: { order: OrderView; onClose: () => void }) {
-  const total = Number(order.amount.replaceAll('.', '').replace(',', '.'));
-  const beforeVat = total / 1.25;
-  const vat = total - beforeVat;
-  const money = (value: number) => value.toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const customer = order.customer;
-  const invoiceDate = order.createdAt ? new Intl.DateTimeFormat('da-DK').format(new Date(order.createdAt)) : order.date;
-  const lines = order.lines?.length ? order.lines : [{ name: `Shopify-ordre ${order.id}`, quantity: 1, discountedTotalSet: { shopMoney: { amount: String(total), currencyCode: order.currency || 'DKK' } } }];
-  return <section className="mt-6 rounded-2xl border bg-[#eceae6] p-4 md:p-8"><div className="mb-4 flex items-center justify-between"><div><p className="eyebrow">Fakturaforhåndsvisning</p><p className="mt-1 text-sm text-muted-foreground">Live-data fra Shopify</p></div><Button variant="outline" onClick={onClose}>Luk</Button></div><article className="mx-auto min-h-[820px] max-w-[780px] bg-white px-10 py-12 shadow-[0_18px_50px_rgba(35,35,35,.12)] md:px-16"><div className="flex items-start justify-between"><address className="not-italic text-sm leading-6"><strong className="text-base">{customer?.name || 'Kunde'}</strong><br />{customer?.address1 || ''}{customer?.address2 && <><br />{customer.address2}</>}<br />{customer?.zip || ''} {customer?.city || ''}<br />{customer?.country || ''}</address><img src="/sablen-logo.webp" alt="Sablen" className="w-40" /></div><div className="mt-16 flex items-end justify-between"><div><h2 className="text-2xl">Faktura</h2><p className="mt-1 text-sm">Ordrenr. <strong>{order.id}</strong></p></div><div className="text-right text-sm leading-6"><p>Fakturanr. <strong>{order.id}</strong></p><p>Fakturadato: <strong>{invoiceDate}</strong></p></div></div><table className="mt-5 w-full text-sm"><thead><tr className="border-y-2 border-[#232b38]"><th className="py-2 text-left font-normal">Beskrivelse</th><th className="py-2 text-right font-normal">Antal</th><th className="py-2 text-right font-normal">Stk. pris</th><th className="py-2 text-right font-normal">Pris</th></tr></thead><tbody>{lines.map((line, index) => { const lineTotal = Number(line.discountedTotalSet.shopMoney.amount); return <tr className="border-b" key={`${line.name}-${index}`}><td className="py-3">{line.name}</td><td className="py-3 text-right">{line.quantity}</td><td className="py-3 text-right">{money(lineTotal / Math.max(line.quantity, 1))}</td><td className="py-3 text-right">{money(lineTotal)}</td></tr>; })}{order.shippingLines?.map((line, index) => <tr className="border-b" key={`shipping-${index}`}><td className="py-3">{line.title || 'Levering'}</td><td className="py-3 text-right">1</td><td className="py-3 text-right">{money(Number(line.discountedPriceSet.shopMoney.amount))}</td><td className="py-3 text-right">{money(Number(line.discountedPriceSet.shopMoney.amount))}</td></tr>)}</tbody></table><div className="ml-auto mt-5 w-full max-w-[380px] text-sm"><div className="flex justify-between py-1"><span>Total ekskl. moms</span><span>{money(Number(order.subtotal || beforeVat))}</span></div><div className="flex justify-between py-1"><span>Moms</span><span>{money(Number(order.tax || vat))}</span></div><div className="mt-1 flex justify-between border-b-4 border-[#555f70] py-2 text-base font-bold"><span>Total inkl. moms {order.currency || 'DKK'}</span><span>{money(total)}</span></div></div><footer className="mt-[220px] border-t pt-4 text-center text-[11px] leading-5 text-slate-500"><p>LA Trading ApS / Egetoften 13 / 7500 Holstebro / Danmark</p><p>CVR-nr. 45036871 / Tlf. +45 2621 9318 / Web https://sablen.dk / E-mail kontakt@sablen.dk</p></footer></article></section>;
-}
 
-const payments = [
-  {
-    order: '#3841',
-    captured: '2. sep. 2026, 09.44',
-    provider: 'Shopify Payments',
-    amount: '1.249,00',
-    status: 'Bogført',
-  },
-  {
-    order: '#3840',
-    captured: '2. sep. 2026, 09.20',
-    provider: 'Shopify Payments',
-    amount: '698,00',
-    status: 'Afventer',
-  },
-  {
-    order: '#3838',
-    captured: '1. sep. 2026, 16.32',
-    provider: 'Shopify Payments',
-    amount: '449,00',
-    status: 'Fejlet',
-  },
-];
-function Payments({ onBook }: { onBook: () => void }) {
-  return (
-    <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
-      <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-        <div>
-          <p className="eyebrow">Shopify · Betalinger</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">
-            Betalinger
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Følg captured betalinger og deres bogføringsstatus.
-          </p>
-        </div>
-        <Button className="h-10 rounded-xl px-4" onClick={onBook}>
-          <BookOpenCheck />
-          Bogfør alle
-        </Button>
-      </div>
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
-        <Stat
-          label="Klar til bogføring"
-          value="20.082,57 kr."
-          note="3 udbetalinger"
-          tone="lime"
-        />
-        <Stat
-          label="Gebyrer denne måned"
-          value="450,70 kr."
-          note="2,2% af omsætning"
-        />
-        <Stat label="Difference" value="0,00 kr." note="Alt stemmer" />
-      </div>
-      <section className="overflow-hidden rounded-2xl border bg-white">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/45">
-              <TableHead className="pl-5">Ordrenummer</TableHead>
-              <TableHead>Captured</TableHead>
-              <TableHead>Betalingsudbyder</TableHead>
-              <TableHead className="text-right">Beløb</TableHead>
-              <TableHead>Bogføringsstatus</TableHead>
-              <TableHead>
-                <span className="sr-only">Handling</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {payments.map((payment) => (
-              <BookingTransactionRow
-                key={payment.order}
-                transaction={payment}
-                onBook={onBook}
-              />
-            ))}
-          </TableBody>
-        </Table>
-      </section>
-    </div>
-  );
-}
-
-const refunds = [
-  {
-    order: '#3840',
-    captured: '2. sep. 2026, 13.14',
-    amount: '– 349,00',
-    provider: 'Shopify Payments',
-    status: 'Bogført',
-  },
-  {
-    order: '#3822',
-    captured: '1. sep. 2026, 11.08',
-    amount: '– 795,00',
-    provider: 'Shopify Payments',
-    status: 'Fejlet',
-  },
-  {
-    order: '#3816',
-    captured: '31. aug. 2026, 15.42',
-    amount: '– 199,00',
-    provider: 'Shopify Payments',
-    status: 'Afventer',
-  },
-];
-function Refunds({ onBook }: { onBook: () => void }) {
-  return (
-    <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
-      <div className="mb-7 flex items-end justify-between">
-        <div>
-          <p className="eyebrow">Shopify · Dinero</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">
-            Tilbagebetalinger
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Følg refunderinger og deres bogføringsstatus.
-          </p>
-        </div>
-        <Button className="h-10 rounded-xl px-4">
-          <RefreshCw />
-          Synkronisér nu
-        </Button>
-      </div>
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
-        <Stat
-          label="Refunderet i september"
-          value="1.144,00 kr."
-          note="2 tilbagebetalinger"
-          tone="lime"
-        />
-        <Stat
-          label="Afventer realisering"
-          value="1 tilbagebetaling"
-          note="199,00 kr. i alt"
-        />
-        <Stat
-          label="Kræver handling"
-          value="1 tilbagebetaling"
-          note="Tilbagebetaling #R-3822"
-          tone="warn"
-        />
-      </div>
-      <section className="overflow-hidden rounded-2xl border bg-white">
-        <div className="border-b p-4">
-          <div className="relative max-w-[320px]">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="h-10 bg-muted/50 pl-9"
-              placeholder="Søg tilbagebetaling"
-            />
-          </div>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/45">
-              <TableHead className="pl-5">Ordrenummer</TableHead>
-              <TableHead>Captured</TableHead>
-              <TableHead>Betalingsudbyder</TableHead>
-              <TableHead className="text-right">Beløb</TableHead>
-              <TableHead>Bogføringsstatus</TableHead>
-              <TableHead>
-                <span className="sr-only">Handling</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {refunds.map((refund) => (
-              <BookingTransactionRow
-                key={refund.order}
-                transaction={refund}
-                onBook={onBook}
-                accent
-              />
-            ))}
-          </TableBody>
-        </Table>
-      </section>
-    </div>
-  );
-}
-
-function BookingTransactionRow({
-  transaction,
-  onBook,
-  accent = false,
-}: {
-  transaction: {
-    order: string;
-    captured: string;
-    provider: string;
-    amount: string;
-    status: string;
-  };
-  onBook: () => void;
-  accent?: boolean;
-}) {
-  const [status, setStatus] = useState(transaction.status);
-  const book = () => {
-    setStatus('Bogfører…');
-    window.setTimeout(() => {
-      setStatus('Bogført');
-      onBook();
-    }, 900);
-  };
-  return (
-    <TableRow className={status === 'Fejlet' ? 'bg-red-50/35' : ''}>
-      <TableCell
-        className={`pl-5 font-semibold ${accent ? 'text-[#a84f40]' : 'text-[#8a6636]'}`}
-      >
-        {transaction.order}
-      </TableCell>
-      <TableCell className="text-muted-foreground">
-        {transaction.captured}
-      </TableCell>
-      <TableCell>{transaction.provider}</TableCell>
-      <TableCell className="text-right font-medium tabular-nums">
-        {transaction.amount}
-      </TableCell>
-      <TableCell>
-        <Badge
-          variant={status === 'Fejlet' ? 'destructive' : 'secondary'}
-          className={status === 'Bogført' ? 'badge-booked' : 'badge-pending'}
-        >
-          {status === 'Bogført' && <BookOpenCheck />}
-          {status}
-        </Badge>
-      </TableCell>
-      <TableCell className="pr-5 text-right">
-        {status !== 'Bogført' && (
-          <Button
-            size="sm"
-            variant="outline"
-            className={status === 'Fejlet' ? 'border-red-200 text-red-700' : ''}
-            onClick={book}
-            disabled={status === 'Bogfører…'}
-          >
-            <RefreshCw />
-            {status === 'Fejlet' ? 'Bogfør igen' : 'Bogfør'}
-          </Button>
-        )}
-      </TableCell>
-    </TableRow>
-  );
-}
-
-const payouts = [
-  {
-    acquirer: 'Shopify Payments',
-    id: 'DK-PO-29831',
-    date: '3. sep. 2026, 06.15',
-    amount: '14.709,86',
-    status: 'Bogført',
-  },
-  {
-    acquirer: 'Shopify Payments',
-    id: 'FP-904218',
-    date: '2. sep. 2026, 23.58',
-    amount: '5.372,71',
-    status: 'Afventer',
-  },
-  {
-    acquirer: 'Shopify Payments',
-    id: 'VB-118402',
-    date: '2. sep. 2026, 18.04',
-    amount: '3.093,73',
-    status: 'Fejlet',
-  },
-  {
-    acquirer: 'Shopify Payments',
-    id: 'DK-PO-29818',
-    date: '1. sep. 2026, 06.12',
-    amount: '8.461,20',
-    status: 'Bogført',
-  },
-];
-
-function Payouts({ onBook }: { onBook: () => void }) {
-  return (
-    <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
-      <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-        <div>
-          <p className="eyebrow">Indløsere · Dinero</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">
-            Udbetalinger
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Følg udbetalinger fra betalingsudbyderne og deres bogføringsstatus.
-          </p>
-        </div>
-        <Button className="h-10 rounded-xl px-4">
-          <RefreshCw />
-          Synkronisér nu
-        </Button>
-      </div>
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
-        <Stat
-          label="Udbetalt i september"
-          value="31.637,50 kr."
-          note="4 udbetalinger"
-          tone="lime"
-        />
-        <Stat
-          label="Afventer bogføring"
-          value="5.372,71 kr."
-          note="1 udbetaling"
-        />
-        <Stat
-          label="Kræver handling"
-          value="3.093,73 kr."
-          note="Udbetaling SP-118402"
-          tone="warn"
-        />
-      </div>
-      <section className="overflow-hidden rounded-2xl border bg-white">
-        <div className="border-b p-4">
-          <div className="relative max-w-[320px]">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="h-10 bg-muted/50 pl-9"
-              placeholder="Søg udbetalings-id eller indløser"
-            />
-          </div>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/45">
-              <TableHead className="pl-5">Indløser</TableHead>
-              <TableHead>Udbetalings-id</TableHead>
-              <TableHead>Transaktionsdato</TableHead>
-              <TableHead className="text-right">Beløb</TableHead>
-              <TableHead>Bogføringsstatus</TableHead>
-              <TableHead>
-                <span className="sr-only">Handling</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {payouts.map((payout) => (
-              <PayoutRow key={payout.id} payout={payout} onBook={onBook} />
-            ))}
-          </TableBody>
-        </Table>
-      </section>
-    </div>
-  );
-}
-
-function PayoutRow({
-  payout,
-  onBook,
-}: {
-  payout: (typeof payouts)[number];
-  onBook: () => void;
-}) {
-  const [status, setStatus] = useState(payout.status);
-  const retry = () => {
-    setStatus('Bogfører…');
-    window.setTimeout(() => {
-      setStatus('Bogført');
-      onBook();
-    }, 900);
-  };
-  return (
-    <TableRow className={status === 'Fejlet' ? 'bg-red-50/35' : ''}>
-      <TableCell className="pl-5 font-medium">{payout.acquirer}</TableCell>
-      <TableCell className="font-semibold text-[#8a6636]">
-        {payout.id}
-      </TableCell>
-      <TableCell className="text-muted-foreground">{payout.date}</TableCell>
-      <TableCell className="text-right font-medium tabular-nums">
-        {payout.amount}
-      </TableCell>
-      <TableCell>
-        <Badge
-          variant={status === 'Fejlet' ? 'destructive' : 'secondary'}
-          className={status === 'Bogført' ? 'badge-booked' : 'badge-pending'}
-        >
-          {status === 'Bogført' && <BookOpenCheck />}
-          {status}
-        </Badge>
-      </TableCell>
-      <TableCell className="pr-5 text-right">
-        {status === 'Fejlet' && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-red-200 text-red-700"
-            onClick={retry}
-            disabled={status === 'Bogfører…'}
-          >
-            <RefreshCw />
-            Bogfør igen
-          </Button>
-        )}
-      </TableCell>
-    </TableRow>
-  );
-}
-
-type Accounts = {
-  vatCode: string;
-  noVatCode: string;
-  goodsVat: string;
-  goodsNoVat: string;
-  shippingVat: string;
-  shippingNoVat: string;
-  servicesVat: string;
-  servicesNoVat: string;
-  refundGoodsVat: string;
-  refundGoodsNoVat: string;
-  refundShippingVat: string;
-  refundShippingNoVat: string;
-  refundServicesVat: string;
-  refundServicesNoVat: string;
-  fees: string;
-  clearing: string;
-  start: string;
-};
 function Settings({
+  mode,
   accounts,
   setAccounts,
   onSave,
   onShopifyConnected,
+  automation, setAutomation, invoiceEmail, setInvoiceEmail, syncIntervalMinutes, setSyncIntervalMinutes, ready, saving, message, onErrorCountChange,
 }: {
+  mode: 'dashboard' | 'integrations' | 'invoice-email' | 'inventory';
   accounts: Accounts;
   setAccounts: React.Dispatch<React.SetStateAction<Accounts>>;
-  onSave: () => void;
+  onSave: () => Promise<void>;
+  automation: Automation; setAutomation: React.Dispatch<React.SetStateAction<Automation>>;
+  invoiceEmail: InvoiceEmailSettings; setInvoiceEmail: React.Dispatch<React.SetStateAction<InvoiceEmailSettings>>;
+  syncIntervalMinutes: number; setSyncIntervalMinutes: React.Dispatch<React.SetStateAction<number>>;
+  ready: boolean; saving: boolean; message: string;
   onShopifyConnected: () => Promise<void>;
+  onErrorCountChange: (count: number) => void;
 }) {
   const [chart, setChart] = useState<
     Array<{ number: string; name: string; vatCode?: string }>
@@ -1077,42 +730,41 @@ function Settings({
   const [connected, setConnected] = useState<Record<string, string>>({});
   const [shopify, setShopify] = useState({ shop: '', clientId: '', clientSecret: '' });
   const [dinero, setDinero] = useState({ clientId: '', clientSecret: '', apiKey: '', organizationId: '' });
-  const [automation, setAutomation] = useState({
-    attachments: true,
-    sales: true,
-    payments: true,
-    refunds: true,
-    payouts: true,
-  });
+  const [emailTestState, setEmailTestState] = useState<'idle' | 'sending'>('idle');
+  const [emailTestMessage, setEmailTestMessage] = useState('');
+  const [emailTestRecipient, setEmailTestRecipient] = useState('rene.jeppesen@live.dk');
   useEffect(() => {
-    const saved = localStorage.getItem('sablen-integrationshub-automation');
-    if (saved)
-      setAutomation((current) => ({ ...current, ...JSON.parse(saved) }));
     fetch('/api/integrations')
-      .then((response) => response.json())
+      .then((response) => response.json() as Promise<{ integrations: Array<{ provider: string; display_name: string }> }>)
       .then((data) => setConnected(Object.fromEntries((data.integrations ?? []).map((item: { provider: string; display_name: string }) => [item.provider, item.display_name]))))
       .catch(() => setConnectionMessage('Forbindelsesstatus kunne ikke hentes'));
   }, []);
   const toggleAutomation = (key: keyof typeof automation, value: boolean) => {
     const next = { ...automation, [key]: value };
     setAutomation(next);
-    localStorage.setItem(
-      'sablen-integrationshub-automation',
-      JSON.stringify(next),
-    );
+  };
+  const sendInvoiceTest = async () => {
+    setEmailTestState('sending'); setEmailTestMessage('');
+    try {
+      const response = await fetch('/api/invoices/email-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient: emailTestRecipient }) });
+      const data = await response.json() as { sent?: boolean; recipient?: string; invoiceNumber?: string; error?: string };
+      if (!response.ok) throw new Error(data.error || 'Testmailen kunne ikke sendes');
+      setEmailTestMessage(`Faktura ${data.invoiceNumber} er sendt til ${data.recipient}.`);
+    } catch (error) { setEmailTestMessage(error instanceof Error ? error.message : 'Testmailen kunne ikke sendes'); }
+    finally { setEmailTestState('idle'); }
   };
   const integrations = [
     {
       name: 'Shopify',
       provider: 'shopify' as const,
-      detail: 'Ordrer og refunderinger',
+      detail: 'Understøtter: Salg, Tilbagebetalinger, Udbetalinger og Lager',
       icon: ShoppingBag,
       connected: Boolean(connected.shopify),
     },
     {
       name: 'Dinero',
       provider: 'dinero' as const,
-      detail: 'Regnskab og bilag',
+      detail: 'Understøtter: Salg, Tilbagebetalinger, Udbetalinger og Lager',
       icon: Landmark,
       connected: Boolean(connected.dinero),
     },
@@ -1126,11 +778,12 @@ function Settings({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ provider, ...(provider === 'shopify' ? shopify : dinero) }),
       });
-      const data = await response.json();
+      const data = await response.json() as { name: string; error?: string };
       if (!response.ok) throw new Error(data.error);
       setConnected((current) => ({ ...current, [provider]: data.name }));
       if (provider === 'shopify') setShopify((current) => ({ ...current, clientSecret: '' }));
       else setDinero((current) => ({ ...current, clientSecret: '', apiKey: '' }));
+      if (provider === 'dinero') { setChart([]); await loadChart(false); }
       setConnectionMessage(`${provider === 'shopify' ? 'Shopify' : 'Dinero'} er testet og forbundet med læseadgang`);
       if (provider === 'shopify') await onShopifyConnected();
     } catch (error) {
@@ -1139,29 +792,43 @@ function Settings({
       setConnecting(null);
     }
   };
-  const loadChart = async () => {
+  const loadChart = async (sync = false) => {
     setLoadingChart(true);
     setChartMessage('');
     try {
-      const response = await fetch('/api/dinero/accounts');
-      const data = await response.json();
+      const response = await fetch('/api/dinero/accounts', { method: sync ? 'POST' : 'GET', cache: 'no-store' });
+      const data = await response.json() as { accounts: Array<{ number: string; name: string; vatCode?: string; hidden?: boolean }>; fetchedAt: string | null; error?: string };
       if (!response.ok) throw new Error(data.error);
-      setChart(data.accounts);
-      setChartMessage(`${data.accounts.length} konti hentet fra Dinero`);
+      setChart(data.accounts.filter(account => !account.hidden));
+      setChartMessage(data.fetchedAt ? `${data.accounts.length} konti gemt · Senest synkroniseret ${new Date(data.fetchedAt).toLocaleString('da-DK')}` : 'Ingen kontoplan gemt endnu. Vælg Synkronisér kontoplan.');
     } catch (error) {
       setChartMessage(
         error instanceof Error
-          ? `${error.message}. Forbind Dinero for at hente reelle konti.`
+          ? `${error.message}${sync ? ' Den tidligere gemte kontoplan er ikke ændret.' : ''}`
           : 'Kontoplanen kunne ikke hentes',
       );
     } finally {
       setLoadingChart(false);
     }
   };
+  useEffect(() => { void loadChart(false); }, []);
+  const vatCodes = vatCodeOptions(chart);
   const Field = ({ name, label }: { name: keyof Accounts; label: string }) => (
     <label className="block">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      {chart.length && name !== 'start' ? (
+      {name === 'vatCode' || name === 'noVatCode' ? (
+        <>
+          <NativeSelect className="mt-1.5 w-full" value={accounts[name]} disabled={loadingChart}
+            onChange={event => setAccounts(current => ({ ...current, [name]: event.target.value }))}>
+            <NativeSelectOption value="">Vælg momskode</NativeSelectOption>
+            {name === 'noVatCode' && <NativeSelectOption value="NONE">Ingen moms</NativeSelectOption>}
+            {accounts[name] && !(name === 'noVatCode' && accounts[name] === 'NONE') && !vatCodes.includes(accounts[name]) && <NativeSelectOption value={accounts[name]} disabled>{accounts[name]} (nuværende valg – ikke i listen)</NativeSelectOption>}
+            {vatCodes.map(code => <NativeSelectOption key={code} value={code}>{code}</NativeSelectOption>)}
+          </NativeSelect>
+          {!vatCodes.length && <span className="mt-1 block text-xs text-muted-foreground">Ingen momskoder i den gemte kontoplan. Synkronisér kontoplanen fra Dinero.</span>}
+          {name === 'noVatCode' && <span className="mt-1 block text-xs text-muted-foreground">Vælg Ingen moms til dansk salg uden moms og en salgskonto uden momskode. Udenlandsk salg kræver særskilt afklaring.</span>}
+        </>
+      ) : chart.length ? (
         <NativeSelect
           className="mt-1.5 w-full"
           value={accounts[name]}
@@ -1189,7 +856,8 @@ function Settings({
             onChange={(e) =>
               setAccounts((a) => ({ ...a, [name]: e.target.value }))
             }
-            readOnly={name !== 'start'}
+            readOnly
+            placeholder="Hent og vælg konto fra Dinero"
           />
           <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#c09960]" />
         </div>
@@ -1201,14 +869,13 @@ function Settings({
       <div className="mb-7">
         <p className="eyebrow">Opsætning</p>
         <h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">
-          Administration
+          {mode === 'dashboard' ? 'Dashboard' : mode === 'integrations' ? 'Integrationer og kontoplan' : mode === 'invoice-email' ? 'Faktura-afsendelse' : 'Lager'}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Forbind dine systemer, og bestem hvordan posteringerne skal lande i
-          Dinero.
+          {mode === 'dashboard' ? 'Overblik over drift, fejl og automatisk behandling.' : mode === 'integrations' ? 'Forbind systemerne, vælg historik og bestem hvordan posteringerne skal lande i Dinero.' : mode === 'invoice-email' ? 'Styr mailafsendelse, tilpas skabelonen og send en afgrænset test.' : 'Vælg lagerkonti og styr automatisk nedskrivning ved afsendte salg.'}
         </p>
       </div>
-      {chartMessage && !chart.length && (
+      {mode === 'integrations' && chartMessage && !chart.length && (
         <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950" role="alert">
           <AlertTriangle className="mt-0.5 size-5 shrink-0" />
           <div>
@@ -1217,20 +884,21 @@ function Settings({
           </div>
         </div>
       )}
+      {mode === 'dashboard' && <>
       <h2 className="mb-3 text-sm font-semibold">Drift og sikkerhed</h2>
       <div className="mb-8 grid gap-3 md:grid-cols-3">
         <div className="rounded-2xl border bg-white p-4">
           <ShieldCheck className="size-5 text-[#6a8d31]" />
           <p className="mt-3 text-sm font-semibold">Privat adgang</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Kun godkendte brugere kan åbne integrationshubben.
+            Kun godkendte brugere kan åbne Sablen Toolbox.
           </p>
         </div>
         <div className="rounded-2xl border bg-white p-4">
           <Database className="size-5 text-[#6a8d31]" />
-          <p className="mt-3 text-sm font-semibold">24 måneders historik</p>
+          <p className="mt-3 text-sm font-semibold">Fælles historik</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Ordrer og bogføringsdata slettes automatisk efter 24 måneder.
+            Historiklængde og startdato styres samlet nedenfor.
           </p>
         </div>
         <div className="rounded-2xl border bg-white p-4">
@@ -1241,6 +909,53 @@ function Settings({
           </p>
         </div>
       </div>
+      <ErrorOverview onCountChange={onErrorCountChange} />
+      <fieldset disabled={!ready || saving} className="min-w-0">
+      <h2 className="mb-3 text-sm font-semibold">Automatik og bilag</h2>
+      <p className="mb-4 text-sm text-muted-foreground">Styr automatisk behandling og vedhæftning af bilag.</p>
+      {!ready && !message && <p role="status" className="mb-4 text-sm">Indlæser fælles indstillinger…</p>}
+      {message && <p role="status" className="mb-4 rounded-xl border p-4 text-sm">{message}</p>}
+      <section className="mb-8 overflow-hidden rounded-2xl border bg-white">
+        <div className="flex flex-col justify-between gap-4 border-b p-5 sm:flex-row sm:items-center"><div><p className="text-sm font-semibold">Synkroniseringsinterval</p><p className="mt-1 text-xs text-muted-foreground">Bestem hvor ofte Shopify, automatiske posteringer og fakturaafsendelse behandles.</p></div><label className="w-full sm:w-52"><span className="sr-only">Synkroniseringsinterval</span><NativeSelect className="w-full" value={String(syncIntervalMinutes)} onChange={event => setSyncIntervalMinutes(Number(event.target.value))}>{syncIntervals.map(minutes => <NativeSelectOption key={minutes} value={String(minutes)}>{minutes === 1 ? 'Hvert minut' : `Hvert ${minutes}. minut`}</NativeSelectOption>)}</NativeSelect></label></div>
+        <div className="flex items-center justify-between border-b p-5">
+          <div><p className="text-sm font-semibold">Upload bilag til regnskabsprogram</p><p className="mt-1 text-xs text-muted-foreground">Vedhæft automatisk faktura eller dokumentation til posteringen i Dinero.</p></div>
+          <Switch checked={automation.attachments} onCheckedChange={(value) => toggleAutomation('attachments', value)} aria-label="Upload bilag til regnskabsprogram" />
+        </div>
+        <div className="p-5"><p className="mb-4 text-sm font-semibold">Automatiske moduler</p><div className="grid gap-3 sm:grid-cols-2">
+          {[{key:'sales',label:'Salg',description:'Bogfør realiserede ordrer'},{key:'refunds',label:'Tilbagebetalinger',description:'Bogfør gennemførte refunderinger'},{key:'payouts',label:'Udbetalinger',description:'Bogfør udbetalinger fra indløsere'}].map(module => <div key={module.key} className="flex items-center justify-between rounded-xl border bg-muted/30 p-4"><div><p className="text-sm font-medium">{module.label}</p><p className="mt-1 text-xs text-muted-foreground">{module.description}</p></div><Switch checked={automation[module.key as keyof typeof automation]} onCheckedChange={value => toggleAutomation(module.key as keyof typeof automation,value)} aria-label={`Automatisk ${module.label}`} /></div>)}
+        </div></div>
+        <div className="flex justify-end border-t p-4"><Button className="h-10 rounded-xl px-4" onClick={onSave}><Save />{saving ? 'Gemmer…' : 'Gem indstillinger'}</Button></div>
+      </section>
+      </fieldset>
+      </>}
+      {mode === 'invoice-email' && <fieldset disabled={!ready || saving} className="min-w-0">
+        {!ready && !message && <p role="status" className="mb-4 text-sm">Indlæser fælles indstillinger…</p>}
+        {message && <p role="status" className="mb-4 rounded-xl border p-4 text-sm">{message}</p>}
+        <section className="mb-8 overflow-hidden rounded-2xl border bg-white">
+          <div className="flex items-center justify-between gap-4 border-b p-5">
+            <div><p className="text-sm font-semibold">Send faktura automatisk til kunden</p><p className="mt-1 text-xs text-muted-foreground">Sender først, når ordren er afsendt, og PDF-fakturaen er dannet. Ved aktivering medtages kun nye fakturaer fra aktiveringstidspunktet.</p></div>
+            <Switch checked={automation.invoiceEmails} onCheckedChange={(value) => toggleAutomation('invoiceEmails', value)} aria-label="Send faktura automatisk til kunden" />
+          </div>
+          <div className="grid gap-4 p-5">
+            <label><span className="text-xs font-medium text-muted-foreground">Emne</span><Input className="mt-1.5" value={invoiceEmail.subject} onChange={event => setInvoiceEmail(current => ({ ...current, subject: event.target.value }))} /></label>
+            <label><span className="text-xs font-medium text-muted-foreground">Mailtekst</span><Textarea className="mt-1.5 min-h-40" value={invoiceEmail.body} onChange={event => setInvoiceEmail(current => ({ ...current, body: event.target.value }))} /></label>
+            <p className="text-xs text-muted-foreground">Du kan bruge: {'{{kundenavn}}'}, {'{{fakturanummer}}'} og {'{{ordrenummer}}'}.</p>
+            <div className="border-t pt-5"><label className="block max-w-md"><span className="text-xs font-medium text-muted-foreground">Send test til</span><Input className="mt-1.5" type="email" autoComplete="email" value={emailTestRecipient} onChange={event => setEmailTestRecipient(event.target.value)} placeholder="navn@eksempel.dk" /></label><div className="mt-3 flex flex-wrap items-center gap-3"><Button type="button" variant="outline" disabled={emailTestState === 'sending' || !emailTestRecipient.trim()} onClick={sendInvoiceTest}><FileText />{emailTestState === 'sending' ? 'Sender test…' : 'Send seneste faktura som test'}</Button><span className="text-xs text-muted-foreground">Testadressen bruges kun til denne test og ændrer ikke kundedata.</span></div></div>
+            {emailTestMessage && <p role="status" className="rounded-xl border p-3 text-sm">{emailTestMessage}</p>}
+          </div>
+          <div className="flex justify-end border-t p-4"><Button className="h-10 rounded-xl px-4" onClick={onSave}><Save />{saving ? 'Gemmer…' : 'Gem indstillinger'}</Button></div>
+        </section>
+      </fieldset>}
+      {mode === 'inventory' && <fieldset disabled={!ready || saving} className="min-w-0">
+        {message && <p role="status" className="mb-4 rounded-xl border p-4 text-sm">{message}</p>}
+        <section className="overflow-hidden rounded-2xl border bg-white">
+          <div className="flex items-center justify-between gap-4 border-b p-5"><div><p className="text-sm font-semibold">Automatisk lagerbogføring</p><p className="mt-1 text-xs text-muted-foreground">Når en ordre bliver fuldt afsendt, bogføres kostprisen som vareforbrug mod lagerkontoen. Funktionen er deaktiveret, indtil kontiene er valgt og en kladde er kontrolleret.</p></div><Switch checked={automation.inventory} onCheckedChange={value => toggleAutomation('inventory', value)} aria-label="Automatisk lagerbogføring" /></div>
+          <div className="grid gap-5 p-5 sm:grid-cols-2"><Field name="inventory" label="Konto til varebeholdning"/><Field name="inventoryAdjustment" label="Modkonto til lagerregulering / vareforbrug"/><p className="sm:col-span-2 text-xs text-muted-foreground">Begge konti skal være aktive Dinero-konti uden moms. En optælling ændrer først antal i Shopify; bogføring af optællingsafvigelsen holdes adskilt fra den løbende salgsautomatik.</p></div>
+          <div className="flex justify-end border-t p-4"><Button onClick={onSave}><Save />{saving ? 'Gemmer…' : 'Gem indstillinger'}</Button></div>
+        </section>
+      </fieldset>}
+      {mode === 'integrations' && <>
+      <HistorySettings />
       <h2 className="mb-3 text-sm font-semibold">Integrationer</h2>
       <div className="mb-8 grid items-start gap-3 md:grid-cols-2">
         {integrations.map(({ name, provider, detail, icon: Icon, connected: isConnected }) => (
@@ -1280,79 +995,14 @@ function Settings({
                   </div>
                 )}
                 {connectionMessage && <p className="mt-3 text-sm text-[#5d712f]" role="status">{connectionMessage}</p>}
+                {provider === 'shopify' && <div className="mt-4 rounded-xl border bg-white p-4"><p className="mb-3 text-sm font-semibold">Bogføring af Shopify Payments</p><Field name="shopifyPaymentsClearing" label="Mellemregningskonto" /></div>}
               </div>
             )}
           </div>
         ))}
+        <ViaBillConnection accountField={<Field name="viaBillClearing" label="Mellemregningskonto" />} />
       </div>
-      <h2 className="mb-3 text-sm font-semibold">Automatik og bilag</h2>
-      <section className="mb-8 overflow-hidden rounded-2xl border bg-white">
-        <div className="flex items-center justify-between border-b p-5">
-          <div>
-            <p className="text-sm font-semibold">
-              Upload bilag til regnskabsprogram
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Vedhæft automatisk faktura eller dokumentation til posteringen i
-              Dinero.
-            </p>
-          </div>
-          <Switch
-            checked={automation.attachments}
-            onCheckedChange={(value) => toggleAutomation('attachments', value)}
-            aria-label="Upload bilag til regnskabsprogram"
-          />
-        </div>
-        <div className="p-5">
-          <p className="mb-4 text-sm font-semibold">Automatiske moduler</p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              {
-                key: 'sales',
-                label: 'Salg',
-                description: 'Bogfør realiserede ordrer',
-              },
-              {
-                key: 'payments',
-                label: 'Betalinger',
-                description: 'Bogfør captured betalinger',
-              },
-              {
-                key: 'refunds',
-                label: 'Tilbagebetalinger',
-                description: 'Bogfør gennemførte refunderinger',
-              },
-              {
-                key: 'payouts',
-                label: 'Udbetalinger',
-                description: 'Bogfør udbetalinger fra indløsere',
-              },
-            ].map((module) => (
-              <div
-                key={module.key}
-                className="flex items-center justify-between rounded-xl border bg-muted/30 p-4"
-              >
-                <div>
-                  <p className="text-sm font-medium">{module.label}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {module.description}
-                  </p>
-                </div>
-                <Switch
-                  checked={automation[module.key as keyof typeof automation]}
-                  onCheckedChange={(value) =>
-                    toggleAutomation(
-                      module.key as keyof typeof automation,
-                      value,
-                    )
-                  }
-                  aria-label={`Automatisk ${module.label}`}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <fieldset disabled={!ready || saving} className="min-w-0">
       <section className="rounded-2xl border bg-white">
         <div className="border-b p-5">
           <div className="flex items-center gap-3">
@@ -1370,11 +1020,11 @@ function Settings({
             <Button
               variant="outline"
               className="h-10"
-              onClick={loadChart}
+              onClick={() => loadChart(true)}
               disabled={loadingChart}
             >
               <ArrowDownToLine />
-              {loadingChart ? 'Henter…' : 'Hent kontoplan'}
+              {loadingChart ? 'Indlæser…' : 'Synkronisér kontoplan'}
             </Button>
           </div>
           {chartMessage && (
@@ -1436,36 +1086,17 @@ function Settings({
           </div>
           <Field name="fees" label="Gebyrkonto" />
           <Field name="clearing" label="Mellemregningskonto" />
-          <label className="block">
-            <span className="text-xs font-medium text-muted-foreground">
-              Integrationen starter fra
-            </span>
-            <Input
-              type="date"
-              className="mt-1.5 h-11"
-              value={accounts.start}
-              onChange={(e) =>
-                setAccounts((a) => ({ ...a, start: e.target.value }))
-              }
-            />
-          </label>
-          <div className="flex items-center justify-between rounded-xl bg-muted/65 p-4">
-            <div>
-              <p className="text-sm font-medium">Automatisk bogføring</p>
-              <p className="text-xs text-muted-foreground">
-                Bogfør realiserede ordrer løbende
-              </p>
-            </div>
-            <Switch defaultChecked aria-label="Automatisk bogføring" />
-          </div>
+          <Field name="bank" label="Bankkonto til udbetalinger" />
         </div>
         <div className="flex justify-end border-t p-4">
           <Button className="h-10 rounded-xl px-4" onClick={onSave}>
             <Save />
-            Gem indstillinger
+            {saving ? 'Gemmer…' : 'Gem indstillinger'}
           </Button>
         </div>
       </section>
+      </fieldset>
+      </>}
     </div>
   );
 }

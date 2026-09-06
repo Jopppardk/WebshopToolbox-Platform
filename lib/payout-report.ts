@@ -1,0 +1,112 @@
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { env } from 'cloudflare:workers';
+import { payoutBreakdown, type PayoutSummary } from './shopify-payout';
+import { fetchPayoutTransactions, type PayoutTransaction } from './shopify-payout-transactions';
+import { minorUnits } from './shopify-payments';
+
+type PayoutSource = { id: string; issuedAt: string; status: string; transactionType: string; provider: string; net: { amount: string; currencyCode: string }; summary: PayoutSummary; transactions?: PayoutTransaction[]; reportVersion?: number; reportKey?: string; reportFingerprint?: string; reportEtag?: string };
+type Runtime = { INVOICES: R2Bucket; ASSETS: Fetcher };
+const keyFor = (id: string) => `payout-reports/${encodeURIComponent(id)}.pdf`;
+const safeId = (id: string) => id.split('/').pop()?.replace(/[^a-zA-Z0-9_-]/g, '-') || 'udbetaling';
+const money = (minor: number, currency: string) => new Intl.NumberFormat('da-DK', { style: 'currency', currency }).format(minor / 100);
+
+async function fingerprint(source: PayoutSource) {
+  const controlled = { reportVersion: 2, id: source.id, issuedAt: source.issuedAt, status: source.status, transactionType: source.transactionType, provider: source.provider, net: source.net, summary: source.summary, transactions: source.transactions };
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(controlled)));
+  return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export async function buildPayoutReport(source: PayoutSource, logoBytes?: ArrayBuffer) {
+  if (source.provider !== 'shopify_payments' || source.status !== 'PAID' || source.transactionType !== 'DEPOSIT') throw new Error('Kun gennemførte Shopify Payments-udbetalinger kan danne en rapport.');
+  if (!Number.isFinite(Date.parse(source.issuedAt))) throw new Error('Udbetalingen mangler en gyldig dato.');
+  const breakdown = payoutBreakdown(source.summary, source.net);
+  if (!Array.isArray(source.transactions) || !source.transactions.length) throw new Error('Udbetalingen mangler de konkrete Shopify-transaktioner.');
+  const pdf = await PDFDocument.create(), regular = await pdf.embedFont(StandardFonts.Helvetica), bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const page = pdf.addPage([595.28, 841.89]);
+  let logo: Awaited<ReturnType<typeof pdf.embedPng>> | undefined;
+  if (logoBytes) { try { logo = await pdf.embedPng(logoBytes); } catch { throw new Error('Sablens logo kunne ikke indlæses i udbetalingsrapporten.'); } }
+  if (logo) { const scale = Math.min(145 / logo.width, 50 / logo.height); page.drawImage(logo, { x: 540 - logo.width * scale, y: 752, width: logo.width * scale, height: logo.height * scale }); }
+  page.drawText('Udbetalingsrapport', { x: 55, y: 750, size: 23, font: bold, color: rgb(.10, .14, .12) });
+  page.drawText('Shopify Payments', { x: 55, y: 724, size: 11, font: regular });
+  const id = safeId(source.id);
+  const date = new Intl.DateTimeFormat('da-DK', { dateStyle: 'long', timeZone: 'Europe/Copenhagen' }).format(new Date(source.issuedAt));
+  page.drawText(`Udbetalings-ID: ${id}`, { x: 55, y: 680, size: 10, font: regular });
+  page.drawText(`Udbetalingsdato: ${date}`, { x: 55, y: 662, size: 10, font: regular });
+  page.drawText('Status: Udbetalt', { x: 55, y: 644, size: 10, font: regular });
+  page.drawLine({ start: { x: 55, y: 620 }, end: { x: 540, y: 620 }, thickness: 1.4, color: rgb(.14, .17, .22) });
+  page.drawText('Afregning', { x: 55, y: 594, size: 12, font: bold });
+  const rows = [
+    ['Bruttobetalinger', breakdown.charges],
+    ['Refunderinger', breakdown.refunds],
+    ['Gebyrer', -breakdown.fees],
+    ['Netto udbetalt til bank', breakdown.net],
+  ] as const;
+  rows.forEach(([label, amount], index) => {
+    const y = 558 - index * 38;
+    page.drawText(label, { x: 55, y, size: 10, font: index === rows.length - 1 ? bold : regular });
+    const value = money(amount, breakdown.currency), font = index === rows.length - 1 ? bold : regular;
+    page.drawText(value, { x: 540 - font.widthOfTextAtSize(value, 10), y, size: 10, font });
+    page.drawLine({ start: { x: 55, y: y - 12 }, end: { x: 540, y: y - 12 }, thickness: .5, color: rgb(.82, .82, .82) });
+  });
+  page.drawText('Rapporten er dannet ud fra den kontrollerede afregningsoversigt fra Shopify Payments.', { x: 55, y: 350, size: 9, font: regular, color: rgb(.35, .38, .42) });
+  page.drawText('Specifikation af de konkrete transaktioner fremgår fra side 2.', { x: 55, y: 334, size: 9, font: regular, color: rgb(.35, .38, .42) });
+  page.drawText('LA Trading ApS / Egetoften 13 / 7500 Holstebro / CVR 45036871 / sablen.dk', { x: 92, y: 28, size: 8, font: regular, color: rgb(.35, .38, .42) });
+  const typeLabel = (item: PayoutTransaction) => ({ CHARGE: 'Betaling', REFUND: 'Refundering', ADJUSTMENT: 'Regulering', CREDIT: 'Kreditering', DEBIT: 'Debitering', DISPUTE: 'Indsigelse' }[item.type] || item.adjustmentReason || item.type);
+  const clip = (value: string, width: number) => { let result = value; while (result.length && regular.widthOfTextAtSize(result, 8) > width) result = result.slice(0, -1); return result === value ? result : `${result.slice(0, -3)}...`; };
+  const drawHeader = (target: typeof page, pageNumber: number) => {
+    target.drawText('Transaktionsspecifikation', { x: 55, y: 780, size: 17, font: bold, color: rgb(.10, .14, .12) });
+    target.drawText(`Shopify Payments ${id}`, { x: 55, y: 759, size: 9, font: regular, color: rgb(.35, .38, .42) });
+    const headers = [['Dato',55],['Ordre',118],['Type',205],['Brutto',350],['Gebyr',445],['Netto',540]] as const;
+    headers.forEach(([label, x]) => target.drawText(label, { x: label === 'Brutto' || label === 'Gebyr' || label === 'Netto' ? x - bold.widthOfTextAtSize(label, 8) : x, y: 728, size: 8, font: bold }));
+    target.drawLine({ start: { x: 55, y: 718 }, end: { x: 540, y: 718 }, thickness: 1, color: rgb(.14, .17, .22) });
+    target.drawText(`Side ${pageNumber}`, { x: 500, y: 28, size: 8, font: regular, color: rgb(.35, .38, .42) });
+  };
+  let detailPage = pdf.addPage([595.28, 841.89]), pageNumber = 2, y = 694;
+  drawHeader(detailPage, pageNumber);
+  for (const item of source.transactions) {
+    if (y < 70) { detailPage = pdf.addPage([595.28, 841.89]); drawHeader(detailPage, ++pageNumber); y = 694; }
+    const transactionDate = new Intl.DateTimeFormat('da-DK', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'Europe/Copenhagen' }).format(new Date(item.processedAt));
+    const order = item.orderName || (item.orderId ? `ID ${item.orderId}` : 'Ingen ordre');
+    detailPage.drawText(transactionDate, { x: 55, y, size: 8, font: regular });
+    detailPage.drawText(clip(order, 80), { x: 118, y, size: 8, font: regular });
+    detailPage.drawText(clip(typeLabel(item), 115), { x: 205, y, size: 8, font: regular });
+    const values = [money(minorUnits(item.amount.amount, breakdown.currency), breakdown.currency), money(-minorUnits(item.fee.amount, breakdown.currency), breakdown.currency), money(minorUnits(item.net.amount, breakdown.currency), breakdown.currency)];
+    [350,445,540].forEach((x, index) => detailPage.drawText(values[index], { x: x - regular.widthOfTextAtSize(values[index], 8), y, size: 8, font: regular }));
+    detailPage.drawLine({ start: { x: 55, y: y - 9 }, end: { x: 540, y: y - 9 }, thickness: .35, color: rgb(.86, .86, .86) });
+    y -= 22;
+  }
+  return pdf.save();
+}
+
+export async function ensurePayoutReport(db: D1Database, externalId: string) {
+  const row = await db.prepare("SELECT payload_json, expires_at FROM integration_records WHERE tenant='sablen.dk' AND record_type='payout' AND external_id=?").bind(externalId).first<{ payload_json: string; expires_at: string }>();
+  if (!row) throw new Error('Udbetalingen findes ikke.');
+  let source = JSON.parse(row.payload_json) as PayoutSource;
+  if (!Array.isArray(source.transactions) || !source.transactions.length) {
+    const breakdown = payoutBreakdown(source.summary, source.net);
+    source = { ...source, transactions: await fetchPayoutTransactions(source.id, breakdown.currency, breakdown.net) };
+    const hydrated = JSON.stringify(source);
+    const hydration = await db.prepare("UPDATE integration_records SET payload_json=? WHERE tenant='sablen.dk' AND record_type='payout' AND external_id=? AND payload_json=?").bind(hydrated, externalId, row.payload_json).run();
+    if (hydration.meta.changes !== 1) throw new Error('Udbetalingen blev ændret under hentning af transaktioner. Hent den igen.');
+    row.payload_json = hydrated;
+  }
+  const wantedFingerprint = await fingerprint(source), reportKey = keyFor(externalId), runtime = env as unknown as Runtime;
+  if (source.reportVersion === 2 && source.reportFingerprint === wantedFingerprint && source.reportKey === reportKey) {
+    const existing = await runtime.INVOICES.head(reportKey);
+    if (existing && existing.etag === source.reportEtag) return { key: reportKey, etag: existing.etag, filename: `${safeId(externalId)}.pdf` };
+  }
+  let logoBytes: ArrayBuffer | undefined;
+  const logoResponse = await runtime.ASSETS.fetch(new Request('https://assets.local/sablen-logo.png'));
+  if (logoResponse.ok) logoBytes = await logoResponse.arrayBuffer();
+  if (!logoBytes) throw new Error('Sablens logo kunne ikke hentes til udbetalingsrapporten.');
+  const bytes = await buildPayoutReport(source, logoBytes);
+  await runtime.INVOICES.put(reportKey, bytes, { httpMetadata: { contentType: 'application/pdf', contentDisposition: `inline; filename="${safeId(externalId)}.pdf"` }, customMetadata: { expiresAt: row.expires_at } });
+  const object = await runtime.INVOICES.head(reportKey);
+  if (!object) throw new Error('Udbetalingsrapporten kunne ikke kontrolleres efter lagring.');
+  const updated = JSON.stringify({ ...source, reportVersion: 2, reportKey, reportFingerprint: wantedFingerprint, reportEtag: object.etag });
+  const result = await db.prepare("UPDATE integration_records SET payload_json=? WHERE tenant='sablen.dk' AND record_type='payout' AND external_id=? AND payload_json=?").bind(updated, externalId, row.payload_json).run();
+  if (result.meta.changes !== 1) throw new Error('Udbetalingen blev ændret under rapportgenereringen. Hent den igen.');
+  return { key: reportKey, etag: object.etag, filename: `${safeId(externalId)}.pdf` };
+}
+
+export { keyFor as payoutReportKeyFor };

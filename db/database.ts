@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { schemaStatements } from './schema';
+import { cleanupHistory } from './history';
 
 type RuntimeEnv = { DB: D1Database };
 
@@ -10,8 +11,6 @@ export function database() {
 export async function prepareDatabase() {
   const db = database();
   await db.batch(schemaStatements.map((statement) => db.prepare(statement)));
-  await db
-    .prepare("DELETE FROM integration_records WHERE expires_at <= datetime('now')")
-    .run();
+  await cleanupHistory(db, (env as unknown as { INVOICES: R2Bucket }).INVOICES);
   return db;
 }

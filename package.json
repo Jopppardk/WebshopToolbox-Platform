@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "vinext dev",
+    "test": "node --test lib/*.test.mjs",
     "build": "vinext build",
     "deploy:cloudflare": "wrangler deploy --config wrangler.direct.jsonc",
     "start": "wrangler dev --config dist/server/wrangler.json",

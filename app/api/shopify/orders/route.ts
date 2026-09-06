@@ -1,7 +1,12 @@
-import { NextResponse } from 'next/server';
+import { recordFailure } from '@/db/errors';
+import { NextRequest, NextResponse } from 'next/server';
+import { loadHistory } from '@/db/history';
+import { historyWindow, shiftMonths } from '@/lib/history-policy';
 import { prepareDatabase } from '@/db/database';
 import { getShopifyAccess } from '@/db/shopify';
-import { createInvoicePdf } from '@/lib/invoice-pdf';
+import { createInvoicePdf, removeLegacyInvoices } from '@/lib/invoice-pdf';
+import { completeOrder, orderFields, orderQuery } from '@/db/shopify-order';
+import { units, type InvoiceSource } from '@/lib/invoice-check';
 
 type ShopifyOrder = {
   id: string;
@@ -10,6 +15,7 @@ type ShopifyOrder = {
   processedAt: string;
   displayFinancialStatus: string | null;
   displayFulfillmentStatus: string;
+  customer: { displayName: string | null; firstName: string | null; lastName: string | null } | null;
   currentTotalPriceSet: { shopMoney: { amount: string; currencyCode: string } };
   currentSubtotalPriceSet: { shopMoney: { amount: string; currencyCode: string } };
   currentTotalTaxSet: { shopMoney: { amount: string; currencyCode: string } } | null;
@@ -26,59 +32,85 @@ function present(order: ShopifyOrder, bookingStatus = 'Afventer') {
   return {
     id: order.name,
     date: new Intl.DateTimeFormat('da-DK', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Copenhagen' }).format(new Date(order.createdAt)),
-    shipped: ['FULFILLED', 'PARTIAL'].includes(order.displayFulfillmentStatus) ? 'Afsendt' : 'Ikke afsendt',
+    shipped: order.displayFulfillmentStatus === 'FULFILLED' ? 'Afsendt' : order.displayFulfillmentStatus === 'PARTIAL' ? 'Delvist afsendt' : 'Ikke afsendt',
     amount: new Intl.NumberFormat('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(money.amount)),
     realized: order.displayFinancialStatus === 'PAID' ? new Intl.DateTimeFormat('da-DK', { dateStyle: 'medium', timeZone: 'Europe/Copenhagen' }).format(new Date(order.processedAt)) : '—',
     status: bookingStatus,
     externalId: order.id,
     createdAt: order.createdAt,
     currency: money.currencyCode,
-    customer: order.billingAddress || order.shippingAddress,
+    total: money.amount,
+    customer: {
+      ...(order.billingAddress || order.shippingAddress),
+      name: order.customer?.displayName || [order.customer?.firstName, order.customer?.lastName].filter(Boolean).join(' ') || (order.billingAddress || order.shippingAddress)?.name || null,
+    },
     lines: order.lineItems?.nodes || [],
     shippingLines: order.shippingLines?.nodes || [],
     subtotal: order.currentSubtotalPriceSet?.shopMoney.amount || money.amount,
-    tax: order.currentTotalTaxSet?.shopMoney.amount || '0',
+    tax: order.currentTotalTaxSet?.shopMoney.amount,
+    paymentStatus: order.displayFinancialStatus,
   };
 }
 
-async function storedOrders() {
+async function storedOrders(offset = 0) {
   const db = await prepareDatabase();
+  const { cutoff } = historyWindow(await loadHistory(db));
   const result = await db
-    .prepare(`SELECT payload_json, booking_status FROM integration_records WHERE tenant = ? AND record_type = 'order' ORDER BY occurred_at DESC LIMIT 100`)
-    .bind('sablen.dk')
+    .prepare(`SELECT o.payload_json, COALESCE(json_extract(t.setting_value, '$.phase'), o.booking_status) AS booking_status FROM integration_records o LEFT JOIN app_settings t ON t.tenant = o.tenant AND t.setting_key = 'sales_transfer:' || o.external_id WHERE o.tenant = ? AND o.record_type = 'order' AND o.occurred_at >= ? ORDER BY o.occurred_at DESC, o.external_id DESC LIMIT 100 OFFSET ?`)
+    .bind('sablen.dk', cutoff, offset)
     .all<{ payload_json: string; booking_status: string }>();
-  return result.results.map((row) => present(JSON.parse(row.payload_json), row.booking_status === 'booked' ? 'Bogført' : row.booking_status === 'failed' ? 'Fejlet' : 'Afventer'));
+  const labels: Record<string, string> = { booked: 'Bogført', failed: 'Fejlet', draft: 'Kladde i Dinero', creating: 'Overfører…', booking: 'Bogfører…', uncertain: 'Kræver kontrol', archived: 'Arkiveret overførsel' };
+  return result.results.map((row) => present(JSON.parse(row.payload_json), labels[row.booking_status] || 'Afventer'));
 }
 
-export async function GET() {
-  return NextResponse.json({ orders: await storedOrders() });
-}
-
-export async function POST() {
+export async function GET(request: NextRequest) {
   try {
-    const { shop, accessToken } = await getShopifyAccess();
-    const response = await fetch(`https://${shop}/admin/api/2026-07/graphql.json`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken },
-      body: JSON.stringify({ query: `query SalesOrders { orders(first: 100, sortKey: CREATED_AT, reverse: true) { nodes { id name createdAt processedAt displayFinancialStatus displayFulfillmentStatus billingAddress { name address1 address2 zip city country } shippingAddress { name address1 address2 zip city country } currentTotalPriceSet { shopMoney { amount currencyCode } } currentSubtotalPriceSet { shopMoney { amount currencyCode } } currentTotalTaxSet { shopMoney { amount currencyCode } } lineItems(first: 50) { nodes { name quantity discountedTotalSet { shopMoney { amount currencyCode } } } } shippingLines(first: 10) { nodes { title discountedPriceSet { shopMoney { amount currencyCode } } } } } } }` }),
-    });
-    const payload = (await response.json()) as { data?: { orders?: { nodes?: ShopifyOrder[] } }; errors?: Array<{ message?: string }> };
-    if (!response.ok || payload.errors?.length || !payload.data?.orders?.nodes)
-      throw new Error(payload.errors?.[0]?.message || 'Shopify-ordrer kunne ikke hentes. Kontrollér at appen har read_orders-adgang.');
-    const db = await prepareDatabase();
-    const statements = payload.data.orders.nodes.map((order) => {
-      const expires = new Date(order.createdAt);
-      expires.setUTCMonth(expires.getUTCMonth() + 24);
+  const offset = Number(request.nextUrl.searchParams.get('offset') || 0);
+  if (!Number.isSafeInteger(offset) || offset < 0) return NextResponse.json({ error: 'Ugyldigt sidetal' }, { status: 400 });
+  const db = await prepareDatabase(); const { cutoff } = historyWindow(await loadHistory(db));
+  const count = await db.prepare("SELECT COUNT(*) AS total FROM integration_records WHERE tenant = 'sablen.dk' AND record_type = 'order' AND occurred_at >= ?").bind(cutoff).first<{ total: number }>();
+  return NextResponse.json({ orders: await storedOrders(offset), total: count?.total || 0 });
+
+  } catch { await recordFailure('Salg'); return NextResponse.json({ error: 'Salg kunne ikke indlæses. Prøv igen.' }, { status: 503 }); }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json().catch(() => ({})) as { after?: string };
+    if (body.after != null && (typeof body.after !== 'string' || body.after.length > 2048)) throw new Error('Ugyldig fortsættelse');
+    const db = await prepareDatabase(); const policy = await loadHistory(db);
+    const { cutoff } = historyWindow(policy);
+    const access = await getShopifyAccess();
+    const payload = await orderQuery<{ orders: { nodes: InvoiceSource[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } }>(access,
+      `query SalesOrders($after:String,$query:String!) { orders(first:5,after:$after,query:$query,sortKey:CREATED_AT,reverse:true) { nodes { ${orderFields} } pageInfo { hasNextPage endCursor } } }`,
+      { after: body.after || null, query: `created_at:>='${cutoff}'` });
+    if (!Array.isArray(payload.orders?.nodes)) throw new Error('Shopify-ordrer kunne ikke hentes.');
+    await removeLegacyInvoices(db);
+    const orders = payload.orders.nodes.filter(order => order.createdAt >= cutoff);
+    const pageInfo = payload.orders.pageInfo;
+    const invoiceWarnings: string[] = [];
+    const incomplete = new Set<string>();
+    for (const order of orders) {
+      try { await completeOrder(order, access); }
+      catch { incomplete.add(order.id); invoiceWarnings.push(`${order.name}: Alle ordrelinjer kunne ikke hentes. Fakturaen er ikke oprettet; prøv Kontrollér igen.`); }
+    }
+    if (pageInfo.hasNextPage && (!pageInfo.endCursor || pageInfo.endCursor === body.after)) throw new Error('Shopify kunne ikke fortsætte hentningen');
+    const statements = orders.map((order) => {
+      const expires = shiftMonths(new Date(order.createdAt), policy.months);
       const money = order.currentTotalPriceSet.shopMoney;
-      return db.prepare(`INSERT INTO integration_records (id, tenant, record_type, external_id, occurred_at, amount_minor, currency, booking_status, payload_json, expires_at) VALUES (?, ?, 'order', ?, ?, ?, ?, 'pending', ?, ?) ON CONFLICT(tenant, record_type, external_id) DO UPDATE SET occurred_at = excluded.occurred_at, amount_minor = excluded.amount_minor, currency = excluded.currency, payload_json = excluded.payload_json, expires_at = excluded.expires_at`).bind(order.id, 'sablen.dk', order.id, order.createdAt, Math.round(Number(money.amount) * 100), money.currencyCode, JSON.stringify(order), expires.toISOString());
+      return db.prepare(`INSERT INTO integration_records (id, tenant, record_type, external_id, occurred_at, amount_minor, currency, booking_status, payload_json, expires_at) VALUES (?, ?, 'order', ?, ?, ?, ?, 'pending', ?, ?) ON CONFLICT(tenant, record_type, external_id) DO UPDATE SET occurred_at = excluded.occurred_at, amount_minor = excluded.amount_minor, currency = excluded.currency, payload_json = excluded.payload_json, expires_at = excluded.expires_at`).bind(order.id, 'sablen.dk', order.id, order.createdAt, units(order.currentTotalPriceSet, money.currencyCode), money.currencyCode, JSON.stringify(order), expires.toISOString());
     });
     if (statements.length) await db.batch(statements);
     let invoicesCreated = 0;
-    for (const order of payload.data.orders.nodes) {
-      const expires = new Date(order.createdAt); expires.setUTCMonth(expires.getUTCMonth() + 24);
-      if (await createInvoicePdf(db, order, expires.toISOString())) invoicesCreated++;
+    for (const order of orders) {
+      if (incomplete.has(order.id)) continue;
+      if (order.displayFulfillmentStatus !== 'FULFILLED') continue;
+      const expires = shiftMonths(new Date(order.createdAt), policy.months);
+      try { if (await createInvoicePdf(db, order, expires.toISOString())) invoicesCreated++; }
+      catch (error) { invoiceWarnings.push(`${order.name}: ${error instanceof Error ? error.message : 'Faktura kunne ikke genereres.'}`); }
     }
-    return NextResponse.json({ orders: await storedOrders(), synced: statements.length, invoicesCreated });
+    if (invoiceWarnings.length) await db.prepare('INSERT INTO system_errors (tenant, source, message) VALUES (?, ?, ?)').bind('sablen.dk', 'Fakturakontrol', invoiceWarnings.join('\n').slice(0, 4000)).run();
+    return NextResponse.json({ orders: await storedOrders(), synced: statements.length, invoicesCreated, invoiceWarnings, ...pageInfo });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Shopify-ordrer kunne ikke hentes';
     try {
