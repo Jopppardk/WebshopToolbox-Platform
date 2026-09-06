@@ -1,5 +1,7 @@
 # Sablen Toolbox
 
+Den komplette produktions- og gendannelsesvejledning findes i [DRIFTSMANUAL.md](./DRIFTSMANUAL.md).
+
 Sablen Toolbox er Sablens interne integrationsplatform til Shopify, Dinero og
 tilknyttede bogførings- og dokumentflows. Produktionsmiljøet kører på Cloudflare
 Workers med D1 og R2 og er tilgængeligt på `integration.sablen.dk`.
