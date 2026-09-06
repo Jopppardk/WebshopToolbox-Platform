@@ -9,6 +9,7 @@ import { Documents } from '@/components/documents';
 import { Inventory } from '@/components/inventory';
 import { Packaging } from '@/components/packaging';
 import { JobInsights } from '@/components/job-insights';
+import { DevelopmentRequests } from '@/components/development-requests';
 import { vatCodeOptions } from '@/lib/vat-code-options';
 import { emptyAccounts, defaultAutomation, defaultInvoiceEmail, validateSettings, type Accounts, type Automation, type AdminSettings, type InvoiceEmailSettings } from '@/lib/admin-settings';
 import { millisecondsToNextRun, syncIntervals } from '@/lib/sync-schedule';
@@ -31,6 +32,7 @@ import {
   Database,
   FileText,
   HandCoins,
+  Lightbulb,
   Landmark,
   Menu,
   Mail,
@@ -97,7 +99,7 @@ export default function Home() {
   const [orderRevision, setOrderRevision] = useState(0);
   const [syncingOrders, setSyncingOrders] = useState(false);
   const [view, setView] = useState<
-    'orders' | 'invoices' | 'documents' | 'refunds' | 'payouts' | 'inventory' | 'packaging' | 'insights' | 'settings'
+    'orders' | 'invoices' | 'documents' | 'refunds' | 'payouts' | 'inventory' | 'packaging' | 'insights' | 'development' | 'settings'
   >('orders');
   const [settingsTab, setSettingsTab] = useState<'dashboard' | 'integrations' | 'invoice-email' | 'inventory'>('dashboard');
   const [notice, setNotice] = useState('');
@@ -230,6 +232,7 @@ export default function Home() {
           <button className={`nav-item w-full ${view === 'documents' ? 'active' : ''}`} onClick={() => setView('documents')}><BookOpenCheck />Udbetalingsrapporter</button>
           <p className="nav-label mt-7">System</p>
           <button className={`nav-item w-full ${view === 'insights' ? 'active' : ''}`} onClick={() => setView('insights')}><Activity />Indsigt</button>
+          <button className={`nav-item w-full ${view === 'development' ? 'active' : ''}`} onClick={() => setView('development')}><Lightbulb />Udvikling</button>
           <button
             className={`nav-item w-full ${view === 'settings' ? 'active' : ''}`}
             onClick={() => setView('settings')}
@@ -288,6 +291,7 @@ export default function Home() {
           <button className={`nav-item w-full ${view === 'documents' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('documents'); }}><BookOpenCheck />Udbetalingsrapporter</button>
           <p className="nav-label mt-7">System</p>
           <button className={`nav-item w-full ${view === 'insights' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('insights'); }}><Activity />Indsigt</button>
+          <button className={`nav-item w-full ${view === 'development' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('development'); }}><Lightbulb />Udvikling</button>
           <button
             className={`nav-item w-full ${view === 'settings' ? 'active' : ''}`}
             onClick={() => { setMobileOpen(false); setView('settings'); }}
@@ -413,6 +417,7 @@ export default function Home() {
         {view === 'inventory' && <Inventory />}
         {view === 'packaging' && <Packaging />}
         {view === 'insights' && <JobInsights />}
+        {view === 'development' && <DevelopmentRequests />}
         {view === 'settings' && (
           <div>
             <div className="mx-auto w-full max-w-[1440px] px-5 pt-6 md:px-8">
