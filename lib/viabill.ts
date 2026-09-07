@@ -85,6 +85,17 @@ export async function accounts(credentials: ViaBillKeys): Promise<ViaBillAccount
   if (rows.length > 100) throw new ViaBillError('ViaBill returnerede uventet mange konti.');
   return rows.map(value => { const row = object(value); const id = identifier(row.accountId ?? row.id); return { id, name: optional(row.name) || `Konto ${id}` }; });
 }
+export async function verifyAccount(credentials: ViaBillKeys, accountIdValue: unknown) {
+  const accountId = identifier(accountIdValue);
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Copenhagen', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  // The entries export is the authoritative account-scoped endpoint documented
+  // by ViaBill. An empty list is a valid verification result.
+  list(await viabillRequest(credentials, `/public/merchant/accounts/${accountId}/entries/download/JSON`, {
+    filter: { transactions: true, transfers: true, dateRange: { startDate: today, endDate: today } },
+    entryPage: { first: 1, pageLength: 1 }, sorting: [],
+  }), 'entries');
+  return accountId;
+}
 export function payment(value: unknown, accountId: string): ViaBillRecord | null {
   const row = object(value);
   if (typeof row.type !== 'string') throw new ViaBillError('ViaBills postering mangler type. Import er stoppet for at undgå at forveksle betalinger og udbetalinger.');
