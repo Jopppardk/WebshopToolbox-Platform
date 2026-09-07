@@ -155,17 +155,36 @@ export async function PATCH(request: NextRequest) {
   if (denied) return denied;
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    const id = clean(body.id, 100),
-      status = clean(body.status, 30);
-    if (!id || !statuses.includes(status as (typeof statuses)[number]))
-      return reply({ error: 'Ugyldigt forslag eller status.' }, 400);
+    const id = clean(body.id, 100);
+    if (!id) return reply({ error: 'Ugyldigt forslag.' }, 400);
     const db = await prepareDatabase();
-    const result = await db
-      .prepare(
-        'UPDATE feature_requests SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant = ? AND id = ?',
-      )
-      .bind(status, tenant, id)
-      .run();
+    let result;
+    if (body.title !== undefined) {
+      const title = clean(body.title, 140),
+        description = clean(body.description, 4000),
+        desiredOutcome = clean(body.desiredOutcome, 2000),
+        area = clean(body.area, 80),
+        priority = clean(body.priority, 20),
+        status = clean(body.status, 30);
+      if (
+        title.length < 3 ||
+        description.length < 5 ||
+        !areas.includes(area as (typeof areas)[number]) ||
+        !priorities.includes(priority as (typeof priorities)[number]) ||
+        !statuses.includes(status as (typeof statuses)[number])
+      ) return reply({ error: 'Kontrollér titel, beskrivelse, område, prioritet og status.' }, 400);
+      result = await db.prepare(
+        'UPDATE feature_requests SET title = ?, description = ?, desired_outcome = ?, area = ?, priority = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant = ? AND id = ?',
+      ).bind(title, description, desiredOutcome || null, area, priority, status, tenant, id).run();
+    } else {
+      const status = clean(body.status, 30);
+      if (!statuses.includes(status as (typeof statuses)[number]))
+        return reply({ error: 'Ugyldig status.' }, 400);
+      result = await db
+        .prepare('UPDATE feature_requests SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant = ? AND id = ?')
+        .bind(status, tenant, id)
+        .run();
+    }
     if (!result.meta.changes)
       return reply({ error: 'Forslaget findes ikke længere.' }, 404);
     return reply({ updated: true });

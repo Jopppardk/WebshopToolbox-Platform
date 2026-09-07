@@ -7,10 +7,13 @@ import {
   Clock3,
   Lightbulb,
   Loader2,
+  Pencil,
   Plus,
   RefreshCw,
   Rocket,
+  Save,
   Send,
+  X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -89,6 +92,7 @@ export function DevelopmentRequests() {
   const [items, setItems] = useState<FeatureRequest[]>([]),
     [busy, setBusy] = useState(true),
     [saving, setSaving] = useState(false),
+    [editingId, setEditingId] = useState<string | null>(null),
     [error, setError] = useState(''),
     [message, setMessage] = useState('');
   const [filter, setFilter] = useState<'active' | 'all' | Status>('active');
@@ -99,6 +103,7 @@ export function DevelopmentRequests() {
     area: 'Generelt',
     priority: 'medium' as Priority,
   });
+  const [editForm, setEditForm] = useState({ title: '', description: '', desiredOutcome: '', area: 'Generelt', priority: 'medium' as Priority, status: 'proposed' as Status });
   const load = useCallback(async () => {
     setBusy(true);
     setError('');
@@ -179,6 +184,22 @@ export function DevelopmentRequests() {
           : 'Status kunne ikke opdateres.',
       );
     }
+  };
+  const beginEdit = (item: FeatureRequest) => {
+    setEditingId(item.id);
+    setEditForm({ title: item.title, description: item.description, desiredOutcome: item.desired_outcome || '', area: item.area, priority: item.priority, status: item.status });
+    setError(''); setMessage('');
+  };
+  const saveEdit = async () => {
+    if (!editingId) return;
+    setSaving(true); setError(''); setMessage('');
+    try {
+      const response = await fetch('/api/admin/feature-requests', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editingId, ...editForm }) });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error);
+      setEditingId(null); setMessage('Forslaget er opdateret.'); await load();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Forslaget kunne ikke opdateres.'); }
+    finally { setSaving(false); }
   };
   const visible = useMemo(
     () =>
@@ -413,6 +434,14 @@ export function DevelopmentRequests() {
             )}
             {visible.map((item) => (
               <article key={item.id} className="p-5">
+                {editingId === item.id ? <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3"><h3 className="font-semibold"><span className="mr-2 text-[#806746]">#{item.reference_number}</span>Redigér forslag</h3><Button variant="ghost" size="icon" onClick={() => setEditingId(null)} aria-label="Annullér redigering"><X /></Button></div>
+                  <label className="block text-sm font-medium">Titel<Input className="mt-1.5" value={editForm.title} maxLength={140} onChange={event => setEditForm(current => ({ ...current, title: event.target.value }))} /></label>
+                  <label className="block text-sm font-medium">Beskrivelse<Textarea className="mt-1.5 min-h-28" value={editForm.description} maxLength={4000} onChange={event => setEditForm(current => ({ ...current, description: event.target.value }))} /></label>
+                  <label className="block text-sm font-medium">Ønsket resultat <span className="font-normal text-muted-foreground">(valgfrit)</span><Textarea className="mt-1.5 min-h-20" value={editForm.desiredOutcome} maxLength={2000} onChange={event => setEditForm(current => ({ ...current, desiredOutcome: event.target.value }))} /></label>
+                  <div className="grid gap-3 sm:grid-cols-3"><label className="text-sm font-medium">Område<NativeSelect className="mt-1.5 w-full" value={editForm.area} onChange={event => setEditForm(current => ({ ...current, area: event.target.value }))}>{areas.map(area => <NativeSelectOption key={area} value={area}>{area}</NativeSelectOption>)}</NativeSelect></label><label className="text-sm font-medium">Prioritet<NativeSelect className="mt-1.5 w-full" value={editForm.priority} onChange={event => setEditForm(current => ({ ...current, priority: event.target.value as Priority }))}>{(Object.keys(priorityLabels) as Priority[]).map(priority => <NativeSelectOption key={priority} value={priority}>{priorityLabels[priority]}</NativeSelectOption>)}</NativeSelect></label><label className="text-sm font-medium">Status<NativeSelect className="mt-1.5 w-full" value={editForm.status} onChange={event => setEditForm(current => ({ ...current, status: event.target.value as Status }))}>{(Object.keys(statusLabels) as Status[]).map(status => <NativeSelectOption key={status} value={status}>{statusLabels[status]}</NativeSelectOption>)}</NativeSelect></label></div>
+                  <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setEditingId(null)}>Annullér</Button><Button onClick={() => void saveEdit()} disabled={saving || editForm.title.trim().length < 3 || editForm.description.trim().length < 5}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? 'Gemmer…' : 'Gem ændringer'}</Button></div>
+                </div> :
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -449,7 +478,7 @@ export function DevelopmentRequests() {
                       {item.created_by ? ` af ${item.created_by}` : ''}
                     </p>
                   </div>
-                  <label className="text-xs font-medium text-muted-foreground">
+                  <div className="flex flex-col items-end gap-2"><Button variant="outline" size="sm" onClick={() => beginEdit(item)}><Pencil />Redigér</Button><label className="text-xs font-medium text-muted-foreground">
                     Status
                     <NativeSelect
                       className="mt-1 w-[180px]"
@@ -464,8 +493,9 @@ export function DevelopmentRequests() {
                         </NativeSelectOption>
                       ))}
                     </NativeSelect>
-                  </label>
+                  </label></div>
                 </div>
+                }
               </article>
             ))}
           </div>

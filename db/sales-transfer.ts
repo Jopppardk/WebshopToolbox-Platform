@@ -98,6 +98,11 @@ export async function runTransfer(body: { externalId: string; action: string; da
   }
   if (!['create', 'book'].includes(action)) rejectTransfer('Ugyldig handling.');
   if (action === 'book' && current!.state.draftTest) rejectTransfer('En testkladde må aldrig bogføres fra løsningen. Slet den i Dinero efter kontrollen.');
+  if (action === 'book') {
+    const settingsRow = await database().prepare("SELECT setting_value FROM app_settings WHERE tenant=? AND setting_key='admin_settings'").bind(tenant).first<{ setting_value: string }>();
+    if (settingsRow && validateSettings(JSON.parse(settingsRow.setting_value)).automation.bookDinero === false)
+      rejectTransfer('Bogføring er fravalgt under Indstillinger. Kladden bliver stående i Dinero.');
+  }
   const testCreate = action === 'create' && current!.state.draftTest === true && draftTestAllowed(externalId);
   if (current!.state.draftTest && !testCreate) rejectTransfer('Kladdetesten er ikke åben for denne ordre.');
   if (!salesWritesEnabled() && !testCreate) rejectTransfer('Overførsel til Dinero er låst, indtil den første produktionsbogføring er aftalt.');

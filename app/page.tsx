@@ -900,6 +900,10 @@ function Settings({
           <div><p className="text-sm font-semibold">Upload bilag til regnskabsprogram</p><p className="mt-1 text-xs text-muted-foreground">Vedhæft automatisk faktura eller dokumentation til posteringen i Dinero.</p></div>
           <Switch checked={automation.attachments} onCheckedChange={(value) => toggleAutomation('attachments', value)} aria-label="Upload bilag til regnskabsprogram" />
         </div>
+        <div className="flex items-center justify-between gap-4 border-b p-5">
+          <div><p className="text-sm font-semibold">Bogfør kladder automatisk i Dinero</p><p className="mt-1 text-xs text-muted-foreground">Når funktionen er slået fra, opretter de aktive moduler kun kontrollerede kladder. Kladderne bogføres ikke automatisk.</p></div>
+          <Switch checked={automation.bookDinero} onCheckedChange={(value) => toggleAutomation('bookDinero', value)} aria-label="Bogfør kladder automatisk i Dinero" />
+        </div>
         <div className="p-5"><p className="mb-4 text-sm font-semibold">Automatiske moduler</p><div className="grid gap-3 sm:grid-cols-2">
           {[{key:'sales',label:'Salg',description:'Bogfør realiserede ordrer'},{key:'refunds',label:'Tilbagebetalinger',description:'Bogfør gennemførte refunderinger'},{key:'payouts',label:'Udbetalinger',description:'Bogfør udbetalinger fra indløsere'}].map(module => <div key={module.key} className="flex items-center justify-between rounded-xl border bg-muted/30 p-4"><div><p className="text-sm font-medium">{module.label}</p><p className="mt-1 text-xs text-muted-foreground">{module.description}</p></div><Switch checked={automation[module.key as keyof typeof automation]} onCheckedChange={value => toggleAutomation(module.key as keyof typeof automation,value)} aria-label={`Automatisk ${module.label}`} /></div>)}
         </div></div>

@@ -1,12 +1,12 @@
 export const accountKeys = ['vatCode', 'noVatCode', 'goodsVat', 'goodsNoVat', 'shippingVat', 'shippingNoVat', 'servicesVat', 'servicesNoVat', 'refundGoodsVat', 'refundGoodsNoVat', 'refundShippingVat', 'refundShippingNoVat', 'refundServicesVat', 'refundServicesNoVat', 'fees', 'clearing', 'bank', 'shopifyPaymentsClearing', 'viaBillClearing', 'inventory', 'inventoryAdjustment'] as const;
 export type Accounts = Record<typeof accountKeys[number], string>;
-export const automationKeys = ['attachments', 'sales', 'payments', 'refunds', 'payouts', 'invoiceEmails', 'inventory'] as const;
+export const automationKeys = ['attachments', 'bookDinero', 'sales', 'payments', 'refunds', 'payouts', 'invoiceEmails', 'inventory'] as const;
 export type Automation = Record<typeof automationKeys[number], boolean>;
 export type InvoiceEmailSettings = { subject: string; body: string };
 export type AdminSettings = { accounts: Accounts; automation: Automation; invoiceEmail: InvoiceEmailSettings; syncIntervalMinutes: number };
 import { normalizeSyncInterval } from './sync-schedule';
 export const emptyAccounts = Object.fromEntries(accountKeys.map(key => [key, ''])) as Accounts;
-export const defaultAutomation = Object.fromEntries(automationKeys.map(key => [key, false])) as Automation;
+export const defaultAutomation = { ...Object.fromEntries(automationKeys.map(key => [key, false])), bookDinero: true } as Automation;
 export const defaultInvoiceEmail: InvoiceEmailSettings = {
   subject: 'Faktura {{fakturanummer}} fra Sablen.dk',
   body: 'Hej {{kundenavn}}\n\nTak for din ordre hos Sablen.dk.\n\nVedhæftet finder du faktura {{fakturanummer}} for ordre {{ordrenummer}}.\n\nVenlig hilsen\nSablen.dk',
@@ -23,7 +23,7 @@ export function validateSettings(input: unknown): AdminSettings {
   }
   for (const key of automationKeys) {
     const field = value.automation?.[key];
-    if (field === undefined && ['invoiceEmails', 'inventory'].includes(key)) continue;
+    if (field === undefined && ['bookDinero', 'invoiceEmails', 'inventory'].includes(key)) continue;
     if (typeof field !== 'boolean') throw new Error('Ugyldigt modulvalg');
     automation[key] = field;
   }
