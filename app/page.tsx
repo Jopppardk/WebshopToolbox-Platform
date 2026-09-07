@@ -29,7 +29,6 @@ import {
   Check,
   ChevronDown,
   Clock3,
-  Database,
   FileText,
   HandCoins,
   Lightbulb,
@@ -42,7 +41,6 @@ import {
   RotateCcw,
   Save,
   Search,
-  ShieldCheck,
   Settings2,
   ShoppingBag,
 } from 'lucide-react';
@@ -890,30 +888,6 @@ function Settings({
         </div>
       )}
       {mode === 'dashboard' && <>
-      <h2 className="mb-3 text-sm font-semibold">Drift og sikkerhed</h2>
-      <div className="mb-8 grid gap-3 md:grid-cols-3">
-        <div className="rounded-2xl border bg-white p-4">
-          <ShieldCheck className="size-5 text-[#6a8d31]" />
-          <p className="mt-3 text-sm font-semibold">Privat adgang</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Kun godkendte brugere kan åbne Sablen Toolbox.
-          </p>
-        </div>
-        <div className="rounded-2xl border bg-white p-4">
-          <Database className="size-5 text-[#6a8d31]" />
-          <p className="mt-3 text-sm font-semibold">Fælles historik</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Historiklængde og startdato styres samlet nedenfor.
-          </p>
-        </div>
-        <div className="rounded-2xl border bg-white p-4">
-          <ShoppingBag className="size-5 text-[#6a8d31]" />
-          <p className="mt-3 text-sm font-semibold">Kun Sablen.dk</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Produktionsskrivninger aktiveres først efter en kontrolleret læsetest.
-          </p>
-        </div>
-      </div>
       <ErrorOverview onCountChange={onErrorCountChange} />
       <fieldset disabled={!ready || saving} className="min-w-0">
       <h2 className="mb-3 text-sm font-semibold">Automatik og bilag</h2>
