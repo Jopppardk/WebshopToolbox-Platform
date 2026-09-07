@@ -42,6 +42,7 @@ async function inspect(externalId: string, date: string, credentials: Record<str
   const db = database(), { cutoff } = historyWindow(await loadHistory(db));
   const stored = await db.prepare("SELECT booking_status FROM integration_records WHERE tenant = ? AND record_type = 'order' AND external_id = ? AND occurred_at >= ?").bind(tenant, externalId, cutoff).first<{ booking_status: string }>();
   if (!stored || stored.booking_status === 'booked') rejectTransfer('Ordren mangler, er uden for historikken eller er allerede bogført.');
+  if (stored.booking_status === 'cancelled') rejectTransfer('Ordren er annulleret i Shopify og er allerede markeret som håndteret.');
   const source = await loadCompleteOrder(externalId);
   if (source.createdAt < cutoff) rejectTransfer('Ordren er uden for historikken.');
   const invoice = checkInvoice(source), fingerprint = await invoiceFingerprint(invoice);

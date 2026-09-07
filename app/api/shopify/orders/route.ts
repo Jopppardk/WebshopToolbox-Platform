@@ -13,6 +13,7 @@ type ShopifyOrder = {
   name: string;
   createdAt: string;
   processedAt: string;
+  cancelledAt: string | null;
   displayFinancialStatus: string | null;
   displayFulfillmentStatus: string;
   customer: { displayName: string | null; firstName: string | null; lastName: string | null } | null;
@@ -29,13 +30,14 @@ type ShopifyAddress = { name: string | null; address1: string | null; address2: 
 
 function present(order: ShopifyOrder, bookingStatus = 'Afventer') {
   const money = order.currentTotalPriceSet.shopMoney;
+  const cancelled = Boolean(order.cancelledAt);
   return {
     id: order.name,
     date: new Intl.DateTimeFormat('da-DK', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Copenhagen' }).format(new Date(order.createdAt)),
-    shipped: order.displayFulfillmentStatus === 'FULFILLED' ? 'Afsendt' : order.displayFulfillmentStatus === 'PARTIAL' ? 'Delvist afsendt' : 'Ikke afsendt',
+    shipped: cancelled ? 'Annulleret' : order.displayFulfillmentStatus === 'FULFILLED' ? 'Afsendt' : order.displayFulfillmentStatus === 'PARTIAL' ? 'Delvist afsendt' : 'Ikke afsendt',
     amount: new Intl.NumberFormat('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(money.amount)),
     realized: order.displayFinancialStatus === 'PAID' ? new Intl.DateTimeFormat('da-DK', { dateStyle: 'medium', timeZone: 'Europe/Copenhagen' }).format(new Date(order.processedAt)) : '—',
-    status: bookingStatus,
+    status: cancelled ? 'Annulleret · håndteret' : bookingStatus,
     externalId: order.id,
     createdAt: order.createdAt,
     currency: money.currencyCode,
@@ -98,12 +100,14 @@ export async function POST(request: NextRequest) {
     const statements = orders.map((order) => {
       const expires = shiftMonths(new Date(order.createdAt), policy.months);
       const money = order.currentTotalPriceSet.shopMoney;
-      return db.prepare(`INSERT INTO integration_records (id, tenant, record_type, external_id, occurred_at, amount_minor, currency, booking_status, payload_json, expires_at) VALUES (?, ?, 'order', ?, ?, ?, ?, 'pending', ?, ?) ON CONFLICT(tenant, record_type, external_id) DO UPDATE SET occurred_at = excluded.occurred_at, amount_minor = excluded.amount_minor, currency = excluded.currency, payload_json = excluded.payload_json, expires_at = excluded.expires_at`).bind(order.id, 'sablen.dk', order.id, order.createdAt, units(order.currentTotalPriceSet, money.currencyCode), money.currencyCode, JSON.stringify(order), expires.toISOString());
+      const bookingStatus = order.cancelledAt ? 'cancelled' : 'pending';
+      return db.prepare(`INSERT INTO integration_records (id, tenant, record_type, external_id, occurred_at, amount_minor, currency, booking_status, payload_json, expires_at) VALUES (?, ?, 'order', ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(tenant, record_type, external_id) DO UPDATE SET occurred_at = excluded.occurred_at, amount_minor = excluded.amount_minor, currency = excluded.currency, booking_status = CASE WHEN excluded.booking_status = 'cancelled' AND integration_records.booking_status != 'booked' THEN 'cancelled' ELSE integration_records.booking_status END, payload_json = excluded.payload_json, expires_at = excluded.expires_at`).bind(order.id, 'sablen.dk', order.id, order.createdAt, units(order.currentTotalPriceSet, money.currencyCode), money.currencyCode, bookingStatus, JSON.stringify(order), expires.toISOString());
     });
     if (statements.length) await db.batch(statements);
     let invoicesCreated = 0;
     for (const order of orders) {
       if (incomplete.has(order.id)) continue;
+      if (order.cancelledAt) continue;
       if (order.displayFulfillmentStatus !== 'FULFILLED') continue;
       const expires = shiftMonths(new Date(order.createdAt), policy.months);
       try { if (await createInvoicePdf(db, order, expires.toISOString())) invoicesCreated++; }

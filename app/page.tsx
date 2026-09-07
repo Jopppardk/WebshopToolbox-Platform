@@ -492,6 +492,7 @@ function Stat({
 function OrderRow({ order, onBooked }: { order: OrderView; onBooked: () => void }) {
   const state = order.status;
   const booked = state === 'Bogført';
+  const handled = booked || state === 'Annulleret · håndteret';
   return (
     <TableRow className={state === 'Fejlet' ? 'bg-red-50/35' : ''}>
       <TableCell className="pl-5 font-semibold text-[#365f08]">
@@ -524,7 +525,7 @@ function OrderRow({ order, onBooked }: { order: OrderView; onBooked: () => void 
         </Badge>
       </TableCell>
       <TableCell className="pr-5 text-right">
-        {order.externalId && <div className="flex flex-wrap justify-end gap-2"><SalesPreview externalId={order.externalId} disabled={booked} /><SalesTransfer externalId={order.externalId} disabled={booked} onBooked={onBooked} /></div>}
+        {order.externalId && <div className="flex flex-wrap justify-end gap-2"><SalesPreview externalId={order.externalId} disabled={handled} /><SalesTransfer externalId={order.externalId} disabled={handled} onBooked={onBooked} /></div>}
       </TableCell>
     </TableRow>
   );
