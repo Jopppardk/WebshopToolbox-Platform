@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
         if (!available.length) throw new ViaBillError('Nøglerne giver ikke adgang til nogen ViaBill-konti.');
         return reply({ accounts: available });
       } catch (error) {
-        if (!(error instanceof ViaBillError) || !/afviste adgangen/.test(error.message)) throw error;
+        if (!(error instanceof ViaBillError) || !/afviste nøgleparret/.test(error.message)) throw error;
         return reply({ accounts: [], manualAccountIdRequired: true });
       }
     }

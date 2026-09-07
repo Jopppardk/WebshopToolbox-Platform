@@ -58,7 +58,11 @@ export async function viabillRequest(credentials: ViaBillKeys, path: string, bod
   }
   if (!response.ok) {
     await response.body?.cancel();
-    throw new ViaBillError(response.status === 401 || response.status === 403 ? 'ViaBill afviste adgangen. Kontroller API key, secret og adgang til afregningsdata.' : response.status === 429 ? 'ViaBill begrænser hentningen. Vent lidt og prøv igen.' : `ViaBill kunne ikke hente data (HTTP ${response.status}).`);
+    throw new ViaBillError(response.status === 401 || response.status === 403
+      ? 'ViaBill afviste nøgleparret til Merchant Account-API’et (HTTP 403). Bed ViaBill bekræfte, at API key og secret er aktiveret til afregningsdata på denne Merchant Account.'
+      : response.status === 400
+        ? 'ViaBill afviste Merchant Account ID eller forespørgslen (HTTP 400). Kontrollér konto-ID’et fra ViaBill.'
+        : response.status === 429 ? 'ViaBill begrænser hentningen. Vent lidt og prøv igen.' : `ViaBill kunne ikke hente data (HTTP ${response.status}).`);
   }
   // Bound memory even when the upstream ignores pagination. Never log the URL,
   // response body or fetch exception: the signature is a reusable credential.
