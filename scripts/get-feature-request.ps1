@@ -1,6 +1,7 @@
 param(
   [ValidateRange(1, 2147483647)]
   [int]$ReferenceNumber,
+  [switch]$All,
   [switch]$HealthCheck
 )
 
@@ -48,8 +49,16 @@ if ($HealthCheck) {
   return
 }
 
+if ($All) {
+  $response.requests |
+    Sort-Object { [int]$_.reference_number } |
+    Select-Object reference_number, title, description, desired_outcome, area, priority, status, created_by, created_at, updated_at |
+    ConvertTo-Json -Depth 4
+  return
+}
+
 if ($ReferenceNumber -lt 1) {
-  throw 'Angiv -ReferenceNumber eller brug -HealthCheck.'
+  throw 'Angiv -ReferenceNumber, -All eller brug -HealthCheck.'
 }
 
 $request = $response.requests | Where-Object { [int]$_.reference_number -eq $ReferenceNumber } | Select-Object -First 1
