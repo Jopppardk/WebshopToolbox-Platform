@@ -101,7 +101,7 @@ export async function runTransfer(body: { externalId: string; action: string; da
   if (action === 'book' && current!.state.draftTest) rejectTransfer('En testkladde må aldrig bogføres fra løsningen. Slet den i Dinero efter kontrollen.');
   if (action === 'book') {
     const settingsRow = await database().prepare("SELECT setting_value FROM app_settings WHERE tenant=? AND setting_key='admin_settings'").bind(tenant).first<{ setting_value: string }>();
-    if (settingsRow && validateSettings(JSON.parse(settingsRow.setting_value)).automation.bookDinero === false)
+    if (settingsRow && validateSettings(JSON.parse(settingsRow.setting_value)).automation.salesBookDinero === false)
       rejectTransfer('Bogføring er fravalgt under Indstillinger. Kladden bliver stående i Dinero.');
   }
   const testCreate = action === 'create' && current!.state.draftTest === true && draftTestAllowed(externalId);
