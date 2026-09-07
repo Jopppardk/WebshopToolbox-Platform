@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
 
   const db = await prepareDatabase();
   let deliveryId = '';
+  let ownsDelivery = false;
   try {
     const body = await request.json() as { externalId?: unknown };
     if (typeof body.externalId !== 'string' || !/^gid:\/\/shopify\/Order\/\d{1,30}$/.test(body.externalId)) return reply({ error: 'Ugyldig ordre.' }, 400);
@@ -45,7 +46,8 @@ export async function POST(request: NextRequest) {
     deliveryId = `invoice-email:customer:${body.externalId}`;
     const existing = await db.prepare('SELECT status FROM invoice_email_deliveries WHERE id=?').bind(deliveryId).first<{ status: string }>();
     if (existing?.status === 'sent') return reply({ error: 'Fakturaen er allerede sendt til kunden og sendes ikke igen.' }, 409);
-    if (existing?.status === 'sending') return reply({ error: 'Fakturaen er allerede ved at blive sendt.' }, 409);
+    if (existing?.status === 'sending') return reply({ error: 'Afsendelsen er i gang eller uafklaret. Kontrollér mailudbyderen før et nyt forsøg; fakturaen sendes ikke igen.' }, 409);
+    if (existing?.status === 'failed') return reply({ error: 'En tidligere afsendelse fejlede og kan være leveret. Kontrollér mailudbyderen før et nyt forsøg; fakturaen sendes ikke igen.' }, 409);
 
     const object = await (env as unknown as { INVOICES: R2Bucket }).INVOICES.get(saved.r2Key);
     if (!object) throw new InvoiceCheckError('PDF-fakturaen blev ikke fundet. Regenerér fakturaen først.');
@@ -55,8 +57,9 @@ export async function POST(request: NextRequest) {
     const settingsRow = await db.prepare("SELECT setting_value FROM app_settings WHERE tenant='sablen.dk' AND setting_key='admin_settings'").first<{ setting_value: string }>();
     const settings = settingsRow ? validateSettings(JSON.parse(settingsRow.setting_value)) : undefined;
     const { subject, text } = renderInvoiceEmail(settings?.invoiceEmail, order);
-    const lock = await db.prepare("INSERT INTO invoice_email_deliveries (id,tenant,external_id,recipient,delivery_mode,status) VALUES (?,'sablen.dk',?,?,'customer','sending') ON CONFLICT(id) DO UPDATE SET recipient=excluded.recipient,status='sending',error_message=NULL,updated_at=CURRENT_TIMESTAMP WHERE invoice_email_deliveries.status='failed'").bind(deliveryId, body.externalId, recipient).run();
+    const lock = await db.prepare("INSERT INTO invoice_email_deliveries (id,tenant,external_id,recipient,delivery_mode,status) VALUES (?,'sablen.dk',?,?,'customer','sending') ON CONFLICT(id) DO NOTHING").bind(deliveryId, body.externalId, recipient).run();
     if (lock.meta.changes !== 1) return reply({ error: 'Fakturaen er allerede sendt eller ved at blive sendt.' }, 409);
+    ownsDelivery = true;
     const result = await (env as unknown as { INVOICE_EMAIL: EmailBinding }).INVOICE_EMAIL.send({
       to: recipient,
       from: { email: 'faktura@sablen.dk', name: 'Sablen.dk' },
@@ -65,17 +68,26 @@ export async function POST(request: NextRequest) {
       text,
       attachments: [{ content: bytes, filename: invoiceFilename(order), type: 'application/pdf', disposition: 'attachment' }],
     });
-    await db.prepare("UPDATE invoice_email_deliveries SET status='sent',provider_message_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(result.messageId, deliveryId).run();
+    if (!result?.messageId) throw new Error('Mailudbyderen returnerede ingen kvittering.');
+    const receipt = await db.prepare("UPDATE invoice_email_deliveries SET status='sent',provider_message_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='sending'").bind(result.messageId, deliveryId).run();
+    if (receipt.meta.changes !== 1) throw new Error('Mailkvitteringen kunne ikke gemmes.');
     return reply({ sent: true, recipient, invoiceNumber: order.name.replace(/^#/, '') });
   } catch (error) {
     const code = error && typeof error === 'object' && 'code' in error ? String((error as { code: unknown }).code) : '';
-    const message = code === 'E_SENDER_DOMAIN_NOT_AVAILABLE' || code === 'E_SENDER_NOT_VERIFIED'
+    const message = ownsDelivery
+      ? 'Fakturaen kan være sendt, men afsendelsen kunne ikke bekræftes. Kontrollér mailudbyderen; automatisk genafsendelse er blokeret.'
+      : code === 'E_SENDER_DOMAIN_NOT_AVAILABLE' || code === 'E_SENDER_NOT_VERIFIED'
       ? 'Sablen.dk er ikke godkendt til mailafsendelse i Cloudflare.'
       : code === 'E_RECIPIENT_NOT_ALLOWED' ? 'Cloudflare afviste kundens mailadresse som destination.'
       : error instanceof InvoiceCheckError ? error.message
       : `Cloudflare kunne ikke sende fakturaen${code ? ` (${code})` : ''}. Prøv igen senere.`;
-    if (deliveryId) await db.prepare("UPDATE invoice_email_deliveries SET status='failed',error_message=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='sending'").bind(message, deliveryId).run();
-    await recordFailure('Faktura-afsendelse');
+    // Keep the durable sending claim after any potentially accepted send. The
+    // existing schema and scheduler already treat sending as non-retryable.
+    // A failure before claiming this delivery must never alter another sender.
+    if (ownsDelivery) {
+      try { await db.prepare("UPDATE invoice_email_deliveries SET error_message=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='sending'").bind(message, deliveryId).run(); } catch { /* The original claim still blocks a duplicate send. */ }
+    }
+    await recordFailure('Faktura-afsendelse', { category: 'email', cause: message, action: ownsDelivery ? 'Kontrollér afsendelsen hos mailudbyderen. Fjern ikke afsendelsesspærringen uden afklaring.' : 'Kontrollér fakturaen og mailopsætningen.' });
     return reply({ error: message }, error instanceof InvoiceCheckError ? 409 : 503);
   }
 }

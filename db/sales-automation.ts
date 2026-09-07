@@ -16,7 +16,7 @@ export async function runSalesAutomation() {
   const automation = setting ? validateSettings(JSON.parse(setting.setting_value)).automation : null;
   if (automation?.sales !== true) return { status: 'skipped' as const, message: 'Salgsautomatikken er fravalgt under Indstillinger.' };
   const eligiblePhases = automation?.salesBookDinero === false ? "('prepared')" : "('prepared','draft')";
-  const rows = await db.prepare(`SELECT o.external_id, o.payload_json FROM integration_records o LEFT JOIN app_settings t ON t.tenant=o.tenant AND t.setting_key='sales_transfer:'||o.external_id WHERE o.tenant=? AND o.record_type='order' AND o.occurred_at>? AND o.booking_status NOT IN ('booked','cancelled') AND (t.setting_key IS NULL OR json_extract(t.setting_value,'$.phase') IN ${eligiblePhases}) ORDER BY o.occurred_at ASC LIMIT 10`).bind(tenant, runtime.DINERO_SALES_START_AFTER).all<{ external_id: string; payload_json: string }>();
+  const rows = await db.prepare(`SELECT o.external_id, o.payload_json FROM integration_records o LEFT JOIN app_settings t ON t.tenant=o.tenant AND t.setting_key='sales_transfer:'||o.external_id WHERE o.tenant=? AND o.record_type='order' AND o.occurred_at>? AND o.booking_status NOT IN ('booked','cancelled') AND json_extract(o.payload_json,'$.displayFulfillmentStatus')='FULFILLED' AND json_extract(o.payload_json,'$.cancelledAt') IS NULL AND (t.setting_key IS NULL OR json_extract(t.setting_value,'$.phase') IN ${eligiblePhases}) ORDER BY o.occurred_at ASC, o.external_id ASC LIMIT 10`).bind(tenant, runtime.DINERO_SALES_START_AFTER).all<{ external_id: string; payload_json: string }>();
   let completed = 0, failed = 0;
   for (const row of rows.results) {
     try {

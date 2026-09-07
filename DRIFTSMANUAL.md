@@ -34,6 +34,10 @@ Det centrale job udfører i rækkefølge:
 
 Status og resultat ses under **System → Indsigt**. Funktionsfejl registreres i fejloversigten på Dashboard og kan udløse fejlmail, hvis dette er aktiveret.
 
+Ordre-, refunderings- og udbetalingsimport henter op til fem sider pr. job. Fortsættelsen gemmes efter hver importeret side. Hvis der er flere sider, viser Indsigt, at næste kørsel fortsætter; modulets automatiske Dinero-overførsel venter, indtil gennemgangen er afsluttet. Derefter begynder næste kørsel forfra, så ændringer på ældre poster også indlæses. Ændrede historikindstillinger starter en ny gennemgang. En tidsbegrænset lås forhindrer overlappende importer; efter et afbrudt job kan der gå op til ti minutter, før det genoptages.
+
+I kladdetilstand optager eksisterende kladder ikke pladserne for nye poster. Når bogføring aktiveres, kan eksisterende refunderings- og udbetalingskladder vælges til bogføring. Igangværende, usikre og allerede bogførte overførsler genoptages ikke automatisk som nye posteringer.
+
 ## Bogføringsprincipper
 
 ### Salg
@@ -72,6 +76,12 @@ Systemet må ikke gætte efter en mulig ekstern skrivning. Hvis Dinero-svaret er
 6. Bekræft efterfølgende status i både Sablen Toolbox og Dinero.
 
 Ved fejl efter `creating`, `draft` eller `booking` skal Dinero altid kontrolleres manuelt. Slet aldrig status i D1 alene for at fremtvinge et nyt forsøg.
+
+### Uafklaret fakturamail
+
+Efter en mulig kundeafsendelse bevares afsendelsesspærringen, også hvis mailudbyderens svar eller lagringen af kvitteringen fejler. Rækken forbliver `sending`, og fejloversigten forklarer, at levering kan være sket. Tidligere `failed`-rækker genforsøges heller ikke automatisk, fordi de kan dække over leverede mails. De spærrer ikke for nye fakturaer i mailkøen.
+
+Kontrollér først mailudbyderens leveringslog. Fjern ikke en spærring blot for at prøve igen. En afsendelse, der allerede er leveret, skal afstemmes som leveret. Hvis det er bekræftet, at ingen mail blev afleveret, kræver et nyt forsøg en kontrolleret manuel afklaring af den enkelte afsendelsesstatus. Der tilføjes ikke automatisk nulstilling eller en ubetinget gensend-knap.
 
 ## Indstillinger og startdato
 

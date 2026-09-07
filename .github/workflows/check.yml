@@ -1,0 +1,25 @@
+name: Kontrollér ændringer
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    name: Test og build uden deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Kontrollér Worker-pakken uden deployment
+        run: npx wrangler deploy --config wrangler.direct.jsonc --dry-run
