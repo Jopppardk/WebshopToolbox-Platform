@@ -410,9 +410,13 @@ export async function runRefundAutomation() {
     throw new Error('Dinero-forbindelsen mangler.');
   const rows = await database()
     .prepare(
-      "SELECT external_id,amount_minor,currency,payload_json FROM integration_records WHERE tenant=? AND record_type='refund' AND occurred_at>=? AND booking_status!='booked' ORDER BY occurred_at ASC LIMIT 5",
+      `SELECT r.external_id,r.amount_minor,r.currency,r.payload_json FROM integration_records r
+       LEFT JOIN app_settings s ON s.tenant=r.tenant AND s.setting_key='refund_production:'||r.external_id
+       WHERE r.tenant=? AND r.record_type='refund' AND r.occurred_at>=? AND r.booking_status!='booked'
+       AND (s.setting_key IS NULL OR (?=1 AND json_extract(s.setting_value,'$.phase')='draft'))
+       ORDER BY r.occurred_at ASC, r.external_id ASC LIMIT 5`,
     )
-    .bind(tenant, start.setting_value)
+    .bind(tenant, start.setting_value, automation.refundsBookDinero ? 1 : 0)
     .all<{
       external_id: string;
       amount_minor: number;
@@ -424,7 +428,8 @@ export async function runRefundAutomation() {
   for (const row of rows.results) {
     const state = await read(row.external_id);
     if (state?.state.phase === 'draft' && !automation.refundsBookDinero) continue;
-    (await processRefund(row, credentials)) ? completed++ : failed++;
+    if (await processRefund(row, credentials)) completed++;
+    else failed++;
   }
   if (failed)
     throw new Error(
