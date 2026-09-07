@@ -27,6 +27,33 @@ const reply = (data: unknown, status = 200) =>
   NextResponse.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 const clean = (value: unknown, max: number) =>
   typeof value === 'string' ? value.trim().slice(0, max) : '';
+async function ensureReferenceNumbers(
+  db: Awaited<ReturnType<typeof prepareDatabase>>,
+) {
+  const missing = await db
+    .prepare(
+      `SELECT f.id FROM feature_requests f LEFT JOIN feature_request_numbers n ON n.tenant = f.tenant AND n.feature_request_id = f.id WHERE f.tenant = ? AND n.feature_request_id IS NULL ORDER BY f.created_at ASC, f.id ASC LIMIT 300`,
+    )
+    .bind(tenant)
+    .all<{ id: string }>();
+  if (!missing.results.length) return;
+  const maximum = await db
+    .prepare(
+      `SELECT COALESCE(MAX(reference_number), 0) AS value FROM feature_request_numbers WHERE tenant = ?`,
+    )
+    .bind(tenant)
+    .first<{ value: number }>();
+  const start = Number(maximum?.value || 0);
+  await db.batch(
+    missing.results.map((item, index) =>
+      db
+        .prepare(
+          `INSERT OR IGNORE INTO feature_request_numbers (reference_number, tenant, feature_request_id) VALUES (?, ?, ?)`,
+        )
+        .bind(start + index + 1, tenant, item.id),
+    ),
+  );
+}
 function authorizeWrite(request: NextRequest) {
   const origin = request.headers.get('origin');
   const actor = request.headers
@@ -50,9 +77,10 @@ function authorizeWrite(request: NextRequest) {
 export async function GET() {
   try {
     const db = await prepareDatabase();
+    await ensureReferenceNumbers(db);
     const result = await db
       .prepare(
-        `SELECT id, title, description, desired_outcome, area, priority, status, created_by, created_at, updated_at FROM feature_requests WHERE tenant = ? ORDER BY CASE priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END, updated_at DESC LIMIT 300`,
+        `SELECT f.id, n.reference_number, f.title, f.description, f.desired_outcome, f.area, f.priority, f.status, f.created_by, f.created_at, f.updated_at FROM feature_requests f JOIN feature_request_numbers n ON n.tenant = f.tenant AND n.feature_request_id = f.id WHERE f.tenant = ? ORDER BY CASE f.priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END, f.updated_at DESC LIMIT 300`,
       )
       .bind(tenant)
       .all();
@@ -87,6 +115,14 @@ export async function POST(request: NextRequest) {
       clean(request.headers.get('cf-access-authenticated-user-email'), 254) ||
       'rene@sablen.dk';
     const db = await prepareDatabase();
+    await ensureReferenceNumbers(db);
+    const maximum = await db
+      .prepare(
+        `SELECT COALESCE(MAX(reference_number), 0) AS value FROM feature_request_numbers WHERE tenant = ?`,
+      )
+      .bind(tenant)
+      .first<{ value: number }>();
+    const referenceNumber = Number(maximum?.value || 0) + 1;
     await db
       .prepare(
         `INSERT INTO feature_requests (id, tenant, title, description, desired_outcome, area, priority, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, 'proposed', ?)`,
@@ -102,7 +138,13 @@ export async function POST(request: NextRequest) {
         createdBy,
       )
       .run();
-    return reply({ created: true, id }, 201);
+    await db
+      .prepare(
+        `INSERT INTO feature_request_numbers (tenant, feature_request_id, reference_number) VALUES (?, ?, ?)`,
+      )
+      .bind(tenant, id, referenceNumber)
+      .run();
+    return reply({ created: true, id, referenceNumber }, 201);
   } catch {
     return reply({ error: 'Forslaget kunne ikke gemmes.' }, 503);
   }

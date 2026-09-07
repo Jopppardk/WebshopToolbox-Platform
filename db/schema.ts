@@ -92,6 +92,13 @@ export const schemaStatements = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_feature_requests_tenant_updated
     ON feature_requests(tenant, updated_at DESC)`,
+  `CREATE TABLE IF NOT EXISTS feature_request_numbers (
+    tenant TEXT NOT NULL,
+    feature_request_id TEXT NOT NULL,
+    reference_number INTEGER NOT NULL,
+    PRIMARY KEY (tenant, feature_request_id),
+    UNIQUE (tenant, reference_number)
+  )`,
   `INSERT OR IGNORE INTO feature_requests (id, tenant, title, description, desired_outcome, area, priority, status, created_by)
     VALUES ('backlog-viabill-integration', 'sablen.dk', 'Integration til ViaBill', 'ViaBill skal integreres til betalinger og udbetalinger. Arbejdet afventer de nødvendige oplysninger og afklaringer fra ViaBill.', 'Færdiggør forbindelsen, synkroniseringen og bogføringsflowet, når ViaBill har leveret den manglende information.', 'Integrationer', 'high', 'clarification', 'rene@sablen.dk')`,
   `INSERT OR IGNORE INTO feature_requests (id, tenant, title, description, desired_outcome, area, priority, status, created_by)

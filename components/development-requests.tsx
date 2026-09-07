@@ -32,6 +32,7 @@ type Status =
 type Priority = 'low' | 'medium' | 'high' | 'critical';
 type FeatureRequest = {
   id: string;
+  reference_number: number;
   title: string;
   description: string;
   desired_outcome: string | null;
@@ -428,7 +429,12 @@ export function DevelopmentRequests() {
                         {priorityLabels[item.priority]} prioritet
                       </span>
                     </div>
-                    <h3 className="text-lg font-semibold">{item.title}</h3>
+                    <h3 className="text-lg font-semibold">
+                      <span className="mr-2 text-[#806746]">
+                        #{item.reference_number}
+                      </span>
+                      {item.title}
+                    </h3>
                     <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
                       {item.description}
                     </p>
