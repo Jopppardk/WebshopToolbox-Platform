@@ -10,12 +10,18 @@ export function middleware(request: NextRequest) {
     .get('cf-access-authenticated-user-email')
     ?.trim()
     .toLowerCase();
+  const serviceClientId = request.headers
+    .get('cf-access-client-id')
+    ?.trim()
+    .toLowerCase();
+  const accessJwt = request.headers.get('cf-access-jwt-assertion');
   if (email === allowedEmail) return NextResponse.next();
   if (
     request.method === 'GET' &&
     request.nextUrl.pathname === '/api/admin/feature-requests' &&
     featureLogServiceClientId &&
-    email === featureLogServiceClientId
+    serviceClientId === featureLogServiceClientId &&
+    accessJwt
   )
     return NextResponse.next();
   return new NextResponse('Adgang kræver Cloudflare Access for rene@sablen.dk.', {
