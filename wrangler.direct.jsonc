@@ -5,6 +5,8 @@
   "preview_urls": false,
   "vars": {
     "FEATURE_LOG_SERVICE_CLIENT_ID": "3ad3d5f8b0692ca8acc9cef0b5bca295.access",
+    "CLOUDFLARE_ACCESS_TEAM_DOMAIN": "https://flat-sun-0738.cloudflareaccess.com",
+    "CLOUDFLARE_ACCESS_AUD": "ddda465e15f3bae8973ad8ac8b8667c42cf01948d4a8ac5515bd6f10abcdc681",
     "DINERO_SALES_WRITES_ENABLED": "true",
     "DINERO_SALES_AUTOMATION_ENABLED": "true",
     "DINERO_SALES_START_AFTER": "2026-09-04T22:00:00Z",
