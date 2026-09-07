@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     if (body.action === 'prepare' && (typeof body.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.date))) return reply({ error: 'Vælg en bogføringsdato.' }, 400);
     return reply(await runTransfer(body, actor || 'local-test'));
   } catch (error) {
-    await recordFailure('Dinero · salgsoverførsel');
+    await recordFailure('Dinero · salgsoverførsel', { category: 'dinero', cause: error instanceof Error ? error.message : 'Salgsoverførslen blev afbrudt.' });
     return reply({ error: error instanceof TransferError || error instanceof InvoiceCheckError ? error.message : 'Kontrollen kunne ikke gennemføres. Hent status igen; gentag ikke overførslen blindt.' }, 422);
   }
 }

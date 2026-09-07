@@ -14,7 +14,7 @@ export async function GET() {
     const db = await prepareDatabase();
     const [result, count, notificationRow] = await Promise.all([db
       .prepare(
-        `SELECT id, source, message, created_at
+        `SELECT id, source, message, details_json, created_at
          FROM system_errors
          WHERE tenant = ? AND resolved_at IS NULL
          ORDER BY created_at DESC
@@ -22,7 +22,13 @@ export async function GET() {
       )
       .bind('sablen.dk')
       .all(), db.prepare('SELECT COUNT(*) AS count FROM system_errors WHERE tenant = ? AND resolved_at IS NULL').bind('sablen.dk').first<{ count: number }>(), db.prepare("SELECT setting_value FROM app_settings WHERE tenant=? AND setting_key='error_notifications'").bind('sablen.dk').first<{ setting_value: string }>()]);
-    return NextResponse.json({ errors: result.results, openCount: count?.count || 0, notifications: notifications(notificationRow?.setting_value) }, { headers: { 'Cache-Control': 'no-store' } });
+    const errors = result.results.map((row: Record<string, unknown>) => {
+      let details = null;
+      try { details = typeof row.details_json === 'string' ? JSON.parse(row.details_json) : null; } catch { details = null; }
+      const { details_json: _detailsJson, ...safeRow } = row;
+      return { ...safeRow, details };
+    });
+    return NextResponse.json({ errors, openCount: count?.count || 0, notifications: notifications(notificationRow?.setting_value) }, { headers: { 'Cache-Control': 'no-store' } });
   } catch {
     return NextResponse.json(
       { error: 'Fejloversigten kunne ikke indlæses' },
