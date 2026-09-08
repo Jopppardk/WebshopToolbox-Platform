@@ -16,13 +16,13 @@ const duration = (value: number | null) => value === null ? '—' : value < 1000
 
 export function JobInsights() {
   const [data, setData] = useState<Insights | null>(null), [busy, setBusy] = useState(true), [error, setError] = useState('');
-  const [category, setCategory] = useState(''), [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState(''), [page, setPage] = useState(1);
   const until = useRef('');
   const [revision, setRevision] = useState(0);
   const refresh = useCallback(() => { setBusy(true); setError(''); setPage(1); until.current = ''; setRevision(value => value + 1); }, []);
   useEffect(() => {
     const controller = new AbortController();
-    const params = new URLSearchParams({ category, page: String(page), ...(until.current ? { until: until.current } : {}) });
+    const params = new URLSearchParams({ status: statusFilter, page: String(page), ...(until.current ? { until: until.current } : {}) });
     void (async () => {
       try {
         const response = await fetch(`/api/admin/insights?${params}`, { cache: 'no-store', signal: controller.signal });
@@ -34,13 +34,13 @@ export function JobInsights() {
       } finally { if (!controller.signal.aborted) setBusy(false); }
     })();
     return () => controller.abort();
-  }, [category, page, revision]);
+  }, [statusFilter, page, revision]);
   useEffect(() => {
     if (page !== 1) return;
     const timer = window.setInterval(refresh, 60000);
     return () => window.clearInterval(timer);
   }, [page, refresh]);
-  const selectCategory = (value: string) => { if (value === category && page === 1) return; setBusy(true); setError(''); setCategory(value); setPage(1); };
+  const selectStatus = (value: string) => { if (value === statusFilter && page === 1) return; setBusy(true); setError(''); setStatusFilter(value); setPage(1); };
   const total = data?.pagination.total || 0;
   const pages = Math.max(1, Math.ceil(total / 100));
   const successRate = useMemo(() => { const completed = (data?.summary.succeeded || 0) + (data?.summary.failed || 0); return completed ? Math.round((data!.summary.succeeded / completed) * 100) : 0; }, [data]);
@@ -50,12 +50,12 @@ export function JobInsights() {
     <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Summary icon={<Activity/>} label="Kørsler seneste 24 timer" value={data?.summary.total ?? 0}/><Summary icon={<CheckCircle2/>} label="Gennemført" value={data?.summary.succeeded ?? 0} tone="good"/><Summary icon={<TriangleAlert/>} label="Fejlet" value={data?.summary.failed ?? 0} tone="bad"/><Summary icon={<CircleDot/>} label="Succesrate" value={`${successRate} %`} note="Af afsluttede kørsler"/></div>
     <section className="mb-6 rounded-2xl border bg-white shadow-[0_12px_40px_rgba(23,31,27,.045)]"><div className="border-b p-5"><h2 className="font-semibold">Aktuelle jobs</h2><p className="mt-1 text-sm text-muted-foreground">Seneste registrerede kørsel for hvert job.</p></div><div className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-3">{!busy && !data?.latest.length && <p className="text-sm text-muted-foreground">Der er endnu ingen registrerede jobkørsler. De vises efter næste planlagte synkronisering.</p>}{data?.latest.map(run => <article key={run.job_key} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{run.job_name}</p><p className="mt-1 text-xs text-muted-foreground">{date(run.started_at)} · {duration(run.duration_ms)}</p></div><Status status={run.status}/></div>{run.message && <p className="mt-3 text-sm text-muted-foreground">{run.message}</p>}</article>)}</div></section>
     <section className="overflow-hidden rounded-2xl border bg-white shadow-[0_12px_40px_rgba(23,31,27,.045)]"><div className="border-b p-5"><h2 className="font-semibold">Jobhistorik</h2><p className="mt-1 text-sm text-muted-foreground">Kørsler fra de seneste 24 timer, vist 100 ad gangen.</p>
-      <fieldset className="mt-4 flex flex-wrap gap-2"><legend className="sr-only">Filtrér jobhistorik efter kategori</legend>
-        <Button size="sm" variant={category === '' ? 'default' : 'outline'} aria-pressed={category === ''} onClick={() => selectCategory('')}>Alle</Button>
-        {data?.latest.map(job => <Button key={job.job_key} size="sm" variant={category === job.job_key ? 'default' : 'outline'} aria-pressed={category === job.job_key} onClick={() => selectCategory(job.job_key)}>{job.job_name}</Button>)}
+      <fieldset className="mt-4 flex flex-wrap gap-2"><legend className="sr-only">Filtrér jobhistorik efter status</legend>
+        <Button size="sm" variant={statusFilter === '' ? 'default' : 'outline'} aria-pressed={statusFilter === ''} onClick={() => selectStatus('')}>Alle</Button>
+        {(['succeeded', 'failed', 'running', 'skipped'] as JobStatus[]).map(status => <Button key={status} size="sm" variant={statusFilter === status ? 'default' : 'outline'} aria-pressed={statusFilter === status} onClick={() => selectStatus(status)}>{statusLabel[status]}</Button>)}
       </fieldset>
       {data && <p className="mt-3 text-xs text-muted-foreground">Tidsvindue: {date(data.pagination.since)} – {date(data.pagination.until)}. Opdatér henter det nyeste døgn og går til side 1.</p>}
-      </div><div className="overflow-x-auto" aria-busy={busy}><Table><TableHeader><TableRow className="bg-muted/45 hover:bg-muted/45"><TableHead className="pl-5">Job</TableHead><TableHead>Start</TableHead><TableHead>Varighed</TableHead><TableHead>Status</TableHead><TableHead>Besked</TableHead></TableRow></TableHeader><TableBody>{busy && <TableRow><TableCell colSpan={5} className="p-10 text-center">Henter jobhistorik…</TableCell></TableRow>}{!busy && !error && !data?.runs.length && <TableRow><TableCell colSpan={5} className="p-10 text-center text-muted-foreground">Ingen kørsler i denne kategori i det valgte døgn.</TableCell></TableRow>}{!busy && !error && data?.runs.map(run => <TableRow key={run.id}><TableCell className="pl-5 font-medium">{run.job_name}</TableCell><TableCell className="whitespace-nowrap">{date(run.started_at)}</TableCell><TableCell>{duration(run.duration_ms)}</TableCell><TableCell><Status status={run.status}/></TableCell><TableCell className="max-w-[430px] text-sm text-muted-foreground">{run.message || '—'}</TableCell></TableRow>)}</TableBody></Table></div>
+      </div><div className="overflow-x-auto" aria-busy={busy}><Table><TableHeader><TableRow className="bg-muted/45 hover:bg-muted/45"><TableHead className="pl-5">Job</TableHead><TableHead>Start</TableHead><TableHead>Varighed</TableHead><TableHead>Status</TableHead><TableHead>Besked</TableHead></TableRow></TableHeader><TableBody>{busy && <TableRow><TableCell colSpan={5} className="p-10 text-center">Henter jobhistorik…</TableCell></TableRow>}{!busy && !error && !data?.runs.length && <TableRow><TableCell colSpan={5} className="p-10 text-center text-muted-foreground">Ingen kørsler med denne status i det valgte døgn.</TableCell></TableRow>}{!busy && !error && data?.runs.map(run => <TableRow key={run.id}><TableCell className="pl-5 font-medium">{run.job_name}</TableCell><TableCell className="whitespace-nowrap">{date(run.started_at)}</TableCell><TableCell>{duration(run.duration_ms)}</TableCell><TableCell><Status status={run.status}/></TableCell><TableCell className="max-w-[430px] text-sm text-muted-foreground">{run.message || '—'}</TableCell></TableRow>)}</TableBody></Table></div>
       <nav aria-label="Sider i jobhistorikken" className="flex flex-wrap items-center justify-between gap-3 border-t p-5">
         <output className="text-sm text-muted-foreground">{busy ? 'Henter…' : error ? 'Historikken kunne ikke hentes.' : `Viser ${total ? (page - 1) * 100 + 1 : 0}–${Math.min(page * 100, total)} af ${total} kørsler · Side ${page} af ${pages}`}</output>
         <div className="flex gap-2"><Button variant="outline" disabled={busy || Boolean(error) || page <= 1} onClick={() => { setBusy(true); setError(''); setPage(value => value - 1); }}>Forrige</Button><Button variant="outline" disabled={busy || Boolean(error) || page >= pages} onClick={() => { setBusy(true); setError(''); setPage(value => value + 1); }}>Næste</Button></div>

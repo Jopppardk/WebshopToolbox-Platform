@@ -8,23 +8,23 @@ const day = 24 * 60 * 60 * 1000;
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const page = Number(params.get('page') || 1);
-  const category = params.get('category') || '';
+  const status = params.get('status') || '';
   const now = Date.now();
   const until = params.get('until') || new Date(now).toISOString();
   const timestamp = Date.parse(until);
-  if (!Number.isSafeInteger(page) || page < 1 || page > 100000 || category.length > 150 ||
+  if (!Number.isSafeInteger(page) || page < 1 || page > 100000 || !['', 'running', 'succeeded', 'failed', 'skipped'].includes(status) ||
       !Number.isFinite(timestamp) || new Date(timestamp).toISOString() !== until || timestamp > now || timestamp < now - day) {
     return NextResponse.json({ error: 'Ugyldigt filter eller tidsvindue. Opdatér jobhistorikken.' }, { status: 400 });
   }
   try {
     const db = await prepareDatabase(), since = new Date(timestamp - day).toISOString();
-    const where = 'tenant=? AND started_at>=? AND started_at<=? AND (?=\'\' OR job_key=?)';
+    const where = 'tenant=? AND started_at>=? AND started_at<=? AND (?=\'\' OR status=?)';
     const [runs, total, counts, latest] = await Promise.all([
       db.prepare(`SELECT id,job_key,job_name,status,started_at,finished_at,duration_ms,message
         FROM job_runs WHERE ${where} ORDER BY started_at DESC,id DESC LIMIT ? OFFSET ?`)
-        .bind(tenant,since,until,category,category,pageSize,(page-1)*pageSize).all(),
+        .bind(tenant,since,until,status,status,pageSize,(page-1)*pageSize).all(),
       db.prepare(`SELECT COUNT(*) total FROM job_runs WHERE ${where}`)
-        .bind(tenant,since,until,category,category).first<{ total: number }>(),
+        .bind(tenant,since,until,status,status).first<{ total: number }>(),
       db.prepare(`SELECT COUNT(*) total,
         COALESCE(SUM(CASE WHEN status='succeeded' THEN 1 ELSE 0 END),0) succeeded,
         COALESCE(SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END),0) failed,
