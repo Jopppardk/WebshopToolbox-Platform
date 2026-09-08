@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Activity, CheckCircle2, CircleDot, RefreshCw, TriangleAlert } from 'lucide-react';
+import { Activity, CheckCircle2, CircleDot, RefreshCw, SkipForward, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -18,6 +18,7 @@ export function JobInsights() {
   const [data, setData] = useState<Insights | null>(null), [busy, setBusy] = useState(true), [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState(''), [page, setPage] = useState(1);
   const until = useRef('');
+  const historyHeading = useRef<HTMLHeadingElement>(null);
   const [revision, setRevision] = useState(0);
   const refresh = useCallback(() => { setBusy(true); setError(''); setPage(1); until.current = ''; setRevision(value => value + 1); }, []);
   useEffect(() => {
@@ -41,15 +42,28 @@ export function JobInsights() {
     return () => window.clearInterval(timer);
   }, [page, refresh]);
   const selectStatus = (value: string) => { if (value === statusFilter && page === 1) return; setBusy(true); setError(''); setStatusFilter(value); setPage(1); };
+  const showHistory = (status: string) => {
+    selectStatus(status);
+    window.requestAnimationFrame(() => {
+      historyHeading.current?.focus({ preventScroll: true });
+      historyHeading.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    });
+  };
   const total = data?.pagination.total || 0;
   const pages = Math.max(1, Math.ceil(total / 100));
   const successRate = useMemo(() => { const completed = (data?.summary.succeeded || 0) + (data?.summary.failed || 0); return completed ? Math.round((data!.summary.succeeded / completed) * 100) : 0; }, [data]);
   return <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
     <div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">System · Drift</p><h1 className="mt-1 text-3xl font-semibold tracking-[-.035em]">Indsigt</h1><p className="mt-2 text-sm text-muted-foreground">Se alle automatiske jobs, deres seneste resultat og den fulde kørselslog.</p></div><Button variant="outline" onClick={refresh} disabled={busy}><RefreshCw className={busy ? 'animate-spin' : ''}/>{busy ? 'Opdaterer…' : 'Opdatér'}</Button></div>
     {error && <p role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p>}
-    <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Summary icon={<Activity/>} label="Kørsler seneste 24 timer" value={data?.summary.total ?? 0}/><Summary icon={<CheckCircle2/>} label="Gennemført" value={data?.summary.succeeded ?? 0} tone="good"/><Summary icon={<TriangleAlert/>} label="Fejlet" value={data?.summary.failed ?? 0} tone="bad"/><Summary icon={<CircleDot/>} label="Succesrate" value={`${successRate} %`} note="Af afsluttede kørsler"/></div>
+    <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <Summary icon={<Activity/>} label="Kørsler seneste 24 timer" value={data?.summary.total ?? 0} onClick={() => showHistory('')} actionLabel="Vis alle kørsler i jobhistorikken" disabled={!data}/>
+      <Summary icon={<CheckCircle2/>} label="Gennemført" value={data?.summary.succeeded ?? 0} tone="good" onClick={() => showHistory('succeeded')} actionLabel="Vis gennemførte kørsler i jobhistorikken" disabled={!data}/>
+      <Summary icon={<TriangleAlert/>} label="Fejlet" value={data?.summary.failed ?? 0} tone="bad" onClick={() => showHistory('failed')} actionLabel="Vis fejlede kørsler i jobhistorikken" disabled={!data}/>
+      <Summary icon={<SkipForward/>} label="Sprunget over" value={data?.summary.skipped ?? 0} onClick={() => showHistory('skipped')} actionLabel="Vis oversprungne kørsler i jobhistorikken" disabled={!data}/>
+      <Summary icon={<CircleDot/>} label="Succesrate" value={`${successRate} %`} note="Af afsluttede kørsler" onClick={() => showHistory('succeeded')} actionLabel="Succesrate – vis gennemførte kørsler i jobhistorikken" disabled={!data}/>
+    </div>
     <section className="mb-6 rounded-2xl border bg-white shadow-[0_12px_40px_rgba(23,31,27,.045)]"><div className="border-b p-5"><h2 className="font-semibold">Aktuelle jobs</h2><p className="mt-1 text-sm text-muted-foreground">Seneste registrerede kørsel for hvert job.</p></div><div className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-3">{!busy && !data?.latest.length && <p className="text-sm text-muted-foreground">Der er endnu ingen registrerede jobkørsler. De vises efter næste planlagte synkronisering.</p>}{data?.latest.map(run => <article key={run.job_key} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{run.job_name}</p><p className="mt-1 text-xs text-muted-foreground">{date(run.started_at)} · {duration(run.duration_ms)}</p></div><Status status={run.status}/></div>{run.message && <p className="mt-3 text-sm text-muted-foreground">{run.message}</p>}</article>)}</div></section>
-    <section className="overflow-hidden rounded-2xl border bg-white shadow-[0_12px_40px_rgba(23,31,27,.045)]"><div className="border-b p-5"><h2 className="font-semibold">Jobhistorik</h2><p className="mt-1 text-sm text-muted-foreground">Kørsler fra de seneste 24 timer, vist 100 ad gangen.</p>
+    <section className="overflow-hidden rounded-2xl border bg-white shadow-[0_12px_40px_rgba(23,31,27,.045)]"><div className="border-b p-5"><h2 ref={historyHeading} tabIndex={-1} className="scroll-mt-6 font-semibold focus-visible:outline-2 focus-visible:outline-offset-4">Jobhistorik</h2><p className="mt-1 text-sm text-muted-foreground">Kørsler fra de seneste 24 timer, vist 100 ad gangen.</p>
       <fieldset className="mt-4 flex flex-wrap gap-2"><legend className="sr-only">Filtrér jobhistorik efter status</legend>
         <Button size="sm" variant={statusFilter === '' ? 'default' : 'outline'} aria-pressed={statusFilter === ''} onClick={() => selectStatus('')}>Alle</Button>
         {(['succeeded', 'failed', 'running', 'skipped'] as JobStatus[]).map(status => <Button key={status} size="sm" variant={statusFilter === status ? 'default' : 'outline'} aria-pressed={statusFilter === status} onClick={() => selectStatus(status)}>{statusLabel[status]}</Button>)}
@@ -64,7 +78,11 @@ export function JobInsights() {
 }
 
 function Status({ status }: { status: JobStatus }) { return <Badge variant="outline" className={statusClass[status]}>{statusLabel[status]}</Badge>; }
-function Summary({ icon, label, value, note, tone }: { icon: ReactNode; label: string; value: string | number; note?: string; tone?: 'good' | 'bad' }) { return <div className="stat-card"><div className={`mb-3 grid size-9 place-items-center rounded-lg ${tone === 'good' ? 'bg-emerald-50 text-emerald-700' : tone === 'bad' ? 'bg-red-50 text-red-700' : 'bg-[#f1e7d7] text-[#6d5430]'}`}>{icon}</div><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-semibold">{value}</p>{note && <p className="mt-1 text-xs text-muted-foreground">{note}</p>}</div>; }
-
-
+function Summary({ icon, label, value, note, tone, onClick, actionLabel, disabled }: { icon: ReactNode; label: string; value: string | number; note?: string; tone?: 'good' | 'bad'; onClick: () => void; actionLabel: string; disabled: boolean }) {
+  return <button type="button" onClick={onClick} disabled={disabled} aria-label={`${actionLabel}: ${value}`} title={actionLabel} className="stat-card flex min-h-40 w-full cursor-pointer flex-col items-center justify-center text-center transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring disabled:cursor-wait disabled:opacity-60">
+    <span className={`mb-3 grid size-9 shrink-0 place-items-center rounded-lg ${tone === 'good' ? 'bg-emerald-50 text-emerald-700' : tone === 'bad' ? 'bg-red-50 text-red-700' : 'bg-[#f1e7d7] text-[#6d5430]'}`}>{icon}</span>
+    <span className="text-xs text-muted-foreground">{label}</span><span className="mt-1 text-2xl font-semibold">{value}</span>
+    <span className="mt-1 min-h-4 text-xs text-muted-foreground">{note || '\u00a0'}</span>
+  </button>;
+}
 
