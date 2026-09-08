@@ -1,4 +1,4 @@
-import { defaultHistory, historyWindow, type HistoryPolicy } from './history-policy';
+import { danishDate, defaultHistory, historyWindow, type HistoryPolicy } from './history-policy';
 export type BalancePayment = {
   id: string;
   type: string;
@@ -29,14 +29,17 @@ export function paymentPeriod(from: unknown, to: unknown, policy: HistoryPolicy 
   if (typeof from !== 'string' || typeof to !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new Error('Vælg en gyldig fra- og til-dato');
   const start = new Date(`${from}T00:00:00Z`);
   const end = new Date(`${to}T00:00:00Z`);
-  if (!Number.isFinite(+start) || !Number.isFinite(+end) || start.toISOString().slice(0, 10) !== from || end.toISOString().slice(0, 10) !== to || start > end || end > new Date()) throw new Error('Vælg en gyldig periode frem til i dag');
+  // Compare calendar dates in Denmark: UTC midnight is still in the future
+  // during the first one or two hours of the Danish day.
+  const now = new Date();
+  if (!Number.isFinite(+start) || !Number.isFinite(+end) || start.toISOString().slice(0, 10) !== from || end.toISOString().slice(0, 10) !== to || start > end || to > danishDate(now)) throw new Error('Vælg en gyldig periode frem til i dag');
   // Calendar dates are interpreted in Denmark, including daylight saving time.
   const midnight = (date: Date) => {
     const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', hour: '2-digit', hourCycle: 'h23' }).format(date));
     return new Date(+date - hour * 3600000).toISOString();
   };
   end.setUTCDate(end.getUTCDate() + 1);
-  const cutoff = historyWindow(policy).cutoff;
+  const cutoff = historyWindow(policy, now).cutoff;
   return { start: midnight(start) > cutoff ? midnight(start) : cutoff, end: midnight(end) };
 }
 
