@@ -44,13 +44,13 @@ export function SyncStatus({ state, mobile = false }: { state: ReturnType<typeof
   const time = (value: string | null) => value ? new Date(value).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Ingen registreret';
   const seconds = status && now ? Math.ceil(millisecondsToNextRun(now + clockOffset, status.intervalMinutes) / 1000) : null;
   const countdown = seconds === null ? '—' : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-  const label = error ? 'Status kan ikke hentes' : !status ? 'Henter status…' : status.status === 'running' ? 'Synkronisering i gang' : status.status === 'failed' ? 'Afsluttet med fejl · se Indsigt' : status.status === 'interrupted' ? 'Kørsel afbrudt · afventer næste start' : status.status === 'unknown' ? 'Ingen kørsel bekræftet endnu' : 'Seneste kørsel afsluttet';
-  return <div className={mobile ? 'fixed bottom-4 left-4 z-40 max-w-[90vw] rounded-xl border bg-[#232323] p-3 text-xs text-white shadow-xl lg:hidden' : 'mx-4 mb-4 rounded-xl border border-white/10 bg-white/5 p-3 text-xs'}>
-    <p className="flex items-center gap-2 font-medium"><Clock3 className="size-4 shrink-0 text-[#c09960]" />{label}</p>
-    {status && !error && <div className="mt-2 space-y-1 text-[11px]">
-      <p>Gemt interval: {status.intervalMinutes} min.</p>
-      {status.status === 'running' ? <p>Næste kørsel afventer den igangværende.</p> : status.blockedUntil && now && status.blockedUntil > now + clockOffset ? <p>Sikkerhedspause indtil {time(new Date(status.blockedUntil).toISOString())}</p> : <p>Næste planlagte start om {countdown}</p>}
-      {!mobile && <><p>Senest startet: {time(status.startedAt)}</p><p>Senest afsluttet: {time(status.finishedAt)}</p><p className="opacity-70">Planlagt tid er ikke en bekræftet start.</p></>}
-    </div>}
+  const paused = status?.blockedUntil && now && status.blockedUntil > now + clockOffset;
+  const label = error ? 'Status utilgængelig' : !status ? 'Henter status…' : status.status === 'running' ? 'Synkroniserer…' : status.status === 'failed' ? 'Fejl · se Indsigt' : status.status === 'interrupted' ? 'Kørsel afbrudt' : 'Synkronisering';
+  const detail = !status || error || status.status === 'running' ? null : paused ? `Pause til ${time(new Date(status.blockedUntil!).toISOString())}` : `Næste planlagte: ${countdown}`;
+  return <div className={mobile ? 'fixed bottom-4 left-4 z-40 max-w-[90vw] rounded-xl border bg-[#232323] px-3 py-2 text-xs text-white shadow-xl lg:hidden' : 'mx-4 mb-4 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs'}>
+    <div className="flex items-center gap-2">
+      <Clock3 className="size-4 shrink-0 text-[#c09960]" />
+      <div><p className="font-medium">{label}</p>{detail && <p className="mt-0.5 text-[11px] tabular-nums opacity-70">{detail}</p>}</div>
+    </div>
   </div>;
 }
