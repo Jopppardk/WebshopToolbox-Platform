@@ -518,7 +518,7 @@ function OrderRow({ order, onBooked }: { order: OrderView; onBooked: () => void 
         </Badge>
       </TableCell>
       <TableCell className="pr-5 text-right">
-        {order.externalId && <div className="flex flex-wrap justify-end gap-2"><SalesPreview externalId={order.externalId} disabled={handled} /><SalesTransfer externalId={order.externalId} disabled={handled} onBooked={onBooked} /></div>}
+        {order.externalId && <div className="flex flex-wrap justify-end gap-2">{order.shipped === 'Afsendt' && !handled && <SalesPreview externalId={order.externalId} />}<SalesTransfer externalId={order.externalId} disabled={handled} onBooked={onBooked} /></div>}
       </TableCell>
     </TableRow>
   );
