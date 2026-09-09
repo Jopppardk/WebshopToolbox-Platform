@@ -149,7 +149,7 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
           </Button>
         </div>
       </div>
-      <p className="px-5 pt-4 text-xs text-muted-foreground">Indberetningspligtige mængder fra Forbrug for samme afsluttede kvartal. Klik på kvartalet for at se registreringerne. Uafklarede mængder kræver klassificering før indberetning.</p>
+      <p className="px-5 pt-4 text-xs text-muted-foreground">Indberetningspligtige mængder fra Forbrug for samme afsluttede kvartal. Klik på kvartalet for at se registreringerne. Manglende kundetype regnes som Privat.</p>
       {data?.providerError&&<p role="alert" className="m-5 rounded-xl bg-amber-50 p-4 text-sm">{data.providerError}</p>}
       {error && (
         <p
@@ -174,7 +174,7 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
               <th className="p-4">Kvartal</th>
               <th className="p-4 text-right">I alt</th><th className="p-4 text-right">Privat</th>
               <th className="p-4 text-right">Erhverv</th>
-              <th className="p-4 text-right">Uafklaret</th><th className="p-4">Status</th>
+              <th className="p-4">Status</th>
               <th className="p-4"><span className="sr-only">Handling</span></th>
             </tr>
           </thead>
@@ -188,7 +188,7 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
                 <td className="p-4 text-right tabular-nums">
                   {kg(q.commercialGrams)}
                 </td>
-                <td className="p-4 text-right tabular-nums">{kg(q.unknownAudienceGrams)}</td><td className="max-w-64 p-4">
+                <td className="max-w-64 p-4">
                   {q.submitted ? (
                     <span className="inline-flex items-center gap-2 text-green-800">
                       <CheckCircle2 className="size-4" />
@@ -240,7 +240,7 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
             </DialogDescription>
             <dl className="my-5 space-y-3">
               <div className="flex justify-between">
-                <dt>Husholdning</dt>
+                <dt>Privat</dt>
                 <dd>{kg(preview.householdKg * 1000)}</dd>
               </div>
               <div className="flex justify-between">

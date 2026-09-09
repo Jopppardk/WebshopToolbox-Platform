@@ -51,7 +51,6 @@ export function orderAudience(order: {
   shippingAddress?: {company: string|null}|null;
 }): Audience {
   if (order.billingAddress?.company?.trim() || order.shippingAddress?.company?.trim()) return 'commercial';
-  if (!('billingAddress' in order) || !('shippingAddress' in order)) return 'unknown';
   return 'household';
 }
 export function quarterTotals(
