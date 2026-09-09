@@ -38,8 +38,8 @@ export async function POST(request: Request) {
     if (body.action === 'sync') {
       const db = await prepareDatabase(),
         config = await getEIConfig(db);
-      if (!config.startDate || !config.cvrField)
-        throw Error('Gem integrationens startdato og CVR-felt først.');
+      if (!config.startDate)
+        throw Error('Gem integrationens startdato først.');
       await syncPackaging(config.startDate, danishDate(), true);
       return reply(await reportingOverview());
     }

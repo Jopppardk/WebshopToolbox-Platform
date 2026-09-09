@@ -12,6 +12,7 @@ import {
 } from '@/lib/emballage-api';
 import {
   emptyEIConfig,
+  audienceRule,
   recentQuarters,
   quarterTotals,
   mappedAnswers,
@@ -71,8 +72,7 @@ export async function packagingSources(db: D1Database) {
     ) as null | {
       start: string;
       end: string;
-      cvrField: string;
-      cvrSource: string;
+      audienceRule?: string;
       syncedAt: string;
     },
   };
@@ -121,8 +121,7 @@ export async function reportingOverview() {
       !source.coverage ||
       source.coverage.start > q.start ||
       source.coverage.end < q.end ||
-      source.coverage.cvrField !== config.cvrField ||
-      source.coverage.cvrSource !== config.cvrSource
+      source.coverage.audienceRule !== audienceRule
     )
       reason = 'Hent historikken til indberetning først.';
     return {
@@ -180,8 +179,7 @@ export async function prepareEIReport(quarter: string) {
     !c ||
     c.start > q.start ||
     c.end < q.end ||
-    c.cvrField !== config.cvrField ||
-    c.cvrSource !== config.cvrSource
+    c.audienceRule !== audienceRule
   )
     throw Error('Hent historikken til indberetning først.');
   if (totals.unresolved)

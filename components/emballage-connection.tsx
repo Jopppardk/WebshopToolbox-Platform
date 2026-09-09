@@ -176,42 +176,8 @@ export function EmballageConnection({
                 </select>
               </label>
               <div className="rounded-xl border bg-white p-3">
-                <p className="mb-3 text-sm font-medium">
-                  Erhvervsordrer identificeres ved CVR
-                </p>
-                <label className="block text-sm">
-                  CVR-nummerets placering
-                  <select
-                    className="mt-1 mb-3 h-10 w-full rounded-lg border px-3"
-                    value={config.cvrSource}
-                    onChange={(e) =>
-                      setConfig({
-                        ...config,
-                        cvrSource: e.target.value as EIConfig['cvrSource'],
-                      })
-                    }
-                  >
-                    <option value="attribute">
-                      Yderligere oplysninger på ordren
-                    </option>
-                    <option value="metafield">Metafelt på ordren</option>
-                  </select>
-                </label>
-                <label className="block text-sm">
-                  {config.cvrSource === 'metafield'
-                    ? 'Metafelt (namespace.feltnavn)'
-                    : 'Præcist feltnavn'}
-                  <Input
-                    value={config.cvrField}
-                    onChange={(e) =>
-                      setConfig({ ...config, cvrField: e.target.value })
-                    }
-                  />
-                </label>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Et udfyldt CVR-felt betyder erhverv. Ellers husholdning. Efter
-                  ændring skal historikken hentes igen på fanen Indberetning.
-                </p>
+                <p className="text-sm font-medium">Erhvervsordrer identificeres ved Company name</p>
+                <p className="mt-2 text-xs text-muted-foreground">Et udfyldt firmanavn på fakturerings- eller leveringsadressen betyder erhverv. Ellers husholdning. Hent historikken igen på fanen Indberetning for at opdatere tidligere ordrer.</p>
               </div>
               <label className="block text-sm">
                 Formular til feltopsætning
