@@ -42,7 +42,7 @@ export function Dashboard({onJobs,onIntegrations}:{onJobs:(status:string)=>void;
       <Button variant="outline" disabled={loading} onClick={()=>setRevision(v=>v+1)}><RefreshCw className={loading?'animate-spin':''}/>{loading?'Opdaterer…':'Opdatér'}</Button>
     </header>
     <section aria-labelledby="finance-heading">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 id="finance-heading" className="text-lg font-semibold">Økonomi</h2><span className="rounded-full border bg-white px-3 py-1 text-xs text-muted-foreground">Dinero · Bogførte tal</span></div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 id="finance-heading" className="text-lg font-semibold">Økonomi</h2><span className="rounded-full border bg-white px-3 py-1 text-xs text-muted-foreground">Dinero · Omsætning ekskl. moms</span></div>
       {(errors.finance || finance?.message) && <p role={errors.finance?'alert':undefined} className="mb-4 text-sm text-muted-foreground">{errors.finance || finance?.message}</p>}
       <div className="grid gap-4 lg:grid-cols-2">
         <Revenue label="Omsætning MTD" subtitle="Denne måned" current={data?.revenueMtd ?? null} previous={data?.previousMtd ?? null} period={data?date(data.periods.monthStart)+' – '+date(data.periods.today):undefined} priorPeriod={data?date(data.periods.priorMonthStart)+' – '+date(data.periods.previous):undefined}/>
@@ -53,7 +53,7 @@ export function Dashboard({onJobs,onIntegrations}:{onJobs:(status:string)=>void;
         <Metric icon={<BarChart3/>} label="Overskud YTD" value={money(data?.profitYtd)} note="Året til dato · før skat"/>
         <Metric icon={<Boxes/>} label="Lagerværdi" value={money(data?.inventory)} note="Bogført saldo på lagerkontoen"/>
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">{finance?.checkedAt?'Senest hentet '+timestamp(finance.checkedAt)+'. ':''}{finance?.stale?'Data er forsinkede; opdatering afventes. ':''}MTD/YTD følger kalenderåret til og med dags dato. — betyder, at datagrundlaget mangler eller ikke kan beregnes sikkert.</p>
+      <p className="mt-3 text-xs text-muted-foreground">{finance?.checkedAt?'Senest hentet '+timestamp(finance.checkedAt)+'. ':''}{finance?.stale?'Data er forsinkede; opdatering afventes. ':''}Omsætning er ekskl. moms. Overskud er før skat og efter bogførte omkostninger; ikke-fradragsberettiget moms kan indgå i omkostningerne. Lagerværdi følger den bogførte saldo på lagerkontoen. MTD/YTD følger kalenderåret til og med dags dato. — betyder, at datagrundlaget mangler eller ikke kan beregnes sikkert.</p>
     </section>
     <section aria-labelledby="platform-heading" className="mt-10">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 id="platform-heading" className="text-lg font-semibold">Platformstatus</h2><span className="text-xs text-muted-foreground">Kørsler · Seneste 24 timer</span></div>
