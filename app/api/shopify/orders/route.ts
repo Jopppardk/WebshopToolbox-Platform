@@ -1,3 +1,4 @@
+import { orderPeriodWindow } from '@/lib/order-period';
 import { shopifyFailure } from '@/lib/shopify-request';
 import { recordFailure } from '@/db/errors';
 import { NextRequest, NextResponse } from 'next/server';
@@ -55,12 +56,12 @@ function present(order: ShopifyOrder, bookingStatus = 'Afventer') {
   };
 }
 
-async function storedOrders(offset = 0) {
+async function storedOrders(offset = 0, from?: string, until = '9999-12-31T00:00:00.000Z', limit = 100) {
   const db = await prepareDatabase();
   const { cutoff } = historyWindow(await loadHistory(db));
   const result = await db
-    .prepare(`SELECT o.payload_json, COALESCE(json_extract(t.setting_value, '$.phase'), o.booking_status) AS booking_status FROM integration_records o LEFT JOIN app_settings t ON t.tenant = o.tenant AND t.setting_key = 'sales_transfer:' || o.external_id WHERE o.tenant = ? AND o.record_type = 'order' AND o.occurred_at >= ? ORDER BY o.occurred_at DESC, o.external_id DESC LIMIT 100 OFFSET ?`)
-    .bind('sablen.dk', cutoff, offset)
+    .prepare(`SELECT o.payload_json, COALESCE(json_extract(t.setting_value, '$.phase'), o.booking_status) AS booking_status FROM integration_records o LEFT JOIN app_settings t ON t.tenant = o.tenant AND t.setting_key = 'sales_transfer:' || o.external_id WHERE o.tenant = ? AND o.record_type = 'order' AND o.occurred_at >= ? AND o.occurred_at < ? ORDER BY o.occurred_at DESC, o.external_id DESC LIMIT ? OFFSET ?`)
+    .bind('sablen.dk', from || cutoff, until, limit, offset)
     .all<{ payload_json: string; booking_status: string }>();
   const labels: Record<string, string> = { booked: 'Bogført', failed: 'Fejlet', draft: 'Kladde i Dinero', creating: 'Overfører…', booking: 'Bogfører…', uncertain: 'Kræver kontrol', archived: 'Arkiveret overførsel' };
   return result.results.map((row) => present(JSON.parse(row.payload_json), labels[row.booking_status] || 'Afventer'));
@@ -70,9 +71,15 @@ export async function GET(request: NextRequest) {
   try {
   const offset = Number(request.nextUrl.searchParams.get('offset') || 0);
   if (!Number.isSafeInteger(offset) || offset < 0) return NextResponse.json({ error: 'Ugyldigt sidetal' }, { status: 400 });
+  const period = request.nextUrl.searchParams.get('period') || 'all';
+  const limit = Number(request.nextUrl.searchParams.get('limit') || 50);
+  if (![50, 100].includes(limit)) return NextResponse.json({ error: 'Ugyldig sidestørrelse' }, { status: 400 });
   const db = await prepareDatabase(); const { cutoff } = historyWindow(await loadHistory(db));
-  const count = await db.prepare("SELECT COUNT(*) AS total FROM integration_records WHERE tenant = 'sablen.dk' AND record_type = 'order' AND occurred_at >= ?").bind(cutoff).first<{ total: number }>();
-  return NextResponse.json({ orders: await storedOrders(offset), total: count?.total || 0 });
+  let window;
+  try { window = orderPeriodWindow(period, cutoff); }
+  catch { return NextResponse.json({ error: 'Ugyldig periode' }, { status: 400 }); }
+  const count = await db.prepare("SELECT COUNT(*) AS total FROM integration_records WHERE tenant = 'sablen.dk' AND record_type = 'order' AND occurred_at >= ? AND occurred_at < ?").bind(window.from, window.until).first<{ total: number }>();
+  return NextResponse.json({ orders: await storedOrders(offset, window.from, window.until, limit), total: count?.total || 0 }, { headers: { 'Cache-Control': 'no-store' } });
 
   } catch { await recordFailure('Salg'); return NextResponse.json({ error: 'Salg kunne ikke indlæses. Prøv igen.' }, { status: 503 }); }
 }

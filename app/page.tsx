@@ -12,6 +12,7 @@ import { JobInsights } from '@/components/job-insights';
 import { DevelopmentRequests } from '@/components/development-requests';
 import { vatCodeOptions } from '@/lib/vat-code-options';
 import { emptyAccounts, defaultAutomation, defaultInvoiceEmail, validateSettings, type Accounts, type Automation, type AdminSettings, type InvoiceEmailSettings } from '@/lib/admin-settings';
+import { orderPeriods, type OrderPeriod } from '@/lib/order-period';
 import { SyncStatus, useSyncStatus } from '@/components/sync-status';
 import { syncIntervals } from '@/lib/sync-schedule';
 import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -75,6 +76,8 @@ export default function Home() {
   const syncState = useSyncStatus();
   const [query, setQuery] = useState('');
   const [salesOrders, setSalesOrders] = useState<OrderView[]>([]);
+  const [orderPeriod, setOrderPeriod] = useState<OrderPeriod>('all');
+  const [ordersLoading, setOrdersLoading] = useState(false);
   const [orderOffset, setOrderOffset] = useState(0);
   const [orderTotal, setOrderTotal] = useState(0);
   const [orderRevision, setOrderRevision] = useState(0);
@@ -120,6 +123,8 @@ export default function Home() {
       setSettingsRevision(data.revision); setSettingsReady(true);
     }).catch(error => setSettingsMessage(error.message || 'Indstillinger kunne ikke indlæses. Genindlæs siden.'));
   }, []);
+  const orderPageSize = view === 'invoices' ? 100 : 50;
+  const activePeriod = view === 'invoices' ? 'all' : orderPeriod;
   const filtered = salesOrders.filter(
     (order) =>
       order.id.includes(query) ||
@@ -127,14 +132,16 @@ export default function Home() {
   );
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`/api/shopify/orders?offset=${orderOffset}`, { signal: controller.signal, cache: 'no-store' })
+    setOrdersLoading(true);
+    fetch(`/api/shopify/orders?offset=${orderOffset}&limit=${orderPageSize}&period=${activePeriod}`, { signal: controller.signal, cache: 'no-store' })
       .then(async response => { const data = await response.json() as { orders: OrderView[]; total: number; error?: string }; if (!response.ok) throw new Error(data.error || 'Ordrer kunne ikke indlæses'); return data; })
       .then((data) => {
-        if (!controller.signal.aborted && Array.isArray(data.orders)) { setSalesOrders(data.orders); setOrderTotal(data.total || 0); setOrderError(''); }
+        if (!controller.signal.aborted && Array.isArray(data.orders)) { if (orderOffset > 0 && orderOffset >= data.total) { setOrderOffset(Math.max(0, Math.ceil(data.total / orderPageSize) - 1) * orderPageSize); return; } setSalesOrders(data.orders); setOrderTotal(data.total || 0); setOrderError(''); }
       })
-      .catch(error => { if (!controller.signal.aborted) setOrderError(error.message || 'Ordrer kunne ikke indlæses'); });
+      .catch(error => { if (!controller.signal.aborted) setOrderError(error.message || 'Ordrer kunne ikke indlæses'); })
+      .finally(() => { if (!controller.signal.aborted) setOrdersLoading(false); });
     return () => controller.abort();
-  }, [orderOffset, orderRevision, syncState.revision, view]);
+  }, [orderOffset, orderRevision, syncState.revision, view, activePeriod, orderPageSize]);
   const syncOrders = async () => {
     setSyncingOrders(true);
     try {
@@ -143,7 +150,7 @@ export default function Home() {
         const response: Response = await fetch('/api/shopify/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ after }) });
         const data: { orders: OrderView[]; synced: number; invoicesCreated: number; invoiceWarnings?: string[]; hasNextPage: boolean; endCursor: string | null; error?: string } = await response.json();
         if (!response.ok) throw new Error(data.error);
-        setSalesOrders(data.orders); synced += data.synced; invoices += data.invoicesCreated || 0;
+        synced += data.synced; invoices += data.invoicesCreated || 0;
         warnings += data.invoiceWarnings?.length || 0;
         after = data.hasNextPage ? data.endCursor : null;
         notify(`${synced} Shopify-ordrer hentet · ${invoices} PDF-fakturaer${warnings ? ` · ${warnings} fakturaer kræver kontrol under Administration` : ''}${after ? ' · henter flere…' : ''}`);
@@ -183,7 +190,7 @@ export default function Home() {
           <p className="nav-label mt-7">Bogføring</p>
           <button
             className={`nav-item w-full ${view === 'orders' ? 'active' : ''}`}
-            onClick={() => setView('orders')}
+            onClick={() => { setOrderOffset(0); setView('orders'); }}
           >
             <PackageCheck />
             Salg
@@ -207,7 +214,7 @@ export default function Home() {
           <p className="nav-label mt-7">Dokumenter</p>
           <button
             className={`nav-item w-full ${view === 'invoices' ? 'active' : ''}`}
-            onClick={() => setView('invoices')}
+            onClick={() => { setOrderOffset(0); setView('invoices'); }}
           >
             <FileText />
             Fakturaer
@@ -230,7 +237,7 @@ export default function Home() {
         <SyncStatus state={syncState} />
       </aside>
       <section className="min-w-0">
-        {(view === 'orders' || view === 'invoices') && <nav aria-label="Ordrehistorik" className="flex flex-wrap items-center justify-between gap-3 border-b bg-white px-5 py-3 text-sm"><span>{orderTotal ? `${orderOffset + 1}–${Math.min(orderOffset + 100, orderTotal)} af ${orderTotal} ordrer i historikken` : 'Ingen ordrer i historikken'}</span><div className="flex gap-2"><Button variant="outline" disabled={syncingOrders || orderOffset === 0} onClick={() => setOrderOffset(value => Math.max(0, value - 100))}>Forrige</Button><Button variant="outline" disabled={syncingOrders || orderOffset + 100 >= orderTotal} onClick={() => setOrderOffset(value => value + 100)}>Næste</Button></div></nav>}
+        {(view === 'orders' || view === 'invoices') && <nav aria-label="Ordrehistorik" className="flex flex-wrap items-center justify-between gap-3 border-b bg-white px-5 py-3 text-sm">{view === 'orders' && <label className="flex items-center gap-2"><span>Periode</span><NativeSelect aria-label="Periode for salg" value={orderPeriod} onChange={event => { setOrderPeriod(event.target.value as OrderPeriod); setOrderOffset(0); setSalesOrders([]); setOrderTotal(0); setOrderError(''); }}>{orderPeriods.map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}</NativeSelect></label>}<span>{ordersLoading ? 'Henter ordrer…' : orderTotal ? `${orderOffset + 1}–${Math.min(orderOffset + orderPageSize, orderTotal)} af ${orderTotal} ordrer · Side ${Math.floor(orderOffset / orderPageSize) + 1} af ${Math.max(1, Math.ceil(orderTotal / orderPageSize))}` : 'Ingen ordrer i perioden'}</span><div className="flex gap-2"><Button variant="outline" disabled={syncingOrders || ordersLoading || orderOffset === 0} onClick={() => setOrderOffset(value => Math.max(0, value - orderPageSize))}>Forrige</Button><Button variant="outline" disabled={syncingOrders || ordersLoading || orderOffset + orderPageSize >= orderTotal} onClick={() => setOrderOffset(value => value + orderPageSize)}>Næste</Button></div></nav>}
         <header className="flex h-20 items-center justify-between border-b border-border bg-white px-5 md:px-8">
           <div className="flex items-center gap-3 lg:hidden">
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -242,7 +249,7 @@ export default function Home() {
           <p className="nav-label mt-7">Bogføring</p>
           <button
             className={`nav-item w-full ${view === 'orders' ? 'active' : ''}`}
-            onClick={() => { setMobileOpen(false); setView('orders'); }}
+            onClick={() => { setMobileOpen(false); setOrderOffset(0); setView('orders'); }}
           >
             <PackageCheck />
             Salg
@@ -266,7 +273,7 @@ export default function Home() {
           <p className="nav-label mt-7">Dokumenter</p>
           <button
             className={`nav-item w-full ${view === 'invoices' ? 'active' : ''}`}
-            onClick={() => { setMobileOpen(false); setView('invoices'); }}
+            onClick={() => { setMobileOpen(false); setOrderOffset(0); setView('invoices'); }}
           >
             <FileText />
             Fakturaer
@@ -355,7 +362,7 @@ export default function Home() {
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     className="h-10 rounded-xl bg-muted/50 pl-9"
-                    placeholder="Søg ordrenummer eller status"
+                    placeholder="Søg på denne side"
                     aria-label="Søg i ordrer"
                   />
                 </div>
