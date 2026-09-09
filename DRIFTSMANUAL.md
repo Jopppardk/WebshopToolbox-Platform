@@ -161,3 +161,17 @@ Sidebarens status læser det gemte interval og faktiske start- og sluttidspunkte
 Hele den planlagte jobkæde har en fælles lås i D1. Samtidige eller gentagne kald for samme planlagte tidspunkt starter ikke en ekstra kæde. Låsen frigives ved normal afslutning, også ved håndterede fejl. Individuelle importlåse og bogføringskvitteringer bevares.
 
 Ved en hårdt afbrudt worker vises kørslen som afbrudt efter 15 minutter. Sikkerhedslåsen udløber efter 20 minutter, hvorefter næste planlagte kørsel kan overtage. Perioden er længere end Cloudflares maksimale levetid på 15 minutter for en Cron-kørsel og forhindrer, at en gammel kørsel fortsat skriver samtidig med en ny. Se [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/). Usikre bogføringsforsøg genposteres ikke automatisk som følge af denne genopretning.
+
+## Dashboard og regnskabsgrundlag
+
+Dashboard er standardforsiden og første menupunkt uden kategorioverskrift.
+
+Økonomital kommer fra Dineros bogførte posteringer via de dokumenterede endpoints accountingyears, accounts/entry, entries og entries/changes. MTD er månedens første dato til dags dato, YTD er kalenderårets første dato til dags dato i dansk tidszone. Sammenligningen er samme dato året før; 29. februar sammenlignes med 28. februar. Regnskabsdata har datoopløsning, ikke klokkeslæt. Omsætning kommer fra kontokategorien Turnover; resultat før skat summerer resultatkategorier uden Tax. Primo og Ultimo indgår ikke i omsætning/resultat. Bogført lagerværdi er saldoen på den valgte lagerkonto, inklusive Primo for det aktuelle regnskabsår.
+
+Datagrundlaget er organisationsopdelt i dashboard_ledger og indeholder kun posteringens ID, konto, dato, beløb og type. Der gemmes ikke bilagstekst eller kundedata her. Første hentning indlæser ét relevant regnskabsår ad gangen; derefter bruges ændringsendpointet i vinduer på højst 30 dage. EntryGuid bruges til idempotente opdateringer, herunder korrigerede primoposteringer. En fælles lås beskytter samtidige hentninger. Almindelig opdatering er højst hvert femte minut via scheduler eller dashboardbesøg. Den første indlæsning kan derfor vise manglende sammenligningstal midlertidigt.
+
+Manglende regnskabsår, ukategoriserede konti med posteringer eller API-fejl vises som manglende tal, ikke nul. Procentændring vises kun med et positivt sammenligningsgrundlag. Gamle data mærkes som forsinkede. API-adgang og lokale caches giver ingen skriveadgang til Dineros bilag fra dashboardet.
+
+Platformstatus bygger på den seneste ikke-oversprungne kørsel pr. job, så en oversprunget kørsel ikke skjuler en tidligere fejl. En gemt forbindelse er ikke i sig selv bevis for drift; ViaBill kan eksempelvis være forbundet uden en bekræftet automatisk kørsel. Succesrate er gennemførte / (gennemførte + fejlede) i de seneste 24 timer. Oversprungne og igangværende udelades, og ingen afsluttede kørsler vises som —. Klik på fejlede kørsler åbner Indsigt filtreret på fejl.
+
+API-specifikation kontrolleret 9. september 2026: https://api.dinero.dk/openapi/index.html og https://api.dinero.dk/openapi/v1/swagger.json.
