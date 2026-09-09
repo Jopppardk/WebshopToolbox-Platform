@@ -20,18 +20,13 @@ export async function POST(request: NextRequest) {
     const body = object(await request.json()); const credentials = keys(body);
     if (body.action !== 'discover' && body.action !== 'connect') throw new ViaBillError('Vælg test eller forbindelse.');
     if (body.action === 'discover') {
-      try {
-        const available = await accounts(credentials);
-        if (!available.length) throw new ViaBillError('Nøglerne giver ikke adgang til nogen ViaBill-konti.');
-        return reply({ accounts: available });
-      } catch (error) {
-        if (!(error instanceof ViaBillError) || !/afviste nøgleparret/.test(error.message)) throw error;
-        return reply({ accounts: [], manualAccountIdRequired: true });
-      }
+      const available = await accounts(credentials);
+      if (!available.length) throw new ViaBillError('ViaBill returnerede ingen konti. Bed ViaBill bekræfte konto og adgang.');
+      return reply({ accounts: available });
     }
     const accountId = await verifyAccount(credentials, body.accountId);
     const displayName = typeof body.accountName === 'string' && body.accountName.trim() ? body.accountName.trim().slice(0, 100) : 'ViaBill-konto';
     await saveCredentials('viabill', { ...credentials, accountId }, `${displayName} (${accountId})`);
     return reply({ connected: true, name: `${displayName} (${accountId})` });
-  } catch (error) { await recordFailure('ViaBill-forbindelse'); return reply({ error: publicError(error) }, 400); }
+  } catch (error) { await recordFailure('ViaBill-forbindelse', { category: 'integration', cause: publicError(error), action: 'Kontrollér nøglepar og Merchant Account-adgang hos ViaBill.' }); return reply({ error: publicError(error), manualAccountIdRequired: error instanceof ViaBillError && error.status === 403 }, error instanceof ViaBillError ? (error.status || 400) : 503); }
 }

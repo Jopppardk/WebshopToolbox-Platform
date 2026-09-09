@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       db.prepare(`SELECT currency, COUNT(*) AS count, SUM(amount_minor) AS amountMinor FROM integration_records WHERE ${where} GROUP BY currency`).bind(...bindings).all(),
     ]);
     return reply({ records: rows.results.map(row => ({ ...JSON.parse(row.payload_json), bookingStatus: row.booking_status })), totals: totals.results });
-  } catch (error) { await recordFailure('ViaBill'); return reply({ error: publicError(error) }, 400); }
+  } catch (error) { await recordFailure('ViaBill', { category: 'integration', cause: publicError(error) }); return reply({ error: publicError(error) }, 400); }
 }
 export async function POST(request: NextRequest) {
   try {
@@ -89,5 +89,5 @@ export async function POST(request: NextRequest) {
     if (statements.length) await db.batch(statements);
     return reply({ synced: records.length, skipped, mismatches: records.filter(row => row.reconciled === false).length,
       next: rows.length === pageLength ? { kind: type, accountId, ...dates, first: first + pageLength, hash } : null });
-  } catch (error) { await recordFailure('ViaBill'); return reply({ error: publicError(error) }, 400); }
+  } catch (error) { await recordFailure('ViaBill', { category: 'integration', cause: publicError(error) }); return reply({ error: publicError(error) }, 400); }
 }

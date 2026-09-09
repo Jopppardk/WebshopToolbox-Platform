@@ -1,3 +1,4 @@
+import { shopifyFetch, shopifyFailure } from '@/lib/shopify-request';
 import { recordFailure } from '@/db/errors';
 import { NextRequest, NextResponse } from 'next/server';
 import { prepareDatabase } from '@/db/database';
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
     ]);
     return reply({ payments: rows.results.map(row => ({ ...JSON.parse(row.payload_json), bookingStatus: row.booking_status })), summary: summary.results });
   } catch (error) {
-    await recordFailure('Tilbagebetalinger');
+    await recordFailure('Tilbagebetalinger', { category: 'shopify', cause: shopifyFailure(error, 'Tilbagebetalinger: indlæsning eller datakontrol mislykkedes.'), action: 'Se jobhistorikken. Kontrollér Shopify-adgang ved adgangsfejl; afvent næste kørsel ved midlertidige fejl.' });
     return reply({ error: error instanceof Error ? error.message : 'Tilbagebetalingerne kunne ikke indlæses' }, 400);
   }
 }
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
     if (start >= end) return reply({ synced: 0, hasNextPage: false, endCursor: null });
     if (body.after != null && (typeof body.after !== 'string' || body.after.length > 2048)) throw new Error('Ugyldig fortsættelse');
     const { shop, accessToken } = await getShopifyAccess();
-    const response = await fetch(`https://${shop}/admin/api/2026-07/graphql.json`, {
+    const response = await shopifyFetch(`https://${shop}/admin/api/2026-07/graphql.json`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken },
       body: JSON.stringify({ query: paymentsQuery, variables: { after: body.after || null, query: `transaction_type:refund processed_at:>='${start}' processed_at:<'${end}'` } }),
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
     if (statements.length) await db.batch(statements);
     return reply({ synced: payments.length, ...connection.pageInfo });
   } catch (error) {
-    await recordFailure('Tilbagebetalinger');
+    await recordFailure('Tilbagebetalinger', { category: 'shopify', cause: shopifyFailure(error, 'Tilbagebetalinger: indlæsning eller datakontrol mislykkedes.'), action: 'Se jobhistorikken. Kontrollér Shopify-adgang ved adgangsfejl; afvent næste kørsel ved midlertidige fejl.' });
     return reply({ error: error instanceof Error ? error.message : 'Shopify Payments kunne ikke hentes' }, 400);
   }
 }

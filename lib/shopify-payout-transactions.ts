@@ -1,3 +1,4 @@
+import { shopifyFetch } from '@/lib/shopify-request';
 import { getShopifyAccess } from '@/db/shopify';
 import { minorUnits } from './shopify-payments';
 
@@ -38,7 +39,7 @@ async function orderNames(shop: string, accessToken: string, ids: string[]) {
   const result = new Map<string, string>();
   for (let offset = 0; offset < ids.length; offset += 100) {
     const batch = ids.slice(offset, offset + 100);
-    const response = await fetch(`https://${shop}/admin/api/${apiVersion}/graphql.json`, {
+    const response = await shopifyFetch(`https://${shop}/admin/api/${apiVersion}/graphql.json`, {
       method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(25000),
       headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken },
       body: JSON.stringify({ query: 'query PayoutOrderNames($ids:[ID!]!){nodes(ids:$ids){... on Order{id name}}}', variables: { ids: batch.map(id => `gid://shopify/Order/${id}`) } }),
@@ -83,7 +84,7 @@ export async function fetchPayoutTransactions(payoutGid: string, currency: strin
     if (page >= 20) throw new Error('Udbetalingen indeholder for mange transaktionssider.');
     const parsed: URL = new URL(url);
     if (parsed.protocol !== 'https:' || parsed.hostname !== shop || parsed.port || parsed.username || parsed.password || parsed.pathname !== path || parsed.searchParams.get('payout_id') !== payoutId) throw new Error('Shopify returnerede en ugyldig fortsættelse til udbetalingstransaktionerne.');
-    const response: Response = await fetch(parsed.toString(), { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(25000), headers: { 'X-Shopify-Access-Token': accessToken } });
+    const response: Response = await shopifyFetch(parsed.toString(), { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(25000), headers: { 'X-Shopify-Access-Token': accessToken } });
     const payload = await response.json() as { transactions?: RawTransaction[] };
     if (!response.ok || !Array.isArray(payload.transactions)) throw new Error(`Shopify kunne ikke hente udbetalingens transaktioner (HTTP ${response.status}).`);
     all.push(...payload.transactions);

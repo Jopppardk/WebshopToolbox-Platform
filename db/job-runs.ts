@@ -1,10 +1,11 @@
+import { sanitizeDiagnostic } from '@/lib/diagnostics';
 import { database } from './database';
 
 export type JobOutcome = { status?: 'succeeded' | 'skipped'; message?: string } | void;
 
 const safeMessage = (value: unknown, fallback: string) => {
   const text = value instanceof Error ? value.message : typeof value === 'string' ? value : fallback;
-  return text.replace(/[\x00-\x1f]+/g, ' ').slice(0, 500) || fallback;
+  return sanitizeDiagnostic(text, 500) || fallback;
 };
 
 export async function runTrackedJob(jobKey: string, jobName: string, task: () => Promise<JobOutcome>) {

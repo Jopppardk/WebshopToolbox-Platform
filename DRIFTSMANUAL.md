@@ -58,6 +58,10 @@ Kun betalte Shopify Payments-indbetalinger til banken i DKK behandles. Bruttobet
 
 ### Usikre svar og genforsøg
 
+Shopify-læsninger forsøges højst tre gange ved netværksfejl, timeout, HTTP 408/429/500/502/503/504 eller GraphQL THROTTLED. Ventetiden er normalt 1 og 2 sekunder; Retry-After og GraphQL-kapacitet kan kræve længere ventetid. Kræves mere end 5 sekunders ventetid, overlades fortsættelsen til en senere kørsel. Den samlede tidsramme er højst 30 sekunder pr. læsning, og en eksisterende kortere tidsgrænse bevares. Adgangsfejl og ugyldige forespørgsler genforsøges ikke. Shopify-mutationer og Dinero-skrivninger omfattes ikke af denne retry-mekanisme.
+
+ViaBill-fejl bevarer den faktiske HTTP-status. HTTP 403 fra kontolisten betyder afvist adgang og vises som fejl; den beviser hverken et forkert nøglepar eller et forkert konto-ID. Et Merchant Account ID, som ViaBill har bekræftet, kan stadig valideres direkte. Nøgler gemmes først efter vellykket validering. Fejloversigt og jobhistorik skjuler URL’er, adgangsdata og mailadresser i diagnostikken.
+
 Systemet må ikke gætte efter en mulig ekstern skrivning. Hvis Dinero-svaret er usikkert, stoppes automatisk genforsøg, og posten fremgår af fejloversigten. Kontrollér først Dinero for en eksisterende kladde eller bogføring. Dette beskytter mod dobbeltbogføring.
 
 ## Daglig kontrol

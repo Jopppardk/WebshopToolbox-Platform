@@ -1,3 +1,4 @@
+import { sanitizeDiagnostic } from '@/lib/diagnostics';
 import { database } from './database';
 import { loadHistory } from './history';
 
@@ -43,7 +44,11 @@ export async function runPaginatedSync(job: string, fetchPage: (after: string | 
   try {
     for (let page = 0; page < pagesPerRun; page++) {
       const response = await fetchPage(state.after);
-      if (!response.ok) throw new Error('Importen fejlede. Næste kørsel fortsætter fra den senest gemte side.');
+      if (!response.ok) {
+        let reason = '';
+        try { const body = await response.json() as { error?: unknown }; reason = sanitizeDiagnostic(body.error, 300); } catch {}
+        throw new Error(`Importen fejlede (HTTP ${response.status}). ${reason} Næste kørsel fortsætter fra den senest gemte side.`);
+      }
       const result = await response.json() as Page;
       if (typeof result?.hasNextPage !== 'boolean') throw new Error('Importen returnerede ikke en gyldig sidestatus.');
       const after = result.hasNextPage ? result.endCursor : null;

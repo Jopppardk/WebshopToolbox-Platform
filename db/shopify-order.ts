@@ -1,3 +1,4 @@
+import { shopifyFetch } from '@/lib/shopify-request';
 import { getShopifyAccess } from './shopify';
 import type { InvoiceSource, Connection } from '@/lib/invoice-check';
 const money = '{ shopMoney { amount currencyCode } }';
@@ -15,7 +16,7 @@ export const orderFields = `id name email createdAt updatedAt processedAt test e
   shippingLines(first:25) { nodes { ${shippingFields} } ${page} }`;
 type Access = Awaited<ReturnType<typeof getShopifyAccess>>;
 export async function orderQuery<T>(access: Access, query: string, variables: Record<string, unknown>, errorMessage = 'Shopify kunne ikke hente komplette ordredata. Kontrollér read_orders-adgangen og prøv igen.'): Promise<T> {
-  const response = await fetch(`https://${access.shop}/admin/api/2026-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': access.accessToken }, body: JSON.stringify({ query, variables }), signal: AbortSignal.timeout(25000), redirect: 'manual' });
+  const response = await shopifyFetch(`https://${access.shop}/admin/api/2026-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': access.accessToken }, body: JSON.stringify({ query, variables }), signal: AbortSignal.timeout(25000), redirect: 'manual' });
   const payload = await response.json() as { data?: T; errors?: unknown[] };
   if (!response.ok || payload.errors?.length || !payload.data) throw new Error(errorMessage);
   return payload.data;

@@ -1,6 +1,8 @@
 // ViaBill Merchant API, settlement endpoints (Stoplight, reviewed 2026-09-04).
 // No checkout/capture/refund/cancel endpoints are exposed by this client.
-export class ViaBillError extends Error {}
+export class ViaBillError extends Error {
+  constructor(message: string, public readonly status?: number) { super(message); }
+}
 export type ViaBillKeys = { apiKey: string; secret: string };
 export type ViaBillAccount = { id: string; name: string };
 export type ViaBillRecord = {
@@ -58,11 +60,16 @@ export async function viabillRequest(credentials: ViaBillKeys, path: string, bod
   }
   if (!response.ok) {
     await response.body?.cancel();
-    throw new ViaBillError(response.status === 401 || response.status === 403
-      ? 'ViaBill afviste nøgleparret til Merchant Account-API’et (HTTP 403). Bed ViaBill bekræfte, at API key og secret er aktiveret til afregningsdata på denne Merchant Account.'
-      : response.status === 400
-        ? 'ViaBill afviste Merchant Account ID eller forespørgslen (HTTP 400). Kontrollér konto-ID’et fra ViaBill.'
-        : response.status === 429 ? 'ViaBill begrænser hentningen. Vent lidt og prøv igen.' : `ViaBill kunne ikke hente data (HTTP ${response.status}).`);
+    const operation = path === '/public/merchant/accounts' ? 'kontolisten' : 'afregningsdata for den valgte Merchant Account';
+    const message = response.status === 401
+      ? `ViaBill kunne ikke godkende API key og secret (HTTP 401) ved hentning af ${operation}. Kontrollér nøgleparret hos ViaBill.`
+      : response.status === 403
+        ? `ViaBill afviste adgang til ${operation} (HTTP 403). Svaret afgør ikke, om årsagen er nøgleparret eller manglende rettigheder. Bed ViaBill bekræfte adgang til dette endpoint.`
+        : response.status === 400
+          ? `ViaBill afviste forespørgslen til ${operation} (HTTP 400). Det beviser ikke, at konto-ID’et er forkert. Bed ViaBill bekræfte Merchant Account ID og API-adgang.`
+          : response.status === 429 ? 'ViaBill begrænser hentningen (HTTP 429). Vent lidt og prøv igen.'
+          : `ViaBill kunne ikke hente ${operation} (HTTP ${response.status}). Prøv senere.`;
+    throw new ViaBillError(message, response.status);
   }
   // Bound memory even when the upstream ignores pagination. Never log the URL,
   // response body or fetch exception: the signature is a reusable credential.

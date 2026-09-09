@@ -21,7 +21,7 @@ export function ViaBillConnection({ accountField }: { accountField?: ReactNode }
       const selected = accounts.find(account => account.id === accountId);
       const response = await fetch('/api/viabill/connection', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, apiKey, secret, accountId, accountName: selected?.name }) });
       const data = await response.json() as { accounts?: ViaBillAccount[]; manualAccountIdRequired?: boolean; name?: string; error?: string };
-      if (!response.ok) throw new Error(data.error || 'ViaBill kunne ikke forbindes.');
+      if (!response.ok) { if (action === 'discover') { setAccounts([]); setAccountId(''); setManualAccountId(Boolean(data.manualAccountIdRequired)); } throw new Error(data.error || 'ViaBill kunne ikke forbindes.'); }
       if (action === 'discover') { setAccounts(data.accounts || []); setManualAccountId(Boolean(data.manualAccountIdRequired)); setAccountId(data.accounts?.length === 1 ? data.accounts[0].id : ''); setNotice(data.manualAccountIdRequired ? 'ViaBill giver ikke nøglen adgang til kontolisten. Indtast Merchant Account ID; forbindelsen valideres direkte mod afregningsdata.' : 'Adgangen er testet. Vælg Sablens konto og gem forbindelsen.'); }
       else { setStatus({ connected: true, name: data.name }); setApiKey(''); setSecret(''); setAccounts([]); setAccountId(''); setNotice('ViaBill er forbundet. Du kan nu hente data under Betalinger og Udbetalinger.'); }
     } catch (error) { setError(error instanceof Error ? error.message : 'ViaBill kunne ikke forbindes.'); }

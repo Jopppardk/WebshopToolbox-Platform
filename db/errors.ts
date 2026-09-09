@@ -1,3 +1,4 @@
+import { sanitizeDiagnostic } from '@/lib/diagnostics';
 import { database } from './database';
 import { env } from 'cloudflare:workers';
 
@@ -10,9 +11,7 @@ export type FailureContext = {
   reference?: string;
 };
 
-const clean = (value: unknown, limit: number) => typeof value === 'string'
-  ? value.replace(/[\x00-\x1f]+/g, ' ').replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, '[mail skjult]').replace(/(?:token|secret|password|authorization|api[-_ ]?key)\s*[:=]\s*\S+/gi, '$1=[skjult]').trim().slice(0, limit)
-  : '';
+const clean = sanitizeDiagnostic;
 
 function safeContext(source: string, context: FailureContext = {}, previous?: { occurrenceCount?: unknown; firstSeenAt?: unknown }) {
   const category = context.category || (source.includes('Dinero') ? 'dinero' : source.includes('Shopify') ? 'shopify' : source.includes('Faktura') || source.includes('rapport') ? 'document' : 'system');
