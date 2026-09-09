@@ -5,15 +5,11 @@ export type Audience = 'household' | 'commercial' | 'unknown';
 export type EIConfig = {
   startDate: string;
   responsibility: string;
-  cvrField: string;
-  cvrSource: 'attribute' | 'metafield';
   mappings: Record<string, { household: string; commercial: string }>;
 };
 export const emptyEIConfig: EIConfig = {
   startDate: '',
   responsibility: '',
-  cvrField: '',
-  cvrSource: 'attribute',
   mappings: {},
 };
 export function validateEIConfig(v: EIConfig): EIConfig {
@@ -24,24 +20,10 @@ export function validateEIConfig(v: EIConfig): EIConfig {
     v.startDate > '2100-01-01'
   )
     throw Error('Startdatoen skal være første dag i et kvartal.');
-  if (
-    !v.responsibility ||
-    v.responsibility.length > 120 ||
-    !['attribute', 'metafield'].includes(v.cvrSource) ||
-    !v.cvrField.trim() ||
-    v.cvrField.length > 120
-  )
-    throw Error('Vælg producentansvar og CVR-felt på Shopify-ordren.');
-  if (
-    v.cvrSource === 'metafield' &&
-    !/^[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+$/.test(v.cvrField)
-  )
-    throw Error('Metafeltet skal angives som namespace.feltnavn.');
+  if (!v.responsibility || v.responsibility.length > 120) throw Error('Vælg producentansvar.');
   return {
     startDate: v.startDate,
     responsibility: v.responsibility,
-    cvrSource: v.cvrSource,
-    cvrField: v.cvrField.trim(),
     mappings: {},
   };
 }
@@ -62,24 +44,14 @@ export function recentQuarters(now = new Date()) {
     };
   });
 }
-export function orderAudience(
-  order: {
-    customAttributes?: Array<{ key: string; value: string }>;
-    reportingCvr?: { value: string } | null;
-  },
-  config: EIConfig,
-): Audience {
-  if (!config.cvrField) return 'unknown';
-  if (config.cvrSource === 'attribute') {
-    if (!Array.isArray(order.customAttributes)) return 'unknown';
-    return order.customAttributes.some(
-      (a) => a.key === config.cvrField && Boolean(a.value?.trim()),
-    )
-      ? 'commercial'
-      : 'household';
-  }
-  if (!('reportingCvr' in order)) return 'unknown';
-  return order.reportingCvr?.value?.trim() ? 'commercial' : 'household';
+export const audienceRule = 'company-name-v1';
+export function orderAudience(order: {
+  billingAddress?: {company: string|null}|null;
+  shippingAddress?: {company: string|null}|null;
+}): Audience {
+  if (order.billingAddress?.company?.trim() || order.shippingAddress?.company?.trim()) return 'commercial';
+  if (!('billingAddress' in order) || !('shippingAddress' in order)) return 'unknown';
+  return 'household';
 }
 export function quarterTotals(
   rows: PackagingRow[],

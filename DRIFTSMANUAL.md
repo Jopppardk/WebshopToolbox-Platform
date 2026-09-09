@@ -197,3 +197,7 @@ Emballage → Indberetning viser de fem seneste afsluttede kvartaler. Før førs
 Indberet åbner en kontrol af mængderne. Bekræft sender serverberegnede tal via POST /reports/{id}/submit med answers og en varig Idempotency-Key; der skrives ikke til udbyderen ved visning eller forhåndskontrol. Lokal lås serialiserer forsøg. Ved usikkert svar bevares nøgle og payload; ændrede mængder blokeres, til forsøget er afklaret. Udbyderens status og accepts_writes er autoritative, og perioder før startdatoen eller uden åben rapport kan ikke indberettes. Kvitteringer gemmes separat fra rullende ordredata, isoleret pr. organisation, test/live og rapport. Testkvitteringer markeres aldrig som rigtige indberetninger. Lukkede perioder og rettelser efter indberetning håndteres af udbyderen.
 
 API-kontrakt læst 9. september 2026: https://app.emballageindberetning.dk/docs/public-api . Ingen liveindberetning udføres under udvikling eller deployment. Første forbindelse og feltskema kan først verificeres mod organisationen efter indtastning af brugerens API-nøgle.
+
+
+### Rettelse: kundetype efter Company name
+Fordelingen bruger nu Company name (company) på Shopify-ordrens fakturerings- eller leveringsadresse. Et udfyldt firmanavn betyder erhverv; tomme felter betyder husholdning. CVR-kilde vælges ikke længere. Den tidligere vejledning om CVR-opsætning er erstattet af denne regel. Eksisterende startdato og formularfelter bevares. Historik beregnet efter CVR skal genhentes via Hent historik til indberetning før nye indberetninger. Vægte og tidligere kvitteringer bevares.
