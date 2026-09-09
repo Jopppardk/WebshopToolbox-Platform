@@ -582,6 +582,8 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
   };
   const visibleOrders = orders.filter((order) => order.id.toLowerCase().includes(query.toLowerCase()));
   const generatedCount = orders.filter((order) => order.externalId && statuses[order.externalId] === 'Genereret').length;
+  const pendingCount = orders.filter(order => order.shipped !== 'Annulleret' && (!order.externalId || statuses[order.externalId] !== 'Genereret')).length;
+
   return (
     <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
       <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
@@ -611,7 +613,7 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
         />
         <Stat
           label="Afventer generering"
-          value={`${orders.length - generatedCount} fakturaer`}
+          value={`${pendingCount} ${pendingCount === 1 ? 'faktura' : 'fakturaer'}`}
           note="Baseret på live Shopify-data"
         />
         <Stat
@@ -647,7 +649,8 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
           </TableHeader>
           <TableBody>
             {visibleOrders.map((order) => {
-              const status = (order.externalId ? statuses[order.externalId] : null) || (order.shipped === 'Afsendt' ? 'Afventer' : 'Afventer afsendelse');
+              const savedStatus = order.externalId ? statuses[order.externalId] : null;
+              const status = savedStatus === 'Genereret' ? savedStatus : order.shipped === 'Annulleret' ? 'Annulleret · ingen faktura' : savedStatus || (order.shipped === 'Afsendt' ? 'Afventer' : 'Afventer afsendelse');
               return (
                 <TableRow
                   key={order.id}
@@ -680,7 +683,7 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
                   <TableCell className="pr-5 text-right">
                     {status === 'Genereret' ? (
                       <div className="flex flex-wrap justify-end gap-1"><a className={buttonVariants({ variant: 'outline', size: 'sm' })} href={`/api/invoices/pdf?externalId=${encodeURIComponent(order.externalId || '')}`} target="_blank" rel="noreferrer"><FileText />PDF</a><Button variant="outline" size="sm" disabled={Boolean(emailing[order.externalId || ''])} onClick={() => sendInvoice(order)}><Mail />{emailing[order.externalId || ''] ? 'Sender…' : 'Send til kunde'}</Button><Button variant="outline" size="sm" disabled={generating} onClick={() => generate(order, true)}><RefreshCw />Regenerér</Button></div>
-                    ) : (
+                    ) : order.shipped === 'Annulleret' ? null : (
                       <div className="flex justify-end gap-1"><Button
                         variant="outline"
                         size="sm"

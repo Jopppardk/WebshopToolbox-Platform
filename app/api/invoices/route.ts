@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     for (const order of result.results) {
       try {
         const fresh = await loadCompleteOrder(order.external_id);
-        if (all && fresh.displayFulfillmentStatus !== 'FULFILLED') continue;
+        if (all && (fresh.cancelledAt || fresh.displayFulfillmentStatus !== 'FULFILLED')) continue;
         if (fresh.createdAt < cutoff) throw new Error('Ordren ligger uden for den valgte historik.');
         if (await createInvoicePdf(db, fresh, shiftMonths(new Date(fresh.createdAt), policy.months).toISOString(), Boolean(regenerate))) generated++;
       } catch (error) {
