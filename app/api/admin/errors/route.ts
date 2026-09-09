@@ -49,9 +49,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ notifications: { enabled, email } }, { headers: { 'Cache-Control': 'no-store' } });
     }
     const id = body.id;
-    if (!Number.isSafeInteger(id) || id <= 0) return NextResponse.json({ error: 'Ugyldigt fejlnummer' }, { status: 400 });
+    if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) return NextResponse.json({ error: 'Ugyldigt fejlnummer' }, { status: 400 });
     const db = await prepareDatabase();
     await db.prepare("UPDATE system_errors SET resolved_at = CURRENT_TIMESTAMP WHERE tenant = ? AND id = ? AND resolved_at IS NULL").bind('sablen.dk', id).run();
     return NextResponse.json({ resolved: true }, { headers: { 'Cache-Control': 'no-store' } });
   } catch { return NextResponse.json({ error: 'Fejlen kunne ikke opdateres' }, { status: 503 }); }
 }
+

@@ -32,6 +32,9 @@ jobs:
       - name: Installer afhængigheder
         run: npm ci
 
+      - name: Kontrollér TypeScript
+        run: npm run typecheck
+
       - name: Kør automatiske tests
         run: npm test
 

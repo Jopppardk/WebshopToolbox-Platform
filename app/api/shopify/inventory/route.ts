@@ -103,17 +103,19 @@ async function commitStocktake(body: { operationId?: unknown; version?: unknown;
       current = await saveState(operationId, current, { ...current.state, phase: 'booked', message: 'Antallene er opdateret. Den samlede lagerværdi var uændret, så intet finansbilag var nødvendigt.' });
       return current.state;
     }
+    const voucher = current.state.voucher;
     const client = await dineroClient(credentials);
     current = await saveState(operationId, current, { ...current.state, phase: 'creating' });
-    const raw = await client('vouchers/manuel', 'POST', current.state.voucher) as { Guid?: string };
+    const raw = await client('vouchers/manuel', 'POST', voucher) as { Guid?: string };
     if (raw.Guid && /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(raw.Guid)) current = await saveState(operationId, current, { ...current.state, guid: raw.Guid });
-    const draft = verifyVoucher(raw, current.state.voucher, current.state.expected);
+    const draft = verifyVoucher(raw, voucher, current.state.expected);
     if (draft.Status !== 'Draft' || !current.state.guid) throw new Error('Dinero bekræftede ikke lagerkladden.');
+    const guid = current.state.guid;
     current = await saveState(operationId, current, { ...current.state, phase: 'draft', message: settings.automation.inventoryBookDinero ? undefined : 'Lageret er opdateret i Shopify, og lagerreguleringen er oprettet som kladde i Dinero.' });
     if (!settings.automation.inventoryBookDinero) return current.state;
     current = await saveState(operationId, current, { ...current.state, phase: 'booking' });
-    const booked = verifyVoucher(await client(`vouchers/manuel/${current.state.guid}/book`, 'POST', { Timestamp: draft.Timestamp }), current.state.voucher, current.state.expected);
-    if (booked.Status !== 'Booked' || booked.Guid.toLowerCase() !== current.state.guid.toLowerCase()) throw new Error('Dinero bekræftede ikke bogføringen af lagerreguleringen.');
+    const booked = verifyVoucher(await client(`vouchers/manuel/${guid}/book`, 'POST', { Timestamp: draft.Timestamp }), voucher, current.state.expected);
+    if (booked.Status !== 'Booked' || booked.Guid.toLowerCase() !== guid.toLowerCase()) throw new Error('Dinero bekræftede ikke bogføringen af lagerreguleringen.');
     current = await saveState(operationId, current, { ...current.state, phase: 'booked', voucherNumber: booked.VoucherNumber, message: 'Lageret er opdateret i Shopify, og lagerreguleringen er bogført i Dinero.' });
     return current.state;
   } catch (error) {
@@ -144,3 +146,4 @@ export async function POST(request: NextRequest) {
     return reply({ error: error instanceof Error ? error.message : 'Lagerreguleringen kunne ikke gennemføres.' }, 422);
   }
 }
+
