@@ -237,7 +237,7 @@ export default function Home() {
         <SyncStatus state={syncState} />
       </aside>
       <section className="min-w-0">
-        {(view === 'orders' || view === 'invoices') && <nav aria-label="Ordrehistorik" className="flex flex-wrap items-center justify-between gap-3 border-b bg-white px-5 py-3 text-sm">{view === 'orders' && <label className="flex items-center gap-2"><span>Periode</span><NativeSelect aria-label="Periode for salg" value={orderPeriod} onChange={event => { setOrderPeriod(event.target.value as OrderPeriod); setOrderOffset(0); setSalesOrders([]); setOrderTotal(0); setOrderError(''); }}>{orderPeriods.map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}</NativeSelect></label>}<span>{ordersLoading ? 'Henter ordrer…' : orderTotal ? `${orderOffset + 1}–${Math.min(orderOffset + orderPageSize, orderTotal)} af ${orderTotal} ordrer · Side ${Math.floor(orderOffset / orderPageSize) + 1} af ${Math.max(1, Math.ceil(orderTotal / orderPageSize))}` : 'Ingen ordrer i perioden'}</span><div className="flex gap-2"><Button variant="outline" disabled={syncingOrders || ordersLoading || orderOffset === 0} onClick={() => setOrderOffset(value => Math.max(0, value - orderPageSize))}>Forrige</Button><Button variant="outline" disabled={syncingOrders || ordersLoading || orderOffset + orderPageSize >= orderTotal} onClick={() => setOrderOffset(value => value + orderPageSize)}>Næste</Button></div></nav>}
+        {(view === 'orders' || view === 'invoices') && <nav aria-label="Ordrehistorik" className="flex flex-wrap items-center justify-between gap-3 border-b bg-white px-5 py-3 text-sm"><span>{ordersLoading ? 'Henter ordrer…' : orderTotal ? `${orderOffset + 1}–${Math.min(orderOffset + orderPageSize, orderTotal)} af ${orderTotal} ordrer · Side ${Math.floor(orderOffset / orderPageSize) + 1} af ${Math.max(1, Math.ceil(orderTotal / orderPageSize))}` : 'Ingen ordrer i perioden'}</span><div className="flex gap-2"><Button variant="outline" disabled={syncingOrders || ordersLoading || orderOffset === 0} onClick={() => setOrderOffset(value => Math.max(0, value - orderPageSize))}>Forrige</Button><Button variant="outline" disabled={syncingOrders || ordersLoading || orderOffset + orderPageSize >= orderTotal} onClick={() => setOrderOffset(value => value + orderPageSize)}>Næste</Button></div></nav>}
         <header className="flex h-20 items-center justify-between border-b border-border bg-white px-5 md:px-8">
           <div className="flex items-center gap-3 lg:hidden">
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -366,6 +366,7 @@ export default function Home() {
                     aria-label="Søg i ordrer"
                   />
                 </div>
+                <label className="flex w-full flex-col gap-1.5 text-sm sm:w-56"><span>Periode</span><NativeSelect aria-label="Periode for salg" value={orderPeriod} onChange={event => { setOrderPeriod(event.target.value as OrderPeriod); setOrderOffset(0); setSalesOrders([]); setOrderTotal(0); setOrderError(''); }}>{orderPeriods.map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}</NativeSelect></label>
               </div>
               <Table>
                 <TableHeader>
