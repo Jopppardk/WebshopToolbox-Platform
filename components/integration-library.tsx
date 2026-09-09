@@ -1,6 +1,6 @@
 'use client';
 import { useCallback,useEffect,useState,useRef } from 'react';
-import { ShoppingBag,Landmark,CreditCard,Plus,Library,Check,Trash2 } from 'lucide-react';
+import { ShoppingBag,Landmark,CreditCard,PackageCheck,Plus,Library,Check,Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription } from '@/components/ui/sheet';
 import { integrationCatalog,type IntegrationId,type IntegrationSelection } from '@/lib/integration-catalog';
@@ -30,7 +30,7 @@ export function useIntegrationLibrary() {
   return {selection,error,busy,refresh,change};
 }
 type State=ReturnType<typeof useIntegrationLibrary>;
-const icons={shopify:ShoppingBag,dinero:Landmark,viabill:CreditCard};
+const icons={shopify:ShoppingBag,dinero:Landmark,viabill:CreditCard,emballage:PackageCheck};
 export function IntegrationLibrary({state,onAdded}:{state:State;onAdded:(id:IntegrationId)=>void}) {
   const [open,setOpen]=useState(false);
   return <>

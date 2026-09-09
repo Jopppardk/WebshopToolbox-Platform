@@ -1,6 +1,7 @@
 'use client';
 import { ProviderLedger } from '@/components/provider-ledger';
 import { IntegrationLibrary, RemoveIntegration, useIntegrationLibrary } from '@/components/integration-library';
+import { EmballageConnection } from '@/components/emballage-connection';
 import { ViaBillConnection } from '@/components/viabill-connection';
 import { HistorySettings } from '@/components/history-settings';
 import { ErrorOverview } from '@/components/error-overview';
@@ -736,6 +737,7 @@ function Settings({
   const [connectionMessage, setConnectionMessage] = useState('');
   const [connecting, setConnecting] = useState<'shopify' | 'dinero' | null>(null);
   const library = useIntegrationLibrary();
+  const [expandedEmballage, setExpandedEmballage] = useState(false);
   const [expandedViaBill, setExpandedViaBill] = useState(false);
   const [expandedIntegration, setExpandedIntegration] = useState<'shopify' | 'dinero' | null>(null);
   const [connected, setConnected] = useState<Record<string, string>>({});
@@ -948,7 +950,7 @@ function Settings({
       </fieldset>}
       {mode === 'integrations' && <>
       <HistorySettings />
-      <IntegrationLibrary state={library} onAdded={id => { if (id === 'viabill') setExpandedViaBill(true); else setExpandedIntegration(id); }} />
+      <IntegrationLibrary state={library} onAdded={id => { if (id === 'viabill') setExpandedViaBill(true); else if(id === 'emballage') setExpandedEmballage(true); else setExpandedIntegration(id); }} />
       <div className="mb-8 grid items-start gap-3 md:grid-cols-2">
         {integrations.filter(item => library.selection?.selected.includes(item.provider) || Boolean(connected[item.provider])).map(({ name, provider, detail, icon: Icon, connected: isConnected }) => (
           <div
@@ -993,6 +995,7 @@ function Settings({
             {!isConnected && <RemoveIntegration state={library} provider={provider} disabled={connecting !== null} />}
           </div>
         ))}
+        {library.selection?.selected.includes('emballage') && <div><EmballageConnection initialExpanded={expandedEmballage} onConnected={() => { void library.refresh(); }} /><RemoveIntegration state={library} provider="emballage" /></div>}
         {library.selection?.selected.includes('viabill') && <div><ViaBillConnection initialExpanded={expandedViaBill} onConnected={() => { void library.refresh(); }} accountField={<Field name="viaBillClearing" label="Mellemregningskonto" />} /><RemoveIntegration state={library} provider="viabill" /></div>}
       </div>
       {(library.selection?.selected.includes('dinero') || Boolean(connected.dinero)) && <fieldset disabled={!ready || saving} className="min-w-0">

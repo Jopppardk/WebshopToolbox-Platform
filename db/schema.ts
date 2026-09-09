@@ -1,6 +1,13 @@
 export const retentionMonths = 24;
 
 export const schemaStatements = [
+  `CREATE TABLE IF NOT EXISTS emballage_submissions (
+    tenant TEXT NOT NULL, organisation TEXT NOT NULL, test_mode INTEGER NOT NULL, report_id INTEGER NOT NULL,
+    request_key TEXT NOT NULL, payload_json TEXT NOT NULL, state TEXT NOT NULL,
+    receipt_json TEXT, lock_owner TEXT, lock_until INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(tenant,organisation,test_mode,report_id)
+  )`,
   `CREATE TABLE IF NOT EXISTS dashboard_ledger (
     organization TEXT NOT NULL, guid TEXT NOT NULL, account INTEGER NOT NULL,
     date TEXT NOT NULL, minor INTEGER NOT NULL, type TEXT NOT NULL,
@@ -115,3 +122,4 @@ export const schemaStatements = [
   `INSERT OR IGNORE INTO feature_requests (id, tenant, title, description, desired_outcome, area, priority, status, created_by)
     VALUES ('backlog-sales-analysis', 'sablen.dk', 'Salgsanalyse-side', 'Opret en salgsanalyse-side, som giver et samlet og anvendeligt overblik over salget i webshoppen.', 'Vis relevante nøgletal, udvikling og mulighed for at analysere salget over valgte perioder.', 'Salg', 'medium', 'proposed', 'rene@sablen.dk')`,
 ];
+
