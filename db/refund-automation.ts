@@ -222,7 +222,12 @@ async function processRefund(
   credentials: Record<string, string>,
 ) {
   let current = await read(row.external_id);
+  let ownsState = false;
   try {
+    if (current && current.state.organizationId !== credentials.organizationId)
+      throw new TransferError(
+        'Tilbagebetalingen tilhører en anden Dinero-organisation. Kontrollér forbindelsen før overførsel.',
+      );
     const item = JSON.parse(row.payload_json);
     if (
       row.currency !== 'DKK' ||
@@ -292,6 +297,7 @@ async function processRefund(
         snapshot: { voucher: proposal.voucher, expected: proposal.expected },
       });
       if (!current) return false;
+      ownsState = true;
       const raw = (await client(
         'vouchers/manuel',
         'POST',
@@ -314,10 +320,16 @@ async function processRefund(
       const draft = verifyVoucher(raw, proposal.voucher, proposal.expected);
       if (draft.Status !== 'Draft' || !current.state.guid)
         throw new TransferError('Dinero bekræftede ikke refunderingskladden.');
-      current = (await save(row.external_id, current, {
+      const drafted = await save(row.external_id, current, {
         ...current.state,
         phase: 'draft',
-      }))!;
+      });
+      if (!drafted)
+        throw new TransferError(
+          'Refunderingsstatus blev ændret efter oprettelsen.',
+        );
+      current = drafted;
+      ownsState = false;
       if (!book) return true;
     }
     if (!current.state.guid)
@@ -327,10 +339,19 @@ async function processRefund(
       current.state.snapshot.voucher,
       current.state.snapshot.expected,
     );
-    current = (await save(row.external_id, current, {
+    if (
+      before.Status !== 'Draft' ||
+      before.Guid.toLowerCase() !== current.state.guid.toLowerCase()
+    )
+      throw new TransferError('Refunderingskladden ændrede sig før bogføring.');
+    const booking = await save(row.external_id, current, {
       ...current.state,
       phase: 'booking',
-    }))!;
+    });
+    if (!booking)
+      throw new TransferError('Refunderingsstatus blev ændret før bogføring.');
+    current = booking;
+    ownsState = true;
     const booked = verifyVoucher(
       await client(`vouchers/manuel/${before.Guid}/book`, 'POST', {
         Timestamp: before.Timestamp,
@@ -338,15 +359,24 @@ async function processRefund(
       current.state.snapshot.voucher,
       current.state.snapshot.expected,
     );
-    if (booked.Status !== 'Booked')
+    if (
+      booked.Status !== 'Booked' ||
+      booked.Guid.toLowerCase() !== before.Guid.toLowerCase()
+    )
       throw new TransferError(
         'Dinero bekræftede ikke refunderingsbogføringen.',
       );
-    await save(row.external_id, current, {
+    const receipt = await save(row.external_id, current, {
       ...current.state,
       phase: 'booked',
       voucherNumber: booked.VoucherNumber,
     });
+    if (!receipt)
+      throw new TransferError(
+        'Bogføringskvitteringen for tilbagebetalingen kunne ikke gemmes.',
+      );
+    current = receipt;
+    ownsState = false;
     await database()
       .prepare(
         "UPDATE integration_records SET booking_status='booked' WHERE tenant=? AND record_type='refund' AND external_id=?",
@@ -355,7 +385,9 @@ async function processRefund(
       .run();
     return true;
   } catch (error) {
-    if (current)
+    // Only the caller that claimed an external write may mark it uncertain.
+    // An observer or a lost compare-and-swap must not change another run's state.
+    if (current && ownsState)
       try {
         await save(row.external_id, current, {
           ...current.state,
@@ -427,7 +459,8 @@ export async function runRefundAutomation() {
     failed = 0;
   for (const row of rows.results) {
     const state = await read(row.external_id);
-    if (state?.state.phase === 'draft' && !automation.refundsBookDinero) continue;
+    if (state?.state.phase === 'draft' && !automation.refundsBookDinero)
+      continue;
     if (await processRefund(row, credentials)) completed++;
     else failed++;
   }

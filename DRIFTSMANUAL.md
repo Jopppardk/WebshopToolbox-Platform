@@ -50,6 +50,8 @@ En vare uden positiv kostpris er en bevidst og gyldig situation: salget bogføre
 
 Gennemførte, ikke-test Shopify Payments-refunderinger bogføres automatisk, når modulet er aktiveret. Beløb, valuta, Shopify-transaktion og vare-/fragtfordeling kontrolleres før skrivning. Produktionsflowet opretter en Dinero-kladde, genlæser og kontrollerer den og bogfører den derefter.
 
+Manuel og automatisk refunderingsbogføring deler en atomisk statusspærring: kun den kørsel, der får gemt overgangen til bogføring, må sende anmodningen til Dinero. En anden kørsel må ikke ændre den igangværende status. Gemte kladder kan kun genoptages med samme Dinero-organisation. Hvis bogføringskvitteringen ikke kan gemmes, forbliver posten spærret til manuel afklaring; en allerede gemt kvittering bevares, hvis opdateringen af oversigten fejler. Tidligere usikre refunderinger nulstilles ikke af denne rettelse.
+
 ### Udbetalinger
 
 Kun betalte Shopify Payments-indbetalinger til banken i DKK behandles. Bruttobetalinger, refunderinger, gebyrer og nettoudbetaling skal afstemmes præcist. Udbetalingsrapporten vedhæftes, når bilagsupload er aktiveret. Produktionsflowet opretter, genlæser, kontrollerer og bogfører Dinero-bilaget.
