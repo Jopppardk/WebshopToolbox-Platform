@@ -6,7 +6,7 @@ import { danishDate } from '@/lib/history-policy';
 import { percentageChange,type calculateFinance } from '@/lib/dashboard-finance';
 
 type Finance={ready:boolean;data:ReturnType<typeof calculateFinance>|null;message?:string;checkedAt?:string;through?:string;stale?:boolean};
-type ActivityCount={total:number;synced:number;failed:number};
+type ActivityCount={total:number;synced:number;failed:number;pending:number};
 type Platform={inactive:number;activity:{today:string;orders:ActivityCount;payouts:ActivityCount;updated:{sales:string|null;refunds:string|null;packaging:string|null}};connected:number;failed:number;succeeded:number;skipped:number;running:number;successRate:number|null;checkedAt:string;providers:Array<{key:string;name:string;connected:boolean;health:string;checkedAt:string|null}>};
 const money=(value:number|null|undefined)=>value==null?'—':new Intl.NumberFormat('da-DK',{style:'currency',currency:'DKK',maximumFractionDigits:0}).format(value/100);
 const date=(value:string)=>new Intl.DateTimeFormat('da-DK',{dateStyle:'short',timeZone:'Europe/Copenhagen'}).format(new Date(value));
@@ -58,7 +58,7 @@ export function Dashboard({onJobs,onIntegrations}:{onJobs:(status:string)=>void;
           <button onClick={onIntegrations} className="group rounded-xl border border-[#e9e2d7] bg-white p-3.5 text-left transition hover:border-[#c09960] hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"><div className="mb-3 flex items-center justify-between"><Link2 className="size-4 text-[#9b7742]"/><ArrowRight className="size-3.5 text-stone-400 transition group-hover:translate-x-0.5"/></div><p className="text-xs text-muted-foreground">Integrationer</p><p className="mt-1 text-sm font-semibold">{stats?stats.connected+' aktive / '+stats.inactive+' inaktive':'—'}</p><p className="mt-1 text-[10px] text-muted-foreground">Aktive = tilsluttede</p></button>
         </div>
       </div>
-      <p className="border-t px-5 py-3 text-[11px] text-muted-foreground">I dag: {stats?date(stats.activity.today):'—'} · Registrerede ordrer og udbetalinger med dagens dato. Synkroniseret = kladde eller bogført i Dinero. Fejlede inkluderer overførsler, der kræver kontrol.</p>
+      <p className="border-t px-5 py-3 text-[11px] text-muted-foreground">I dag: {stats?date(stats.activity.today):'—'} · Registrerede ordrer og udbetalinger med dagens dato. Synkroniseret = kladde eller bogført i Dinero. Afventer = endnu ikke overført, inkl. igangværende overførsler; annullerede og arkiverede er udeladt. Fejlede inkluderer overførsler, der kræver kontrol.</p>
     </section>
     <section aria-labelledby="finance-heading">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 id="finance-heading" className="text-lg font-semibold">Økonomi</h2><span className="rounded-full border bg-white px-3 py-1 text-xs text-muted-foreground">Dinero · Omsætning ekskl. moms</span></div>
@@ -89,10 +89,11 @@ function Revenue({label,subtitle,current,previous,period,priorPeriod,accent=fals
 function Metric({icon,label,value,note}:{icon:ReactNode;label:string;value:string;note:string}) { return <article className="rounded-2xl border bg-white p-5 shadow-sm"><div className="flex items-center justify-between gap-2"><h3 className="text-sm text-muted-foreground">{label}</h3><span className="text-[#9b7742] [&_svg]:size-5">{icon}</span></div><p className="mt-4 text-3xl font-semibold tracking-tight tabular-nums">{value}</p><p className="mt-2 text-xs text-muted-foreground">{note}</p></article>; }
 
 function ActivityRow({label,counts,icon}:{label:string;counts?:ActivityCount;icon:ReactNode}) {
-  return <div className="grid grid-cols-3 items-center gap-3 border-b border-[#eee8df] px-4 py-5 md:px-6 sm:grid-cols-[minmax(150px,0.9fr)_repeat(3,minmax(0,1fr))]">
-    <div className="col-span-3 flex items-center gap-3 sm:col-span-1"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#f4eadc] text-[#8a6636]">{icon}</span><div><h2 className="text-sm font-semibold">{label}</h2><span className="text-[11px] text-muted-foreground">Dagens aktivitet</span></div></div>
+  return <div className="grid grid-cols-2 items-center gap-3 border-b border-[#eee8df] px-4 py-5 md:px-6 lg:grid-cols-[minmax(150px,0.9fr)_repeat(4,minmax(0,1fr))]">
+    <div className="col-span-2 flex items-center gap-3 lg:col-span-1"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#f4eadc] text-[#8a6636]">{icon}</span><div><h2 className="text-sm font-semibold">{label}</h2><span className="text-[11px] text-muted-foreground">Dagens aktivitet</span></div></div>
     <div className="rounded-xl bg-stone-50 px-3 py-3 text-center"><p className="text-[10px] font-medium text-muted-foreground sm:text-[11px]">Antal i dag</p><p className="mt-1.5 text-3xl font-semibold tracking-tight tabular-nums">{counts?.total ?? '—'}</p></div>
     <div className="rounded-xl bg-emerald-50/70 px-3 py-3 text-center"><p className="text-[10px] font-medium text-emerald-800 sm:text-[11px]">Synkroniseret til Dinero</p><p className="mt-1.5 text-3xl font-semibold tracking-tight tabular-nums text-emerald-800">{counts?.synced ?? '—'}</p></div>
+    <div className="rounded-xl bg-amber-50/70 px-3 py-3 text-center"><p className="text-[10px] font-medium text-amber-800 sm:text-[11px]">Afventer</p><p className="mt-1.5 text-3xl font-semibold tracking-tight tabular-nums text-amber-800">{counts?.pending ?? '—'}</p></div>
     <div className={'rounded-xl px-3 py-3 text-center '+(counts?.failed?'bg-red-50':'bg-stone-50')}><p className="text-[10px] font-medium text-muted-foreground sm:text-[11px]">Fejlede</p><p className={'mt-1.5 text-3xl font-semibold tracking-tight tabular-nums '+(counts?.failed?'text-red-700':'text-stone-500')}>{counts?.failed ?? '—'}</p></div>
   </div>;
 }
