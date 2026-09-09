@@ -175,3 +175,9 @@ Manglende regnskabsår, ukategoriserede konti med posteringer eller API-fejl vis
 Platformstatus bygger på den seneste ikke-oversprungne kørsel pr. job, så en oversprunget kørsel ikke skjuler en tidligere fejl. En gemt forbindelse er ikke i sig selv bevis for drift; ViaBill kan eksempelvis være forbundet uden en bekræftet automatisk kørsel. Succesrate er gennemførte / (gennemførte + fejlede) i de seneste 24 timer. Oversprungne og igangværende udelades, og ingen afsluttede kørsler vises som —. Klik på fejlede kørsler åbner Indsigt filtreret på fejl.
 
 API-specifikation kontrolleret 9. september 2026: https://api.dinero.dk/openapi/index.html og https://api.dinero.dk/openapi/v1/swagger.json.
+
+## Dashboardets øverste aktivitetsbjælke
+
+Ordrer og udbetalinger vises i hver sin række. I dag afgrænses efter postens ordre-/udbetalingsdato fra dansk midnat til næste danske midnat, også ved sommertid. Antallet omfatter registrerede poster i løsningen; ikke ordrer, der endnu ikke er hentet fra Shopify. Synkroniseret betyder en bekræftet kladde eller bogføring i Dinero. Fejlede tæller gemt fejlstatus eller en usikker overførsel, som kræver kontrol. En efterfølgende bekræftet overførsel tælles ikke længere som fejlet.
+
+System-status viser seneste gennemførte salgs-/tilbagebetalingsimport, Dinero-lagerværdiens hentetid og emballagens gemte synkroniseringstid. Fejlede jobkørsler tælles særskilt for de seneste 24 timer og åbner den filtrerede jobhistorik. Aktive integrationer betyder tilsluttede integrationer (Shopify, Dinero og ViaBill); tallet er ikke en garanti for leverandørens oppetid. Den tidligere platformsektion nederst er fjernet.
