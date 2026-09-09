@@ -1,5 +1,6 @@
 'use client';
 import { ProviderLedger } from '@/components/provider-ledger';
+import { IntegrationLibrary, RemoveIntegration, useIntegrationLibrary } from '@/components/integration-library';
 import { ViaBillConnection } from '@/components/viabill-connection';
 import { HistorySettings } from '@/components/history-settings';
 import { ErrorOverview } from '@/components/error-overview';
@@ -734,6 +735,8 @@ function Settings({
   const [chartMessage, setChartMessage] = useState('');
   const [connectionMessage, setConnectionMessage] = useState('');
   const [connecting, setConnecting] = useState<'shopify' | 'dinero' | null>(null);
+  const library = useIntegrationLibrary();
+  const [expandedViaBill, setExpandedViaBill] = useState(false);
   const [expandedIntegration, setExpandedIntegration] = useState<'shopify' | 'dinero' | null>(null);
   const [connected, setConnected] = useState<Record<string, string>>({});
   const [shopify, setShopify] = useState({ shop: '', clientId: '', clientSecret: '' });
@@ -789,6 +792,7 @@ function Settings({
       const data = await response.json() as { name: string; error?: string };
       if (!response.ok) throw new Error(data.error);
       setConnected((current) => ({ ...current, [provider]: data.name }));
+      void library.refresh();
       if (provider === 'shopify') setShopify((current) => ({ ...current, clientSecret: '' }));
       else setDinero((current) => ({ ...current, clientSecret: '', apiKey: '' }));
       if (provider === 'dinero') { setChart([]); await loadChart(false); }
@@ -883,7 +887,7 @@ function Settings({
           {mode === 'dashboard' ? 'Overblik over drift, fejl og automatisk behandling.' : mode === 'integrations' ? 'Forbind systemerne, vælg historik og bestem hvordan posteringerne skal lande i Dinero.' : mode === 'invoice-email' ? 'Styr mailafsendelse, tilpas skabelonen og send en afgrænset test.' : 'Vælg lagerkonti og styr automatisk nedskrivning ved afsendte salg.'}
         </p>
       </div>
-      {mode === 'integrations' && chartMessage && !chart.length && (
+      {mode === 'integrations' && library.selection?.selected.includes('dinero') && chartMessage && !chart.length && (
         <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950" role="alert">
           <AlertTriangle className="mt-0.5 size-5 shrink-0" />
           <div>
@@ -944,9 +948,9 @@ function Settings({
       </fieldset>}
       {mode === 'integrations' && <>
       <HistorySettings />
-      <h2 className="mb-3 text-sm font-semibold">Integrationer</h2>
+      <IntegrationLibrary state={library} onAdded={id => { if (id === 'viabill') setExpandedViaBill(true); else setExpandedIntegration(id); }} />
       <div className="mb-8 grid items-start gap-3 md:grid-cols-2">
-        {integrations.map(({ name, provider, detail, icon: Icon, connected: isConnected }) => (
+        {integrations.filter(item => library.selection?.selected.includes(item.provider) || Boolean(connected[item.provider])).map(({ name, provider, detail, icon: Icon, connected: isConnected }) => (
           <div
             key={name}
             className="overflow-hidden rounded-2xl border bg-white"
@@ -986,11 +990,12 @@ function Settings({
                 {provider === 'shopify' && <div className="mt-4 rounded-xl border bg-white p-4"><p className="mb-3 text-sm font-semibold">Bogføring af Shopify Payments</p><Field name="shopifyPaymentsClearing" label="Mellemregningskonto" /></div>}
               </div>
             )}
+            {!isConnected && <RemoveIntegration state={library} provider={provider} disabled={connecting !== null} />}
           </div>
         ))}
-        <ViaBillConnection accountField={<Field name="viaBillClearing" label="Mellemregningskonto" />} />
+        {library.selection?.selected.includes('viabill') && <div><ViaBillConnection initialExpanded={expandedViaBill} onConnected={() => { void library.refresh(); }} accountField={<Field name="viaBillClearing" label="Mellemregningskonto" />} /><RemoveIntegration state={library} provider="viabill" /></div>}
       </div>
-      <fieldset disabled={!ready || saving} className="min-w-0">
+      {(library.selection?.selected.includes('dinero') || Boolean(connected.dinero)) && <fieldset disabled={!ready || saving} className="min-w-0">
       <section className="rounded-2xl border bg-white">
         <div className="border-b p-5">
           <div className="flex items-center gap-3">
@@ -1083,7 +1088,7 @@ function Settings({
           </Button>
         </div>
       </section>
-      </fieldset>
+      </fieldset>}
       </>}
     </div>
   );
