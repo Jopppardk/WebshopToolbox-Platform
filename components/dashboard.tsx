@@ -1,6 +1,6 @@
 'use client';
 import { useEffect,useState,type ReactNode } from 'react';
-import { ArrowDownRight,ArrowUpRight,ArrowRight,BarChart3,Boxes,RefreshCw,Wallet } from 'lucide-react';
+import { ArrowDownRight,ArrowUpRight,ArrowRight,BarChart3,Boxes,RefreshCw,Wallet,Package,Activity,Clock3,Link2,TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { danishDate } from '@/lib/history-policy';
 import { percentageChange,type calculateFinance } from '@/lib/dashboard-finance';
@@ -43,19 +43,19 @@ export function Dashboard({onJobs,onIntegrations}:{onJobs:(status:string)=>void;
       <div><p className="eyebrow">Sablen · Overblik</p><h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-4xl">Dashboard</h1><p className="mt-2 text-sm text-muted-foreground">Din økonomi og drift, samlet ét sted.</p></div>
       <Button variant="outline" disabled={loading} onClick={()=>setRevision(v=>v+1)}><RefreshCw className={loading?'animate-spin':''}/>{loading?'Opdaterer…':'Opdatér'}</Button>
     </header>
-    <section aria-label="Dagens aktivitet og systemstatus" className="mb-8 overflow-hidden rounded-2xl border bg-white shadow-sm">
+    <section aria-label="Dagens aktivitet og systemstatus" className="mb-8 overflow-hidden rounded-2xl border border-[#e3d8c7] bg-white shadow-[0_8px_30px_rgba(70,50,20,0.05)]">
       {errors.platform && <p role="alert" className="border-b bg-red-50 p-4 text-sm text-red-700">{errors.platform}</p>}
-      <ActivityRow label="Ordrer" counts={stats?.activity.orders}/>
-      <ActivityRow label="Udbetalinger" counts={stats?.activity.payouts}/>
-      <div className="border-t bg-[#f8f6f2] px-5 py-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">System-status</h2><span className="text-[11px] text-muted-foreground">Seneste gennemførte opdateringer</span></div>
-        <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2 xl:grid-cols-6">
+      <ActivityRow icon={<Package className="size-5"/>} label="Ordrer" counts={stats?.activity.orders}/>
+      <ActivityRow icon={<Wallet className="size-5"/>} label="Udbetalinger" counts={stats?.activity.payouts}/>
+      <div className="border-t border-[#e9e2d7] bg-[#faf8f5] p-4 md:p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 text-sm font-semibold"><Activity className="size-4 text-[#9b7742]"/>System-status</h2><span className="text-[11px] text-muted-foreground">Seneste gennemførte opdateringer</span></div>
+        <div className="grid grid-cols-1 gap-2.5 min-[400px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
           <Update label="Salg" value={stats?.activity.updated.sales}/>
           <Update label="Tilbagebetalinger" value={stats?.activity.updated.refunds}/>
           <Update label="Lagerværdi" value={!errors.finance && finance?.data?.inventory != null ? finance.checkedAt : null}/>
           <Update label="Emballage" value={stats?.activity.updated.packaging}/>
-          <button onClick={()=>onJobs('failed')} className="text-left hover:underline focus-visible:outline-2 focus-visible:outline-offset-4"><p className="text-xs text-muted-foreground">Fejlede kørsler · 24 timer</p><p className={'mt-1 flex items-center gap-2 text-sm font-semibold '+(stats?.failed?'text-red-700':'')}>{stats?.failed ?? '—'}<ArrowRight className="size-3.5"/></p></button>
-          <button onClick={onIntegrations} className="text-left hover:underline focus-visible:outline-2 focus-visible:outline-offset-4"><p className="text-xs text-muted-foreground">Integrationer</p><p className="mt-1 text-sm font-semibold">{stats?stats.connected+' aktive / '+stats.inactive+' inaktive':'—'}</p><p className="mt-1 text-[10px] text-muted-foreground">Aktive = tilsluttede</p></button>
+          <button onClick={()=>onJobs('failed')} className="group rounded-xl border border-[#e9e2d7] bg-white p-3.5 text-left transition hover:border-[#c09960] hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"><div className="mb-3 flex items-center justify-between"><TriangleAlert className={'size-4 '+(stats?.failed?'text-red-600':'text-stone-400')}/><ArrowRight className="size-3.5 text-stone-400 transition group-hover:translate-x-0.5"/></div><p className="text-xs text-muted-foreground">Fejlede kørsler</p><p className={'mt-1 text-xl font-semibold tabular-nums '+(stats?.failed?'text-red-700':'')}>{stats?.failed ?? '—'}</p><p className="mt-1 text-[10px] text-muted-foreground">Seneste 24 timer</p></button>
+          <button onClick={onIntegrations} className="group rounded-xl border border-[#e9e2d7] bg-white p-3.5 text-left transition hover:border-[#c09960] hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"><div className="mb-3 flex items-center justify-between"><Link2 className="size-4 text-[#9b7742]"/><ArrowRight className="size-3.5 text-stone-400 transition group-hover:translate-x-0.5"/></div><p className="text-xs text-muted-foreground">Integrationer</p><p className="mt-1 text-sm font-semibold">{stats?stats.connected+' aktive / '+stats.inactive+' inaktive':'—'}</p><p className="mt-1 text-[10px] text-muted-foreground">Aktive = tilsluttede</p></button>
         </div>
       </div>
       <p className="border-t px-5 py-3 text-[11px] text-muted-foreground">I dag: {stats?date(stats.activity.today):'—'} · Registrerede ordrer og udbetalinger med dagens dato. Synkroniseret = kladde eller bogført i Dinero. Fejlede inkluderer overførsler, der kræver kontrol.</p>
@@ -88,14 +88,16 @@ function Revenue({label,subtitle,current,previous,period,priorPeriod,accent=fals
 }
 function Metric({icon,label,value,note}:{icon:ReactNode;label:string;value:string;note:string}) { return <article className="rounded-2xl border bg-white p-5 shadow-sm"><div className="flex items-center justify-between gap-2"><h3 className="text-sm text-muted-foreground">{label}</h3><span className="text-[#9b7742] [&_svg]:size-5">{icon}</span></div><p className="mt-4 text-3xl font-semibold tracking-tight tabular-nums">{value}</p><p className="mt-2 text-xs text-muted-foreground">{note}</p></article>; }
 
-function ActivityRow({label,counts}:{label:string;counts?:ActivityCount}) {
-  return <div className="grid grid-cols-3 items-center gap-4 border-b px-5 py-4 last:border-b-0 sm:grid-cols-[minmax(120px,0.8fr)_repeat(3,minmax(0,1fr))]">
-    <h2 className="col-span-3 text-sm font-semibold sm:col-span-1">{label}</h2>
-    <div><p className="text-[11px] text-muted-foreground">Antal i dag</p><p className="mt-1 text-2xl font-semibold tabular-nums">{counts?.total ?? '—'}</p></div>
-    <div><p className="text-[11px] text-muted-foreground">Synkroniseret til Dinero</p><p className="mt-1 text-2xl font-semibold tabular-nums text-emerald-700">{counts?.synced ?? '—'}</p></div>
-    <div><p className="text-[11px] text-muted-foreground">Fejlede</p><p className={'mt-1 text-2xl font-semibold tabular-nums '+(counts?.failed?'text-red-700':'')}>{counts?.failed ?? '—'}</p></div>
+function ActivityRow({label,counts,icon}:{label:string;counts?:ActivityCount;icon:ReactNode}) {
+  return <div className="grid grid-cols-3 items-center gap-3 border-b border-[#eee8df] px-4 py-5 md:px-6 sm:grid-cols-[minmax(150px,0.9fr)_repeat(3,minmax(0,1fr))]">
+    <div className="col-span-3 flex items-center gap-3 sm:col-span-1"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#f4eadc] text-[#8a6636]">{icon}</span><div><h2 className="text-sm font-semibold">{label}</h2><span className="text-[11px] text-muted-foreground">Dagens aktivitet</span></div></div>
+    <div className="rounded-xl bg-stone-50 px-3 py-3 text-center"><p className="text-[10px] font-medium text-muted-foreground sm:text-[11px]">Antal i dag</p><p className="mt-1.5 text-3xl font-semibold tracking-tight tabular-nums">{counts?.total ?? '—'}</p></div>
+    <div className="rounded-xl bg-emerald-50/70 px-3 py-3 text-center"><p className="text-[10px] font-medium text-emerald-800 sm:text-[11px]">Synkroniseret til Dinero</p><p className="mt-1.5 text-3xl font-semibold tracking-tight tabular-nums text-emerald-800">{counts?.synced ?? '—'}</p></div>
+    <div className={'rounded-xl px-3 py-3 text-center '+(counts?.failed?'bg-red-50':'bg-stone-50')}><p className="text-[10px] font-medium text-muted-foreground sm:text-[11px]">Fejlede</p><p className={'mt-1.5 text-3xl font-semibold tracking-tight tabular-nums '+(counts?.failed?'text-red-700':'text-stone-500')}>{counts?.failed ?? '—'}</p></div>
   </div>;
 }
 function Update({label,value}:{label:string;value?:string|null}) {
-  return <div><p className="text-xs text-muted-foreground">{label} senest opdateret</p><p className="mt-1 text-sm font-medium">{value?(danishDate(new Date(value)) === danishDate() ? 'I dag kl. '+new Intl.DateTimeFormat('da-DK',{timeStyle:'short',timeZone:'Europe/Copenhagen'}).format(new Date(value)) : timestamp(value)):'Ikke registreret'}</p></div>;
+  const today=Boolean(value && danishDate(new Date(value)) === danishDate());
+  const time=value?new Intl.DateTimeFormat('da-DK',{timeStyle:'short',timeZone:'Europe/Copenhagen'}).format(new Date(value)):null;
+  return <div className="rounded-xl border border-[#e9e2d7] bg-white p-3.5"><div className="mb-3 flex items-center justify-between"><Clock3 className="size-4 text-[#9b7742]"/>{today && <span className="rounded-full bg-[#f4eadc] px-2 py-0.5 text-[10px] font-semibold text-[#765523]">I dag</span>}</div><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-sm font-semibold tabular-nums">{value?(today?'kl. '+time:date(value)+' · '+time):'Ikke registreret'}</p><p className="mt-1 text-[10px] text-muted-foreground">Senest opdateret</p></div>;
 }
