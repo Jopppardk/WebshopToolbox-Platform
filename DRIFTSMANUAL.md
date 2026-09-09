@@ -207,3 +207,7 @@ Fordelingen bruger nu Company name (company) på Shopify-ordrens fakturerings- e
 Alle integrationskort bruger samme header, statusmærke, ikonramme, panel og placering af fjern-knappen (i udfoldet kort). Forbrug og Indberetning bruger samme fordeling af produkt- og manuelle registreringer. Indberetning viser også samlet indberetningspligtig vægt og uafklaret kundetype; en udbyderfejl skjuler ikke de gemte forbrugstal, men blokerer afsendelse. Kvartalets navn åbner samme periode i Forbrug. Begge faner opdateres efter synkronisering og ved faneskift.
 
 Den eksisterende kg-pris anvendes som privatpris. Erhvervspris gemmes særskilt, med fire decimaler ligesom privatprisen. Prisen gælder indberetningspligtige gram; ukendt kundetype, manglende afklaring eller manglende erhvervspris giver ikke et misvisende samlet prisestimat. Priserne er lokale estimater og sendes ikke som indberetningsdata.
+
+
+### Standardkundetype: Privat
+Manglende eller tidligere uafklaret kundetype behandles som Privat i Forbrug, prisberegning og Indberetning. Det gælder både gamle ordrelinjer og manuelle registreringer uden behov for datamigrering. Kun eksplicit erhverv behandles som erhverv. Manglende vægt eller uafklaret indberetningspligt kræver fortsat afklaring.

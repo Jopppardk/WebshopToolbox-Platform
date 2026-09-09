@@ -27,7 +27,7 @@ export function validateManualPackaging(value: unknown): Omit<ManualPackaging,'i
   const row=value as Record<string,unknown>, date=String(row?.date||''), description=String(row?.description||'').trim(), supplier=String(row?.supplier||'').trim(), supplierCountry=String(row?.supplierCountry||'').trim().toUpperCase(), supplierCvr=String(row?.supplierCvr||'').trim(), weightGrams=Number(row?.weightGrams), reportable=String(row?.reportable||'') as Reportable;
   const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Copenhagen'}).format(new Date());
   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>today||!description||description.length>200||supplier.length>200||supplierCountry.length>100||supplierCvr.length>50||!Number.isSafeInteger(weightGrams)||weightGrams<0||weightGrams>100_000_000||!['yes','no','unknown'].includes(reportable)) throw new Error('Den manuelle emballagepost er ugyldig.');
-  const audience=['household','commercial'].includes(String(row.audience))?row.audience as Audience:'unknown';
+  const audience:Audience=row.audience==='commercial'?'commercial':'household';
   return {date,description,supplier,supplierCountry,supplierCvr,weightGrams,reportable,audience};
 }
 
@@ -37,11 +37,11 @@ export function packagingAudienceTotals(rows:PackagingRow[],manual:ManualPackagi
  for(const row of [...rows.filter(r=>!r.test),...manual]){
    const grams=row.weightGrams===null?null:row.weightGrams*('quantity' in row?row.quantity:1);
    const valid=grams!==null&&Number.isSafeInteger(grams)&&grams>=0;
-   if(valid){if(row.audience==='household')householdTotalGrams+=grams;else if(row.audience==='commercial')commercialTotalGrams+=grams;else unknownTotalGrams+=grams;}
+   if(valid){if(row.audience==='commercial')commercialTotalGrams+=grams;else householdTotalGrams+=grams;}
    if(row.reportable==='no')continue;
-   if(!valid||row.reportable!=='yes'||!['household','commercial'].includes(row.audience||''))unresolved++;
+   if(!valid||row.reportable!=='yes')unresolved++;
    if(!valid||row.reportable!=='yes')continue;
-   if(row.audience==='household')householdGrams+=grams;else if(row.audience==='commercial')commercialGrams+=grams;else unknownAudienceGrams+=grams;
+   if(row.audience==='commercial')commercialGrams+=grams;else householdGrams+=grams;
  }
  if(![householdGrams,commercialGrams,unknownAudienceGrams,householdTotalGrams,commercialTotalGrams,unknownTotalGrams].every(Number.isSafeInteger))throw Error('Emballagemængden er for stor.');
  return {householdGrams,commercialGrams,unknownAudienceGrams,householdTotalGrams,commercialTotalGrams,unknownTotalGrams,unresolved};
