@@ -116,8 +116,6 @@ export async function reportingOverview() {
     else if (!report) reason = 'Perioden er ikke tilgængelig hos udbyderen.';
     else if (!report.accepts_writes && !submitted)
       reason = 'Perioden er lukket for indberetning.';
-    else if (totals.unresolved)
-      reason = `${totals.unresolved} emballagelinjer kræver afklaring.`;
     else if (
       !source.coverage ||
       source.coverage.start > q.start ||
@@ -186,10 +184,6 @@ export async function prepareEIReport(quarter: string) {
     c.audienceRule !== audienceRule
   )
     throw Error('Hent historikken til indberetning først.');
-  if (totals.unresolved)
-    throw Error(
-      'Afklar manglende vægte, indberetningspligt og kundetype før indberetning.',
-    );
   const { data: schema } = await eiRequest<EISchema>(
       key,
       `/reports/${report.id}/schema`,
@@ -220,6 +214,7 @@ export async function prepareEIReport(quarter: string) {
       quarter: q.label,
       householdKg: totals.householdGrams / 1000,
       commercialKg: totals.commercialGrams / 1000,
+      ignoredLines: totals.unresolved,
       testMode: context.api_key.is_test,
       organisation: context.organisation.name,
     },

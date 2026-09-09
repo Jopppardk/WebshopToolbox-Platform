@@ -210,4 +210,7 @@ Den eksisterende kg-pris anvendes som privatpris. Erhvervspris gemmes særskilt,
 
 
 ### Standardkundetype: Privat
-Manglende eller tidligere uafklaret kundetype behandles som Privat i Forbrug, prisberegning og Indberetning. Det gælder både gamle ordrelinjer og manuelle registreringer uden behov for datamigrering. Kun eksplicit erhverv behandles som erhverv. Manglende vægt eller uafklaret indberetningspligt kræver fortsat afklaring.
+Manglende eller tidligere uafklaret kundetype behandles som Privat i Forbrug, prisberegning og Indberetning. Det gælder både gamle ordrelinjer og manuelle registreringer uden behov for datamigrering. Kun eksplicit erhverv behandles som erhverv. Manglende vægt eller uafklaret indberetningspligt medfører, at linjen ignoreres i beregning og indberetning.
+
+### Ignorerede emballagelinjer
+Linjer uden gyldig emballagevægt eller med uafklaret indberetningspligt udelades fra forbrugstal, prisberegning og indberetning. Antallet vises som ignoreret og blokerer ikke indberetning. Kildedata bevares, så linjerne kan medregnes efter en senere synkronisering med udfyldte felter.

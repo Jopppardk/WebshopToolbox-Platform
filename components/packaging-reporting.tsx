@@ -22,6 +22,7 @@ type Quarter = {
   reason: string;
   statusNote?: string;
   canSubmit: boolean;
+  unresolved: number;
 };
 type Overview = {
   connected: boolean;
@@ -36,6 +37,7 @@ type Preview = {
   token: string;
   quarter: string;
   householdKg: number;
+  ignoredLines: number;
   commercialKg: number;
   testMode: boolean;
   organisation: string;
@@ -152,7 +154,7 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
           </Button>
         </div>
       </div>
-      <p className="px-5 pt-4 text-xs text-muted-foreground">Indberetningspligtige mængder fra Forbrug for samme afsluttede kvartal. Klik på kvartalet for at se registreringerne. Manglende kundetype regnes som Privat.</p>
+      <p className="px-5 pt-4 text-xs text-muted-foreground">Indberetningspligtige mængder fra Forbrug for samme afsluttede kvartal. Klik på kvartalet for at se registreringerne. Manglende kundetype regnes som Privat. Linjer uden gyldig vægt eller afklaret indberetningspligt ignoreres.</p>
       {data?.providerError&&<p role="alert" className="m-5 rounded-xl bg-amber-50 p-4 text-sm">{data.providerError}</p>}
       {error && (
         <p
@@ -207,6 +209,7 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
                   ) : (
                     q.reason || q.statusNote || 'Klar til indberetning'
                   )}
+                  {q.unresolved > 0 && <p className="mt-1 text-xs text-muted-foreground">{q.unresolved} linjer ignoreret</p>}
                 </td>
                 <td className="p-4 text-right">
                   {!q.submitted && (
@@ -254,6 +257,7 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
                 <dd>{kg(preview.commercialKg * 1000)}</dd>
               </div>
             </dl>
+            {preview.ignoredLines > 0 && <p className="mb-3 text-sm text-muted-foreground">{preview.ignoredLines} linjer uden gyldig vægt eller afklaret indberetningspligt er udeladt.</p>}
             <p className="mb-5 text-sm">
               {preview.testMode
                 ? 'Testen kontrollerer data uden at afslutte kvartalet.'
@@ -295,4 +299,3 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
     </section>
   );
 }
-
