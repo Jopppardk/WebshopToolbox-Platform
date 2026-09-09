@@ -7,8 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import type { ViaBillAccount } from '@/lib/viabill';
 import type { ReactNode } from 'react';
 
-export function ViaBillConnection({ accountField }: { accountField?: ReactNode }) {
-  const [expanded, setExpanded] = useState(false);
+export function ViaBillConnection({ accountField, initialExpanded = false, onConnected }: { accountField?: ReactNode; initialExpanded?: boolean; onConnected?: () => void }) {
+  const [expanded, setExpanded] = useState(initialExpanded);
   const [status, setStatus] = useState<{ connected: boolean; name?: string } | null>(null);
   const [apiKey, setApiKey] = useState(''); const [secret, setSecret] = useState('');
   const [accounts, setAccounts] = useState<ViaBillAccount[]>([]); const [accountId, setAccountId] = useState('');
@@ -23,7 +23,7 @@ export function ViaBillConnection({ accountField }: { accountField?: ReactNode }
       const data = await response.json() as { accounts?: ViaBillAccount[]; manualAccountIdRequired?: boolean; name?: string; error?: string };
       if (!response.ok) { if (action === 'discover') { setAccounts([]); setAccountId(''); setManualAccountId(Boolean(data.manualAccountIdRequired)); } throw new Error(data.error || 'ViaBill kunne ikke forbindes.'); }
       if (action === 'discover') { setAccounts(data.accounts || []); setManualAccountId(Boolean(data.manualAccountIdRequired)); setAccountId(data.accounts?.length === 1 ? data.accounts[0].id : ''); setNotice(data.manualAccountIdRequired ? 'ViaBill giver ikke nøglen adgang til kontolisten. Indtast Merchant Account ID; forbindelsen valideres direkte mod afregningsdata.' : 'Adgangen er testet. Vælg Sablens konto og gem forbindelsen.'); }
-      else { setStatus({ connected: true, name: data.name }); setApiKey(''); setSecret(''); setAccounts([]); setAccountId(''); setNotice('ViaBill er forbundet. Du kan nu hente data under Betalinger og Udbetalinger.'); }
+      else { setStatus({ connected: true, name: data.name }); onConnected?.(); setApiKey(''); setSecret(''); setAccounts([]); setAccountId(''); setNotice('ViaBill er forbundet. Du kan nu hente data under Betalinger og Udbetalinger.'); }
     } catch (error) { setError(error instanceof Error ? error.message : 'ViaBill kunne ikke forbindes.'); }
     finally { setBusy(false); }
   }
@@ -45,3 +45,4 @@ export function ViaBillConnection({ accountField }: { accountField?: ReactNode }
     </div>}
   </section>;
 }
+

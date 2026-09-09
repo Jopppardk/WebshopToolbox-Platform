@@ -181,3 +181,7 @@ API-specifikation kontrolleret 9. september 2026: https://api.dinero.dk/openapi/
 Ordrer og udbetalinger vises i hver sin række. I dag afgrænses efter postens ordre-/udbetalingsdato fra dansk midnat til næste danske midnat, også ved sommertid. Antallet omfatter registrerede poster i løsningen; ikke ordrer, der endnu ikke er hentet fra Shopify. Synkroniseret betyder en bekræftet kladde eller bogføring i Dinero. Fejlede tæller gemt fejlstatus eller en usikker overførsel, som kræver kontrol. En efterfølgende bekræftet overførsel tælles ikke længere som fejlet.
 
 System-status viser seneste gennemførte salgs-/tilbagebetalingsimport, Dinero-lagerværdiens hentetid og emballagens gemte synkroniseringstid. Fejlede jobkørsler tælles særskilt for de seneste 24 timer og åbner den filtrerede jobhistorik. Aktive integrationer betyder tilsluttede integrationer (Shopify, Dinero og ViaBill); tallet er ikke en garanti for leverandørens oppetid. Den tidligere platformsektion nederst er fjernet.
+
+
+## Integrationsbibliotek
+Under Indstillinger → Integrationer viser Dine integrationer kun valgte tjenester. Brug Tilføj integration til at vælge Shopify, Dinero eller ViaBill i biblioteket og åbne opsætningen. Valgene gemmes fælles på tværs af enheder. Eksisterende forbindelser vises automatisk. En valgt, endnu ikke forbundet tjeneste kan fjernes fra oversigten; aktive forbindelser kan ikke fjernes her. Valget ændrer ikke automatikkens indstillinger. Dinero-kontoplanen vises, når Dinero er valgt.
