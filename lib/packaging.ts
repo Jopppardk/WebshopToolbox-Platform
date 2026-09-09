@@ -8,19 +8,24 @@ export const normalizeReportable = (value: unknown): Reportable => {
   const text = String(value || '').trim().toLowerCase();
   return ['ja', 'yes', 'true', '1'].includes(text) ? 'yes' : ['nej', 'no', 'false', '0'].includes(text) ? 'no' : 'unknown';
 };
+export function ignoredPackaging(row: PackagingRow | ManualPackaging) {
+  const grams = row.weightGrams === null ? null : row.weightGrams * ('quantity' in row ? row.quantity : 1);
+  return grams === null || !Number.isSafeInteger(grams) || grams < 0 || !['yes', 'no'].includes(row.reportable);
+}
 export function packagingPeriod(rows: PackagingRow[], manual: ManualPackaging[], start: string, end: string): PackagingPeriod {
   const selectedRows = rows.filter(row => !row.test && row.date >= start && row.date <= end), selectedManual = manual.filter(row => row.date >= start && row.date <= end);
   const products = new Map<string, PackagingPeriod['products'][number]>(); let unknown = 0, missing = 0;
   for (const row of selectedRows) {
     const grams = (row.weightGrams ?? 0) * row.quantity, reportableGrams = row.reportable === 'yes' ? grams : 0;
     if (row.weightGrams === null) missing++; if (row.reportable === 'unknown') unknown += grams;
+    if (ignoredPackaging(row)) continue;
     const key = row.productId || row.product, product = products.get(key) || { productId: row.productId, product: row.product, grams: 0, reportableGrams: 0, quantity: 0, orders: [] };
     product.grams += grams; product.reportableGrams += reportableGrams; product.quantity += row.quantity; product.orders.push(row); products.set(key, product);
   }
   for (const item of selectedManual) if (item.reportable === 'unknown') unknown += item.weightGrams;
   const list = [...products.values()].sort((a,b) => b.grams-a.grams || a.product.localeCompare(b.product,'da'));
   for (const product of list) product.orders.sort((a,b) => b.date.localeCompare(a.date) || b.orderName.localeCompare(a.orderName));
-  const productGrams = list.reduce((s,p)=>s+p.grams,0), productReportableGrams=list.reduce((s,p)=>s+p.reportableGrams,0), manualGrams=selectedManual.reduce((s,p)=>s+p.weightGrams,0), manualReportableGrams=selectedManual.filter(p=>p.reportable==='yes').reduce((s,p)=>s+p.weightGrams,0);
+  const productGrams = list.reduce((s,p)=>s+p.grams,0), productReportableGrams=list.reduce((s,p)=>s+p.reportableGrams,0), manualGrams=selectedManual.filter(p=>!ignoredPackaging(p)).reduce((s,p)=>s+p.weightGrams,0), manualReportableGrams=selectedManual.filter(p=>!ignoredPackaging(p)&&p.reportable==='yes').reduce((s,p)=>s+p.weightGrams,0);
   return { ...packagingAudienceTotals(selectedRows,selectedManual), start, end, totalGrams: productGrams+manualGrams, reportableGrams: productReportableGrams+manualReportableGrams, productGrams, productReportableGrams, manualGrams, manualReportableGrams, unknownReportabilityGrams: unknown, unconfiguredProductLines: missing, products:list, manualEntries:selectedManual.sort((a,b)=>b.date.localeCompare(a.date)) };
 }
 export function validateManualPackaging(value: unknown): Omit<ManualPackaging,'id'|'updatedAt'> {
@@ -37,6 +42,7 @@ export function packagingAudienceTotals(rows:PackagingRow[],manual:ManualPackagi
  for(const row of [...rows.filter(r=>!r.test),...manual]){
    const grams=row.weightGrams===null?null:row.weightGrams*('quantity' in row?row.quantity:1);
    const valid=grams!==null&&Number.isSafeInteger(grams)&&grams>=0;
+   if(ignoredPackaging(row)){unresolved++;continue;}
    if(valid){if(row.audience==='commercial')commercialTotalGrams+=grams;else householdTotalGrams+=grams;}
    if(row.reportable==='no')continue;
    if(!valid||row.reportable!=='yes')unresolved++;
@@ -48,6 +54,6 @@ export function packagingAudienceTotals(rows:PackagingRow[],manual:ManualPackagi
 }
 export function validatePackagingPrice(value:unknown){if(typeof value!=='number'||!Number.isFinite(value)||value<0||value>1000)throw Error('Prisen pr. kg er ugyldig.');return Math.round(value*10000)/10000;}
 export function packagingEstimate(period:ReturnType<typeof packagingAudienceTotals>,householdPrice:number,commercialPrice:number|null){
- if(period.unresolved||period.unknownAudienceGrams||period.commercialGrams>0&&commercialPrice===null)return null;
+ if(period.unknownAudienceGrams||period.commercialGrams>0&&commercialPrice===null)return null;
  return (period.householdGrams*householdPrice+period.commercialGrams*(commercialPrice??0))/1000;
 }
