@@ -15,7 +15,7 @@ Sablen Toolbox drives på `https://integration.sablen.dk` og forbinder Sablen.dk
 - Domæne: `integration.sablen.dk`
 - Tidszone for forretningsdatoer: `Europe/Copenhagen`
 
-Push til `main` starter GitHub Actions. Workflowet installerer afhængigheder, kører test og build og udgiver derefter hele Worker-pakken til Cloudflare. En fejlet test eller build stopper udgivelsen.
+Push til `main` starter GitHub Actions. Workflowet installerer afhængigheder, kører typekontrol, test og build og udgiver derefter hele Worker-pakken til Cloudflare. En fejlet typekontrol, test eller build stopper udgivelsen. Pull requests gennemgår samme typekontrol før sammenlægning.
 
 ## Automatiske jobs
 
@@ -94,7 +94,7 @@ Hvis startdatoen ændres, kan tidligere poster komme tilbage i udvælgelsen. Kon
 ### Normal udgivelse
 
 1. Arbejd på en separat Git-gren.
-2. Kør `npm test` og `npm run build` lokalt.
+2. Kør `npm run typecheck`, `npm test` og `npm run build` lokalt.
 3. Gennemgå ændringerne og sammenlæg dem i `main`.
 4. Kontrollér den grønne GitHub Actions-kørsel.
 5. Kontrollér produktionen og siden Indsigt efter første planlagte job.

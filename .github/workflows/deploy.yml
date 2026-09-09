@@ -38,6 +38,10 @@ jobs:
       - name: Byg applikationen
         run: npm run build
 
+      # worker-entry.ts imports the generated Worker bundle.
+      - name: Kontrollér TypeScript
+        run: npm run typecheck
+
       - name: Deploy til Cloudflare Workers
         uses: cloudflare/wrangler-action@v4
         with:

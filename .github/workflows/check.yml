@@ -21,5 +21,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      # worker-entry.ts imports the generated Worker bundle.
+      - run: npm run typecheck
       - name: Kontrollér Worker-pakken uden deployment
         run: npx wrangler deploy --config wrangler.direct.jsonc --dry-run

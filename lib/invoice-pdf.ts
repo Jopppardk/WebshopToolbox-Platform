@@ -67,7 +67,7 @@ export async function buildInvoicePdf(order: InvoiceSource, logoBytes?: ArrayBuf
     page.drawLine({ start: { x: 54, y: 721 }, end: { x: 541, y: 721 }, thickness: .7, color: line });
 
     if (!pageIndex) {
-      page.drawText('FAKTURERES TIL', { x: 54, y: 667, size: 7.5, font: bold, color: gold, characterSpacing: 1 });
+      page.drawText('FAKTURERES TIL', { x: 54, y: 667, size: 7.5, font: bold, color: gold });
       customerLines.forEach((text, i) => page.drawText(text, { x: 54, y: 647 - i * 13, size: i ? 9 : 11, font: i ? regular : bold, color: ink }));
       page.drawRectangle({ x: 356, y: 604, width: 185, height: 65, color: paper, borderColor: line, borderWidth: .7 });
       page.drawText('FAKTURANUMMER', { x: 372, y: 649, size: 7, font: bold, color: muted });
@@ -79,7 +79,7 @@ export async function buildInvoicePdf(order: InvoiceSource, logoBytes?: ArrayBuf
       const status = paid ? 'BETALT' : 'AFVENTER BETALING';
       page.drawText(status, { x: 492 - bold.widthOfTextAtSize(status, 8) / 2, y: 686, size: 8, font: bold, color: black });
     }
-    page.drawText('FAKTURALINJER', { x: 54, y: 583, size: 8, font: bold, color: gold, characterSpacing: 1 });
+    page.drawText('FAKTURALINJER', { x: 54, y: 583, size: 8, font: bold, color: gold });
     page.drawText('Priser er ekskl. moms og efter rabatter', { x: 352, y: 583, size: 7.5, font: regular, color: muted });
     page.drawRectangle({ x: 54, y: 552, width: 487, height: 24, color: softGold, borderColor: line, borderWidth: .5 });
     page.drawText('Beskrivelse', { x: 66, y: 560, size: 8, font: bold, color: ink }); page.drawText('Moms', { x: 332, y: 560, size: 8, font: bold, color: ink }); page.drawText('Antal', { x: 378, y: 560, size: 8, font: bold, color: ink }); page.drawText('Stk. pris', { x: 431, y: 560, size: 8, font: bold, color: ink }); page.drawText('Beløb', { x: 507, y: 560, size: 8, font: bold, color: ink });
