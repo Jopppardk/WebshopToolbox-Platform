@@ -96,6 +96,9 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
       setBusy(false);
     }
   }
+  const visibleQuarters = data?.quarters.filter(
+    (q) => !data.startDate || q.start >= data.startDate,
+  ) ?? [];
   const kg = (g: number) =>
     new Intl.NumberFormat('da-DK', {
       minimumFractionDigits: 3,
@@ -118,7 +121,7 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
         <div>
           <h2 className="text-lg font-semibold">Kvartalsindberetninger</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            De seneste fem afsluttede kvartaler ·{' '}
+            Op til fem afsluttede kvartaler fra integrationens startdato ·{' '}
             {data?.organisation || 'Henter…'}
           </p>
           {data?.testMode && (
@@ -179,7 +182,10 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
             </tr>
           </thead>
           <tbody>
-            {data?.quarters.map((q) => (
+            {data && visibleQuarters.length === 0 && (
+              <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">Der er endnu ingen afsluttede kvartaler fra integrationens startdato.</td></tr>
+            )}
+            {visibleQuarters.map((q) => (
               <tr key={q.id} className="border-t">
                 <td className="p-4 font-medium"><button className="text-left underline decoration-dotted underline-offset-4" onClick={()=>onShowConsumption?.(q.start,q.end)}>{q.label}</button></td><td className="p-4 text-right tabular-nums">{kg(q.reportableGrams)}</td>
                 <td className="p-4 text-right tabular-nums">
@@ -211,7 +217,7 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
                       }
                     >
                       <Send />
-                      {data.testMode ? 'Test indberetning' : 'Indberet'}
+                      {data?.testMode ? 'Test indberetning' : 'Indberet'}
                     </Button>
                   )}
                 </td>
@@ -289,3 +295,4 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
     </section>
   );
 }
+
