@@ -1,3 +1,4 @@
+import {packagingAudienceTotals} from '@/lib/packaging';
 import { danishDate } from '@/lib/history-policy';
 import type { PackagingRow, ManualPackaging } from '@/lib/packaging';
 import type { EISchema } from '@/lib/emballage-api';
@@ -59,36 +60,8 @@ export function quarterTotals(
   start: string,
   end: string,
 ) {
-  let householdGrams = 0,
-    commercialGrams = 0,
-    unresolved = 0;
-  const sources: unknown[] = [];
-  for (const row of [
-    ...rows.filter((r) => !r.test && r.date >= start && r.date <= end),
-    ...manual.filter((r) => r.date >= start && r.date <= end),
-  ]) {
-    sources.push(row);
-    if (row.reportable === 'no') continue;
-    const grams =
-      row.weightGrams === null
-        ? null
-        : row.weightGrams * ('quantity' in row ? row.quantity : 1);
-    if (
-      row.reportable !== 'yes' ||
-      grams === null ||
-      !Number.isSafeInteger(grams) ||
-      grams < 0 ||
-      !['household', 'commercial'].includes(row.audience || '')
-    ) {
-      unresolved++;
-      continue;
-    }
-    if (row.audience === 'household') householdGrams += grams;
-    else commercialGrams += grams;
-  }
-  if (!Number.isSafeInteger(householdGrams + commercialGrams))
-    throw Error('Emballagemængden er for stor.');
-  return { householdGrams, commercialGrams, unresolved, sources };
+  const selectedRows=rows.filter(r=>!r.test&&r.date>=start&&r.date<=end),selectedManual=manual.filter(r=>r.date>=start&&r.date<=end);
+  return {...packagingAudienceTotals(selectedRows,selectedManual),sources:[...selectedRows,...selectedManual]};
 }
 export function mappedAnswers(
   schema: EISchema,

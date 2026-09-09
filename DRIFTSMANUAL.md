@@ -201,3 +201,9 @@ API-kontrakt læst 9. september 2026: https://app.emballageindberetning.dk/docs/
 
 ### Rettelse: kundetype efter Company name
 Fordelingen bruger nu Company name (company) på Shopify-ordrens fakturerings- eller leveringsadresse. Et udfyldt firmanavn betyder erhverv; tomme felter betyder husholdning. CVR-kilde vælges ikke længere. Den tidligere vejledning om CVR-opsætning er erstattet af denne regel. Eksisterende startdato og formularfelter bevares. Historik beregnet efter CVR skal genhentes via Hent historik til indberetning før nye indberetninger. Vægte og tidligere kvitteringer bevares.
+
+
+### Ensartede integrationskort og fælles emballagetal
+Alle integrationskort bruger samme header, statusmærke, ikonramme, panel og placering af fjern-knappen (i udfoldet kort). Forbrug og Indberetning bruger samme fordeling af produkt- og manuelle registreringer. Indberetning viser også samlet indberetningspligtig vægt og uafklaret kundetype; en udbyderfejl skjuler ikke de gemte forbrugstal, men blokerer afsendelse. Kvartalets navn åbner samme periode i Forbrug. Begge faner opdateres efter synkronisering og ved faneskift.
+
+Den eksisterende kg-pris anvendes som privatpris. Erhvervspris gemmes særskilt, med fire decimaler ligesom privatprisen. Prisen gælder indberetningspligtige gram; ukendt kundetype, manglende afklaring eller manglende erhvervspris giver ikke et misvisende samlet prisestimat. Priserne er lokale estimater og sendes ikke som indberetningsdata.

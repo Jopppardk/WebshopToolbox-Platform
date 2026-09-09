@@ -14,6 +14,8 @@ type Quarter = {
   start: string;
   end: string;
   householdGrams: number;
+  reportableGrams:number;
+  unknownAudienceGrams:number;
   commercialGrams: number;
   submitted: boolean;
   submittedAt?: string;
@@ -28,6 +30,7 @@ type Overview = {
   startDate?: string;
   quarters: Quarter[];
   error?: string;
+  providerError?:string;
 };
 type Preview = {
   token: string;
@@ -37,7 +40,7 @@ type Preview = {
   testMode: boolean;
   organisation: string;
 };
-export function PackagingReporting() {
+export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{revision?:number;onUpdated?:()=>void;onShowConsumption?:(start:string,end:string)=>void}) {
   const [data, setData] = useState<Overview | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
@@ -52,7 +55,7 @@ export function PackagingReporting() {
   useEffect(() => {
     const timer=window.setTimeout(()=>{void load().catch((e) => setError(e.message));},0);
     return ()=>window.clearTimeout(timer);
-  }, []);
+  }, [revision]);
   async function action(body: {
     action: string;
     quarter?: string;
@@ -83,6 +86,7 @@ export function PackagingReporting() {
               : `Indberettet · ${d.receipt?.submission_number}`,
         );
         await load();
+        if(body.action==='sync')onUpdated?.();
       }
     } catch (e) {
       setError(
@@ -145,6 +149,8 @@ export function PackagingReporting() {
           </Button>
         </div>
       </div>
+      <p className="px-5 pt-4 text-xs text-muted-foreground">Indberetningspligtige mængder fra Forbrug for samme afsluttede kvartal. Klik på kvartalet for at se registreringerne. Uafklarede mængder kræver klassificering før indberetning.</p>
+      {data?.providerError&&<p role="alert" className="m-5 rounded-xl bg-amber-50 p-4 text-sm">{data.providerError}</p>}
       {error && (
         <p
           role="alert"
@@ -166,23 +172,23 @@ export function PackagingReporting() {
           <thead className="bg-muted/30 text-left">
             <tr>
               <th className="p-4">Kvartal</th>
-              <th className="p-4 text-right">Husholdning</th>
+              <th className="p-4 text-right">I alt</th><th className="p-4 text-right">Privat</th>
               <th className="p-4 text-right">Erhverv</th>
-              <th className="p-4">Status</th>
+              <th className="p-4 text-right">Uafklaret</th><th className="p-4">Status</th>
               <th className="p-4"><span className="sr-only">Handling</span></th>
             </tr>
           </thead>
           <tbody>
             {data?.quarters.map((q) => (
               <tr key={q.id} className="border-t">
-                <td className="p-4 font-medium">{q.label}</td>
+                <td className="p-4 font-medium"><button className="text-left underline decoration-dotted underline-offset-4" onClick={()=>onShowConsumption?.(q.start,q.end)}>{q.label}</button></td><td className="p-4 text-right tabular-nums">{kg(q.reportableGrams)}</td>
                 <td className="p-4 text-right tabular-nums">
                   {kg(q.householdGrams)}
                 </td>
                 <td className="p-4 text-right tabular-nums">
                   {kg(q.commercialGrams)}
                 </td>
-                <td className="max-w-64 p-4">
+                <td className="p-4 text-right tabular-nums">{kg(q.unknownAudienceGrams)}</td><td className="max-w-64 p-4">
                   {q.submitted ? (
                     <span className="inline-flex items-center gap-2 text-green-800">
                       <CheckCircle2 className="size-4" />

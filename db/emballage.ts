@@ -99,17 +99,18 @@ export async function reportingOverview() {
   const db = await prepareDatabase(),
     credentials = await loadCredentials('emballage', true);
   if (!credentials) return { connected: false, quarters: [] };
-  const config = await getEIConfig(db),
-    { context, key } = await eiAccess(),
-    reports = await eiReports(key),
-    source = await packagingSources(db);
-  const journal=await db.prepare('SELECT report_id,state,receipt_json FROM emballage_submissions WHERE tenant=? AND organisation=? AND test_mode=?').bind(tenant,String(context.organisation.id),context.api_key.is_test?1:0).all<{report_id:number;state:string;receipt_json:string|null}>();
+  const config=await getEIConfig(db),source=await packagingSources(db);
+  let context:EIContext|null=null,reports:EIReport[]=[],providerError='';
+  try {const access=await eiAccess();context=access.context;reports=await eiReports(access.key);}
+  catch(e){providerError=e instanceof EIError?e.message:'Indberetningsstatus kunne ikke hentes. Forbrugstallene vises fra de gemte registreringer.';}
+  const journal=await db.prepare('SELECT report_id,state,receipt_json FROM emballage_submissions WHERE tenant=? AND organisation=? AND test_mode=?').bind(tenant,String(context?.organisation.id||credentials.organisationId),context?.api_key.is_test?1:0).all<{report_id:number;state:string;receipt_json:string|null}>();
   const quarters = recentQuarters().map((q) => {
     const totals = quarterTotals(source.rows, source.manual, q.start, q.end),
       report = reportFor(reports, config, q),
       submitted = report && isSubmitted(report.status);
     let reason = '';
-    if (!config.startDate) reason = 'Vælg startdato i indstillingerne.';
+    if(providerError)reason='Status hos udbyderen er utilgængelig.';
+    else if (!config.startDate) reason = 'Vælg startdato i indstillingerne.';
     else if (q.start < config.startDate)
       reason = 'Før integrationens startdato';
     else if (!report) reason = 'Perioden er ikke tilgængelig hos udbyderen.';
@@ -126,6 +127,8 @@ export async function reportingOverview() {
       reason = 'Hent historikken til indberetning først.';
     return {
       ...q,
+      reportableGrams:totals.householdGrams+totals.commercialGrams+totals.unknownAudienceGrams,
+      unknownAudienceGrams:totals.unknownAudienceGrams,
       householdGrams: totals.householdGrams,
       commercialGrams: totals.commercialGrams,
       unresolved: totals.unresolved,
@@ -140,8 +143,9 @@ export async function reportingOverview() {
   });
   return {
     connected: true,
-    testMode: context.api_key.is_test,
-    organisation: context.organisation.name,
+    testMode: context?.api_key.is_test,
+    organisation: context?.organisation.name,
+    providerError,
     startDate: config.startDate,
     quarters,
     coverage: source.coverage,
