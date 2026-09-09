@@ -94,3 +94,4 @@ function Summary({ icon, label, value, note, tone, onClick, actionLabel, disable
     <span className="mt-1 min-h-4 text-xs text-muted-foreground">{note || '\u00a0'}</span>
   </button>;
 }
+
