@@ -55,4 +55,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ resolved: true }, { headers: { 'Cache-Control': 'no-store' } });
   } catch { return NextResponse.json({ error: 'Fejlen kunne ikke opdateres' }, { status: 503 }); }
 }
-

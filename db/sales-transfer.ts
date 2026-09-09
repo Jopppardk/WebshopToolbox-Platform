@@ -154,4 +154,3 @@ export async function runTransfer(body: { externalId: string; action: string; da
   }
   return transferStatus(externalId);
 }
-

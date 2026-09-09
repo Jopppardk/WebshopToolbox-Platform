@@ -146,4 +146,3 @@ export async function POST(request: NextRequest) {
     return reply({ error: error instanceof Error ? error.message : 'Lagerreguleringen kunne ikke gennemføres.' }, 422);
   }
 }
-

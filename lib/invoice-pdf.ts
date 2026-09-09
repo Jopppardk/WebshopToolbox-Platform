@@ -150,4 +150,3 @@ export async function removeLegacyInvoices(db: D1Database) {
 }
 
 export { keyFor };
-
