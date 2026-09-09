@@ -214,3 +214,6 @@ Manglende eller tidligere uafklaret kundetype behandles som Privat i Forbrug, pr
 
 ### Ignorerede emballagelinjer
 Linjer uden gyldig emballagevægt eller med uafklaret indberetningspligt udelades fra forbrugstal, prisberegning og indberetning. Antallet vises som ignoreret og blokerer ikke indberetning. Kildedata bevares, så linjerne kan medregnes efter en senere synkronisering med udfyldte felter.
+
+### Besked om nye indberetningsperioder
+Emballage Indberetning kontrolleres højst én gang i timen af Cloudflare-baggrundsjobbet, uafhængigt af salgsintervallet. Kun tilsluttede integrationer med gemt startdato og producentansvar kontrolleres. Åbne, ikke-indberettede perioder blandt de fem afsluttede kvartaler fra startdatoen giver én besked pr. organisation, test/drift og rapport-ID. Allerede åbne perioder vises ved første kontrol. Beskeder gemmes under klokken og kan markeres læst; læsestatus bevares ved senere kontroller. Jobhistorikken viser kontrolresultat og eventuelle API-fejl. Funktionen sender ingen indberetning automatisk.

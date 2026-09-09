@@ -1,3 +1,4 @@
+import { monitorEmballagePeriods } from './db/emballage-monitor';
 import { syncDashboardFinance } from './db/dashboard-finance';
 import app from './dist/server/index.js';
 import { runSalesAutomation } from './db/sales-automation';
@@ -30,6 +31,7 @@ async function runInvoiceEmailAutomation(workerEnv: unknown, ctx: ExecutionConte
 export default {
   fetch: app.fetch.bind(app),
   async scheduled(controller: ScheduledController, workerEnv: unknown, ctx: ExecutionContext) {
+    ctx.waitUntil(monitorEmballagePeriods(controller.scheduledTime).catch(() => { /* Det timelige kontroljob registrerer eventuelle API-fejl. */ }));
     ctx.waitUntil((async () => {
       const settingsRow = await database().prepare("SELECT setting_value FROM app_settings WHERE tenant='sablen.dk' AND setting_key='admin_settings'").first<{setting_value:string}>();
       const interval = normalizeSyncInterval(settingsRow ? JSON.parse(settingsRow.setting_value)?.syncIntervalMinutes : 5);
