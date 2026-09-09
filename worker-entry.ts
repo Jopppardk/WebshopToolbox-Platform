@@ -5,6 +5,7 @@ import { runRefundAutomation } from './db/refund-automation';
 import { recordFailure } from './db/errors';
 import { database } from './db/database';
 import { normalizeSyncInterval, scheduledRunIsDue } from './lib/sync-schedule';
+import { runSyncCycle } from './db/sync-cycle';
 import { runTrackedJob } from './db/job-runs';
 import { runPaginatedSync } from './db/paginated-sync';
 
@@ -32,8 +33,14 @@ export default {
       const settingsRow = await database().prepare("SELECT setting_value FROM app_settings WHERE tenant='sablen.dk' AND setting_key='admin_settings'").first<{setting_value:string}>();
       const interval = normalizeSyncInterval(settingsRow ? JSON.parse(settingsRow.setting_value)?.syncIntervalMinutes : 5);
       if (!scheduledRunIsDue(controller.scheduledTime, interval)) return;
+      await runSyncCycle(controller.scheduledTime, async () => {
+      let failed = false;
+      const track: typeof runTrackedJob = async (...args) => {
+        try { return await runTrackedJob(...args); }
+        catch (error) { failed = true; throw error; }
+      };
       let ordersReady = false;
-      try { await runTrackedJob('shopify-orders', 'Shopify · Ordrer', async () => {
+      try { await track('shopify-orders', 'Shopify · Ordrer', async () => {
         const result = await runPaginatedSync('shopify-orders', async after => {
           const request = new Request('https://integration.sablen.dk/api/shopify/orders', {
             method: 'POST',
@@ -45,11 +52,11 @@ export default {
         ordersReady = result.complete;
         return result;
       }); } catch (error) { await recordFailure('Shopify · automatisk ordresynkronisering', { category: 'shopify', cause: error instanceof Error ? error.message : 'Ordresynkroniseringen blev afbrudt.' }); }
-      try { await runTrackedJob('shopify-packaging', 'Shopify · Emballage', async () => { const request = new Request('https://integration.sablen.dk/api/shopify/packaging', { method: 'POST', headers: { origin: 'https://integration.sablen.dk', 'content-type': 'application/json', 'cf-access-authenticated-user-email': 'rene@sablen.dk' }, body: JSON.stringify({ action: 'sync' }) }); const response = await app.fetch(request, workerEnv, ctx); const result = await response.json().catch(() => null) as { error?: string } | null; if (!response.ok) throw new Error(result?.error || 'Emballagedata kunne ikke synkroniseres.'); return { message: 'Emballagedata blev synkroniseret og gemt.' }; }); } catch { /* Jobhistorik og emballageruten registrerer fejlen. */ }
-      try { await runTrackedJob('dinero-sales', 'Dinero · Salg', async () => ordersReady ? await runSalesAutomation() : { status: 'skipped', message: 'Sprunget over, indtil ordresynkroniseringen er afsluttet.' }); } catch { /* Jobbet har sin egen historik og salgsfejl registreres ved kilden. */ }
-      try { await runTrackedJob('invoice-email', 'Fakturaer · Afsendelse', async () => await runInvoiceEmailAutomation(workerEnv,ctx)); } catch { /* Fejl registreres både i jobhistorikken og fejloversigten. */ }
+      try { await track('shopify-packaging', 'Shopify · Emballage', async () => { const request = new Request('https://integration.sablen.dk/api/shopify/packaging', { method: 'POST', headers: { origin: 'https://integration.sablen.dk', 'content-type': 'application/json', 'cf-access-authenticated-user-email': 'rene@sablen.dk' }, body: JSON.stringify({ action: 'sync' }) }); const response = await app.fetch(request, workerEnv, ctx); const result = await response.json().catch(() => null) as { error?: string } | null; if (!response.ok) throw new Error(result?.error || 'Emballagedata kunne ikke synkroniseres.'); return { message: 'Emballagedata blev synkroniseret og gemt.' }; }); } catch { /* Jobhistorik og emballageruten registrerer fejlen. */ }
+      try { await track('dinero-sales', 'Dinero · Salg', async () => ordersReady ? await runSalesAutomation() : { status: 'skipped', message: 'Sprunget over, indtil ordresynkroniseringen er afsluttet.' }); } catch { /* Jobbet har sin egen historik og salgsfejl registreres ved kilden. */ }
+      try { await track('invoice-email', 'Fakturaer · Afsendelse', async () => await runInvoiceEmailAutomation(workerEnv,ctx)); } catch { /* Fejl registreres både i jobhistorikken og fejloversigten. */ }
       let refundsReady = false;
-      try { await runTrackedJob('shopify-refunds', 'Shopify Payments · Tilbagebetalinger', async () => {
+      try { await track('shopify-refunds', 'Shopify Payments · Tilbagebetalinger', async () => {
         const result = await runPaginatedSync('shopify-refunds', async after => {
           const request = new Request('https://integration.sablen.dk/api/shopify/refunds', {
             method: 'POST',
@@ -61,9 +68,9 @@ export default {
         refundsReady = result.complete;
         return result;
       }); } catch (error) { await recordFailure('Shopify · automatisk tilbagebetaling', { category: 'shopify', cause: error instanceof Error ? error.message : 'Tilbagebetalingerne kunne ikke synkroniseres.' }); }
-      try { await runTrackedJob('dinero-refunds', 'Dinero · Tilbagebetalinger', async () => refundsReady ? await runRefundAutomation() : { status: 'skipped' as const, message: 'Sprunget over, indtil tilbagebetalingerne er færdigsynkroniseret.' }); } catch { /* Jobbet har sin egen historik og fejloversigt. */ }
+      try { await track('dinero-refunds', 'Dinero · Tilbagebetalinger', async () => refundsReady ? await runRefundAutomation() : { status: 'skipped' as const, message: 'Sprunget over, indtil tilbagebetalingerne er færdigsynkroniseret.' }); } catch { /* Jobbet har sin egen historik og fejloversigt. */ }
       let payoutsReady = false;
-      try { await runTrackedJob('shopify-payouts', 'Shopify Payments · Udbetalinger', async () => {
+      try { await track('shopify-payouts', 'Shopify Payments · Udbetalinger', async () => {
         const result = await runPaginatedSync('shopify-payouts', async after => {
           const payoutRequest = new Request('https://integration.sablen.dk/api/shopify/payouts', {
             method: 'POST',
@@ -75,7 +82,9 @@ export default {
         payoutsReady = result.complete;
         return result;
       }); } catch (error) { await recordFailure('Shopify · automatisk udbetalingssynkronisering', { category: 'shopify', cause: error instanceof Error ? error.message : 'Udbetalingerne kunne ikke synkroniseres.' }); }
-      try { await runTrackedJob('dinero-payouts', 'Dinero · Udbetalinger', async () => payoutsReady ? await runPayoutAutomation() : { status: 'skipped', message: 'Sprunget over, indtil udbetalingssynkroniseringen er afsluttet.' }); } catch { /* Jobbet har sin egen historik og udbetalingsfejl registreres ved kilden. */ }
-    })());
+      try { await track('dinero-payouts', 'Dinero · Udbetalinger', async () => payoutsReady ? await runPayoutAutomation() : { status: 'skipped', message: 'Sprunget over, indtil udbetalingssynkroniseringen er afsluttet.' }); } catch { /* Jobbet har sin egen historik og udbetalingsfejl registreres ved kilden. */ }
+      return { failed };
+      });
+    })().catch(async () => { await recordFailure('Synkronisering · scheduler', { category: 'system', cause: 'Den samlede synkronisering kunne ikke startes eller afsluttes. Kontrollér Indsigt.' }); }));
   },
 };

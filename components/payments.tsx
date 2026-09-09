@@ -56,8 +56,10 @@ const payoutStatuses: Record<string, string> = {
 
 export function Payments({
   kind = 'payment',
+  syncRevision = 0,
 }: {
   kind?: 'payment' | 'refund';
+  syncRevision?: number;
 }) {
   const refund = kind === 'refund';
   const endpoint = refund ? '/api/shopify/refunds' : '/api/shopify/payments';
@@ -103,6 +105,8 @@ export function Payments({
         };
         if (!response.ok)
           throw new Error(data.error || 'Betalingerne kunne ikke indlæses');
+        if (controller.signal.aborted) return;
+        setError('');
         setPayments(data.payments);
         setSummary(data.summary);
       } catch (failure) {
@@ -123,7 +127,7 @@ export function Payments({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [from, to, search, offset, revision, endpoint]);
+  }, [from, to, search, offset, revision, endpoint, syncRevision]);
 
   async function sync() {
     setSyncing(true);

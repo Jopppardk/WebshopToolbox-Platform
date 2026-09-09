@@ -12,7 +12,8 @@ import { JobInsights } from '@/components/job-insights';
 import { DevelopmentRequests } from '@/components/development-requests';
 import { vatCodeOptions } from '@/lib/vat-code-options';
 import { emptyAccounts, defaultAutomation, defaultInvoiceEmail, validateSettings, type Accounts, type Automation, type AdminSettings, type InvoiceEmailSettings } from '@/lib/admin-settings';
-import { millisecondsToNextRun, syncIntervals } from '@/lib/sync-schedule';
+import { SyncStatus, useSyncStatus } from '@/components/sync-status';
+import { syncIntervals } from '@/lib/sync-schedule';
 import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -28,7 +29,6 @@ import {
   Boxes,
   Check,
   ChevronDown,
-  Clock3,
   FileText,
   HandCoins,
   Lightbulb,
@@ -71,25 +71,8 @@ type OrderView = {
   subtotal?: string; tax?: string; paymentStatus?: string | null;
 };
 
-function SyncCountdown({ intervalMinutes, mobile = false }: { intervalMinutes: number; mobile?: boolean }) {
-  const [remaining, setRemaining] = useState<number | null>(null);
-  useEffect(() => {
-    const update = () => {
-      setRemaining(millisecondsToNextRun(Date.now(), intervalMinutes));
-    };
-    update();
-    const timer = window.setInterval(update, 1000);
-    return () => window.clearInterval(timer);
-  }, [intervalMinutes]);
-  const seconds = remaining === null ? null : Math.max(0, Math.ceil(remaining / 1000));
-  const value = seconds === null ? '–:––' : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-  return <div className={mobile ? 'fixed bottom-4 left-4 z-40 flex items-center gap-2 rounded-full border bg-[#232323] px-3 py-2 text-xs text-white shadow-xl lg:hidden' : 'mx-4 mb-4 flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-3'} title="Cloudflare-jobbet kører hvert femte minut">
-    <Clock3 className="size-4 shrink-0 text-[#c09960]" />
-    <div><p className={mobile ? 'sr-only' : 'text-[10px] uppercase tracking-[.12em] text-[#817c75]'}>Næste synkronisering</p><p className="font-medium tabular-nums">om {value}</p></div>
-  </div>;
-}
-
 export default function Home() {
+  const syncState = useSyncStatus();
   const [query, setQuery] = useState('');
   const [salesOrders, setSalesOrders] = useState<OrderView[]>([]);
   const [orderOffset, setOrderOffset] = useState(0);
@@ -143,13 +126,15 @@ export default function Home() {
       order.status.toLowerCase().includes(query.toLowerCase()),
   );
   useEffect(() => {
-    fetch(`/api/shopify/orders?offset=${orderOffset}`)
+    const controller = new AbortController();
+    fetch(`/api/shopify/orders?offset=${orderOffset}`, { signal: controller.signal, cache: 'no-store' })
       .then(async response => { const data = await response.json() as { orders: OrderView[]; total: number; error?: string }; if (!response.ok) throw new Error(data.error || 'Ordrer kunne ikke indlæses'); return data; })
       .then((data) => {
-        if (Array.isArray(data.orders)) { setSalesOrders(data.orders); setOrderTotal(data.total || 0); setOrderError(''); }
+        if (!controller.signal.aborted && Array.isArray(data.orders)) { setSalesOrders(data.orders); setOrderTotal(data.total || 0); setOrderError(''); }
       })
-      .catch(error => setOrderError(error.message || 'Ordrer kunne ikke indlæses'));
-  }, [orderOffset, orderRevision]);
+      .catch(error => { if (!controller.signal.aborted) setOrderError(error.message || 'Ordrer kunne ikke indlæses'); });
+    return () => controller.abort();
+  }, [orderOffset, orderRevision, syncState.revision, view]);
   const syncOrders = async () => {
     setSyncingOrders(true);
     try {
@@ -180,7 +165,7 @@ export default function Home() {
       const response = await fetch('/api/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ settings: { accounts, automation, invoiceEmail, syncIntervalMinutes }, revision: settingsRevision }) });
       const data = await response.json() as { revision: string; error?: string };
       if (!response.ok) throw new Error(data.error);
-      setSettingsRevision(data.revision); setSettingsMessage('Indstillingerne er gemt fælles for alle enheder. Bogføring er fortsat ikke aktiveret.');
+      setSettingsRevision(data.revision); setSettingsMessage('Indstillingerne er gemt. Intervallet bruges fra næste planlagte start; en igangværende kørsel afsluttes først.'); void syncState.refresh();
     } catch (error) { setSettingsMessage(error instanceof Error ? error.message : 'Kunne ikke gemme'); }
     finally { setSettingsSaving(false); }
   };
@@ -242,7 +227,7 @@ export default function Home() {
         <div className="mx-4 mb-3 overflow-hidden rounded-xl border border-white/10 bg-black/30 shadow-lg">
           <img src="/og.png" alt="Sablen Toolbox" className="h-auto w-full" />
         </div>
-        <SyncCountdown intervalMinutes={syncIntervalMinutes} />
+        <SyncStatus state={syncState} />
       </aside>
       <section className="min-w-0">
         {(view === 'orders' || view === 'invoices') && <nav aria-label="Ordrehistorik" className="flex flex-wrap items-center justify-between gap-3 border-b bg-white px-5 py-3 text-sm"><span>{orderTotal ? `${orderOffset + 1}–${Math.min(orderOffset + 100, orderTotal)} af ${orderTotal} ordrer i historikken` : 'Ingen ordrer i historikken'}</span><div className="flex gap-2"><Button variant="outline" disabled={syncingOrders || orderOffset === 0} onClick={() => setOrderOffset(value => Math.max(0, value - 100))}>Forrige</Button><Button variant="outline" disabled={syncingOrders || orderOffset + 100 >= orderTotal} onClick={() => setOrderOffset(value => value + 100)}>Næste</Button></div></nav>}
@@ -405,12 +390,12 @@ export default function Home() {
         {view === 'invoices' && (
           <Invoices orders={salesOrders} onGenerated={(count) => notify(`${count} faktura${count === 1 ? '' : 'er'} er genereret`)} onSync={syncOrders} syncing={syncingOrders} />
         )}
-        {view === 'documents' && <Documents />}
+        {view === 'documents' && <Documents syncRevision={syncState.revision} />}
         {view === 'refunds' && (
-          <Payments kind="refund" />
+          <Payments syncRevision={syncState.revision} kind="refund" />
         )}
         {view === 'payouts' && (
-          <ProviderLedger kind="payout" />
+          <ProviderLedger kind="payout" syncRevision={syncState.revision} />
         )}
         {view === 'inventory' && <Inventory />}
         {view === 'packaging' && <Packaging />}
@@ -431,6 +416,7 @@ export default function Home() {
               </Tabs>
             </div>
             <Settings
+            savedIntervalMinutes={syncState.status?.intervalMinutes}
             mode={settingsTab}
             accounts={accounts}
             setAccounts={setAccounts}
@@ -454,7 +440,7 @@ export default function Home() {
           {notice}
         </div>
       )}
-      <SyncCountdown intervalMinutes={syncIntervalMinutes} mobile />
+      <SyncStatus state={syncState} mobile />
     </main>
   );
 }
@@ -710,7 +696,7 @@ function Settings({
   setAccounts,
   onSave,
   onShopifyConnected,
-  automation, setAutomation, invoiceEmail, setInvoiceEmail, syncIntervalMinutes, setSyncIntervalMinutes, ready, saving, message, onErrorCountChange,
+  automation, setAutomation, invoiceEmail, setInvoiceEmail, syncIntervalMinutes, setSyncIntervalMinutes, savedIntervalMinutes, ready, saving, message, onErrorCountChange,
 }: {
   mode: 'dashboard' | 'integrations' | 'invoice-email' | 'inventory';
   accounts: Accounts;
@@ -719,6 +705,7 @@ function Settings({
   automation: Automation; setAutomation: React.Dispatch<React.SetStateAction<Automation>>;
   invoiceEmail: InvoiceEmailSettings; setInvoiceEmail: React.Dispatch<React.SetStateAction<InvoiceEmailSettings>>;
   syncIntervalMinutes: number; setSyncIntervalMinutes: React.Dispatch<React.SetStateAction<number>>;
+  savedIntervalMinutes?: number;
   ready: boolean; saving: boolean; message: string;
   onShopifyConnected: () => Promise<void>;
   onErrorCountChange: (count: number) => void;
@@ -896,7 +883,7 @@ function Settings({
       {!ready && !message && <p role="status" className="mb-4 text-sm">Indlæser fælles indstillinger…</p>}
       {message && <p role="status" className="mb-4 rounded-xl border p-4 text-sm">{message}</p>}
       <section className="mb-8 overflow-hidden rounded-2xl border bg-white">
-        <div className="flex flex-col justify-between gap-4 border-b p-5 sm:flex-row sm:items-center"><div><p className="text-sm font-semibold">Synkroniseringsinterval</p><p className="mt-1 text-xs text-muted-foreground">Bestem hvor ofte Shopify, automatiske posteringer og fakturaafsendelse behandles.</p></div><label className="w-full sm:w-52"><span className="sr-only">Synkroniseringsinterval</span><NativeSelect className="w-full" value={String(syncIntervalMinutes)} onChange={event => setSyncIntervalMinutes(Number(event.target.value))}>{syncIntervals.map(minutes => <NativeSelectOption key={minutes} value={String(minutes)}>{minutes === 1 ? 'Hvert minut' : `Hvert ${minutes}. minut`}</NativeSelectOption>)}</NativeSelect></label></div>
+        <div className="flex flex-col justify-between gap-4 border-b p-5 sm:flex-row sm:items-center"><div><p className="text-sm font-semibold">Synkroniseringsinterval</p><p className="mt-1 text-xs text-muted-foreground">Vælg interval og tryk Gem indstillinger. Kørsler starter på hele minutter; næste kørsel venter, hvis en tidligere stadig arbejder.</p></div><label className="w-full sm:w-52"><span className="mb-2 block text-xs">{savedIntervalMinutes === undefined ? 'Aktivt interval hentes…' : `Gemt interval: ${savedIntervalMinutes} min.`}{savedIntervalMinutes !== undefined && savedIntervalMinutes !== syncIntervalMinutes && <strong className="mt-1 block text-amber-700">Ændringen er ikke gemt endnu</strong>}</span><span className="sr-only">Synkroniseringsinterval</span><NativeSelect className="w-full" value={String(syncIntervalMinutes)} onChange={event => setSyncIntervalMinutes(Number(event.target.value))}>{syncIntervals.map(minutes => <NativeSelectOption key={minutes} value={String(minutes)}>{minutes === 1 ? 'Hvert minut' : `Hvert ${minutes}. minut`}</NativeSelectOption>)}</NativeSelect></label></div>
         <div className="flex items-center justify-between border-b p-5">
           <div><p className="text-sm font-semibold">Upload bilag til regnskabsprogram</p><p className="mt-1 text-xs text-muted-foreground">Vedhæft automatisk faktura eller dokumentation til posteringen i Dinero.</p></div>
           <Switch checked={automation.attachments} onCheckedChange={(value) => toggleAutomation('attachments', value)} aria-label="Upload bilag til regnskabsprogram" />
