@@ -6,6 +6,7 @@ import { EmballageConnection } from '@/components/emballage-connection';
 import { ViaBillConnection } from '@/components/viabill-connection';
 import { HistorySettings } from '@/components/history-settings';
 import { ErrorOverview } from '@/components/error-overview';
+import { OrderLog } from '@/components/order-log';
 import { SalesPreview } from '@/components/sales-preview';
 import { SalesTransfer } from '@/components/sales-transfer';
 import { Documents } from '@/components/documents';
@@ -528,7 +529,7 @@ function OrderRow({ order, onBooked }: { order: OrderView; onBooked: () => void 
         </Badge>
       </TableCell>
       <TableCell className="pr-5 text-right">
-        {order.externalId && <div className="flex flex-wrap justify-end gap-2">{order.shipped === 'Afsendt' && !handled && <SalesPreview externalId={order.externalId} />}<SalesTransfer externalId={order.externalId} disabled={handled} onBooked={onBooked} /></div>}
+        {order.externalId && <div className="flex flex-wrap justify-end gap-2">{order.shipped === 'Afsendt' && !handled && <SalesPreview externalId={order.externalId} />}<OrderLog externalId={order.externalId} /><SalesTransfer externalId={order.externalId} disabled={handled} onBooked={onBooked} /></div>}
       </TableCell>
     </TableRow>
   );
