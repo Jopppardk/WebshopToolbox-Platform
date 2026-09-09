@@ -1,3 +1,4 @@
+import { shopifyFetch, shopifyFailure } from '@/lib/shopify-request';
 import { env } from 'cloudflare:workers';
 import { database } from './database';
 import { loadCredentials } from './credentials';
@@ -111,7 +112,7 @@ async function details(
   currency: string,
 ) {
   const { shop, accessToken } = await getShopifyAccess();
-  const response = await fetch(
+  const response = await shopifyFetch(
     `https://${shop}/admin/api/2026-07/graphql.json`,
     {
       method: 'POST',
@@ -395,7 +396,7 @@ async function processRefund(
           message: error instanceof Error ? error.message : 'Ukendt fejl',
         });
       } catch {}
-    await recordFailure('Dinero · automatisk tilbagebetaling');
+    await recordFailure('Dinero Â· automatisk tilbagebetaling');
     return false;
   }
 }

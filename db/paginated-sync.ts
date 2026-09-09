@@ -1,3 +1,4 @@
+import { sanitizeDiagnostic } from '@/lib/diagnostics';
 import { database } from './database';
 import { loadHistory } from './history';
 

@@ -1,3 +1,4 @@
+import { shopifyFailure } from '@/lib/shopify-request';
 import { NextRequest, NextResponse } from 'next/server';
 import { getShopifyAccess } from '@/db/shopify';
 import { orderQuery } from '@/db/shopify-order';
@@ -129,7 +130,7 @@ async function commitStocktake(body: { operationId?: unknown; version?: unknown;
 
 export async function GET() {
   try { return reply(await readInventory()); }
-  catch { await recordFailure('Shopify · lagerstatus'); return reply({ error: 'Lagerstatus kunne ikke hentes. Kontrollér at Shopify-appen har read_inventory og adgang til kostpriser.' }, 502); }
+  catch (error) { await recordFailure('Shopify · lagerstatus', { category: 'shopify', cause: shopifyFailure(error, 'Lagerdata kunne ikke indlæses eller valideres.') }); return reply({ error: 'Lagerstatus kunne ikke hentes. Kontrollér at Shopify-appen har read_inventory og adgang til kostpriser.' }, 502); }
 }
 
 export async function POST(request: NextRequest) {

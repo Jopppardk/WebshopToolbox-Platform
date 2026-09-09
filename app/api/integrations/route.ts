@@ -1,3 +1,4 @@
+import { shopifyFetch } from '@/lib/shopify-request';
 import { NextRequest, NextResponse } from 'next/server';
 import { prepareDatabase } from '@/db/database';
 import { saveCredentials } from '@/db/credentials';
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
       };
       if (!tokenResponse.ok || !tokenPayload.access_token)
         throw new Error('Shopify afviste Client ID eller Client Secret');
-      const response = await fetch(`https://${shop}/admin/api/2026-07/graphql.json`, {
+      const response = await shopifyFetch(`https://${shop}/admin/api/2026-07/graphql.json`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,3 +1,4 @@
+import { shopifyFetch, shopifyFailure } from '@/lib/shopify-request';
 import { recordFailure } from '@/db/errors';
 import { NextRequest, NextResponse } from 'next/server';
 import { prepareDatabase } from '@/db/database';
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
     const count = await db.prepare(`SELECT COUNT(*) AS total FROM integration_records WHERE ${where}`).bind(cutoff).first<{ total: number }>();
     return reply({ payouts: rows.results.map(row => ({ ...JSON.parse(row.payload_json), bookingStatus: row.booking_status })), total: count?.total || 0 });
   } catch (error) {
-    await recordFailure('Udbetalinger'); return reply({ error: error instanceof Error ? error.message : 'Udbetalingerne kunne ikke læses' }, 400); }
+    await recordFailure('Udbetalinger', { category: 'shopify', cause: shopifyFailure(error, 'Udbetalinger: indlæsning eller datakontrol mislykkedes.'), action: 'Se jobhistorikken. Kontrollér Shopify-adgang ved adgangsfejl; afvent næste kørsel ved midlertidige fejl.' }); return reply({ error: error instanceof Error ? error.message : 'Udbetalingerne kunne ikke læses' }, 400); }
 }
 export async function POST(request: NextRequest) {
   try {
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
     const db = await prepareDatabase(); const policy = await loadHistory(db);
     const cutoff = new Date(historyWindow(policy).cutoff);
     const { shop, accessToken } = await getShopifyAccess();
-    const response = await fetch(`https://${shop}/admin/api/2026-07/graphql.json`, {
+    const response = await shopifyFetch(`https://${shop}/admin/api/2026-07/graphql.json`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken }, signal: AbortSignal.timeout(25000),
       body: JSON.stringify({ query: `query Payouts($after: String, $query: String!) { shopifyPaymentsAccount { payouts(first: 50, after: $after, query: $query, sortKey: ISSUED_AT, reverse: true) { nodes { id issuedAt status transactionType net { amount currencyCode } summary { ${moneyFields} } } pageInfo { hasNextPage endCursor } } } }`, variables: { after: after || null, query: `issued_at:>='${cutoff.toISOString()}'` } }),
     });
@@ -60,5 +61,5 @@ export async function POST(request: NextRequest) {
     else await db.prepare("UPDATE system_errors SET resolved_at=CURRENT_TIMESTAMP WHERE tenant='sablen.dk' AND source='Udbetalingsrapporter' AND resolved_at IS NULL").run();
     return reply({ synced: payouts.length, reportWarnings, ...connection.pageInfo });
   } catch (error) {
-    await recordFailure('Udbetalinger'); return reply({ error: error instanceof Error ? error.message : 'Udbetalingerne kunne ikke hentes' }, 400); }
+    await recordFailure('Udbetalinger', { category: 'shopify', cause: shopifyFailure(error, 'Udbetalinger: indlæsning eller datakontrol mislykkedes.'), action: 'Se jobhistorikken. Kontrollér Shopify-adgang ved adgangsfejl; afvent næste kørsel ved midlertidige fejl.' }); return reply({ error: error instanceof Error ? error.message : 'Udbetalingerne kunne ikke hentes' }, 400); }
 }

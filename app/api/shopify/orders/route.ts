@@ -1,3 +1,4 @@
+import { shopifyFailure } from '@/lib/shopify-request';
 import { recordFailure } from '@/db/errors';
 import { NextRequest, NextResponse } from 'next/server';
 import { loadHistory } from '@/db/history';
@@ -117,10 +118,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ orders: await storedOrders(), synced: statements.length, invoicesCreated, invoiceWarnings, ...pageInfo });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Shopify-ordrer kunne ikke hentes';
-    try {
-      const db = await prepareDatabase();
-      await db.prepare('INSERT INTO system_errors (tenant, source, message) VALUES (?, ?, ?)').bind('sablen.dk', 'Shopify', message).run();
-    } catch {}
+    await recordFailure('Shopify', { category: 'shopify', cause: shopifyFailure(error, 'Ordreimportens datakontrol eller lagring mislykkedes.') });
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
