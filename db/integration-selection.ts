@@ -2,9 +2,9 @@ import { integrationCatalog,type IntegrationId,type IntegrationSelection } from 
 export async function integrationSelection(db:D1Database):Promise<IntegrationSelection> {
   const [credentials,settings] = await Promise.all([
     db.prepare("SELECT provider FROM integration_credentials WHERE tenant='sablen.dk'").all<{provider:string}>(),
-    db.prepare("SELECT setting_key FROM app_settings WHERE tenant='sablen.dk' AND (setting_key LIKE 'integration_selection:%' OR setting_key='viabill_credentials')").all<{setting_key:string}>(),
+    db.prepare("SELECT setting_key FROM app_settings WHERE tenant='sablen.dk' AND (setting_key LIKE 'integration_selection:%' OR setting_key IN ('viabill_credentials','emballage_credentials'))").all<{setting_key:string}>(),
   ]);
-  const connected=integrationCatalog.filter(p=>p.id==='viabill'?settings.results.some(s=>s.setting_key==='viabill_credentials'):credentials.results.some(c=>c.provider===p.id)).map(p=>p.id);
+  const connected=integrationCatalog.filter(p=>(p.id==='viabill'||p.id==='emballage')?settings.results.some(s=>s.setting_key===p.id+'_credentials'):credentials.results.some(c=>c.provider===p.id)).map(p=>p.id);
   const selected=integrationCatalog.filter(p=>connected.includes(p.id) || settings.results.some(s=>s.setting_key==='integration_selection:'+p.id)).map(p=>p.id);
   return {selected,connected};
 }

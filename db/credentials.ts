@@ -26,7 +26,7 @@ async function encryptionKey() {
 }
 
 export async function saveCredentials(
-  provider: 'shopify' | 'dinero' | 'viabill',
+  provider: 'shopify' | 'dinero' | 'viabill' | 'emballage',
   credentials: Record<string, string>,
   displayName: string,
 ) {
@@ -40,11 +40,11 @@ export async function saveCredentials(
   const db = await prepareDatabase();
   // The legacy credentials table only permits Shopify/Dinero. Keep the new
   // provider's encrypted envelope in the existing server-only settings store.
-  if (provider === 'viabill') {
+  if (provider === 'viabill' || provider === 'emballage') {
     await db.prepare(`INSERT INTO app_settings (tenant, setting_key, setting_value)
-      VALUES (?, 'viabill_credentials', ?) ON CONFLICT(tenant, setting_key)
+      VALUES (?, ?, ?) ON CONFLICT(tenant, setting_key)
       DO UPDATE SET setting_value = excluded.setting_value, updated_at = CURRENT_TIMESTAMP`)
-      .bind(tenant, JSON.stringify({ ciphertext: bytesToBase64(new Uint8Array(ciphertext)), iv: bytesToBase64(iv), displayName, verifiedAt: new Date().toISOString() })).run();
+      .bind(tenant, provider+'_credentials', JSON.stringify({ ciphertext: bytesToBase64(new Uint8Array(ciphertext)), iv: bytesToBase64(iv), displayName, verifiedAt: new Date().toISOString() })).run();
     return;
   }
   await db
@@ -69,10 +69,10 @@ export async function saveCredentials(
     .run();
 }
 
-export async function loadCredentials(provider: 'shopify' | 'dinero' | 'viabill', readOnly = false) {
+export async function loadCredentials(provider: 'shopify' | 'dinero' | 'viabill' | 'emballage', readOnly = false) {
   const db = readOnly ? database() : await prepareDatabase();
-  const envelope = provider === 'viabill' ? await db.prepare("SELECT setting_value FROM app_settings WHERE tenant = ? AND setting_key = 'viabill_credentials'").bind(tenant).first<{ setting_value: string }>() : null;
-  const row = provider === 'viabill' ? (envelope ? JSON.parse(envelope.setting_value) as { ciphertext: string; iv: string } : null) : await db
+  const envelope = (provider === 'viabill' || provider === 'emballage') ? await db.prepare("SELECT setting_value FROM app_settings WHERE tenant = ? AND setting_key = ?").bind(tenant, provider+'_credentials').first<{ setting_value: string }>() : null;
+  const row = (provider === 'viabill' || provider === 'emballage') ? (envelope ? JSON.parse(envelope.setting_value) as { ciphertext: string; iv: string } : null) : await db
     .prepare(
       'SELECT ciphertext, iv FROM integration_credentials WHERE tenant = ? AND provider = ?',
     )
@@ -86,3 +86,4 @@ export async function loadCredentials(provider: 'shopify' | 'dinero' | 'viabill'
   );
   return JSON.parse(new TextDecoder().decode(plaintext)) as Record<string, string>;
 }
+
