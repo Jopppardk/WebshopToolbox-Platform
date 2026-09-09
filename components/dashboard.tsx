@@ -2,6 +2,7 @@
 import { useEffect,useState,type ReactNode } from 'react';
 import { ArrowDownRight,ArrowUpRight,ArrowRight,BarChart3,Boxes,RefreshCw,Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { danishDate } from '@/lib/history-policy';
 import { percentageChange,type calculateFinance } from '@/lib/dashboard-finance';
 
 type Finance={ready:boolean;data:ReturnType<typeof calculateFinance>|null;message?:string;checkedAt?:string;through?:string;stale?:boolean};
@@ -96,5 +97,5 @@ function ActivityRow({label,counts}:{label:string;counts?:ActivityCount}) {
   </div>;
 }
 function Update({label,value}:{label:string;value?:string|null}) {
-  return <div><p className="text-xs text-muted-foreground">{label} senest opdateret</p><p className="mt-1 text-sm font-medium">{value?timestamp(value):'Ikke registreret'}</p></div>;
+  return <div><p className="text-xs text-muted-foreground">{label} senest opdateret</p><p className="mt-1 text-sm font-medium">{value?(danishDate(new Date(value)) === danishDate() ? 'I dag kl. '+new Intl.DateTimeFormat('da-DK',{timeStyle:'short',timeZone:'Europe/Copenhagen'}).format(new Date(value)) : timestamp(value)):'Ikke registreret'}</p></div>;
 }
