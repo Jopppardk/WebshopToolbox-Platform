@@ -151,3 +151,13 @@ Cloudflare- og integrationshemmeligheder følger ikke med Git-klonen. Normal dep
 - ViaBill afventer bekræftet live API-adgang, automatisk synkronisering og Dinero-workflow.
 - Flatpay afventer officiel API-dokumentation og adgang.
 - Praktisk restore-øvelse for D1/R2 og periodisk Access-gennemgang skal planlægges som en driftsaktivitet.
+
+## Synkroniseringsinterval og kørselsstatus
+
+Intervallet skal gemmes i Indstillinger. Det træder i kraft ved næste planlagte minutgrænse; Gem starter ikke en øjeblikkelig synkronisering. Ét minut angiver hyppigheden af planlagte starter, ikke en garanti for, at alle data er hentet og bogført inden for ét minut.
+
+Sidebarens status læser det gemte interval og faktiske start- og sluttidspunkter fra serveren. Den opdateres hvert 15. sekund, mens siden er synlig. Ordrelisten, tilbagebetalinger, udbetalinger og dokumenter genindlæses efter en registreret afslutning. En afsluttet kørsel kan stadig indeholde oversprungne job; se Indsigt for detaljerne. Historiske importer kan kræve flere kørsler.
+
+Hele den planlagte jobkæde har en fælles lås i D1. Samtidige eller gentagne kald for samme planlagte tidspunkt starter ikke en ekstra kæde. Låsen frigives ved normal afslutning, også ved håndterede fejl. Individuelle importlåse og bogføringskvitteringer bevares.
+
+Ved en hårdt afbrudt worker vises kørslen som afbrudt efter 15 minutter. Sikkerhedslåsen udløber efter 20 minutter, hvorefter næste planlagte kørsel kan overtage. Perioden er længere end Cloudflares maksimale levetid på 15 minutter for en Cron-kørsel og forhindrer, at en gammel kørsel fortsat skriver samtidig med en ny. Se [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/). Usikre bogføringsforsøg genposteres ikke automatisk som følge af denne genopretning.

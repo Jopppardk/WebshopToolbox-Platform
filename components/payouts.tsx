@@ -27,7 +27,7 @@ const statuses: Record<string, string> = {
   FAILED: 'Fejlet',
   CANCELED: 'Annulleret',
 };
-export function LivePayouts() {
+export function LivePayouts({ syncRevision = 0 }: { syncRevision?: number }) {
   const [rows, setRows] = useState<Payout[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -51,6 +51,8 @@ export function LivePayouts() {
         };
         if (!response.ok)
           throw new Error(data.error || 'Udbetalingerne kunne ikke indlæses');
+        if (controller.signal.aborted) return;
+        setError('');
         setRows(data.payouts);
         setTotal(data.total);
       } catch (failure) {
@@ -63,7 +65,7 @@ export function LivePayouts() {
       }
     })();
     return () => controller.abort();
-  }, [offset, revision]);
+  }, [offset, revision, syncRevision]);
   async function sync() {
     setSyncing(true);
     setError('');
