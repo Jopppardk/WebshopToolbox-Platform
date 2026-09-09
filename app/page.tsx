@@ -1,6 +1,7 @@
 'use client';
 import { ProviderLedger } from '@/components/provider-ledger';
 import { IntegrationLibrary, RemoveIntegration, useIntegrationLibrary } from '@/components/integration-library';
+import { IntegrationCard } from '@/components/integration-card';
 import { EmballageConnection } from '@/components/emballage-connection';
 import { ViaBillConnection } from '@/components/viabill-connection';
 import { HistorySettings } from '@/components/history-settings';
@@ -953,24 +954,7 @@ function Settings({
       <IntegrationLibrary state={library} onAdded={id => { if (id === 'viabill') setExpandedViaBill(true); else if(id === 'emballage') setExpandedEmballage(true); else setExpandedIntegration(id); }} />
       <div className="mb-8 grid items-start gap-3 md:grid-cols-2">
         {integrations.filter(item => library.selection?.selected.includes(item.provider) || Boolean(connected[item.provider])).map(({ name, provider, detail, icon: Icon, connected: isConnected }) => (
-          <div
-            key={name}
-            className="overflow-hidden rounded-2xl border bg-white"
-          >
-            <button
-              type="button"
-              className="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-muted/30"
-              onClick={() => setExpandedIntegration((current) => current === provider ? null : provider)}
-              aria-expanded={expandedIntegration === provider}
-              aria-controls={`${provider}-connection-panel`}
-            >
-              <span className="grid size-11 place-items-center rounded-xl bg-muted"><Icon className="size-5" /></span>
-              <span className="min-w-0 flex-1"><span className="block font-semibold">{name}</span><span className="block text-xs text-muted-foreground">{detail}</span></span>
-              <Badge className={isConnected ? 'badge-booked' : ''} variant="secondary">{isConnected ? 'Forbundet' : 'Ikke forbundet'}</Badge>
-              <ChevronDown className={`size-4 text-muted-foreground transition-transform ${expandedIntegration === provider ? 'rotate-180' : ''}`} />
-            </button>
-            {expandedIntegration === provider && (
-              <div id={`${provider}-connection-panel`} className="border-t bg-muted/20 p-5">
+          <IntegrationCard key={name} name={name} description={detail} icon={Icon} connected={isConnected} expanded={expandedIntegration===provider} onToggle={()=>setExpandedIntegration(current=>current===provider?null:provider)} panelId={`${provider}-connection-panel`} footer={!isConnected&&<RemoveIntegration state={library} provider={provider} disabled={connecting!==null}/>}> 
                 <p className="mb-4 text-xs text-muted-foreground">{provider === 'shopify' ? 'Den installerede app udveksler automatisk oplysningerne til et kortlivet adgangstoken. Testen læser kun butikkens navn.' : 'Personlig integration med læsetest.'}</p>
                 {provider === 'shopify' ? (
                   <div className="space-y-3">
@@ -990,13 +974,10 @@ function Settings({
                 )}
                 {connectionMessage && <p className="mt-3 text-sm text-[#5d712f]" role="status">{connectionMessage}</p>}
                 {provider === 'shopify' && <div className="mt-4 rounded-xl border bg-white p-4"><p className="mb-3 text-sm font-semibold">Bogføring af Shopify Payments</p><Field name="shopifyPaymentsClearing" label="Mellemregningskonto" /></div>}
-              </div>
-            )}
-            {!isConnected && <RemoveIntegration state={library} provider={provider} disabled={connecting !== null} />}
-          </div>
+          </IntegrationCard>
         ))}
-        {library.selection?.selected.includes('emballage') && <div><EmballageConnection initialExpanded={expandedEmballage} onConnected={() => { void library.refresh(); }} /><RemoveIntegration state={library} provider="emballage" /></div>}
-        {library.selection?.selected.includes('viabill') && <div><ViaBillConnection initialExpanded={expandedViaBill} onConnected={() => { void library.refresh(); }} accountField={<Field name="viaBillClearing" label="Mellemregningskonto" />} /><RemoveIntegration state={library} provider="viabill" /></div>}
+        {library.selection?.selected.includes('emballage') && <EmballageConnection initialExpanded={expandedEmballage} onConnected={() => { void library.refresh(); }}  footer={<RemoveIntegration state={library} provider="emballage" />}/>}
+        {library.selection?.selected.includes('viabill') && <ViaBillConnection initialExpanded={expandedViaBill} onConnected={() => { void library.refresh(); }} accountField={<Field name="viaBillClearing" label="Mellemregningskonto" />}  footer={<RemoveIntegration state={library} provider="viabill" />}/>}
       </div>
       {(library.selection?.selected.includes('dinero') || Boolean(connected.dinero)) && <fieldset disabled={!ready || saving} className="min-w-0">
       <section className="rounded-2xl border bg-white">

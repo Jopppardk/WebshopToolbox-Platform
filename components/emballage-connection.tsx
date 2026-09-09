@@ -1,6 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { PackageCheck, ChevronDown, Save } from 'lucide-react';
+import { PackageCheck, Save } from 'lucide-react';
+import type {ReactNode} from 'react';
+import {IntegrationCard} from '@/components/integration-card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { emptyEIConfig, type EIConfig } from '@/lib/emballage-reporting';
@@ -17,8 +19,10 @@ type Status = {
 export function EmballageConnection({
   initialExpanded = false,
   onConnected,
+  footer,
 }: {
   initialExpanded?: boolean;
+  footer?: ReactNode;
   onConnected: () => void;
 }) {
   const [open, setOpen] = useState(initialExpanded),
@@ -98,27 +102,8 @@ export function EmballageConnection({
     }
   }
   return (
-    <section className="overflow-hidden rounded-2xl border bg-white">
-      <button
-        className="flex w-full items-center gap-3 p-4 text-left"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-      >
-        <span className="grid size-11 place-items-center rounded-xl bg-[#eef2e4]">
-          <PackageCheck className="size-5 text-[#697f3b]" />
-        </span>
-        <span className="flex-1">
-          <span className="block font-semibold">Emballage Indberetning</span>
-          <span className="text-xs text-muted-foreground">
-            {status?.connected
-              ? `${status.organisation} · ${status.testMode ? 'Testnøgle' : 'Forbundet'}`
-              : 'Kvartalsvis indberetning under 8.000 kg'}
-          </span>
-        </span>
-        <ChevronDown className={open ? 'rotate-180' : ''} />
-      </button>
-      {open && (
-        <div className="space-y-4 border-t bg-muted/20 p-5">
+    <IntegrationCard name="Emballage Indberetning" description="Kvartalsvis indberetning under 8.000 kg" icon={PackageCheck} connected={status?.connected??null} testMode={status?.testMode} expanded={open} onToggle={()=>setOpen(!open)} panelId="emballage-connection-panel" footer={footer}>
+          {status?.connected&&<p className="text-sm">Forbundet til {status.organisation}.</p>}
           <label htmlFor="emballage-api-key" className="block text-sm">
             API-nøgle
             <Input
@@ -253,8 +238,6 @@ export function EmballageConnection({
               {message}
             </output>
           )}
-        </div>
-      )}
-    </section>
+    </IntegrationCard>
   );
 }
