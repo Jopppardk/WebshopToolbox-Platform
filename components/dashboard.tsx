@@ -45,7 +45,7 @@ export function Dashboard({onJobs,onIntegrations}:{onJobs:(status:string)=>void;
     </header>
     <section aria-label="Dagens aktivitet og systemstatus" className="mb-8 overflow-hidden rounded-2xl border border-[#e3d8c7] bg-white shadow-[0_8px_30px_rgba(70,50,20,0.05)]">
       {errors.platform && <p role="alert" className="border-b bg-red-50 p-4 text-sm text-red-700">{errors.platform}</p>}
-      <ActivityRow icon={<Package className="size-5"/>} label="Ordrer" counts={stats?.activity.orders}/>
+      <ActivityRow icon={<Package className="size-5"/>} label="Salg" counts={stats?.activity.orders}/>
       <ActivityRow icon={<Wallet className="size-5"/>} label="Udbetalinger" counts={stats?.activity.payouts}/>
       <div className="border-t border-[#e9e2d7] bg-[#faf8f5] p-4 md:p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 text-sm font-semibold"><Activity className="size-4 text-[#9b7742]"/>System-status</h2><span className="text-[11px] text-muted-foreground">Seneste gennemførte opdateringer</span></div>
