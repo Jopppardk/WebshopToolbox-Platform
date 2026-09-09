@@ -14,12 +14,21 @@ const statusClass: Record<JobStatus, string> = { running: 'border-blue-200 bg-bl
 const date = (value: string) => new Intl.DateTimeFormat('da-DK', { dateStyle: 'short', timeStyle: 'medium', timeZone: 'Europe/Copenhagen' }).format(new Date(value));
 const duration = (value: number | null) => value === null ? '—' : value < 1000 ? `${value} ms` : value < 60000 ? `${(value / 1000).toLocaleString('da-DK', { maximumFractionDigits: 1 })} sek.` : `${(value / 60000).toLocaleString('da-DK', { maximumFractionDigits: 1 })} min.`;
 
-export function JobInsights() {
+export function JobInsights({ initialStatus = '' }: { initialStatus?: string }) {
   const [data, setData] = useState<Insights | null>(null), [busy, setBusy] = useState(true), [error, setError] = useState('');
-  const [statusFilter, setStatusFilter] = useState(''), [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState(initialStatus), [page, setPage] = useState(1);
   const until = useRef('');
   const historyHeading = useRef<HTMLHeadingElement>(null);
   const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    if (!initialStatus) return;
+    const frame = window.requestAnimationFrame(() => {
+      historyHeading.current?.focus({ preventScroll:true });
+      historyHeading.current?.scrollIntoView({block:'start',behavior:'instant'});
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [initialStatus]);
+
   const refresh = useCallback(() => { setBusy(true); setError(''); setPage(1); until.current = ''; setRevision(value => value + 1); }, []);
   useEffect(() => {
     const controller = new AbortController();

@@ -1,3 +1,4 @@
+import { syncDashboardFinance } from './db/dashboard-finance';
 import app from './dist/server/index.js';
 import { runSalesAutomation } from './db/sales-automation';
 import { runPayoutAutomation } from './db/payout-automation';
@@ -83,6 +84,7 @@ export default {
         return result;
       }); } catch (error) { await recordFailure('Shopify · automatisk udbetalingssynkronisering', { category: 'shopify', cause: error instanceof Error ? error.message : 'Udbetalingerne kunne ikke synkroniseres.' }); }
       try { await track('dinero-payouts', 'Dinero · Udbetalinger', async () => payoutsReady ? await runPayoutAutomation() : { status: 'skipped', message: 'Sprunget over, indtil udbetalingssynkroniseringen er afsluttet.' }); } catch { /* Jobbet har sin egen historik og udbetalingsfejl registreres ved kilden. */ }
+      try { await track('dinero-dashboard', 'Dinero · Dashboard', syncDashboardFinance); } catch { /* Jobhistorikken registrerer fejlen; økonomital markeres utilgængelige. */ }
       return { failed };
       });
     })().catch(async () => { await recordFailure('Synkronisering · scheduler', { category: 'system', cause: 'Den samlede synkronisering kunne ikke startes eller afsluttes. Kontrollér Indsigt.' }); }));

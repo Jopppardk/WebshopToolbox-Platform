@@ -1,6 +1,13 @@
 export const retentionMonths = 24;
 
 export const schemaStatements = [
+  `CREATE TABLE IF NOT EXISTS dashboard_ledger (
+    organization TEXT NOT NULL, guid TEXT NOT NULL, account INTEGER NOT NULL,
+    date TEXT NOT NULL, minor INTEGER NOT NULL, type TEXT NOT NULL,
+    PRIMARY KEY (organization, guid)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_dashboard_ledger_date ON dashboard_ledger(organization, date)`,
+
   `CREATE TABLE IF NOT EXISTS integration_records (
     id TEXT PRIMARY KEY,
     tenant TEXT NOT NULL DEFAULT 'sablen.dk',

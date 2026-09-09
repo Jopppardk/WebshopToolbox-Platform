@@ -8,6 +8,7 @@ import { SalesTransfer } from '@/components/sales-transfer';
 import { Documents } from '@/components/documents';
 import { Inventory } from '@/components/inventory';
 import { Packaging } from '@/components/packaging';
+import { Dashboard } from '@/components/dashboard';
 import { JobInsights } from '@/components/job-insights';
 import { DevelopmentRequests } from '@/components/development-requests';
 import { vatCodeOptions } from '@/lib/vat-code-options';
@@ -27,6 +28,7 @@ import {
   AlertTriangle,
   Bell,
   BookOpenCheck,
+  LayoutDashboard,
   Boxes,
   Check,
   ChevronDown,
@@ -82,9 +84,10 @@ export default function Home() {
   const [orderTotal, setOrderTotal] = useState(0);
   const [orderRevision, setOrderRevision] = useState(0);
   const [syncingOrders, setSyncingOrders] = useState(false);
+  const [insightFilter, setInsightFilter] = useState('');
   const [view, setView] = useState<
-    'orders' | 'invoices' | 'documents' | 'refunds' | 'payouts' | 'inventory' | 'packaging' | 'insights' | 'development' | 'settings'
-  >('orders');
+    'dashboard' | 'orders' | 'invoices' | 'documents' | 'refunds' | 'payouts' | 'inventory' | 'packaging' | 'insights' | 'development' | 'settings'
+  >('dashboard');
   const [settingsTab, setSettingsTab] = useState<'dashboard' | 'integrations' | 'invoice-email' | 'inventory'>('dashboard');
   const [notice, setNotice] = useState('');
   const [accounts, setAccounts] = useState<Accounts>(emptyAccounts);
@@ -187,6 +190,7 @@ export default function Home() {
           />
         </div>
         <nav className="flex-1 px-3 py-4" aria-label="Primær navigation">
+          <button className={`nav-item w-full ${view === 'dashboard' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('dashboard'); }}><LayoutDashboard/>Dashboard</button>
           <p className="nav-label mt-7">Bogføring</p>
           <button
             className={`nav-item w-full ${view === 'orders' ? 'active' : ''}`}
@@ -221,7 +225,7 @@ export default function Home() {
           </button>
           <button className={`nav-item w-full ${view === 'documents' ? 'active' : ''}`} onClick={() => setView('documents')}><BookOpenCheck />Udbetalingsrapporter</button>
           <p className="nav-label mt-7">System</p>
-          <button className={`nav-item w-full ${view === 'insights' ? 'active' : ''}`} onClick={() => setView('insights')}><Activity />Indsigt</button>
+          <button className={`nav-item w-full ${view === 'insights' ? 'active' : ''}`} onClick={() => { setInsightFilter(''); setView('insights'); }}><Activity />Indsigt</button>
           <button className={`nav-item w-full ${view === 'development' ? 'active' : ''}`} onClick={() => setView('development')}><Lightbulb />Udvikling</button>
           <button
             className={`nav-item w-full ${view === 'settings' ? 'active' : ''}`}
@@ -246,6 +250,7 @@ export default function Home() {
                 <div className="flex items-center justify-between"><SheetTitle className="text-white">Menu</SheetTitle><Button variant="outline" onClick={() => setMobileOpen(false)}>Luk</Button></div>
                 <SheetDescription className="text-slate-300">Sablen Toolbox</SheetDescription>
                 <nav className="flex-1 px-3 py-4" aria-label="Primær navigation">
+          <button className={`nav-item w-full ${view === 'dashboard' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('dashboard'); }}><LayoutDashboard/>Dashboard</button>
           <p className="nav-label mt-7">Bogføring</p>
           <button
             className={`nav-item w-full ${view === 'orders' ? 'active' : ''}`}
@@ -280,7 +285,7 @@ export default function Home() {
           </button>
           <button className={`nav-item w-full ${view === 'documents' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('documents'); }}><BookOpenCheck />Udbetalingsrapporter</button>
           <p className="nav-label mt-7">System</p>
-          <button className={`nav-item w-full ${view === 'insights' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('insights'); }}><Activity />Indsigt</button>
+          <button className={`nav-item w-full ${view === 'insights' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setInsightFilter(''); setView('insights'); }}><Activity />Indsigt</button>
           <button className={`nav-item w-full ${view === 'development' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('development'); }}><Lightbulb />Udvikling</button>
           <button
             className={`nav-item w-full ${view === 'settings' ? 'active' : ''}`}
@@ -313,6 +318,7 @@ export default function Home() {
             </span>
           </div>
         </header>
+        {view === 'dashboard' && <Dashboard onJobs={status => { setInsightFilter(status); setView('insights'); }} onIntegrations={() => { setSettingsTab('integrations'); setView('settings'); }}/>}
         {view === 'orders' && (
           <div
             className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9"
@@ -407,7 +413,7 @@ export default function Home() {
         )}
         {view === 'inventory' && <Inventory />}
         {view === 'packaging' && <Packaging />}
-        {view === 'insights' && <JobInsights />}
+        {view === 'insights' && <JobInsights initialStatus={insightFilter} />}
         {view === 'development' && <DevelopmentRequests />}
         {view === 'settings' && (
           <div>
