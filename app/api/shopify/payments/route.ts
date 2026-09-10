@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   try {
     const params = request.nextUrl.searchParams;
     const db = await prepareDatabase();
-    const { start, end } = paymentPeriod(params.get('from'), params.get('to'), await loadHistory(db));
+    const { start, end } = paymentPeriod(params.get('from'), params.get('to'), await loadHistory(db, 'shopify'));
     const offset = Number(params.get('offset') || 0);
     if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('Ugyldigt sidetal');
     const search = (params.get('search') || '').trim().slice(0, 100);
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as { from?: string; to?: string; after?: string | null };
-    const db = await prepareDatabase(); const policy = await loadHistory(db);
+    const db = await prepareDatabase(); const policy = await loadHistory(db, 'shopify');
     const { start, end } = paymentPeriod(body.from, body.to, policy);
     if (start >= end) return reply({ synced: 0, hasNextPage: false, endCursor: null });
     if (body.after != null && (typeof body.after !== 'string' || body.after.length > 2048)) throw new Error('Ugyldig fortsættelse');
@@ -70,3 +70,4 @@ export async function POST(request: NextRequest) {
     return reply({ error: error instanceof Error ? error.message : 'Shopify Payments kunne ikke hentes' }, 400);
   }
 }
+

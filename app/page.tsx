@@ -1,5 +1,6 @@
 'use client';
 import { ProviderLedger } from '@/components/provider-ledger';
+import {IntegrationStartDate} from '@/components/integration-start-date';
 import { IntegrationLibrary, RemoveIntegration, useIntegrationLibrary } from '@/components/integration-library';
 import { IntegrationCard } from '@/components/integration-card';
 import { FlatpayConnection } from '@/components/flatpay-connection';
@@ -973,7 +974,7 @@ function Settings({
                     <Button className="sm:col-span-2" onClick={() => connect('dinero')} disabled={connecting !== null}>{connecting === 'dinero' ? 'Tester…' : isConnected ? 'Test og opdatér forbindelse' : 'Test og forbind'}</Button>
                   </div>
                 )}
-                {connectionMessage && <p className="mt-3 text-sm text-[#5d712f]" role="status">{connectionMessage}</p>}
+                <IntegrationStartDate provider={provider}/>{connectionMessage && <p className="mt-3 text-sm text-[#5d712f]" role="status">{connectionMessage}</p>}
                 {provider === 'shopify' && <div className="mt-4 rounded-xl border bg-white p-4"><p className="mb-3 text-sm font-semibold">Bogføring af Shopify Payments</p><Field name="shopifyPaymentsClearing" label="Mellemregningskonto" /></div>}
           </IntegrationCard>
         ))}

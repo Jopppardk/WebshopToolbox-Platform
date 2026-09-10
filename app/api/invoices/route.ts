@@ -11,7 +11,7 @@ const tenant = 'sablen.dk';
 async function statuses() {
   const db = await prepareDatabase();
   await removeLegacyInvoices(db);
-  const { cutoff } = historyWindow(await loadHistory(db));
+  const { cutoff } = historyWindow(await loadHistory(db, 'shopify'));
   const result = await db.prepare(`SELECT external_id, booking_status FROM integration_records WHERE tenant = ? AND record_type = 'invoice' AND occurred_at >= ?`).bind(tenant, cutoff).all<{ external_id: string; booking_status: string }>();
   return Object.fromEntries(result.results.map((row) => [row.external_id, row.booking_status === 'failed' ? 'Fejlet' : 'Genereret']));
 }
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('Ugyldigt sidetal');
     if (!all && !externalId) throw new Error('Der mangler et ordrenummer');
     const db = await prepareDatabase();
-    const policy = await loadHistory(db); const { cutoff } = historyWindow(policy);
+    const policy = await loadHistory(db, 'shopify'); const { cutoff } = historyWindow(policy);
     await removeLegacyInvoices(db);
     const query = all
       ? db.prepare(`SELECT id, external_id, occurred_at, amount_minor, currency, payload_json, expires_at FROM integration_records WHERE tenant = ? AND record_type = 'order' AND occurred_at >= ? ORDER BY external_id LIMIT 5 OFFSET ?`).bind(tenant, cutoff, offset)
@@ -57,3 +57,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
+

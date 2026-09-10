@@ -12,7 +12,7 @@ const pagesPerRun = 5;
 // newer orders were created. Checkpoint only pages the import route committed.
 export async function runPaginatedSync(job: string, fetchPage: (after: string | null) => Promise<Response>) {
   const db = database(), settingKey = `sync_progress:${job}`;
-  const scope = JSON.stringify(await loadHistory(db));
+  const scope = JSON.stringify(await loadHistory(db, 'shopify'));
   const row = await db.prepare('SELECT setting_value FROM app_settings WHERE tenant=? AND setting_key=?')
     .bind(tenant, settingKey).first<{ setting_value: string }>();
   const previous = row ? JSON.parse(row.setting_value) as Progress : null;

@@ -58,7 +58,7 @@ function present(order: ShopifyOrder, bookingStatus = 'Afventer') {
 
 async function storedOrders(offset = 0, from?: string, until = '9999-12-31T00:00:00.000Z', limit = 100) {
   const db = await prepareDatabase();
-  const { cutoff } = historyWindow(await loadHistory(db));
+  const { cutoff } = historyWindow(await loadHistory(db, 'shopify'));
   const result = await db
     .prepare(`SELECT o.payload_json, COALESCE(json_extract(t.setting_value, '$.phase'), o.booking_status) AS booking_status FROM integration_records o LEFT JOIN app_settings t ON t.tenant = o.tenant AND t.setting_key = 'sales_transfer:' || o.external_id WHERE o.tenant = ? AND o.record_type = 'order' AND o.occurred_at >= ? AND o.occurred_at < ? ORDER BY o.occurred_at DESC, o.external_id DESC LIMIT ? OFFSET ?`)
     .bind('sablen.dk', from || cutoff, until, limit, offset)
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
   const period = request.nextUrl.searchParams.get('period') || 'all';
   const limit = Number(request.nextUrl.searchParams.get('limit') || 50);
   if (![50, 100].includes(limit)) return NextResponse.json({ error: 'Ugyldig sidestørrelse' }, { status: 400 });
-  const db = await prepareDatabase(); const { cutoff } = historyWindow(await loadHistory(db));
+  const db = await prepareDatabase(); const { cutoff } = historyWindow(await loadHistory(db, 'shopify'));
   let window;
   try { window = orderPeriodWindow(period, cutoff); }
   catch { return NextResponse.json({ error: 'Ugyldig periode' }, { status: 400 }); }
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({})) as { after?: string };
     if (body.after != null && (typeof body.after !== 'string' || body.after.length > 2048)) throw new Error('Ugyldig fortsættelse');
-    const db = await prepareDatabase(); const policy = await loadHistory(db);
+    const db = await prepareDatabase(); const policy = await loadHistory(db, 'shopify');
     const { cutoff } = historyWindow(policy);
     const access = await getShopifyAccess();
     const payload = await orderQuery<{ orders: { nodes: InvoiceSource[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } }>(access,
@@ -129,3 +129,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
+

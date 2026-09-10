@@ -1,7 +1,10 @@
+import {integrationStart,type DatedIntegration} from './integration-start';
 import { defaultHistory, validateHistory, historyWindow, type HistoryPolicy } from '@/lib/history-policy';
-export async function loadHistory(db: D1Database) {
+export async function loadHistory(db: D1Database, provider?: DatedIntegration) {
   const row = await db.prepare("SELECT setting_value FROM app_settings WHERE tenant = 'sablen.dk' AND setting_key = 'history_policy'").first<{ setting_value: string }>();
-  return row ? validateHistory(JSON.parse(row.setting_value) as HistoryPolicy) : defaultHistory;
+  const policy = row ? validateHistory(JSON.parse(row.setting_value) as HistoryPolicy) : defaultHistory;
+  const startDate = provider ? await integrationStart(db,provider) : '';
+  return {...policy,startDate:startDate>policy.startDate?startDate:policy.startDate};
 }
 // Bounded housekeeping on API activity. Import start only hides old data; retention removes it.
 export async function cleanupHistory(db: D1Database, bucket: R2Bucket) {
@@ -22,3 +25,4 @@ export async function cleanupHistory(db: D1Database, bucket: R2Bucket) {
   }));
   try { await db.prepare("DELETE FROM job_runs WHERE tenant = 'sablen.dk' AND started_at < ?").bind(retentionCutoff).run(); } catch { /* Tabellen findes først efter jobindsigt-migrationen. */ }
 }
+

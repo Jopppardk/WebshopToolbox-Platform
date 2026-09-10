@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     const { externalId, mode = 'sale' } = await request.json() as { externalId?: unknown; mode?: string };
     if (typeof externalId !== 'string' || !/^gid:\/\/shopify\/Order\/\d+$/.test(externalId) || !['sale', 'invoice'].includes(mode)) return json({ error: 'Ugyldig ordre eller kontroltype.' }, 400);
     const db = database();
-    const { cutoff } = historyWindow(await loadHistory(db));
+    const { cutoff } = historyWindow(await loadHistory(db, 'shopify'));
     const stored = await db.prepare("SELECT external_id FROM integration_records WHERE tenant = 'sablen.dk' AND record_type = 'order' AND external_id = ? AND occurred_at >= ?").bind(externalId, cutoff).first();
     if (!stored) return json({ error: 'Ordren er ikke indlæst eller ligger uden for den valgte historik.' }, 404);
     const source = await loadCompleteOrder(externalId);
@@ -45,3 +45,4 @@ export async function POST(request: NextRequest) {
     return json({ error: error instanceof InvoiceCheckError ? error.message : 'Kontrollen kunne ikke gennemføres. Kontrollér Shopify-forbindelsen og prøv igen. Ingen data er ændret.' }, 422);
   }
 }
+

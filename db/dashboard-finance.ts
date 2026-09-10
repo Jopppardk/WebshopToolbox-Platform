@@ -1,14 +1,15 @@
+import {integrationStart} from './integration-start';
 import { schemaStatements } from './schema';
 import { database } from './database';
 import { loadCredentials } from './credentials';
 import { calculateFinance, financePeriods, parseEntries, type LedgerEntry, type LedgerYear } from '@/lib/dashboard-finance';
 
-type State = { loaded: LedgerYear[]; categories: Record<string,string>; cursor: string; checkedAt?: string; retryAt?: number; leaseUntil?: number; owner?: string; error?: string };
+type State = { inventoryComplete?: boolean; loaded: LedgerYear[]; categories: Record<string,string>; cursor: string; checkedAt?: string; retryAt?: number; leaseUntil?: number; owner?: string; error?: string };
 const tenant = 'sablen.dk';
 export async function syncDashboardFinance() {
   const credentials = await loadCredentials('dinero', true);
   if (!credentials?.organizationId) return { status: 'skipped' as const, message: 'Dinero er ikke forbundet.' };
-  const db = database(), key = 'dashboard_finance:' + credentials.organizationId;
+  const db = database(), startDate=await integrationStart(db,'dinero'), key = 'dashboard_finance:' + credentials.organizationId + (startDate?':'+startDate:'');
   await db.batch(schemaStatements.filter(sql=>sql.includes('dashboard_ledger')).map(sql=>db.prepare(sql)));
   const row = await db.prepare('SELECT setting_value FROM app_settings WHERE tenant=? AND setting_key=?').bind(tenant,key).first<{ setting_value:string }>();
   const state: State = row ? JSON.parse(row.setting_value) : { loaded:[], categories:{}, cursor: new Date().toISOString() };
@@ -33,7 +34,8 @@ export async function syncDashboardFinance() {
     const yearRows = await read('accountingyears') as Array<{ FromDate:string; ToDate:string }>;
     if (!Array.isArray(yearRows) || yearRows.some(y=>!/^\d{4}-\d{2}-\d{2}$/.test(y.FromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(y.ToDate))) throw new Error('Dinero returnerede ukendte regnskabsår.');
     const p = financePeriods();
-    const years = yearRows.map(y=>({from:y.FromDate,to:y.ToDate})).filter(y=>y.to>=p.priorYearStart && y.from<=p.today).sort((a,b)=>b.from.localeCompare(a.from));
+    state.inventoryComplete=yearRows.some(y=>y.FromDate<=p.today&&y.ToDate>=p.today&&y.FromDate>=startDate);
+    const years = yearRows.map(y=>({from:y.FromDate>startDate?y.FromDate:startDate,to:y.ToDate})).filter(y=>y.to>=(startDate||p.priorYearStart) && y.from<=p.today && y.from<=y.to).sort((a,b)=>b.from.localeCompare(a.from));
     const accountRows = await read('accounts/entry?fields=AccountNumber,Category') as Array<{AccountNumber:number;Category:string}>;
     if (!Array.isArray(accountRows) || accountRows.some(a=>!Number.isInteger(a.AccountNumber) || typeof a.Category!=='string')) throw new Error('Dinero returnerede en ukendt kontoplan.');
     state.categories = Object.fromEntries(accountRows.map(a=>[a.AccountNumber,a.Category]));
@@ -49,6 +51,7 @@ export async function syncDashboardFinance() {
       entries = parseEntries(await read('entries/changes?' + new URLSearchParams({ changesFrom:state.cursor,changesTo:end,includePrimo:'true' })));
       cursor = end;
     }
+    entries=entries.filter(e=>e.date>=startDate);
     for (let i=0;i<entries.length;i+=100) await db.batch(entries.slice(i,i+100).map(e=>db.prepare('INSERT INTO dashboard_ledger(organization,guid,account,date,minor,type) VALUES(?,?,?,?,?,?) ON CONFLICT(organization,guid) DO UPDATE SET account=excluded.account,date=excluded.date,minor=excluded.minor,type=excluded.type').bind(credentials.organizationId,e.guid,e.account,e.date,e.minor,e.type)));
     if (missing) state.loaded = [...state.loaded.filter(y=>y.from!==missing.from), missing];
     state.cursor = cursor;
@@ -67,14 +70,15 @@ export async function syncDashboardFinance() {
 export async function dashboardFinance() {
   const credentials = await loadCredentials('dinero',true);
   if (!credentials?.organizationId) return { ready:false, message:'Forbind Dinero under Indstillinger for at se regnskabstal.', data:null };
-  const db=database();
-  const row=await db.prepare('SELECT setting_value FROM app_settings WHERE tenant=? AND setting_key=?').bind(tenant,'dashboard_finance:'+credentials.organizationId).first<{setting_value:string}>();
+  const db=database(),startDate=await integrationStart(db,'dinero');
+  const row=await db.prepare('SELECT setting_value FROM app_settings WHERE tenant=? AND setting_key=?').bind(tenant,'dashboard_finance:'+credentials.organizationId+(startDate?':'+startDate:'')).first<{setting_value:string}>();
   const state:State|null=row?JSON.parse(row.setting_value):null;
   if (!state || state.leaseUntil || state.error) return { ready:false, message:state?.error || 'Henter regnskabsgrundlaget fra Dinero…',data:null };
   const settings=await db.prepare("SELECT setting_value FROM app_settings WHERE tenant=? AND setting_key='admin_settings'").bind(tenant).first<{setting_value:string}>();
   const account = Number(JSON.parse(settings?.setting_value || '{}').accounts?.inventory?.match(/^\d+/)?.[0]) || null;
-  const entries=await db.prepare('SELECT guid,account,date,minor,type FROM dashboard_ledger WHERE organization=? AND date>=?').bind(credentials.organizationId,Math.min(...state.loaded.map(y=>Number(y.from.slice(0,4))))+'-01-01').all<LedgerEntry>();
+  const entries=await db.prepare('SELECT guid,account,date,minor,type FROM dashboard_ledger WHERE organization=? AND date>=?').bind(credentials.organizationId,[startDate,...state.loaded.map(y=>y.from)].filter(Boolean).sort()[0]||'9999-12-31').all<LedgerEntry>();
   const data=calculateFinance(entries.results,state.categories,state.loaded,account && state.categories[account] ? account:null);
+  if(startDate&&state.inventoryComplete!==true)data.inventory=null;
   return { ready:true, data, checkedAt:state.checkedAt, through:state.cursor, stale:Date.now()-Date.parse(state.cursor)>10*60000,
     message: account ? 'Bogførte posteringer · resultat før skat · lagerværdi fra Dinero-konto '+account : 'Vælg lagerkonto under Indstillinger for at vise lagerværdi.' };
 }

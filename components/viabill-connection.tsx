@@ -1,4 +1,5 @@
 'use client';
+import {IntegrationStartDate} from '@/components/integration-start-date';
 import { useEffect, useState } from 'react';
 import { CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -29,7 +30,7 @@ export function ViaBillConnection({ accountField, initialExpanded = false, onCon
   }
   return <IntegrationCard name="ViaBill" description="Betalinger og udbetalinger" icon={CreditCard} connected={status?.connected??null} expanded={expanded} onToggle={()=>setExpanded(v=>!v)} panelId="viabill-connection-panel" footer={footer}>
       <p className="text-sm text-muted-foreground">Kun læsning af afregningsdata. Shopify-appen fortsætter uændret. Nøglerne gemmes krypteret og vises ikke igen.</p>
-      {accountField && <div className="rounded-xl border bg-white p-4"><p className="mb-3 text-sm font-semibold">Bogføring</p>{accountField}</div>}
+      <IntegrationStartDate provider="viabill"/>{accountField && <div className="rounded-xl border bg-white p-4"><p className="mb-3 text-sm font-semibold">Bogføring</p>{accountField}</div>}
       {status?.connected && <p className="text-sm">Forbundet til {status.name}. Indtast nøgler igen for at ændre forbindelsen.</p>}
       <fieldset disabled={busy} className="space-y-3">
         <label className="block text-sm">API key<Input type="password" autoComplete="off" className="mt-1" value={apiKey} onChange={event => { setApiKey(event.target.value); setAccounts([]); setManualAccountId(false); setAccountId(''); setNotice(''); }} /></label>
