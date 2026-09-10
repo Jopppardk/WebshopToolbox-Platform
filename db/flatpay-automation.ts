@@ -34,7 +34,7 @@ export async function runFlatpayAutomation(){
    completed++;
   }catch(error){failed++;await recordFailure('Dinero · Flatpay-udbetaling',{category:'dinero',reference:payout.setting_key,cause:error instanceof Error?error.message:'Overførslen fejlede.',action:'Kontrollér afregningsgrundlaget og Dinero før et nyt forsøg.'});await db.prepare("UPDATE app_settings SET updated_at=CURRENT_TIMESTAMP WHERE tenant='sablen.dk' AND setting_key=?").bind(payout.setting_key).run();}
  }
- if(failed)throw Error(`${failed} Flatpay-udbetalinger kræver kontrol af afregning, konti eller Dinero-status; ${completed} gennemført. Åbn Kladde i Dinero på udbetalingen.`);
+ if(failed)throw Error(`${failed} Flatpay-udbetalinger kræver kontrol af afregning, konti eller Dinero-status; ${completed} gennemført. Vælg Bogfør manuelt på udbetalingen efter kontrol af Dinero.`);
  if(held&&!completed)return {status:'skipped' as const,message:`${held} tidligere testudbetaling afventer afklaring af Dinero-status. Øvrige udbetalinger behandles automatisk.`};
  return {message:`${completed} Flatpay-udbetalinger ${settings.automation.payoutsBookDinero?'bogført':'oprettet som kladde'} med rapport.`};
 }

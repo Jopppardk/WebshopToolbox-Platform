@@ -10,7 +10,7 @@ import { HistorySettings } from '@/components/history-settings';
 import { ErrorOverview } from '@/components/error-overview';
 import { OrderLog } from '@/components/order-log';
 import { SalesPreview } from '@/components/sales-preview';
-import { SalesTransfer } from '@/components/sales-transfer';
+import { ManualBookingAction } from '@/components/manual-booking-action';
 import { Documents } from '@/components/documents';
 import { Inventory } from '@/components/inventory';
 import { NotificationBell } from '@/components/notification-bell';
@@ -531,7 +531,7 @@ function OrderRow({ order, onBooked }: { order: OrderView; onBooked: () => void 
         </Badge>
       </TableCell>
       <TableCell className="pr-5 text-right">
-        {order.externalId && <div className="flex flex-wrap justify-end gap-2">{order.shipped === 'Afsendt' && !handled && <SalesPreview externalId={order.externalId} />}<OrderLog externalId={order.externalId} /><SalesTransfer externalId={order.externalId} disabled={handled} onBooked={onBooked} /></div>}
+        {order.externalId && <div className="flex flex-wrap justify-end gap-2">{order.shipped === 'Afsendt' && !handled && <SalesPreview externalId={order.externalId} />}<OrderLog externalId={order.externalId} />{order.shipped === 'Afsendt' && !handled && <ManualBookingAction kind="sale" externalId={order.externalId} onDone={onBooked} />}</div>}
       </TableCell>
     </TableRow>
   );

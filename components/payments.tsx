@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BookingStatus } from '@/components/booking-status';
-import { BookingAction } from '@/components/booking-action';
+import { ManualBookingAction } from '@/components/manual-booking-action';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -370,8 +370,8 @@ export function Payments({
                   </TableCell>
                   <TableCell>
                     {refund && payment.provider!=='flatpay' && payment.bookingStatus !== 'booked' ? (
-                      <BookingAction
-                        endpoint="/api/refunds/transfer"
+                      <ManualBookingAction
+                        kind="refund"
                         externalId={payment.id}
                         onDone={() => setRevision((value) => value + 1)}
                       />
