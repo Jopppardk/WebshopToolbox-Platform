@@ -186,6 +186,7 @@ export default function Home() {
     } catch (error) { setSettingsMessage(error instanceof Error ? error.message : 'Kunne ikke gemme'); }
     finally { setSettingsSaving(false); }
   };
+  const orderPagination = <nav aria-label="Ordrehistorik" className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-white px-5 py-4 text-sm"><span>{ordersLoading ? 'Henter ordrer…' : orderTotal ? `${orderOffset + 1}–${Math.min(orderOffset + orderPageSize, orderTotal)} af ${orderTotal} ordrer · Side ${Math.floor(orderOffset / orderPageSize) + 1} af ${Math.max(1, Math.ceil(orderTotal / orderPageSize))}` : 'Ingen ordrer i perioden'}</span><div className="flex gap-2"><Button variant="outline" disabled={syncingOrders || ordersLoading || orderOffset === 0} onClick={() => setOrderOffset(value => Math.max(0, value - orderPageSize))}>Forrige</Button><Button variant="outline" disabled={syncingOrders || ordersLoading || orderOffset + orderPageSize >= orderTotal} onClick={() => setOrderOffset(value => value + orderPageSize)}>Næste</Button></div></nav>;
   return (
     <main className="min-h-screen bg-background text-foreground lg:grid lg:grid-cols-[246px_1fr]">
       <aside className="sidebar-shell hidden min-h-screen flex-col lg:flex">
@@ -248,7 +249,6 @@ export default function Home() {
         <SyncStatus state={syncState} />
       </aside>
       <section className="min-w-0">
-        {(view === 'orders' || view === 'invoices') && <nav aria-label="Ordrehistorik" className="flex flex-wrap items-center justify-between gap-3 border-b bg-white px-5 py-3 text-sm"><span>{ordersLoading ? 'Henter ordrer…' : orderTotal ? `${orderOffset + 1}–${Math.min(orderOffset + orderPageSize, orderTotal)} af ${orderTotal} ordrer · Side ${Math.floor(orderOffset / orderPageSize) + 1} af ${Math.max(1, Math.ceil(orderTotal / orderPageSize))}` : 'Ingen ordrer i perioden'}</span><div className="flex gap-2"><Button variant="outline" disabled={syncingOrders || ordersLoading || orderOffset === 0} onClick={() => setOrderOffset(value => Math.max(0, value - orderPageSize))}>Forrige</Button><Button variant="outline" disabled={syncingOrders || ordersLoading || orderOffset + orderPageSize >= orderTotal} onClick={() => setOrderOffset(value => value + orderPageSize)}>Næste</Button></div></nav>}
         <header className="flex h-20 items-center justify-between border-b border-border bg-white px-5 md:px-8">
           <div className="flex items-center gap-3 lg:hidden">
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -400,14 +400,12 @@ export default function Home() {
                   ))}
                 </TableBody>
               </Table>
-              <div className="flex items-center justify-between border-t border-border px-5 py-4 text-xs text-muted-foreground">
-                <span>Viser {filtered.length} af {salesOrders.length} ordrer</span>
-              </div>
+              {orderPagination}
             </section>
           </div>
         )}
         {view === 'invoices' && (
-          <Invoices orders={salesOrders} onGenerated={(count) => notify(`${count} faktura${count === 1 ? '' : 'er'} er genereret`)} onSync={syncOrders} syncing={syncingOrders} />
+          <Invoices pagination={orderPagination} orders={salesOrders} onGenerated={(count) => notify(`${count} faktura${count === 1 ? '' : 'er'} er genereret`)} onSync={syncOrders} syncing={syncingOrders} />
         )}
         {view === 'documents' && <Documents syncRevision={syncState.revision} />}
         {view === 'refunds' && (
@@ -537,7 +535,7 @@ function OrderRow({ order, onBooked }: { order: OrderView; onBooked: () => void 
   );
 }
 
-function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[]; onGenerated: (count: number) => void; onSync: () => Promise<void>; syncing: boolean }) {
+function Invoices({ orders, onGenerated, onSync, syncing, pagination }: { pagination: React.ReactNode; orders: OrderView[]; onGenerated: (count: number) => void; onSync: () => Promise<void>; syncing: boolean }) {
   const [statuses, setStatuses] = useState<Record<string, string>>({});
   const [emailing, setEmailing] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState('');
@@ -706,6 +704,7 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
             })}
           </TableBody>
         </Table>
+        {pagination}
       </section>
       {!orders.length && <div className="mt-4 rounded-xl border border-dashed bg-white p-8 text-center text-sm text-muted-foreground">Ingen Shopify-ordrer er hentet endnu. Forbind Shopify under Indstillinger, og vælg derefter “Hent fra Shopify”.</div>}
     </div>
