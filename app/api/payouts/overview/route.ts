@@ -15,6 +15,10 @@ export async function GET(request:NextRequest){
  UNION ALL SELECT setting_key id,'flatpay' provider,COALESCE(json_extract(setting_value,'$.paidDate'),json_extract(setting_value,'$.scheduledDate')) date,setting_value payload_json,'test' booking_status FROM app_settings WHERE tenant='sablen.dk' AND setting_key LIKE 'flatpay:payout:%' AND COALESCE(json_extract(setting_value,'$.paidDate'),json_extract(setting_value,'$.scheduledDate'))>=? AND substr(COALESCE(json_extract(setting_value,'$.paidDate'),json_extract(setting_value,'$.scheduledDate')),1,10)>=? AND json_extract(setting_value,'$.merchantID')=? AND json_extract(setting_value,'$.agreementID')=? )`;
  const args=[shopifyCutoff,viaBillCutoff,cutoff,flatpay?.startDate||'9999-12-31',flatpay?.merchantID||'',flatpay?.agreementId||''];
  const [rows,count]=await Promise.all([db.prepare(source+' SELECT * FROM payouts ORDER BY julianday(date) DESC,provider,id LIMIT 50 OFFSET ?').bind(...args,offset).all<{id:string;provider:string;date:string;payload_json:string;booking_status:string}>(),db.prepare(source+' SELECT COUNT(*) total FROM payouts').bind(...args).first<{total:number}>()]);
+ const dinero=await loadCredentials('dinero',true);
+ const config=await db.prepare("SELECT setting_value FROM app_settings WHERE tenant='sablen.dk' AND setting_key='flatpay_production'").first<{setting_value:string}>();
+ const holds=config?JSON.parse(config.setting_value).holdIds:[];
+ for(const row of rows.results.filter(r=>r.provider==='flatpay')){const state=dinero?.organizationId?await db.prepare("SELECT json_extract(setting_value,'$.phase') phase FROM app_settings WHERE tenant='sablen.dk' AND setting_key=?").bind(`flatpay_draft:${dinero.organizationId}:${row.id}`).first<{phase:string}>():null;row.booking_status=state?.phase||(Array.isArray(holds)&&holds.includes(row.id)?'held':'pending');}
  return reply({payouts:rows.results.map(unifiedPayout),total:count?.total||0});
  }catch{return reply({error:'Den samlede udbetalingsoversigt kunne ikke hentes.'},503);}
 }

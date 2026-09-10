@@ -1,3 +1,4 @@
+import {flatpayActivity} from '@/db/flatpay-activity';
 import { dashboardActivity } from '@/db/dashboard-activity';
 import { NextResponse } from 'next/server';
 import { prepareDatabase } from '@/db/database';
@@ -16,6 +17,8 @@ export async function GET() {
       db.prepare("SELECT setting_key FROM app_settings WHERE tenant='sablen.dk' AND setting_key='emballage_credentials'").first(),
       db.prepare("SELECT setting_key FROM app_settings WHERE tenant='sablen.dk' AND setting_key='flatpay_credentials'").first(),
     ]);
+    const fp=await flatpayActivity(db,new Date(now));
+    for(const key of ['total','synced','failed','pending'] as const)activity.payouts[key]+=fp[key];
     const interval=normalizeSyncInterval(JSON.parse(settings?.setting_value || '{}').syncIntervalMinutes);
     const summary=Object.fromEntries(counts.results.map(c=>[c.status,c.count]));
     const providers=[{key:'shopify',name:'Shopify'},{key:'dinero',name:'Dinero'},{key:'viabill',name:'ViaBill'},{key:'emballage',name:'Emballage Indberetning'},{key:'flatpay',name:'Flatpay'}].map(p=>{
