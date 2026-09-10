@@ -18,7 +18,7 @@ function period(from: unknown, to: unknown, policy: HistoryPolicy) {
 export async function GET(request: NextRequest) {
   try {
     const params = request.nextUrl.searchParams; const type = kind(params.get('kind'));
-    const db = await prepareDatabase(); const policy = await loadHistory(db);
+    const db = await prepareDatabase(); const policy = await loadHistory(db, 'viabill');
     const dates = period(params.get('from') || undefined, params.get('to') || undefined, policy);
     const offset = Number(params.get('offset') || 0);
     if (!Number.isSafeInteger(offset) || offset < 0) throw new ViaBillError('Ugyldigt sidetal.');
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
   try {
     if (request.headers.get('origin') && request.headers.get('origin') !== request.nextUrl.origin) return reply({ error: 'Ugyldig forespørgsel.' }, 403);
     const body = object(await request.json()); const type = kind(body.kind);
-    const db = await prepareDatabase(); const policy = await loadHistory(db);
+    const db = await prepareDatabase(); const policy = await loadHistory(db, 'viabill');
     const dates = period(body.from, body.to, policy);
     if (dates.from > dates.to) return reply({ synced: 0, skipped: 0, next: null, mismatches: 0 });
     const stored = await loadCredentials('viabill');
@@ -91,3 +91,4 @@ export async function POST(request: NextRequest) {
       next: rows.length === pageLength ? { kind: type, accountId, ...dates, first: first + pageLength, hash } : null });
   } catch (error) { await recordFailure('ViaBill', { category: 'integration', cause: publicError(error) }); return reply({ error: publicError(error) }, 400); }
 }
+

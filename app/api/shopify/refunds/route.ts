@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   try {
     const params = request.nextUrl.searchParams;
     const db = await prepareDatabase();
-    const { start, end } = paymentPeriod(params.get('from'), params.get('to'), await loadHistory(db));
+    const { start, end } = paymentPeriod(params.get('from'), params.get('to'), await loadHistory(db, 'shopify'));
     const offset = Number(params.get('offset') || 0);
     if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('Ugyldigt sidetal');
     const search = (params.get('search') || '').trim().slice(0, 100);
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as { from?: string; to?: string; after?: string | null };
-    const db = await prepareDatabase(); const policy = await loadHistory(db);
+    const db = await prepareDatabase(); const policy = await loadHistory(db, 'shopify');
     const defaultStart = new Date(Math.max(+new Date(policy.startDate ? `${policy.startDate}T00:00:00Z` : '1970-01-01T00:00:00Z'), +new Date(shiftMonths(new Date(), -policy.months)))).toISOString().slice(0, 10);
     const defaultEnd = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Copenhagen' }).format(new Date());
     const { start, end } = paymentPeriod(body.from || defaultStart, body.to || defaultEnd, policy);
@@ -72,3 +72,4 @@ export async function POST(request: NextRequest) {
     return reply({ error: error instanceof Error ? error.message : 'Shopify Payments kunne ikke hentes' }, 400);
   }
 }
+

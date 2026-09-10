@@ -1,3 +1,4 @@
+import {validStartDate} from '@/db/integration-start';
 import { NextResponse } from 'next/server';
 import { loadCredentials,saveCredentials } from '@/db/credentials';
 import { flatpayRead,safeAgreement } from '@/lib/flatpay-api';
@@ -7,6 +8,7 @@ export async function POST(request:Request){
  if(request.headers.get('origin')!==new URL(request.url).origin||!request.headers.get('content-type')?.startsWith('application/json'))return reply({error:'Start handlingen fra integrationssiden.'},403);
  try{
   const b=await request.json() as {username:string;password:string;agreementNumber:string;startDate:string;action:string};
+  if(b.action==='start-date'){if(!b.startDate||!validStartDate(b.startDate))throw Error('Angiv en gyldig startdato.');const c=await loadCredentials('flatpay');if(!c)throw Error('Forbind Flatpay først.');await saveCredentials('flatpay',{...c,startDate:b.startDate},'Flatpay · '+c.agreementNumber);return reply({connected:true,startDate:b.startDate});}
   if(typeof b.username!=='string'||typeof b.password!=='string'||b.username.length>300||b.password.length>2000)throw Error('Angiv API-brugernavn og adgangskode.');
   const access={username:b.username.trim(),password:b.password};
   const agreements=(await flatpayRead(access,'agreements')).map(safeAgreement);

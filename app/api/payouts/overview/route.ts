@@ -9,10 +9,11 @@ export async function GET(request:NextRequest){
  try{
  const offset=Number(request.nextUrl.searchParams.get('offset')||0);if(!Number.isSafeInteger(offset)||offset<0)return reply({error:'Ugyldigt sidetal.'},400);
  const db=await prepareDatabase(),{cutoff}=historyWindow(await loadHistory(db)),flatpay=await loadCredentials('flatpay',true);
+ const shopifyCutoff=historyWindow(await loadHistory(db,'shopify')).cutoff,viaBillCutoff=historyWindow(await loadHistory(db,'viabill')).cutoff;
  const source=`WITH payouts AS (
- SELECT external_id id,json_extract(payload_json,'$.provider') provider,occurred_at date,payload_json,booking_status FROM integration_records WHERE tenant='sablen.dk' AND record_type='payout' AND occurred_at>=? AND json_extract(payload_json,'$.provider') IN ('shopify_payments','viabill')
+ SELECT external_id id,json_extract(payload_json,'$.provider') provider,occurred_at date,payload_json,booking_status FROM integration_records WHERE tenant='sablen.dk' AND record_type='payout' AND ((occurred_at>=? AND json_extract(payload_json,'$.provider')='shopify_payments') OR (occurred_at>=? AND json_extract(payload_json,'$.provider')='viabill'))
  UNION ALL SELECT setting_key id,'flatpay' provider,json_extract(setting_value,'$.paidDate') date,setting_value payload_json,'test' booking_status FROM app_settings WHERE tenant='sablen.dk' AND setting_key LIKE 'flatpay:payout:%' AND json_extract(setting_value,'$.paidDate')>=? AND substr(json_extract(setting_value,'$.paidDate'),1,10)>=? AND json_extract(setting_value,'$.merchantID')=? AND json_extract(setting_value,'$.agreementID')=? )`;
- const args=[cutoff,cutoff,flatpay?.startDate||'9999-12-31',flatpay?.merchantID||'',flatpay?.agreementId||''];
+ const args=[shopifyCutoff,viaBillCutoff,cutoff,flatpay?.startDate||'9999-12-31',flatpay?.merchantID||'',flatpay?.agreementId||''];
  const [rows,count]=await Promise.all([db.prepare(source+' SELECT * FROM payouts ORDER BY julianday(date) DESC,provider,id LIMIT 50 OFFSET ?').bind(...args,offset).all<{id:string;provider:string;date:string;payload_json:string;booking_status:string}>(),db.prepare(source+' SELECT COUNT(*) total FROM payouts').bind(...args).first<{total:number}>()]);
  return reply({payouts:rows.results.map(unifiedPayout),total:count?.total||0});
  }catch{return reply({error:'Den samlede udbetalingsoversigt kunne ikke hentes.'},503);}

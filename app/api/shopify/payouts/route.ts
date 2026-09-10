@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const offset = Number(request.nextUrl.searchParams.get('offset') || 0);
     if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('Ugyldigt sidetal');
     const db = await prepareDatabase();
-    const { cutoff } = historyWindow(await loadHistory(db));
+    const { cutoff } = historyWindow(await loadHistory(db, 'shopify'));
     const where = "tenant = 'sablen.dk' AND record_type = 'payout' AND json_extract(payload_json, '$.provider') = 'shopify_payments' AND occurred_at >= ?";
     const rows = await db.prepare(`SELECT payload_json, booking_status FROM integration_records WHERE ${where} ORDER BY occurred_at DESC, external_id DESC LIMIT 50 OFFSET ?`).bind(cutoff, offset).all<{ payload_json: string; booking_status: string }>();
     const count = await db.prepare(`SELECT COUNT(*) AS total FROM integration_records WHERE ${where}`).bind(cutoff).first<{ total: number }>();
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   try {
     const { after } = await request.json() as { after?: string | null };
     if (after != null && (typeof after !== 'string' || after.length > 2048)) throw new Error('Ugyldig fortsættelse');
-    const db = await prepareDatabase(); const policy = await loadHistory(db);
+    const db = await prepareDatabase(); const policy = await loadHistory(db, 'shopify');
     const cutoff = new Date(historyWindow(policy).cutoff);
     const { shop, accessToken } = await getShopifyAccess();
     const response = await shopifyFetch(`https://${shop}/admin/api/2026-07/graphql.json`, {
@@ -63,3 +63,4 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     await recordFailure('Udbetalinger', { category: 'shopify', cause: shopifyFailure(error, 'Udbetalinger: indlæsning eller datakontrol mislykkedes.'), action: 'Se jobhistorikken. Kontrollér Shopify-adgang ved adgangsfejl; afvent næste kørsel ved midlertidige fejl.' }); return reply({ error: error instanceof Error ? error.message : 'Udbetalingerne kunne ikke hentes' }, 400); }
 }
+

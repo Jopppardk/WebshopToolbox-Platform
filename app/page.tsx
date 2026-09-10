@@ -1,5 +1,6 @@
 'use client';
 import { ProviderLedger } from '@/components/provider-ledger';
+import {IntegrationStartDate} from '@/components/integration-start-date';
 import { IntegrationLibrary, RemoveIntegration, useIntegrationLibrary } from '@/components/integration-library';
 import { IntegrationCard } from '@/components/integration-card';
 import { FlatpayConnection } from '@/components/flatpay-connection';
@@ -280,56 +281,9 @@ export default function Home() {
             Udbetalinger
           </button>
           <button className={`nav-item w-full ${view === 'inventory' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('inventory'); }}><Warehouse />Lager</button>
-          <button className={`nav-item w-full ${view === 'packaging' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('packaging'); }}><Boxes />Emballage</button>
-          <p className="nav-label mt-7">Dokumenter</p>
-          <button
-            className={`nav-item w-full ${view === 'invoices' ? 'active' : ''}`}
-            onClick={() => { setMobileOpen(false); setOrderOffset(0); setView('invoices'); }}
-          >
-            <FileText />
-            Fakturaer
-          </button>
-          <button className={`nav-item w-full ${view === 'documents' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('documents'); }}><BookOpenCheck />Udbetalingsrapporter</button>
+          <button className={`nav-item w-full ${view === 'packaging' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('packaging'); }}><Boxes />okOpenCheck />Udbetalingsrapporter</button>
           <p className="nav-label mt-7">System</p>
-          <button className={`nav-item w-full ${view === 'insights' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setInsightFilter(''); setView('insights'); }}><Activity />Indsigt</button>
-          <button className={`nav-item w-full ${view === 'development' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('development'); }}><Lightbulb />Udvikling</button>
-          <button
-            className={`nav-item w-full ${view === 'settings' ? 'active' : ''}`}
-            onClick={() => { setMobileOpen(false); setView('settings'); }}
-          >
-            <Settings2 />
-            Indstillinger
-          </button>
-        </nav>
-                <div className="mx-3 mb-3 overflow-hidden rounded-xl border border-white/10 bg-black/30"><img src="/og.png" alt="Sablen Toolbox" className="h-auto w-full" /></div>
-              </SheetContent>
-            </Sheet>
-            <img src="/sablen-logo.webp" alt="Sablen" className="w-[105px]" />
-          </div>
-          <div className="hidden items-center gap-2 text-sm text-muted-foreground lg:flex">
-            <span>Sablen.dk</span>
-            <ChevronDown className="size-4" />
-          </div>
-          <div className="ml-auto flex items-center gap-3">
-            <NotificationBell errorCount={openErrorCount} onErrors={()=>{setSettingsTab('dashboard');setView('settings');}} onReporting={()=>{setPackagingEntry(p=>({tab:'reporting',key:p.key+1}));setView('packaging');}}/>
-            <div className="hidden text-right sm:block">
-              <p className="text-sm font-medium">rene@sablen.dk</p>
-              <p className="text-xs text-muted-foreground">Administrator</p>
-            </div>
-            <span className="grid size-9 place-items-center rounded-full bg-[#f1e7d7] text-xs font-bold text-[#6d5430]">
-              RJ
-            </span>
-          </div>
-        </header>
-        {view === 'dashboard' && <Dashboard onJobs={status => { setInsightFilter(status); setView('insights'); }} onIntegrations={() => { setSettingsTab('integrations'); setView('settings'); }}/>}
-        {view === 'orders' && (
-          <div
-            className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9"
-            id="orders"
-          >
-            <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-              <div>
-                <p className="eyebrow">Shopify · Dinero</p>
+          <button className={`nav-item w-full ${view === 'insights' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setInsightFilter(''); setView('pify · Dinero</p>
                 <h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">
                   Ordrer
                 </h1>
@@ -392,9 +346,7 @@ export default function Home() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {!filtered.length && <TableRow><TableCell colSpan={7} className="p-8 text-center">{orderError ? 'Ordrerne kunne ikke vises.' : 'Ingen ordrer i det valgte udsnit.'}</TableCell></TableRow>}
-                  {filtered.map((order) => (
-                    <OrderRow key={order.id} order={order} onBooked={() => setOrderRevision(value => value + 1)} />
+                  {!filtered.length && <TableRow><TableCell colSpan={7} className="p-8 text-center">{orderError>
                   ))}
                 </TableBody>
               </Table>
@@ -409,13 +361,7 @@ export default function Home() {
         )}
         {view === 'documents' && <Documents syncRevision={syncState.revision} />}
         {view === 'refunds' && (
-          <Payments syncRevision={syncState.revision} kind="refund" />
-        )}
-        {view === 'payouts' && (
-          <ProviderLedger kind="payout" syncRevision={syncState.revision} />
-        )}
-        {view === 'inventory' && <Inventory />}
-        {view === 'packaging' && <Packaging key={packagingEntry.key} initialTab={packagingEntry.tab}/>}
+          <Payments syncRevision={syncState.revisioy={packagingEntry.key} initialTab={packagingEntry.tab}/>}
         {view === 'insights' && <JobInsights initialStatus={insightFilter} />}
         {view === 'development' && <DevelopmentRequests />}
         {view === 'settings' && (
@@ -439,15 +385,7 @@ export default function Home() {
             setAccounts={setAccounts}
             onSave={saveSettings}
             automation={automation} setAutomation={setAutomation} invoiceEmail={invoiceEmail} setInvoiceEmail={setInvoiceEmail} syncIntervalMinutes={syncIntervalMinutes} setSyncIntervalMinutes={setSyncIntervalMinutes}
-            ready={settingsReady} saving={settingsSaving} message={settingsMessage}
-            onShopifyConnected={syncOrders}
-            onErrorCountChange={setOpenErrorCount}
-          />
-          </div>
-        )}
-      </section>
-      {notice && (
-        <div
+                <div
           role="status"
           className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl bg-[#17201b] px-4 py-3 text-sm font-medium text-white shadow-2xl"
         >
@@ -481,18 +419,7 @@ function Stat({
           <p className="mt-2 text-xl font-semibold tracking-tight">{value}</p>
         </div>
         {tone === 'warn' && (
-          <span className="mt-1 size-2 rounded-full bg-amber-400" />
-        )}
-      </div>
-      <p
-        className={`mt-2 text-xs ${tone === 'lime' ? 'text-[#427209]' : 'text-muted-foreground'}`}
-      >
-        {note}
-      </p>
-    </div>
-  );
-}
-function OrderRow({ order, onBooked }: { order: OrderView; onBooked: () => void }) {
+          <unction OrderRow({ order, onBooked }: { order: OrderView; onBooked: () => void }) {
   const state = order.status;
   const booked = state === 'Bogført';
   const handled = booked || state === 'Annulleret · håndteret';
@@ -509,22 +436,7 @@ function OrderRow({ order, onBooked }: { order: OrderView; onBooked: () => void 
         {order.shipped}
       </TableCell>
       <TableCell className="text-right font-medium tabular-nums">
-        {order.amount} {order.currency || 'DKK'}
-      </TableCell>
-      <TableCell className="text-muted-foreground">{order.realized}</TableCell>
-      <TableCell>
-        <Badge
-          variant={state === 'Fejlet' ? 'destructive' : 'secondary'}
-          className={
-            state === 'Bogført'
-              ? 'badge-booked'
-              : state === 'Afventer' || state === 'Bogfører…'
-                ? 'badge-pending'
-                : ''
-          }
-        >
-          {state === 'Bogført' && <BookOpenCheck />}
-          {state}
+        {order.amount} {order.currency    {state}
         </Badge>
       </TableCell>
       <TableCell className="pr-5 text-right">
@@ -541,12 +453,7 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
   const [generating, setGenerating] = useState(false);
   const [invoiceError, setInvoiceError] = useState('');
   const [invoiceMessage, setInvoiceMessage] = useState('');
-  useEffect(() => { fetch('/api/invoices').then(async response => { if (!response.ok) throw new Error('Fakturastatus kunne ikke indlæses'); return response.json() as Promise<{ statuses: Record<string, string> }>; }).then(data => setStatuses(data.statuses || {})).catch(error => setInvoiceError(error.message)); }, []);
-  const generate = async (order: OrderView, regenerate = false) => {
-    if (!order.externalId) return;
-    const previousStatus = statuses[order.externalId];
-    setInvoiceError(''); setGenerating(true);
-    setStatuses(current => ({ ...current, [order.externalId!]: regenerate ? 'Regenererer…' : 'Genererer…' }));
+  useEffect(() => { fetch('/api/invoices').then(async response => { if (!response.ok) throw new Error('Fakturastatus kunne ikke indlæses'); return response.json() as Promise<{ statuses: Record<string, string> }>; }).then(data => setStatuses(data.statuses || {})).catch(error => setInvoies(current => ({ ...current, [order.externalId!]: regenerate ? 'Regenererer…' : 'Genererer…' }));
     try {
       const response = await fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ externalId: order.externalId, regenerate }) });
       const data = await response.json() as { statuses: Record<string, string>; generated: number; error?: string };
@@ -578,39 +485,18 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
     try {
       const response = await fetch('/api/invoices/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ externalId: order.externalId }) });
       const data = await response.json() as { sent?: boolean; recipient?: string; invoiceNumber?: string; error?: string };
-      if (!response.ok || !data.sent) throw new Error(data.error || 'Fakturaen kunne ikke sendes');
-      setInvoiceMessage(`Faktura ${data.invoiceNumber || order.id.replace(/^#/, '')} er sendt til ${data.recipient}.`);
-    } catch (error) { setInvoiceError(error instanceof Error ? error.message : 'Fakturaen kunne ikke sendes'); }
+      if (!respoceof Error ? error.message : 'Fakturaen kunne ikke sendes'); }
     finally { setEmailing(current => ({ ...current, [order.externalId!]: false })); }
   };
   const visibleOrders = orders.filter((order) => order.id.toLowerCase().includes(query.toLowerCase()));
   const generatedCount = orders.filter((order) => order.externalId && statuses[order.externalId] === 'Genereret').length;
-  const pendingCount = orders.filter(order => order.shipped !== 'Annulleret' && (!order.externalId || statuses[order.externalId] !== 'Genereret')).length;
-
-  return (
-    <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
-      <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-        <div>
-          <p className="eyebrow">Ordrer · Dokumenter</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">
-            Fakturaer
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Fakturaer oprettes først, når hele ordren er markeret som afsendt i Shopify. Opdateringen sker ved hentning fra Shopify.
-          </p>
-        </div>
-        <div className="flex gap-2"><Button variant="outline" className="h-10 rounded-xl px-4" onClick={onSync} disabled={syncing}><RefreshCw className={syncing ? 'animate-spin' : ''} />{syncing ? 'Henter…' : 'Hent fra Shopify'}</Button><Button className="h-10 rounded-xl px-4" onClick={generateAll} disabled={generating || !orders.length}>
+  const pendingCount = orders.filter(order => order.shipped !== 'Annulleret' && (!order.externalId || statuses[order.externalIdabled={syncing}><RefreshCw className={syncing ? 'animate-spin' : ''} />{syncing ? 'Henter…' : 'Hent fra Shopify'}</Button><Button className="h-10 rounded-xl px-4" onClick={generateAll} disabled={generating || !orders.length}>
           <FileText />
           {generating ? 'Genererer…' : 'Generér alle manglende'}
         </Button></div>
       </div>
       {invoiceError && <p role="alert" className="mb-4 rounded-xl border border-red-200 p-4 text-sm text-red-700">{invoiceError}</p>}
-      {invoiceMessage && <p role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{invoiceMessage}</p>}
-      <p className="mb-4 text-sm text-muted-foreground">En genereret faktura kan sendes manuelt til kundens mailadresse fra Shopify. Eksisterende PDF’er bevares, og ændrede fakturaer kræver særskilt gennemgang.</p>
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
-        <Stat
-          label="Fakturaer på denne side"
-          value={`${orders.length} ordrer`}
+      {invoiceMs.length} ordrer`}
           note={`${generatedCount} er genereret`}
           tone="lime"
         />
@@ -622,19 +508,7 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
         <Stat
           label="Kræver handling"
           value={`${Object.values(statuses).filter((status) => status === 'Fejlet').length} fakturaer`}
-          note="Fejl vises under Administration"
-          tone="warn"
-        />
-      </div>
-      <section className="overflow-hidden rounded-2xl border bg-white">
-        <div className="border-b p-4">
-          <div className="relative max-w-[320px]">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="h-10 bg-muted/50 pl-9"
-              placeholder="Søg ordrenummer"
+          note="Fejl vises under Administrat     placeholder="Søg ordrenummer"
             />
           </div>
         </div>
@@ -679,100 +553,11 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
                           : 'badge-pending'
                       }
                     >
-                      {status === 'Genereret' && <Check />}
-                      {status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="pr-5 text-right">
-                    {status === 'Genereret' ? (
-                      <div className="flex flex-wrap justify-end gap-1"><a className={buttonVariants({ variant: 'outline', size: 'sm' })} href={`/api/invoices/pdf?externalId=${encodeURIComponent(order.externalId || '')}`} target="_blank" rel="noreferrer"><FileText />PDF</a><Button variant="outline" size="sm" disabled={Boolean(emailing[order.externalId || ''])} onClick={() => sendInvoice(order)}><Mail />{emailing[order.externalId || ''] ? 'Sender…' : 'Send til kunde'}</Button><Button variant="outline" size="sm" disabled={generating} onClick={() => generate(order, true)}><RefreshCw />Regenerér</Button></div>
-                    ) : order.shipped === 'Annulleret' ? null : (
-                      <div className="flex justify-end gap-1"><Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => generate(order)}
-                        disabled={generating || order.shipped !== 'Afsendt' || status === 'Genererer…' || status === 'Regenererer…'}
-                      >
-                        <FileText />
-                        {status === 'Fejlet' ? 'Generér igen' : 'Generér'}
-                      </Button></div>
-                    )}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </section>
-      {!orders.length && <div className="mt-4 rounded-xl border border-dashed bg-white p-8 text-center text-sm text-muted-foreground">Ingen Shopify-ordrer er hentet endnu. Forbind Shopify under Administration, og vælg derefter “Hent fra Shopify”.</div>}
-    </div>
-  );
-}
-
-
-function Settings({
-  mode,
-  accounts,
-  setAccounts,
-  onSave,
-  onShopifyConnected,
-  automation, setAutomation, invoiceEmail, setInvoiceEmail, syncIntervalMinutes, setSyncIntervalMinutes, savedIntervalMinutes, ready, saving, message, onErrorCountChange,
-}: {
-  mode: 'dashboard' | 'integrations' | 'invoice-email' | 'inventory';
-  accounts: Accounts;
-  setAccounts: React.Dispatch<React.SetStateAction<Accounts>>;
-  onSave: () => Promise<void>;
-  automation: Automation; setAutomation: React.Dispatch<React.SetStateAction<Automation>>;
-  invoiceEmail: InvoiceEmailSettings; setInvoiceEmail: React.Dispatch<React.SetStateAction<InvoiceEmailSettings>>;
-  syncIntervalMinutes: number; setSyncIntervalMinutes: React.Dispatch<React.SetStateAction<number>>;
-  savedIntervalMinutes?: number;
-  ready: boolean; saving: boolean; message: string;
-  onShopifyConnected: () => Promise<void>;
-  onErrorCountChange: (count: number) => void;
-}) {
-  const [chart, setChart] = useState<
-    Array<{ number: string; name: string; vatCode?: string }>
-  >([]);
-  const [loadingChart, setLoadingChart] = useState(false);
-  const [chartMessage, setChartMessage] = useState('');
-  const [connectionMessage, setConnectionMessage] = useState('');
-  const [connecting, setConnecting] = useState<'shopify' | 'dinero' | null>(null);
-  const library = useIntegrationLibrary();
-  const [expandedEmballage, setExpandedEmballage] = useState(false);
-  const [expandedFlatpay,setExpandedFlatpay]=useState(false);
-  const [expandedViaBill, setExpandedViaBill] = useState(false);
-  const [expandedIntegration, setExpandedIntegration] = useState<'shopify' | 'dinero' | null>(null);
-  const [connected, setConnected] = useState<Record<string, string>>({});
-  const [shopify, setShopify] = useState({ shop: '', clientId: '', clientSecret: '' });
-  const [dinero, setDinero] = useState({ clientId: '', clientSecret: '', apiKey: '', organizationId: '' });
-  const [emailTestState, setEmailTestState] = useState<'idle' | 'sending'>('idle');
-  const [emailTestMessage, setEmailTestMessage] = useState('');
-  const [emailTestRecipient, setEmailTestRecipient] = useState('rene.jeppesen@live.dk');
-  useEffect(() => {
-    fetch('/api/integrations')
-      .then((response) => response.json() as Promise<{ integrations: Array<{ provider: string; display_name: string }> }>)
-      .then((data) => setConnected(Object.fromEntries((data.integrations ?? []).map((item: { provider: string; display_name: string }) => [item.provider, item.display_name]))))
-      .catch(() => setConnectionMessage('Forbindelsesstatus kunne ikke hentes'));
-  }, []);
-  const toggleAutomation = (key: keyof typeof automation, value: boolean) => {
-    const next = { ...automation, [key]: value };
-    setAutomation(next);
-  };
-  const sendInvoiceTest = async () => {
-    setEmailTestState('sending'); setEmailTestMessage('');
-    try {
-      const response = await fetch('/api/invoices/email-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient: emailTestRecipient }) });
+                      {status === 'Genereret'oices/email-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient: emailTestRecipient }) });
       const data = await response.json() as { sent?: boolean; recipient?: string; invoiceNumber?: string; error?: string };
       if (!response.ok) throw new Error(data.error || 'Testmailen kunne ikke sendes');
       setEmailTestMessage(`Faktura ${data.invoiceNumber} er sendt til ${data.recipient}.`);
-    } catch (error) { setEmailTestMessage(error instanceof Error ? error.message : 'Testmailen kunne ikke sendes'); }
-    finally { setEmailTestState('idle'); }
-  };
-  const integrations = [
-    {
-      name: 'Shopify',
-      provider: 'shopify' as const,
-      detail: 'Understøtter: Salg, Tilbagebetalinger, Udbetalinger og Lager',
+    } catch (error) { setEmailTestMessage(error instanceof , Udbetalinger og Lager',
       icon: ShoppingBag,
       connected: Boolean(connected.shopify),
     },
@@ -780,24 +565,12 @@ function Settings({
       name: 'Dinero',
       provider: 'dinero' as const,
       detail: 'Understøtter: Salg, Tilbagebetalinger, Udbetalinger og Lager',
-      icon: Landmark,
-      connected: Boolean(connected.dinero),
-    },
-  ];
-  const connect = async (provider: 'shopify' | 'dinero') => {
-    setConnecting(provider);
-    setConnectionMessage('');
-    try {
-      const response = await fetch('/api/integrations', {
+    tegrations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ provider, ...(provider === 'shopify' ? shopify : dinero) }),
       });
-      const data = await response.json() as { name: string; error?: string };
-      if (!response.ok) throw new Error(data.error);
-      setConnected((current) => ({ ...current, [provider]: data.name }));
-      void library.refresh();
-      if (provider === 'shopify') setShopify((current) => ({ ...current, clientSecret: '' }));
+      const data = await response.json() as { name: st, clientSecret: '' }));
       else setDinero((current) => ({ ...current, clientSecret: '', apiKey: '' }));
       if (provider === 'dinero') { setChart([]); await loadChart(false); }
       setConnectionMessage(`${provider === 'shopify' ? 'Shopify' : 'Dinero'} er testet og forbundet med læseadgang`);
@@ -973,7 +746,7 @@ function Settings({
                     <Button className="sm:col-span-2" onClick={() => connect('dinero')} disabled={connecting !== null}>{connecting === 'dinero' ? 'Tester…' : isConnected ? 'Test og opdatér forbindelse' : 'Test og forbind'}</Button>
                   </div>
                 )}
-                {connectionMessage && <p className="mt-3 text-sm text-[#5d712f]" role="status">{connectionMessage}</p>}
+                <IntegrationStartDate provider={provider}/>{connectionMessage && <p className="mt-3 text-sm text-[#5d712f]" role="status">{connectionMessage}</p>}
                 {provider === 'shopify' && <div className="mt-4 rounded-xl border bg-white p-4"><p className="mb-3 text-sm font-semibold">Bogføring af Shopify Payments</p><Field name="shopifyPaymentsClearing" label="Mellemregningskonto" /></div>}
           </IntegrationCard>
         ))}

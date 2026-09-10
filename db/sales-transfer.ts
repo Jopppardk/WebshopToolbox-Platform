@@ -39,7 +39,7 @@ export async function transferStatus(externalId: string) {
   return { state: (await read(externalId))?.state ?? null, enabled: salesWritesEnabled(), draftTestAllowed: draftTestAllowed(externalId) };
 }
 async function inspect(externalId: string, date: string, credentials: Record<string, string>, draftTest = false): Promise<Snapshot> {
-  const db = database(), { cutoff } = historyWindow(await loadHistory(db));
+  const db = database(), { cutoff } = historyWindow(await loadHistory(db, 'shopify'));
   const stored = await db.prepare("SELECT booking_status FROM integration_records WHERE tenant = ? AND record_type = 'order' AND external_id = ? AND occurred_at >= ?").bind(tenant, externalId, cutoff).first<{ booking_status: string }>();
   if (!stored || stored.booking_status === 'booked') return rejectTransfer('Ordren mangler, er uden for historikken eller er allerede bogført.');
   if (stored.booking_status === 'cancelled') rejectTransfer('Ordren er annulleret i Shopify og er allerede markeret som håndteret.');
@@ -154,3 +154,4 @@ export async function runTransfer(body: { externalId: string; action: string; da
   }
   return transferStatus(externalId);
 }
+

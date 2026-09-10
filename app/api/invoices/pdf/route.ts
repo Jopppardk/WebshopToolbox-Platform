@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   try {
   const externalId = request.nextUrl.searchParams.get('externalId');
   if (!externalId) return NextResponse.json({ error: 'Der mangler et ordre-id' }, { status: 400 });
-  const db = await prepareDatabase(); const { cutoff } = historyWindow(await loadHistory(db));
+  const db = await prepareDatabase(); const { cutoff } = historyWindow(await loadHistory(db, 'shopify'));
   const record = await db.prepare("SELECT id FROM integration_records WHERE tenant = 'sablen.dk' AND record_type = 'invoice' AND external_id = ? AND occurred_at >= ?").bind(externalId, cutoff).first();
   if (!record) return NextResponse.json({ error: 'Fakturaen ligger uden for den gemte historik eller findes ikke' }, { status: 404 });
   const object = await (env as unknown as { INVOICES: R2Bucket }).INVOICES.get(keyFor(externalId));
@@ -19,3 +19,4 @@ export async function GET(request: NextRequest) {
 
   } catch { await recordFailure('Faktura-PDF'); return NextResponse.json({ error: 'Faktura-PDF kunne ikke indlæses. Prøv igen.' }, { status: 503 }); }
 }
+
