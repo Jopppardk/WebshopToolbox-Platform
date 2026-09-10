@@ -6,7 +6,7 @@ const taxes = `taxLines { rate channelLiable priceSet ${money} } discountAllocat
 const itemFields = `id name quantity currentQuantity requiresShipping isGiftCard variant { inventoryItem { id unitCost { amount currencyCode } } } originalTotalSet ${money} discountedTotalSet ${money} ${taxes}`;
 const shippingFields = `id title isRemoved originalPriceSet ${money} discountedPriceSet ${money} ${taxes}`;
 const page = 'pageInfo { hasNextPage endCursor }';
-export const orderFields = `id name email createdAt updatedAt processedAt test edited cancelledAt taxesIncluded displayFinancialStatus displayFulfillmentStatus
+export const orderFields = `id name email createdAt updatedAt processedAt test edited cancelledAt taxesIncluded paymentGatewayNames displayFinancialStatus displayFulfillmentStatus
   fulfillments { createdAt status }
   customer { displayName firstName lastName }
   billingAddress { name address1 address2 zip city country countryCodeV2 }
@@ -50,3 +50,4 @@ export async function loadCompleteOrder(id: string) {
   if (!data.order || data.order.id !== id) throw new Error('Ordren kunne ikke findes i Shopify.');
   return completeOrder(data.order, access);
 }
+
