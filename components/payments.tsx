@@ -62,7 +62,9 @@ export function Payments({
   syncRevision?: number;
 }) {
   const refund = kind === 'refund';
-  const endpoint = refund ? '/api/shopify/refunds' : '/api/shopify/payments';
+  const endpoint = refund ? '/api/refunds/overview' : '/api/shopify/payments';
+  const [provider,setProvider]=useState('shopify');
+  const syncEndpoint=refund?(provider==='flatpay'?'/api/flatpay/refunds':'/api/shopify/refunds'):endpoint;
   const plural = refund ? 'tilbagebetalinger' : 'betalinger';
   const title = refund ? 'Tilbagebetalinger' : 'Betalinger';
   const [from, setFrom] = useState(() => `${today().slice(0, 7)}-01`);
@@ -135,9 +137,10 @@ export function Payments({
     setNotice(`Henter ${plural}…`);
     let after: string | null = null;
     let synced = 0;
+    const seen=new Set<string>();
     try {
       do {
-        const response = await fetch(endpoint, {
+        const response = await fetch(syncEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ from, to, after }),
@@ -157,6 +160,8 @@ export function Payments({
           throw new Error(data.error || 'Hentningen mislykkedes');
         synced += data.synced;
         after = data.hasNextPage ? data.endCursor : null;
+        if(data.hasNextPage&&(!after||seen.has(after)||seen.size>=200))throw Error('Hentningen kunne ikke fortsætte. Prøv igen.');
+        if(after)seen.add(after);
         setNotice(
           `${synced} ${plural} hentet${after ? ' · henter flere…' : ' · perioden er færdighentet'}`,
         );
@@ -179,24 +184,27 @@ export function Payments({
     <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
       <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <p className="eyebrow">Shopify Payments</p>
+          <p className="eyebrow">{refund?'Samlet oversigt':'Shopify Payments'}</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">
             {title}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {refund
-              ? 'Faktiske tilbagebetalinger via Shopify Payments. Delvise tilbagebetalinger vises som separate transaktioner. Andre betalingsudbydere og butikskredit indgår ikke.'
+              ? 'Tilbagebetalinger fra Shopify Payments og Flatpay samlet, nyeste først. Delvise tilbagebetalinger vises som separate transaktioner.'
               : 'Gennemførte betalinger med gebyrer og nettobeløb.'}
           </p>
         </div>
+        <div className="flex items-end gap-3">
+        {refund&&<label className="text-sm">Hent fra<select className="mt-1 block h-10 rounded-lg border px-3" value={provider} disabled={syncing} onChange={e=>setProvider(e.target.value)}><option value="shopify">Shopify Payments</option><option value="flatpay">Flatpay</option></select></label>}
         <Button
           className="h-10 rounded-xl px-4"
           onClick={sync}
           disabled={syncing || !from || !to || from > to}
         >
           <RefreshCw className={syncing ? 'animate-spin' : ''} />
-          {syncing ? 'Henter…' : 'Hent fra Shopify Payments'}
+          {syncing ? 'Henter…' : refund?'Hent tilbagebetalinger':'Hent fra Shopify Payments'}
         </Button>
+        </div>
       </div>
       <div className="mb-5 flex flex-wrap items-end gap-3">
         <label className="text-sm">
@@ -283,7 +291,7 @@ export function Payments({
       ))}
       <p className="mb-4 text-sm text-muted-foreground">
         {refund
-          ? 'Når modulet er aktiveret under Indstillinger, bogføres nye Shopify Payments-refunderinger automatisk i Dinero. Kun faktiske refunderingstransaktioner med kontrollerbare vare- og fragtlinjer bogføres; testtransaktioner indgår ikke.'
+          ? 'Når modulet er aktiveret under Indstillinger, bogføres nye Shopify Payments-refunderinger automatisk i Dinero. Flatpay vises til kontrol og bogføres ikke automatisk. Flatpay-beløb vises med API’ets fortegn; gebyrer og netto afrundes til visning. En afregning er ikke nødvendigvis udbetalt endnu.'
           : 'Bogføring i Dinero er ikke aktiveret for betalinger. Testbetalinger og tilbagebetalinger indgår ikke her.'}
       </p>
       <section
@@ -321,7 +329,7 @@ export function Payments({
                     ? `${title} kunne ikke vises.`
                     : search
                       ? `Ingen ${plural} matcher søgningen.`
-                      : `Ingen gemte ${plural} i perioden. Vælg Hent fra Shopify Payments.`}
+                      : `Ingen gemte ${plural} i perioden. Vælg udbyder og hent tilbagebetalinger.`}
                 </TableCell>
               </TableRow>
             ) : (
@@ -333,11 +341,11 @@ export function Payments({
                         'Ingen tilknyttet ordre'}
                     </div>
                     <div className="mt-1 text-sm text-muted-foreground">
-                      {shortId(payment.id)}
+                      {payment.provider==='flatpay'?payment.transactionID:shortId(payment.id)}
                     </div>
                   </TableCell>
                   <TableCell>{date(payment.transactionDate)}</TableCell>
-                  <TableCell>Shopify Payments</TableCell>
+                  <TableCell>{payment.provider==='flatpay'?'Flatpay':'Shopify Payments'}</TableCell>
                   <TableCell className="text-right tabular-nums">
                     {money(payment.amount.amount, payment.amount.currencyCode)}
                   </TableCell>
@@ -348,23 +356,23 @@ export function Payments({
                     {money(payment.net.amount, payment.net.currencyCode)}
                   </TableCell>
                   <TableCell>
-                    <div>{shortId(payment.associatedPayout?.id)}</div>
+                    <div>{payment.provider==='flatpay'?(payment.settlementNumber||'—'):shortId(payment.associatedPayout?.id)}</div>
                     <div className="mt-1 text-sm text-muted-foreground">
-                      {payment.associatedPayout?.status
+                      {payment.provider==='flatpay'?'Afregningsnummer':payment.associatedPayout?.status
                         ? payoutStatuses[payment.associatedPayout.status] ||
                           payment.associatedPayout.status
                         : 'Ikke tildelt'}
                     </div>
                   </TableCell>
                   <TableCell>
-                    {payment.bookingStatus === 'booked'
+                    {payment.provider==='flatpay'?'Ikke aktiveret':payment.bookingStatus === 'booked'
                       ? 'Bogført'
                       : payment.bookingStatus === 'failed'
                         ? 'Fejlet'
                         : 'Afventer'}
                   </TableCell>
                   <TableCell>
-                    {refund && payment.bookingStatus !== 'booked' ? (
+                    {refund && payment.provider!=='flatpay' && payment.bookingStatus !== 'booked' ? (
                       <BookingAction
                         endpoint="/api/refunds/transfer"
                         externalId={payment.id}
@@ -408,3 +416,4 @@ export function Payments({
     </div>
   );
 }
+

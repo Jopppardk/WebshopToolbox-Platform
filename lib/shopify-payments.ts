@@ -12,7 +12,7 @@ export type BalancePayment = {
   sourceOrderTransactionId: string | null;
 };
 
-export type PaymentView = BalancePayment & { bookingStatus: string };
+export type PaymentView = BalancePayment & { bookingStatus: string; provider?: string; transactionID?:string; settlementNumber?:string|null };
 export type PaymentSummary = { currency: string; count: number; gross: number; fees: number; net: number };
 
 // Shopify money is a decimal string. Store exact minor units, never float products.
