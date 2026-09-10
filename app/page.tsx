@@ -2,6 +2,7 @@
 import { ProviderLedger } from '@/components/provider-ledger';
 import { IntegrationLibrary, RemoveIntegration, useIntegrationLibrary } from '@/components/integration-library';
 import { IntegrationCard } from '@/components/integration-card';
+import { FlatpayConnection } from '@/components/flatpay-connection';
 import { EmballageConnection } from '@/components/emballage-connection';
 import { ViaBillConnection } from '@/components/viabill-connection';
 import { HistorySettings } from '@/components/history-settings';
@@ -738,6 +739,7 @@ function Settings({
   const [connecting, setConnecting] = useState<'shopify' | 'dinero' | null>(null);
   const library = useIntegrationLibrary();
   const [expandedEmballage, setExpandedEmballage] = useState(false);
+  const [expandedFlatpay,setExpandedFlatpay]=useState(false);
   const [expandedViaBill, setExpandedViaBill] = useState(false);
   const [expandedIntegration, setExpandedIntegration] = useState<'shopify' | 'dinero' | null>(null);
   const [connected, setConnected] = useState<Record<string, string>>({});
@@ -950,7 +952,7 @@ function Settings({
       </fieldset>}
       {mode === 'integrations' && <>
       <HistorySettings />
-      <IntegrationLibrary state={library} onAdded={id => { if (id === 'viabill') setExpandedViaBill(true); else if(id === 'emballage') setExpandedEmballage(true); else setExpandedIntegration(id); }} />
+      <IntegrationLibrary state={library} onAdded={id => { if(id==='flatpay')setExpandedFlatpay(true); else if (id === 'viabill') setExpandedViaBill(true); else if(id === 'emballage') setExpandedEmballage(true); else setExpandedIntegration(id); }} />
       <div className="mb-8 grid items-start gap-3 md:grid-cols-2">
         {integrations.filter(item => library.selection?.selected.includes(item.provider) || Boolean(connected[item.provider])).map(({ name, provider, detail, icon: Icon, connected: isConnected }) => (
           <IntegrationCard key={name} name={name} description={detail} icon={Icon} connected={isConnected} expanded={expandedIntegration===provider} onToggle={()=>setExpandedIntegration(current=>current===provider?null:provider)} panelId={`${provider}-connection-panel`} footer={!isConnected&&<RemoveIntegration state={library} provider={provider} disabled={connecting!==null}/>}> 
@@ -975,6 +977,7 @@ function Settings({
                 {provider === 'shopify' && <div className="mt-4 rounded-xl border bg-white p-4"><p className="mb-3 text-sm font-semibold">Bogføring af Shopify Payments</p><Field name="shopifyPaymentsClearing" label="Mellemregningskonto" /></div>}
           </IntegrationCard>
         ))}
+        {library.selection?.selected.includes('flatpay') && <FlatpayConnection initialExpanded={expandedFlatpay} onConnected={()=>{void library.refresh();}} footer={<RemoveIntegration state={library} provider="flatpay"/>}/>}
         {library.selection?.selected.includes('emballage') && <EmballageConnection initialExpanded={expandedEmballage} onConnected={() => { void library.refresh(); }}  footer={<RemoveIntegration state={library} provider="emballage" />}/>}
         {library.selection?.selected.includes('viabill') && <ViaBillConnection initialExpanded={expandedViaBill} onConnected={() => { void library.refresh(); }} accountField={<Field name="viaBillClearing" label="Mellemregningskonto" />}  footer={<RemoveIntegration state={library} provider="viabill" />}/>}
       </div>

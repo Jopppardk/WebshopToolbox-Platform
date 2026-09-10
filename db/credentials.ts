@@ -26,7 +26,7 @@ async function encryptionKey() {
 }
 
 export async function saveCredentials(
-  provider: 'shopify' | 'dinero' | 'viabill' | 'emballage',
+  provider: 'shopify' | 'dinero' | 'viabill' | 'emballage' | 'flatpay',
   credentials: Record<string, string>,
   displayName: string,
 ) {
@@ -40,7 +40,7 @@ export async function saveCredentials(
   const db = await prepareDatabase();
   // The legacy credentials table only permits Shopify/Dinero. Keep the new
   // provider's encrypted envelope in the existing server-only settings store.
-  if (provider === 'viabill' || provider === 'emballage') {
+  if (provider === 'viabill' || provider === 'emballage' || provider === 'flatpay') {
     await db.prepare(`INSERT INTO app_settings (tenant, setting_key, setting_value)
       VALUES (?, ?, ?) ON CONFLICT(tenant, setting_key)
       DO UPDATE SET setting_value = excluded.setting_value, updated_at = CURRENT_TIMESTAMP`)
@@ -69,10 +69,10 @@ export async function saveCredentials(
     .run();
 }
 
-export async function loadCredentials(provider: 'shopify' | 'dinero' | 'viabill' | 'emballage', readOnly = false) {
+export async function loadCredentials(provider: 'shopify' | 'dinero' | 'viabill' | 'emballage' | 'flatpay', readOnly = false) {
   const db = readOnly ? database() : await prepareDatabase();
-  const envelope = (provider === 'viabill' || provider === 'emballage') ? await db.prepare("SELECT setting_value FROM app_settings WHERE tenant = ? AND setting_key = ?").bind(tenant, provider+'_credentials').first<{ setting_value: string }>() : null;
-  const row = (provider === 'viabill' || provider === 'emballage') ? (envelope ? JSON.parse(envelope.setting_value) as { ciphertext: string; iv: string } : null) : await db
+  const envelope = (provider === 'viabill' || provider === 'emballage' || provider === 'flatpay') ? await db.prepare("SELECT setting_value FROM app_settings WHERE tenant = ? AND setting_key = ?").bind(tenant, provider+'_credentials').first<{ setting_value: string }>() : null;
+  const row = (provider === 'viabill' || provider === 'emballage' || provider === 'flatpay') ? (envelope ? JSON.parse(envelope.setting_value) as { ciphertext: string; iv: string } : null) : await db
     .prepare(
       'SELECT ciphertext, iv FROM integration_credentials WHERE tenant = ? AND provider = ?',
     )
