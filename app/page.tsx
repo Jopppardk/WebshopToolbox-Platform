@@ -77,7 +77,7 @@ type OrderView = {
   customer?: { name?: string | null; address1?: string | null; address2?: string | null; zip?: string | null; city?: string | null; country?: string | null } | null;
   lines?: Array<{ name: string; quantity: number; discountedTotalSet: { shopMoney: { amount: string; currencyCode: string } } }>;
   shippingLines?: Array<{ title: string; discountedPriceSet: { shopMoney: { amount: string; currencyCode: string } } }>;
-  subtotal?: string; tax?: string; paymentStatus?: string | null;
+  paymentProvider?: string; subtotal?: string; tax?: string; paymentStatus?: string | null;
 };
 
 export default function Home() {
@@ -383,6 +383,7 @@ export default function Home() {
                   <TableRow className="bg-muted/45 hover:bg-muted/45">
                     <TableHead className="pl-5">Ordre</TableHead>
                     <TableHead>Dato</TableHead>
+                    <TableHead>Betalingsudbyder</TableHead>
                     <TableHead>Afsendelse</TableHead>
                     <TableHead className="text-right">Beløb</TableHead>
                     <TableHead>Realiseret</TableHead>
@@ -393,7 +394,7 @@ export default function Home() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {!filtered.length && <TableRow><TableCell colSpan={7} className="p-8 text-center">{orderError ? 'Ordrerne kunne ikke vises.' : 'Ingen ordrer i det valgte udsnit.'}</TableCell></TableRow>}
+                  {!filtered.length && <TableRow><TableCell colSpan={8} className="p-8 text-center">{orderError ? 'Ordrerne kunne ikke vises.' : 'Ingen ordrer i det valgte udsnit.'}</TableCell></TableRow>}
                   {filtered.map((order) => (
                     <OrderRow key={order.id} order={order} onBooked={() => setOrderRevision(value => value + 1)} />
                   ))}
@@ -503,6 +504,7 @@ function OrderRow({ order, onBooked }: { order: OrderView; onBooked: () => void 
         {order.id}
       </TableCell>
       <TableCell className="text-muted-foreground">{order.date}</TableCell>
+      <TableCell>{order.paymentProvider || 'Afventer opdatering'}</TableCell>
       <TableCell>
         <span
           className={`status-dot ${order.shipped === 'Afsendt' ? 'ok' : 'wait'}`}

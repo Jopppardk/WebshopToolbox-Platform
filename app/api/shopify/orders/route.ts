@@ -1,3 +1,5 @@
+import {orderPaymentProvider} from '@/lib/order-payment-provider';
+import {enrichOrderPaymentProviders} from '@/db/order-payment-provider';
 import { orderPeriodWindow } from '@/lib/order-period';
 import { shopifyFailure } from '@/lib/shopify-request';
 import { recordFailure } from '@/db/errors';
@@ -11,6 +13,7 @@ import { completeOrder, orderFields, orderQuery } from '@/db/shopify-order';
 import { units, type InvoiceSource } from '@/lib/invoice-check';
 
 type ShopifyOrder = {
+  paymentGatewayNames?:string[];
   id: string;
   name: string;
   createdAt: string;
@@ -35,6 +38,7 @@ function present(order: ShopifyOrder, bookingStatus = 'Afventer') {
   const cancelled = Boolean(order.cancelledAt);
   return {
     id: order.name,
+    paymentProvider: orderPaymentProvider(order.paymentGatewayNames),
     date: new Intl.DateTimeFormat('da-DK', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Copenhagen' }).format(new Date(order.createdAt)),
     shipped: cancelled ? 'Annulleret' : order.displayFulfillmentStatus === 'FULFILLED' ? 'Afsendt' : order.displayFulfillmentStatus === 'PARTIAL' ? 'Delvist afsendt' : 'Ikke afsendt',
     amount: new Intl.NumberFormat('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(money.amount)),
@@ -63,6 +67,7 @@ async function storedOrders(offset = 0, from?: string, until = '9999-12-31T00:00
     .prepare(`SELECT o.payload_json, COALESCE(json_extract(t.setting_value, '$.phase'), o.booking_status) AS booking_status FROM integration_records o LEFT JOIN app_settings t ON t.tenant = o.tenant AND t.setting_key = 'sales_transfer:' || o.external_id WHERE o.tenant = ? AND o.record_type = 'order' AND o.occurred_at >= ? AND o.occurred_at < ? ORDER BY o.occurred_at DESC, o.external_id DESC LIMIT ? OFFSET ?`)
     .bind('sablen.dk', from || cutoff, until, limit, offset)
     .all<{ payload_json: string; booking_status: string }>();
+  await enrichOrderPaymentProviders(db,result.results);
   const labels: Record<string, string> = { booked: 'Bogført', failed: 'Fejlet', draft: 'Kladde i Dinero', creating: 'Overfører…', booking: 'Bogfører…', uncertain: 'Kræver kontrol', archived: 'Arkiveret overførsel' };
   return result.results.map((row) => present(JSON.parse(row.payload_json), labels[row.booking_status] || 'Afventer'));
 }
