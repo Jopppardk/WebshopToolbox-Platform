@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import {ensureFlatpayReport,flatpayReportStateKey} from '@/db/flatpay-report';
 import { database } from '@/db/database';
 import { loadCredentials } from '@/db/credentials';
 import { flatpayRead,flatpayDateRange } from '@/lib/flatpay-api';
@@ -6,6 +7,7 @@ const reply=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{'
 export async function POST(request:Request){
  if(request.headers.get('origin')!==new URL(request.url).origin||!request.headers.get('content-type')?.startsWith('application/json'))return reply({error:'Start læsetesten fra Toolbox.'},403);
  try{
+ const reportWarnings:string[]=[];
  const c=await loadCredentials('flatpay');if(!c)throw Error('Forbind Flatpay under Indstillinger først.');
  const b=await request.json() as {start:string;end:string;kind:string};flatpayDateRange(b.start,b.end,c.startDate);
  if(!['transactions','settlements','payments'].includes(b.kind))throw Error('Ugyldig datatype.');
@@ -23,7 +25,12 @@ export async function POST(request:Request){
    const valid=data.filter(r=>typeof r.paymentID==='string'&&r.paymentID&&typeof r.payoutAmount==='number'&&Number.isFinite(r.payoutAmount)&&typeof r.currency==='string'&&/^[A-Z]{3}$/.test(r.currency)&&typeof (r.paidDate??r.scheduledDate)==='string'&&Number.isFinite(Date.parse(String(r.paidDate??r.scheduledDate))));
    if(valid.length!==data.length)throw Error('Flatpay-udbetalingerne mangler ID, dato, valuta eller beløb og kunne ikke gemmes i oversigten.');
    for(let i=0;i<valid.length;i+=50)await db.batch(valid.slice(i,i+50).map(r=>db.prepare("INSERT INTO app_settings(tenant,setting_key,setting_value) VALUES(?,?,?) ON CONFLICT(tenant,setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=CURRENT_TIMESTAMP WHERE json_extract(excluded.setting_value,'$.paidDate') IS NOT NULL OR json_extract(app_settings.setting_value,'$.paidDate') IS NULL").bind('sablen.dk',`flatpay:payout:${c.merchantID}:${c.agreementId}:${r.paymentID}`,JSON.stringify({...r,merchantID:c.merchantID,agreementID:c.agreementId}))));
+   for(const r of valid.filter(r=>r.paidDate).slice(0,5)){
+    const id=`flatpay:payout:${c.merchantID}:${c.agreementId}:${r.paymentID}`;
+    const report=await db.prepare("SELECT setting_value FROM app_settings WHERE tenant='sablen.dk' AND setting_key=?").bind(flatpayReportStateKey(id)).first();
+    if(!report)try{await ensureFlatpayReport(db,id);}catch{reportWarnings.push('Rapport '+String(r.paymentID)+' kunne ikke dannes. Prøv Dan rapport under Udbetalingsrapporter.');}
+   }
  }
- return reply({records:data,agreementNumber:c.agreementNumber,fetchedAt:new Date().toISOString(),readOnly:true,note:'Læsning af Flatpay-data. Beløb og typer vises som leveret af API’et; ingen bogføring eller tilbagebetaling udføres.'});
+ return reply({records:data,reportWarnings,agreementNumber:c.agreementNumber,fetchedAt:new Date().toISOString(),readOnly:true,note:'Læsning af Flatpay-data. Beløb og typer vises som leveret af API’et; ingen bogføring eller tilbagebetaling udføres.'});
  }catch(e){return reply({error:e instanceof Error?e.message:'Flatpay-data kunne ikke hentes.'},422);}
 }
