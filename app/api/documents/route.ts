@@ -1,3 +1,4 @@
+import {ensurePayoutReport} from '@/lib/payout-report';
 import { NextRequest, NextResponse } from 'next/server';
 import { env } from 'cloudflare:workers';
 import { prepareDatabase } from '@/db/database';
@@ -31,8 +32,8 @@ export async function GET(request: NextRequest) {
       if (!object) return reply({ error: 'Udbetalingsrapportens PDF mangler.' }, 404);
       return new NextResponse(object.body, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${externalId.split('/').pop()}.pdf"`, 'Cache-Control': 'private, no-store' } });
     }
-    const rows = await db.prepare("SELECT external_id, occurred_at, payload_json FROM integration_records WHERE tenant='sablen.dk' AND record_type='payout' AND occurred_at>=? AND json_extract(payload_json,'$.reportKey') IS NOT NULL ORDER BY occurred_at DESC LIMIT 100").bind(cutoff).all<{ external_id: string; occurred_at: string; payload_json: string }>();
-    const shopDocuments=rows.results.map(row => { const value = JSON.parse(row.payload_json); return { externalId: row.external_id, date: row.occurred_at, provider: value.provider, amount: value.net, filename: `${row.external_id.split('/').pop()}.pdf`,ready:true }; });
+    const rows = await db.prepare("SELECT external_id, occurred_at, payload_json FROM integration_records WHERE tenant='sablen.dk' AND record_type='payout' AND occurred_at>=? AND json_extract(payload_json,'$.provider')='shopify_payments' AND json_extract(payload_json,'$.status')='PAID' AND json_extract(payload_json,'$.transactionType')='DEPOSIT' ORDER BY occurred_at DESC LIMIT 100").bind(cutoff).all<{ external_id: string; occurred_at: string; payload_json: string }>();
+    const shopDocuments=rows.results.map(row => { const value = JSON.parse(row.payload_json); return { externalId: row.external_id, date: row.occurred_at, provider: value.provider, amount: value.net, filename: `${row.external_id.split('/').pop()}.pdf`,ready:!!value.reportKey }; });
     return reply({documents:[...shopDocuments,...flatDocuments.map(({report: _report,...d})=>d)].sort((a,b)=>Date.parse(b.date)-Date.parse(a.date)||a.externalId.localeCompare(b.externalId)).slice(0,100)});
   } catch { await recordFailure('Udbetalingsrapporter'); return reply({ error: 'Dokumenterne kunne ikke indlæses.' }, 503); }
 }
@@ -40,5 +41,19 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request:Request){
  if(request.headers.get('origin')!==new URL(request.url).origin||!request.headers.get('content-type')?.startsWith('application/json'))return reply({error:'Start handlingen fra Toolbox.'},403);
- try{const b=await request.json() as {externalId:string};if(typeof b.externalId!=='string'||b.externalId.length>300||!b.externalId.startsWith('flatpay:payout:'))return reply({error:'Ugyldigt dokument-ID.'},400);await ensureFlatpayReport(await prepareDatabase(),b.externalId);return reply({message:'Udbetalingsrapporten er klar.'});}catch(e){return reply({error:e instanceof Error?e.message:'Rapporten kunne ikke dannes.'},422);}
+ try{
+ const b=await request.json() as {externalId:string};
+ if(typeof b.externalId!=='string'||b.externalId.length>300)return reply({error:'Ugyldigt dokument-ID.'},400);
+ const flatpay=b.externalId.startsWith('flatpay:payout:');
+ if(!flatpay&&!/^gid:\/\/shopify\/ShopifyPaymentsPayout\/\d+$/.test(b.externalId))return reply({error:'Ugyldigt dokument-ID.'},400);
+ const db=await prepareDatabase();
+ if(flatpay)await ensureFlatpayReport(db,b.externalId);
+ else{
+  const {cutoff}=historyWindow(await loadHistory(db,'shopify'));
+  const row=await db.prepare("SELECT external_id FROM integration_records WHERE tenant='sablen.dk' AND record_type='payout' AND external_id=? AND occurred_at>=? AND json_extract(payload_json,'$.provider')='shopify_payments' AND json_extract(payload_json,'$.status')='PAID' AND json_extract(payload_json,'$.transactionType')='DEPOSIT'").bind(b.externalId,cutoff).first();
+  if(!row)return reply({error:'Udbetalingen findes ikke som en gennemført bankudbetaling i den valgte historik.'},404);
+  await ensurePayoutReport(db,b.externalId);
+ }
+ return reply({message:'Udbetalingsrapporten er klar.'});
+ }catch(e){return reply({error:e instanceof Error?e.message:'Rapporten kunne ikke dannes.'},422);}
 }
