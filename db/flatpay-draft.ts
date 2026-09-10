@@ -46,8 +46,9 @@ export async function flatpayDraftAction(body:{externalId:string;action:string;f
   const object=await (env as unknown as {INVOICES:R2Bucket}).INVOICES.get(report.key);
   if(!object||object.etag!==report.etag)throw new TransferError('Rapporten mangler eller er ændret.');
   const form=new FormData();form.append('file',new Blob([await object.arrayBuffer()],{type:'application/pdf'}),report.filename);
-  const upload=await client('files','POST',form) as {FileGuid?:string};
-  if(!upload.FileGuid||!/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(upload.FileGuid))throw new TransferError('Dinero bekræftede ikke PDF-upload.');
+  const upload=await client('files','POST',form) as {FileGuid?:unknown}|null;
+  // Dinero FileGuid is an opaque file ID, not a voucher UUID (see FileSavedReadModel).
+  if(typeof upload?.FileGuid!=='string'||!/^[-\w]{10,128}$/.test(upload.FileGuid))throw new TransferError('Dinero bekræftede ikke PDF-upload.');
   proposal.voucher.FileGuid=upload.FileGuid;
   await save({...state!,proposal});
   const raw=await client('vouchers/manuel','POST',proposal.voucher) as {Guid?:string};
