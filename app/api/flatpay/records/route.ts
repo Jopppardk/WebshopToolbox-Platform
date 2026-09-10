@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { database } from '@/db/database';
 import { loadCredentials } from '@/db/credentials';
 import { flatpayRead,flatpayDateRange } from '@/lib/flatpay-api';
 const reply=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{'Cache-Control':'no-store'}});
@@ -15,6 +16,12 @@ export async function POST(request:Request){
  const selected=rows.filter(r=>r.merchantID===c.merchantID&&(kind==='payments'?r.agreementNumber===c.agreementNumber:r.agreementID===c.agreementId));
  const fields=kind==='transactions'?['transactionID','purchaseDate','registrationDate','transactionType','transactionCode','currency','grossAmount','fees','interchange','netAmount','settlementNumber','paidDate']:kind==='payments'?['paymentID','paidDate','scheduledDate','currency','payoutAmount','settlements']:['settlementID','settlementNumber','createdDate','paidDate','currency','grossPurchase','grossSettlement','netSettlement','payout','feeAmount','refundAmount','deduction','chargeback','rollingReserve','rollingRelease','chargebackFees','schemeFees','transactionFee','addedSum','deductedSum','balanceTransfer','otherFees'];
  const data=selected.filter(r=>typeof r[dateKey]==='string'&&String(r[dateKey]).slice(0,10)>=b.start&&String(r[dateKey]).slice(0,10)<=b.end).map(r=>Object.fromEntries(fields.map(key=>[key,typeof r[key]==='string'||typeof r[key]==='number'?r[key]:null])));
+ if(kind==='payments'){
+   const db=database();
+   const valid=data.filter(r=>typeof r.paymentID==='string'&&r.paymentID&&typeof r.payoutAmount==='number'&&Number.isFinite(r.payoutAmount)&&typeof r.currency==='string'&&/^[A-Z]{3}$/.test(r.currency)&&typeof r.paidDate==='string'&&Number.isFinite(Date.parse(r.paidDate)));
+   if(valid.length!==data.length)throw Error('Flatpay-udbetalingerne mangler ID, dato, valuta eller beløb og kunne ikke gemmes i oversigten.');
+   for(let i=0;i<valid.length;i+=50)await db.batch(valid.slice(i,i+50).map(r=>db.prepare('INSERT INTO app_settings(tenant,setting_key,setting_value) VALUES(?,?,?) ON CONFLICT(tenant,setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=CURRENT_TIMESTAMP').bind('sablen.dk',`flatpay:payout:${c.merchantID}:${c.agreementId}:${r.paymentID}`,JSON.stringify({...r,merchantID:c.merchantID,agreementID:c.agreementId}))));
+ }
  return reply({records:data,agreementNumber:c.agreementNumber,fetchedAt:new Date().toISOString(),readOnly:true,note:'Læsning af Flatpay-data. Beløb og typer vises som leveret af API’et; ingen bogføring eller tilbagebetaling udføres.'});
  }catch(e){return reply({error:e instanceof Error?e.message:'Flatpay-data kunne ikke hentes.'},422);}
 }
