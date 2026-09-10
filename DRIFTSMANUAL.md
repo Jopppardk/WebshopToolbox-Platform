@@ -217,3 +217,8 @@ Linjer uden gyldig emballagevægt eller med uafklaret indberetningspligt udelade
 
 ### Besked om nye indberetningsperioder
 Emballage Indberetning kontrolleres højst én gang i timen af Cloudflare-baggrundsjobbet, uafhængigt af salgsintervallet. Kun tilsluttede integrationer med gemt startdato og producentansvar kontrolleres. Åbne, ikke-indberettede perioder blandt de fem afsluttede kvartaler fra startdatoen giver én besked pr. organisation, test/drift og rapport-ID. Allerede åbne perioder vises ved første kontrol. Beskeder gemmes under klokken og kan markeres læst; læsestatus bevares ved senere kontroller. Jobhistorikken viser kontrolresultat og eventuelle API-fejl. Funktionen sender ingen indberetning automatisk.
+
+### Flatpay: første læsetest
+Tilføj Flatpay i integrationsbiblioteket. Indtast Saga/Valitor API-brugernavn og adgangskode, hent aftaler, vælg aftale og startdato, og gem. Adgangsoplysninger krypteres. Under Betalinger og Udbetalinger findes Flatpay-fanen, hvor op til 31 dages transaktioner, afregninger eller bankudbetalinger kan læses. Kort- og bankkontonumre udelades. Dette trin importerer ikke til regnskabet og foretager ingen betalinger eller tilbagebetalinger.
+
+Før næste trin skal en virkelig afregning kontrolleres: transaktionstype-/kode for køb, tilbagebetaling, chargeback og tilbageførsel; gebyrernes fortegn og overlap; sammenhæng mellem settlement og payment; eventuelle udokumenterede svargrænser; datotidszone. Swagger beskriver felterne, men ikke disse regnskabsregler. Der er endnu ingen Flatpay-PDF, automatisk synkronisering eller Dinero-bogføring. Den fulde Shopify Payments-lignende funktionalitet afventer denne kontrol.
