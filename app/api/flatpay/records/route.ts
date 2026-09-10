@@ -1,3 +1,4 @@
+import {payoutImportStatements} from '@/db/payout-events';
 import {refreshFlatpayUpcoming} from '@/db/flatpay-upcoming';
 import { NextResponse } from 'next/server';
 import {ensureFlatpayReport,flatpayReportStateKey} from '@/db/flatpay-report';
@@ -26,7 +27,7 @@ export async function POST(request:Request){
    await refreshFlatpayUpcoming(db,c,upcomingStart,upcomingEnd);
    const valid=data.filter(r=>typeof r.paymentID==='string'&&r.paymentID&&typeof r.payoutAmount==='number'&&Number.isFinite(r.payoutAmount)&&typeof r.currency==='string'&&/^[A-Z]{3}$/.test(r.currency)&&typeof (r.paidDate??r.scheduledDate)==='string'&&Number.isFinite(Date.parse(String(r.paidDate??r.scheduledDate))));
    if(valid.length!==data.length)throw Error('Flatpay-udbetalingerne mangler ID, dato, valuta eller beløb og kunne ikke gemmes i oversigten.');
-   for(let i=0;i<valid.length;i+=50)await db.batch(valid.slice(i,i+50).map(r=>db.prepare("INSERT INTO app_settings(tenant,setting_key,setting_value) VALUES(?,?,?) ON CONFLICT(tenant,setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=CURRENT_TIMESTAMP WHERE json_extract(excluded.setting_value,'$.paidDate') IS NOT NULL OR json_extract(app_settings.setting_value,'$.paidDate') IS NULL").bind('sablen.dk',`flatpay:payout:${c.merchantID}:${c.agreementId}:${r.paymentID}`,JSON.stringify({...r,merchantID:c.merchantID,agreementID:c.agreementId}))));
+   for(let i=0;i<valid.length;i+=20)await db.batch(valid.slice(i,i+20).flatMap(r=>{const write=db.prepare("INSERT INTO app_settings(tenant,setting_key,setting_value) VALUES(?,?,?) ON CONFLICT(tenant,setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=CURRENT_TIMESTAMP WHERE json_extract(excluded.setting_value,'$.paidDate') IS NOT NULL OR json_extract(app_settings.setting_value,'$.paidDate') IS NULL").bind('sablen.dk',`flatpay:payout:${c.merchantID}:${c.agreementId}:${r.paymentID}`,JSON.stringify({...r,merchantID:c.merchantID,agreementID:c.agreementId}));return payoutImportStatements(db,`flatpay:payout:${c.merchantID}:${c.agreementId}:${r.paymentID}`,'flatpay',r,write);}));
    for(const r of valid.filter(r=>r.paidDate).slice(0,5)){
     const id=`flatpay:payout:${c.merchantID}:${c.agreementId}:${r.paymentID}`;
     const report=await db.prepare("SELECT setting_value FROM app_settings WHERE tenant='sablen.dk' AND setting_key=?").bind(flatpayReportStateKey(id)).first();

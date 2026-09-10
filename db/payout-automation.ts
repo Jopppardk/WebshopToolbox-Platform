@@ -1,3 +1,4 @@
+import {savePayoutReceipt,payoutAttemptFailed} from './payout-events';
 import { env } from 'cloudflare:workers';
 import { database } from './database';
 import { loadCredentials } from './credentials';
@@ -12,9 +13,9 @@ type State = { phase: 'creating'|'draft'|'booking'|'booked'|'uncertain'; version
 const tenant='sablen.dk', key=(id:string)=>`payout_production:${id}`;
 const runtime=()=>env as unknown as { DINERO_PAYOUT_WRITES_ENABLED?:string; DINERO_PAYOUT_AUTOMATION_ENABLED?:string; DINERO_PAYOUT_START_AFTER?:string };
 async function read(id:string){const row=await database().prepare('SELECT setting_value FROM app_settings WHERE tenant=? AND setting_key=?').bind(tenant,key(id)).first<{setting_value:string}>();return row?{raw:row.setting_value,state:JSON.parse(row.setting_value) as State}:null;}
-async function save(id:string,previous:Awaited<ReturnType<typeof read>>,value:Omit<State,'version'|'updatedAt'>){const state={...value,version:crypto.randomUUID(),updatedAt:new Date().toISOString()} as State,raw=JSON.stringify(state);const result=previous?await database().prepare('UPDATE app_settings SET setting_value=?,updated_at=CURRENT_TIMESTAMP WHERE tenant=? AND setting_key=? AND setting_value=?').bind(raw,tenant,key(id),previous.raw).run():await database().prepare('INSERT INTO app_settings(tenant,setting_key,setting_value) VALUES(?,?,?) ON CONFLICT DO NOTHING').bind(tenant,key(id),raw).run();return result.meta.changes===1?{raw,state}:null;}
+async function save(id:string,previous:Awaited<ReturnType<typeof read>>,value:Omit<State,'version'|'updatedAt'>){const state={...value,version:crypto.randomUUID(),updatedAt:new Date().toISOString()} as State,raw=JSON.stringify(state);const write=previous?database().prepare('UPDATE app_settings SET setting_value=?,updated_at=CURRENT_TIMESTAMP WHERE tenant=? AND setting_key=? AND setting_value=?').bind(raw,tenant,key(id),previous.raw):database().prepare('INSERT INTO app_settings(tenant,setting_key,setting_value) VALUES(?,?,?) ON CONFLICT DO NOTHING').bind(tenant,key(id),raw);const result=await savePayoutReceipt(database(),write,key(id),id,previous?JSON.parse(previous.raw):null,state,raw);return result.meta.changes===1?{raw,state}:null;}
 async function shouldBook(){const row=await database().prepare("SELECT setting_value FROM app_settings WHERE tenant=? AND setting_key='admin_settings'").bind(tenant).first<{setting_value:string}>();return !row||validateSettings(JSON.parse(row.setting_value)).automation.payoutsBookDinero;}
-async function processPayout(externalId:string,credentials:Record<string,string>){
+async function processPayoutInner(externalId:string,credentials:Record<string,string>){
  const existing=await read(externalId),book=await shouldBook();if(existing?.state.phase==='booked'){await database().prepare("UPDATE integration_records SET booking_status='booked' WHERE tenant=? AND record_type='payout' AND external_id=?").bind(tenant,externalId).run();return true;}if(existing&&existing.state.phase!=='draft')throw new TransferError('Udbetalingen har allerede en igangværende eller usikker Dinero-status. Kontrollér fejloversigten og Dinero før nyt forsøg.');if(existing&&!book)return true;
  const snapshot=existing?.state.snapshot||await payoutProposal(externalId,credentials,false);
  let current=existing||await save(externalId,null,{phase:'creating',externalId,organizationId:credentials.organizationId,snapshot});if(!current)return;
@@ -30,6 +31,9 @@ async function processPayout(externalId:string,credentials:Record<string,string>
   await database().prepare("UPDATE integration_records SET booking_status='booked' WHERE tenant=? AND record_type='payout' AND external_id=?").bind(tenant,externalId).run();
   return true;
  }catch(error){const message=error instanceof Error?error.message:'Automatisk udbetaling blev afbrudt.';try{await save(externalId,current,{...current.state,phase:'uncertain',message});}catch{}await recordFailure('Dinero · automatisk udbetaling');return false;}
+}
+async function processPayout(externalId:string,credentials:Record<string,string>){
+ try{return await processPayoutInner(externalId,credentials);}catch(error){await payoutAttemptFailed(database(),externalId,error,credentials.organizationId);throw error;}
 }
 export async function runSinglePayout(externalId:string){const config=runtime();if(config.DINERO_PAYOUT_WRITES_ENABLED!=='true')throw new TransferError('Overførsel af udbetalinger til Dinero er deaktiveret.');const credentials=await loadCredentials('dinero',true);if(!credentials?.organizationId)throw new TransferError('Dinero-forbindelsen mangler.');const ok=await processPayout(externalId,credentials);if(!ok)throw new TransferError('Udbetalingen kunne ikke overføres. Se fejloversigten, og kontrollér Dinero før et nyt forsøg.');const state=await read(externalId);return{message:state?.state.phase==='booked'?'Udbetalingen er bogført i Dinero.':'Udbetalingen er oprettet som kladde i Dinero.'};}
 export async function runPayoutAutomation(){

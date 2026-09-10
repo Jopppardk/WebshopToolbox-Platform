@@ -1,3 +1,4 @@
+import {savePayoutReceipt,payoutAttemptFailed} from './payout-events';
 import {database} from './database';
 import {loadCredentials} from './credentials';
 import {flatpayDraftAction} from './flatpay-draft';
@@ -32,7 +33,7 @@ export async function runFlatpayAutomation(){
    if(state.phase!=='draft'&&state.phase!=='booked')throw Error('Flatpay-overførslen har en igangværende eller usikker status.');
    if(state.phase==='draft'&&settings.automation.payoutsBookDinero)await bookFlatpay(payout.setting_key,dinero);
    completed++;
-  }catch(error){failed++;await recordFailure('Dinero · Flatpay-udbetaling',{category:'dinero',reference:payout.setting_key,cause:error instanceof Error?error.message:'Overførslen fejlede.',action:'Kontrollér afregningsgrundlaget og Dinero før et nyt forsøg.'});await db.prepare("UPDATE app_settings SET updated_at=CURRENT_TIMESTAMP WHERE tenant='sablen.dk' AND setting_key=?").bind(payout.setting_key).run();}
+  }catch(error){failed++;await payoutAttemptFailed(db,payout.setting_key,error,dinero.organizationId);await recordFailure('Dinero · Flatpay-udbetaling',{category:'dinero',reference:payout.setting_key,cause:error instanceof Error?error.message:'Overførslen fejlede.',action:'Kontrollér afregningsgrundlaget og Dinero før et nyt forsøg.'});await db.prepare("UPDATE app_settings SET updated_at=CURRENT_TIMESTAMP WHERE tenant='sablen.dk' AND setting_key=?").bind(payout.setting_key).run();}
  }
  if(failed)throw Error(`${failed} Flatpay-udbetalinger kræver kontrol af afregning, konti eller Dinero-status; ${completed} gennemført. Vælg Bogfør manuelt på udbetalingen efter kontrol af Dinero.`);
  if(held&&!completed)return {status:'skipped' as const,message:`${held} tidligere testudbetaling afventer afklaring af Dinero-status. Øvrige udbetalinger behandles automatisk.`};
@@ -46,7 +47,7 @@ export async function bookFlatpay(id:string,credentials:Record<string,string>){
  let raw=row.setting_value,state=JSON.parse(raw);
  if(state.phase==='booked')return;
  if(state.phase!=='draft'||state.organizationId!==credentials.organizationId||!state.guid||!state.proposal?.voucher?.FileGuid)throw Error('Kladden er ikke klar til bogføring med bilag.');
- async function save(phase:string){const next={...state,phase,version:crypto.randomUUID(),updatedAt:new Date().toISOString()},value=JSON.stringify(next);const result=await db.prepare("UPDATE app_settings SET setting_value=?,updated_at=CURRENT_TIMESTAMP WHERE tenant='sablen.dk' AND setting_key=? AND setting_value=?").bind(value,key,raw).run();if(result.meta.changes!==1)throw Error('Kladdestatus blev ændret.');raw=value;state=next;}
+ async function save(phase:string){const next={...state,phase,version:crypto.randomUUID(),updatedAt:new Date().toISOString()},value=JSON.stringify(next);const write=db.prepare("UPDATE app_settings SET setting_value=?,updated_at=CURRENT_TIMESTAMP WHERE tenant='sablen.dk' AND setting_key=? AND setting_value=?").bind(value,key,raw);const result=await savePayoutReceipt(db,write,key,id,state,next,value);if(result.meta.changes!==1)throw Error('Kladdestatus blev ændret.');raw=value;state=next;}
  const client=await dineroClient(credentials);
  // Claim before reading so two invocations can never post the same /book request.
  await save('booking');

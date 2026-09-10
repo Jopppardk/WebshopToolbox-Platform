@@ -53,7 +53,7 @@ export async function manualBooking(body:Input,actor:string){
  const claim=row?await db.prepare('UPDATE app_settings SET setting_value=?,updated_at=CURRENT_TIMESTAMP WHERE tenant=? AND setting_key=? AND setting_value=?').bind(raw,tenant,key,row.setting_value).run():await db.prepare('INSERT INTO app_settings(tenant,setting_key,setting_value) VALUES(?,?,?) ON CONFLICT DO NOTHING').bind(tenant,key,raw).run();
  if(claim.meta.changes!==1)throw new TransferError('En anden kørsel har ændret posten. Hent status igen.');
  const auditKey=`manual_booking:${crypto.randomUUID()}`;
- const audit={kind,externalId,actor,confirmedAt:claimed.updatedAt,previous:state,outcome:'started'};
+ const audit={kind,externalId,organizationId:credentials.organizationId,actor,confirmedAt:claimed.updatedAt,previous:state,outcome:'started'};
  // If audit persistence fails, leave the durable claim in place and send nothing.
  await db.prepare('INSERT INTO app_settings(tenant,setting_key,setting_value) VALUES(?,?,?)').bind(tenant,auditKey,JSON.stringify(audit)).run();
  async function replace(next:Receipt|null){
@@ -104,7 +104,7 @@ export async function manualBooking(body:Input,actor:string){
  }catch(error){
   // Only undo our own claim, never overwrite a newer receipt from an external write.
   if(raw)await replace({...claimed,...state,phase:'uncertain',updatedAt:new Date().toISOString()}).catch(()=>undefined);
-  await db.prepare('UPDATE app_settings SET setting_value=? WHERE tenant=? AND setting_key=?').bind(JSON.stringify({...audit,outcome:'failed',finishedAt:new Date().toISOString()}),tenant,auditKey).run();
+  await db.prepare('UPDATE app_settings SET setting_value=? WHERE tenant=? AND setting_key=?').bind(JSON.stringify({...audit,outcome:'failed',message:error instanceof TransferError?error.message:'Forsøget blev afbrudt. Kontrollér Dinero.',finishedAt:new Date().toISOString()}),tenant,auditKey).run();
   throw error;
  }
 }

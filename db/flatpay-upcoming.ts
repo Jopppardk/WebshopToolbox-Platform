@@ -19,7 +19,14 @@ export async function refreshFlatpayUpcoming(db:D1Database,c:Scope,start:string,
  if(value.length>1000000)throw Error('Listen over kommende Flatpay-afregninger er for stor.');
  // Replace a successful snapshot, including an empty one, to remove paid,
  // cancelled or rescheduled estimates. Failed reads preserve the last snapshot.
- await db.prepare("INSERT INTO app_settings(tenant,setting_key,setting_value) VALUES('sablen.dk',?,?) ON CONFLICT(tenant,setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=CURRENT_TIMESTAMP").bind(key(c),value).run();
+ const events=[...entries.values()].flatMap(entry=>{
+  const previous="SELECT value FROM app_settings,json_each(json_extract(setting_value,'$.entries')) WHERE tenant='sablen.dk' AND setting_key=? AND json_extract(value,'$.id')=?";
+  const at=new Date().toISOString();
+  return [db.prepare(`INSERT INTO payout_events(id,tenant,external_id,kind,at,data_json) SELECT ?,'sablen.dk',?,'received',?,? WHERE NOT EXISTS(${previous}) AND NOT EXISTS(SELECT 1 FROM payout_events WHERE tenant='sablen.dk' AND external_id=? AND kind='received')`).bind(crypto.randomUUID(),entry.id,at,JSON.stringify({status:'Kommende · forventet'}),key(c),entry.id,entry.id),
+   db.prepare(`INSERT INTO payout_events(id,tenant,external_id,kind,at,data_json) SELECT ?,'sablen.dk',?,'estimate',?,? FROM (${previous}) WHERE json_extract(value,'$.scheduledDate') IS NOT ? OR json_extract(value,'$.payoutAmount') IS NOT ?`).bind(crypto.randomUUID(),entry.id,at,JSON.stringify({date:entry.scheduledDate,amount:entry.payoutAmount,currency:entry.currency}),key(c),entry.id,entry.scheduledDate,entry.payoutAmount)];
+ });
+ const write=db.prepare("INSERT INTO app_settings(tenant,setting_key,setting_value) VALUES('sablen.dk',?,?) ON CONFLICT(tenant,setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=CURRENT_TIMESTAMP").bind(key(c),value);
+ await db.batch([...events,write]);
  return entries.size;
 }
 export async function readFlatpayUpcoming(db:D1Database,c:Scope|null){
