@@ -11,6 +11,7 @@ import { SalesPreview } from '@/components/sales-preview';
 import { SalesTransfer } from '@/components/sales-transfer';
 import { Documents } from '@/components/documents';
 import { Inventory } from '@/components/inventory';
+import { NotificationBell } from '@/components/notification-bell';
 import { Packaging } from '@/components/packaging';
 import { Dashboard } from '@/components/dashboard';
 import { JobInsights } from '@/components/job-insights';
@@ -30,7 +31,6 @@ import {
   ArrowDownToLine,
   ArrowUpRight,
   AlertTriangle,
-  Bell,
   BookOpenCheck,
   LayoutDashboard,
   Boxes,
@@ -89,6 +89,7 @@ export default function Home() {
   const [orderRevision, setOrderRevision] = useState(0);
   const [syncingOrders, setSyncingOrders] = useState(false);
   const [insightFilter, setInsightFilter] = useState('');
+  const [packagingEntry,setPackagingEntry]=useState({tab:'consumption' as 'consumption'|'reporting',key:0});
   const [view, setView] = useState<
     'dashboard' | 'orders' | 'invoices' | 'documents' | 'refunds' | 'payouts' | 'inventory' | 'packaging' | 'insights' | 'development' | 'settings'
   >('dashboard');
@@ -309,10 +310,7 @@ export default function Home() {
             <ChevronDown className="size-4" />
           </div>
           <div className="ml-auto flex items-center gap-3">
-            <button type="button" className="relative grid size-10 place-items-center rounded-full border bg-white text-foreground transition-colors hover:bg-muted" onClick={() => { setSettingsTab('dashboard'); setView('settings'); }} aria-label={openErrorCount ? `${openErrorCount} åbne fejl – åbn fejloversigten` : 'Ingen åbne fejl'}>
-              <Bell className="size-5" />
-              {openErrorCount > 0 && <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[11px] font-bold leading-none text-white">{openErrorCount > 99 ? '99+' : openErrorCount}</span>}
-            </button>
+            <NotificationBell errorCount={openErrorCount} onErrors={()=>{setSettingsTab('dashboard');setView('settings');}} onReporting={()=>{setPackagingEntry(p=>({tab:'reporting',key:p.key+1}));setView('packaging');}}/>
             <div className="hidden text-right sm:block">
               <p className="text-sm font-medium">rene@sablen.dk</p>
               <p className="text-xs text-muted-foreground">Administrator</p>
@@ -416,7 +414,7 @@ export default function Home() {
           <ProviderLedger kind="payout" syncRevision={syncState.revision} />
         )}
         {view === 'inventory' && <Inventory />}
-        {view === 'packaging' && <Packaging />}
+        {view === 'packaging' && <Packaging key={packagingEntry.key} initialTab={packagingEntry.tab}/>}
         {view === 'insights' && <JobInsights initialStatus={insightFilter} />}
         {view === 'development' && <DevelopmentRequests />}
         {view === 'settings' && (
