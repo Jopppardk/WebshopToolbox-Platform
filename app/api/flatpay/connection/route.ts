@@ -10,6 +10,7 @@ export async function POST(request:Request){
   if(typeof b.username!=='string'||typeof b.password!=='string'||b.username.length>300||b.password.length>2000)throw Error('Angiv API-brugernavn og adgangskode.');
   const access={username:b.username.trim(),password:b.password};
   const agreements=(await flatpayRead(access,'agreements')).map(safeAgreement);
+  if(!agreements.length)throw Error('Flatpay accepterede forespørgslen, men returnerede ingen aftaler. Bed Flatpay bekræfte, at API-brugeren er knyttet til jeres indløsningsaftale.');
   if(b.action==='validate')return reply({agreements});
   if(b.action!=='save')throw Error('Ugyldig handling.');
   const matches=agreements.filter(a=>a.agreementNumber===b.agreementNumber);
