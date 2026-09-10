@@ -17,7 +17,13 @@ export async function flatpayRead(access: FlatpayAccess, resource: typeof resour
     if (!response.ok) throw Error(response.status===401?'Flatpay afviste API-brugernavn eller adgangskode (HTTP 401).':response.status===403?'Flatpay-adgangen mangler rettigheder (HTTP 403).':`Flatpay-læsningen fejlede (HTTP ${response.status}).`);
     let payload: Record<string,unknown>;
     try { const raw=await response.text();if(raw.length>15000000)throw Error();payload=JSON.parse(raw); } catch { throw Error('Flatpay returnerede et ugyldigt eller for stort svar. Vælg en kortere periode.'); }
-    if (!payload || !Array.isArray(payload[resource])) throw Error('Flatpay returnerede ikke den dokumenterede dataliste.');
+    if (!payload || Array.isArray(payload) || typeof payload !== 'object') throw Error(`Flatpay /${resource}: svaret er ${payload === null ? 'null' : Array.isArray(payload) ? 'en direkte liste' : typeof payload}; forventede et objekt med feltet ${resource}.`);
+    if (Object.hasOwn(payload, resource) && payload[resource] === null) return [];
+    if (!Array.isArray(payload[resource])) {
+      const value = payload[resource];
+      const shape = Object.hasOwn(payload, resource) ? typeof value : 'mangler';
+      throw Error(`Flatpay /${resource}: feltet ${resource} ${shape === 'mangler' ? 'mangler' : 'har typen '+shape}. Forventede en liste eller null. HTTP ${response.status}.`);
+    }
     const rows=payload[resource] as Record<string,unknown>[];
     if(rows.length>=10000||rows.some(r=>!r||typeof r!=='object'||Array.isArray(r)))throw Error('Flatpay-svaret skal kontrolleres for fuldstændighed. Vælg en kortere periode.');
     return rows;
