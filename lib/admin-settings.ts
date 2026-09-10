@@ -1,4 +1,4 @@
-export const accountKeys = ['vatCode', 'noVatCode', 'goodsVat', 'goodsNoVat', 'shippingVat', 'shippingNoVat', 'servicesVat', 'servicesNoVat', 'refundGoodsVat', 'refundGoodsNoVat', 'refundShippingVat', 'refundShippingNoVat', 'refundServicesVat', 'refundServicesNoVat', 'fees', 'clearing', 'bank', 'shopifyPaymentsClearing', 'viaBillClearing', 'inventory', 'inventoryAdjustment'] as const;
+export const accountKeys = ['vatCode', 'noVatCode', 'goodsVat', 'goodsNoVat', 'shippingVat', 'shippingNoVat', 'servicesVat', 'servicesNoVat', 'refundGoodsVat', 'refundGoodsNoVat', 'refundShippingVat', 'refundShippingNoVat', 'refundServicesVat', 'refundServicesNoVat', 'fees', 'clearing', 'bank', 'shopifyPaymentsClearing', 'viaBillClearing', 'flatpayClearing', 'inventory', 'inventoryAdjustment'] as const;
 export type Accounts = Record<typeof accountKeys[number], string>;
 export const automationKeys = ['attachments', 'bookDinero', 'salesBookDinero', 'refundsBookDinero', 'payoutsBookDinero', 'inventoryBookDinero', 'sales', 'payments', 'refunds', 'payouts', 'invoiceEmails', 'inventory'] as const;
 export type Automation = Record<typeof automationKeys[number], boolean>;
@@ -25,7 +25,7 @@ export function validateSettings(input: unknown): AdminSettings {
   }
   for (const key of accountKeys) {
     const field = value.accounts?.[key];
-    if (field === undefined && ['bank', 'shopifyPaymentsClearing', 'viaBillClearing', 'inventory', 'inventoryAdjustment'].includes(key)) continue;
+    if (field === undefined && ['bank', 'shopifyPaymentsClearing', 'viaBillClearing', 'flatpayClearing', 'inventory', 'inventoryAdjustment'].includes(key)) continue;
     if (typeof field !== 'string' || field.length > 200 || /[\x00-\x1f]/.test(field)) throw new Error('Ugyldig kontotilknytning');
     accounts[key] = field.trim();
   }
@@ -45,3 +45,4 @@ export function validateSettings(input: unknown): AdminSettings {
   const syncIntervalMinutes = normalizeSyncInterval(value.syncIntervalMinutes);
   return { accounts, automation, invoiceEmail, syncIntervalMinutes };
 }
+

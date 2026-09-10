@@ -10,6 +10,8 @@ import { normalizeSyncInterval, scheduledRunIsDue } from './lib/sync-schedule';
 import { runSyncCycle } from './db/sync-cycle';
 import { runTrackedJob } from './db/job-runs';
 import { runPaginatedSync } from './db/paginated-sync';
+import { syncFlatpay, syncFlatpayReports } from './db/flatpay-sync';
+import { runFlatpayAutomation } from './db/flatpay-automation';
 
 async function runInvoiceEmailAutomation(workerEnv: unknown, ctx: ExecutionContext) {
   const db = database();
@@ -87,6 +89,12 @@ export default {
       }); } catch (error) { await recordFailure('Shopify · automatisk udbetalingssynkronisering', { category: 'shopify', cause: error instanceof Error ? error.message : 'Udbetalingerne kunne ikke synkroniseres.' }); }
       try { await track('dinero-payouts', 'Dinero · Udbetalinger', async () => payoutsReady ? await runPayoutAutomation() : { status: 'skipped', message: 'Sprunget over, indtil udbetalingssynkroniseringen er afsluttet.' }); } catch { /* Jobbet har sin egen historik og udbetalingsfejl registreres ved kilden. */ }
       try { await track('dinero-dashboard', 'Dinero · Dashboard', syncDashboardFinance); } catch { /* Jobhistorikken registrerer fejlen; økonomital markeres utilgængelige. */ }
+      const flatpayDispatch = (path:string,body:Record<string,unknown>) => app.fetch(new Request('https://integration.sablen.dk'+path,{method:'POST',headers:{origin:'https://integration.sablen.dk','content-type':'application/json','cf-access-authenticated-user-email':'rene@sablen.dk'},body:JSON.stringify(body)}),workerEnv,ctx);
+      let flatpayReady=false;
+      try { await track('flatpay-payouts','Flatpay · Udbetalinger',async()=>{const result=await syncFlatpay('payouts',flatpayDispatch);flatpayReady=result.status!=='skipped';return result;}); } catch { /* Jobhistorikken indeholder API-fejlen. */ }
+      try { await track('flatpay-refunds','Flatpay · Refunderinger',()=>syncFlatpay('refunds',flatpayDispatch)); } catch { /* Uafhængigt af udbetalinger og Shopify. */ }
+      try { await track('flatpay-reports','Flatpay · Udbetalingsrapporter',syncFlatpayReports); } catch { /* Rapportjobbet genforsøges ved næste kørsel. */ }
+      try { await track('dinero-flatpay-payouts','Dinero · Flatpay-udbetalinger',()=>flatpayReady?runFlatpayAutomation():Promise.resolve({status:'skipped' as const,message:'Afventer vellykket Flatpay-hentning.'})); } catch { /* Usikre Dinero-svar genforsøges aldrig automatisk. */ }
       return { failed };
       });
     })().catch(async () => { await recordFailure('Synkronisering · scheduler', { category: 'system', cause: 'Den samlede synkronisering kunne ikke startes eller afsluttes. Kontrollér Indsigt.' }); }));

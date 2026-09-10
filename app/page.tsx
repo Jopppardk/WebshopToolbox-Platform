@@ -980,7 +980,7 @@ function Settings({
                 {provider === 'shopify' && <div className="mt-4 rounded-xl border bg-white p-4"><p className="mb-3 text-sm font-semibold">Bogføring af Shopify Payments</p><Field name="shopifyPaymentsClearing" label="Mellemregningskonto" /></div>}
           </IntegrationCard>
         ))}
-        {library.selection?.selected.includes('flatpay') && <FlatpayConnection initialExpanded={expandedFlatpay} onConnected={()=>{void library.refresh();}} footer={<RemoveIntegration state={library} provider="flatpay"/>}/>}
+        {library.selection?.selected.includes('flatpay') && <FlatpayConnection accountField={<Field name="flatpayClearing" label="Mellemregningskonto" />} initialExpanded={expandedFlatpay} onConnected={()=>{void library.refresh();}} footer={<RemoveIntegration state={library} provider="flatpay"/>}/>}
         {library.selection?.selected.includes('emballage') && <EmballageConnection initialExpanded={expandedEmballage} onConnected={() => { void library.refresh(); }}  footer={<RemoveIntegration state={library} provider="emballage" />}/>}
         {library.selection?.selected.includes('viabill') && <ViaBillConnection initialExpanded={expandedViaBill} onConnected={() => { void library.refresh(); }} accountField={<Field name="viaBillClearing" label="Mellemregningskonto" />}  footer={<RemoveIntegration state={library} provider="viabill" />}/>}
       </div>

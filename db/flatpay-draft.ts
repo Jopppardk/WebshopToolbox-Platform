@@ -9,7 +9,7 @@ import {TransferError,verifyVoucher} from '@/lib/dinero-sale';
 import {validateSettings} from '@/lib/admin-settings';
 const tenant='sablen.dk';
 type Proposal=ReturnType<typeof flatpayDraft>&{report?:{key:string;etag:string;filename:string;fingerprint:string}};
-type State={phase:'prepared'|'creating'|'draft'|'uncertain';version:string;organizationId:string;proposal:Proposal;guid?:string;updatedAt:string};
+type State={phase:'prepared'|'creating'|'draft'|'booking'|'booked'|'uncertain';version:string;organizationId:string;proposal:Proposal;guid?:string;updatedAt:string};
 export async function flatpayDraftAction(body:{externalId:string;action:string;flatpayAccount?:number;version?:string}){
  if(!['preview','create','status'].includes(body.action)||typeof body.externalId!=='string'||body.externalId.length>300)throw new TransferError('Ugyldig kladdehandling.');
  const db=database(),c=await loadCredentials('flatpay',true),dinero=await loadCredentials('dinero',true);
@@ -17,7 +17,7 @@ export async function flatpayDraftAction(body:{externalId:string;action:string;f
  const row=await db.prepare('SELECT setting_value FROM app_settings WHERE tenant=? AND setting_key=?').bind(tenant,body.externalId).first<{setting_value:string}>();
  if(!row||!body.externalId.startsWith(`flatpay:payout:${c.merchantID}:${c.agreementId}:`))throw new TransferError('Udbetalingen findes ikke på den valgte Flatpay-aftale.');
  const p=JSON.parse(row.setting_value) as Record<string,unknown>;
- if(p.merchantID!==c.merchantID||p.agreementID!==c.agreementId||typeof p.paidDate!=='string'||p.paidDate.slice(0,10)<c.startDate||typeof p.settlements!=='string'||!/^\d{1,30}$/.test(p.settlements))throw new TransferError('Kladdetesten kræver en gennemført udbetaling med én afregning fra integrationens startdato.');
+ if(p.merchantID!==c.merchantID||p.agreementID!==c.agreementId||typeof p.paidDate!=='string'||p.paidDate.slice(0,10)<c.startDate||typeof p.settlements!=='string'||!/^\d{1,30}$/.test(p.settlements))throw new TransferError('Overførslen kræver en gennemført udbetaling med én afregning fra integrationens startdato.');
  const key=`flatpay_draft:${dinero.organizationId}:${body.externalId}`;
  let stored=await db.prepare('SELECT setting_value FROM app_settings WHERE tenant=? AND setting_key=?').bind(tenant,key).first<{setting_value:string}>();
  let state:State|null=stored?JSON.parse(stored.setting_value):null;
