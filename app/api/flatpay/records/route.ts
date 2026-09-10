@@ -1,3 +1,4 @@
+import {refreshFlatpayUpcoming} from '@/db/flatpay-upcoming';
 import { NextResponse } from 'next/server';
 import {ensureFlatpayReport,flatpayReportStateKey} from '@/db/flatpay-report';
 import { database } from '@/db/database';
@@ -22,6 +23,7 @@ export async function POST(request:Request){
  const data=selected.filter(r=>(typeof r[dateKey]==='string'&&String(r[dateKey]).slice(0,10)>=b.start&&String(r[dateKey]).slice(0,10)<=b.end)||(kind==='payments'&&r.paidDate==null&&typeof r.scheduledDate==='string'&&r.scheduledDate.slice(0,10)>=upcomingStart&&r.scheduledDate.slice(0,10)<=upcomingEnd)).map(r=>Object.fromEntries(fields.map(key=>[key,typeof r[key]==='string'||typeof r[key]==='number'?r[key]:null])));
  if(kind==='payments'){
    const db=database();
+   await refreshFlatpayUpcoming(db,c,upcomingStart,upcomingEnd);
    const valid=data.filter(r=>typeof r.paymentID==='string'&&r.paymentID&&typeof r.payoutAmount==='number'&&Number.isFinite(r.payoutAmount)&&typeof r.currency==='string'&&/^[A-Z]{3}$/.test(r.currency)&&typeof (r.paidDate??r.scheduledDate)==='string'&&Number.isFinite(Date.parse(String(r.paidDate??r.scheduledDate))));
    if(valid.length!==data.length)throw Error('Flatpay-udbetalingerne mangler ID, dato, valuta eller beløb og kunne ikke gemmes i oversigten.');
    for(let i=0;i<valid.length;i+=50)await db.batch(valid.slice(i,i+50).map(r=>db.prepare("INSERT INTO app_settings(tenant,setting_key,setting_value) VALUES(?,?,?) ON CONFLICT(tenant,setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=CURRENT_TIMESTAMP WHERE json_extract(excluded.setting_value,'$.paidDate') IS NOT NULL OR json_extract(app_settings.setting_value,'$.paidDate') IS NULL").bind('sablen.dk',`flatpay:payout:${c.merchantID}:${c.agreementId}:${r.paymentID}`,JSON.stringify({...r,merchantID:c.merchantID,agreementID:c.agreementId}))));
