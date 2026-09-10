@@ -7,6 +7,7 @@ const statuses: Record<string, { label: string; tone: string }> = {
   pending: { label: 'Afventer', tone: 'badge-pending' },
   prepared: { label: 'Afventer', tone: 'badge-pending' },
   creating: { label: 'Overfører…', tone: 'badge-pending' },
+  recovering: { label: 'Kontrollerer…', tone: 'badge-pending' },
   booking: { label: 'Bogfører…', tone: 'badge-pending' },
   uncertain: { label: 'Kræver kontrol', tone: 'bg-red-50 text-red-800' },
   held: { label: 'Afventer afklaring', tone: 'badge-pending' },

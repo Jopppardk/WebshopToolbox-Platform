@@ -1,5 +1,9 @@
 import { TransferError, normalizeRemote } from '@/lib/dinero-sale';
 
+export class DineroHttpError extends TransferError {
+  constructor(public readonly status:number){super(`Dinero svarede HTTP ${status}. Kontrollér bilagsstatus før et nyt forsøg.`);}
+}
+
 // This client never retries writes and never follows redirects carrying credentials.
 export async function dineroClient(credentials: Record<string, string>) {
   const tokenResponse = await fetch('https://authz.dinero.dk/dineroapi/oauth/token', {
@@ -17,7 +21,7 @@ export async function dineroClient(credentials: Record<string, string>) {
       headers: { Authorization: `Bearer ${token.access_token}`, Accept: 'application/json', ...(!multipart && body ? { 'Content-Type': 'application/json' } : {}) },
       body: method === 'GET' ? undefined : multipart ? body : JSON.stringify(body),
     });
-    if (!response.ok) throw new TransferError(`Dinero svarede HTTP ${response.status}. Kontrollér bilagsstatus før et nyt forsøg.`);
+    if (!response.ok) throw new DineroHttpError(response.status);
     return normalizeRemote(await response.json());
   };
 }
