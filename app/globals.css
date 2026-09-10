@@ -94,6 +94,8 @@ body {
 .nav-item svg { width: 17px; height: 17px; }
 .nav-item:hover { background: rgba(255,255,255,.05); color: white; }
 .nav-item.active { background: #c09960; color: white; box-shadow: 0 8px 24px rgba(192,153,96,.12); }
+.page-title { margin-top: .25rem; font-size: 1.875rem; line-height: 1.2; font-weight: 600; letter-spacing: -.035em; }
+@media (min-width: 768px) { .page-title { font-size: 2.25rem; } }
 .eyebrow { color: #c16452; font-size: 10px; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; }
 .stat-card { min-height: 126px; border: 1px solid var(--border); border-radius: 16px; background: white; padding: 18px; }
 .stat-lime { border-color: #dfc9a6; background: #f7efe3; }
@@ -149,3 +151,4 @@ body {
     @apply font-sans;
   }
 }
+

@@ -118,7 +118,7 @@ export function EmballageConnection({
             disabled={busy || !apiKey}
             onClick={() => void act({ action: 'connect', apiKey })}
           >
-            {busy ? 'Arbejder…' : 'Valider og gem forbindelse'}
+            {busy ? 'Arbejder…' : 'Validér og gem forbindelse'}
           </Button>
           {status?.connected && (
             <>

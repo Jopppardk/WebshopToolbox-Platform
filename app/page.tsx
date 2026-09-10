@@ -163,7 +163,7 @@ export default function Home() {
         synced += data.synced; invoices += data.invoicesCreated || 0;
         warnings += data.invoiceWarnings?.length || 0;
         after = data.hasNextPage ? data.endCursor : null;
-        notify(`${synced} Shopify-ordrer hentet · ${invoices} PDF-fakturaer${warnings ? ` · ${warnings} fakturaer kræver kontrol under Administration` : ''}${after ? ' · henter flere…' : ''}`);
+        notify(`${synced} Shopify-ordrer hentet · ${invoices} PDF-fakturaer${warnings ? ` · ${warnings} fakturaer kræver kontrol under Indstillinger` : ''}${after ? ' · henter flere…' : ''}`);
       } while (after);
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Shopify-ordrer kunne ikke synkroniseres');
@@ -331,8 +331,8 @@ export default function Home() {
             <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
               <div>
                 <p className="eyebrow">Shopify · Dinero</p>
-                <h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">
-                  Ordrer
+                <h1 className="page-title">
+                  Salg
                 </h1>
                 <p className="mt-2 text-sm text-muted-foreground">
                   Følg salg, realisering og bogføring ét sted.
@@ -358,12 +358,12 @@ export default function Home() {
               <Stat
                 label="Kræver handling"
                 value={`${salesOrders.filter((order) => order.status === 'Fejlet').length} ordrer`}
-                note="Se fejl under Administration"
+                note="Se fejl under Indstillinger"
                 tone="warn"
               />
             </div>
             {orderError && <p role="alert" className="mb-4 text-red-700">{orderError}</p>}
-            <p className="mb-4 text-sm text-muted-foreground">Bogføring i Dinero er ikke aktiveret. Bogføringsstatus ændres ikke ved at genindlæse siden.</p>
+            <p className="mb-4 text-sm text-muted-foreground">Automatisk overførsel og bogføring følger valgene under Indstillinger. Bogføringsstatus viser den senest registrerede behandling i Dinero.</p>
             <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_40px_rgba(23,31,27,.045)]">
               <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="relative w-full sm:max-w-[320px]">
@@ -426,7 +426,7 @@ export default function Home() {
               <Tabs value={settingsTab} onValueChange={value => setSettingsTab(value as typeof settingsTab)}>
                 <div className="overflow-x-auto pb-1">
                   <TabsList aria-label="Indstillinger">
-                    <TabsTrigger value="dashboard" className="px-4">Dashboard</TabsTrigger>
+                    <TabsTrigger value="dashboard" className="px-4">Generelt</TabsTrigger>
                     <TabsTrigger value="integrations" className="px-4">Integrationer og kontoplan</TabsTrigger>
                     <TabsTrigger value="invoice-email" className="px-4">Faktura-afsendelse</TabsTrigger>
                     <TabsTrigger value="inventory" className="px-4">Lager</TabsTrigger>
@@ -571,7 +571,7 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
         setStatuses(data.statuses || {}); count += data.generated || 0; more = data.hasMore; offset = data.nextOffset;
       }
       onGenerated(count);
-      if (warnings.length) setInvoiceError(`${warnings.length} fakturaer kræver gennemgang. ${warnings.slice(0, 3).join(' ')} Se alle meddelelser under Administration.`);
+      if (warnings.length) setInvoiceError(`${warnings.length} fakturaer kræver gennemgang. ${warnings.slice(0, 3).join(' ')} Se alle meddelelser under Indstillinger.`);
     } catch (error) { setInvoiceError(error instanceof Error ? error.message : 'Fakturaerne kunne ikke genereres'); } finally { setGenerating(false); }
   };
   const sendInvoice = async (order: OrderView) => {
@@ -594,8 +594,8 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
     <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
       <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <p className="eyebrow">Ordrer · Dokumenter</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">
+          <p className="eyebrow">Dokumenter · Shopify</p>
+          <h1 className="page-title">
             Fakturaer
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -625,7 +625,7 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
         <Stat
           label="Kræver handling"
           value={`${Object.values(statuses).filter((status) => status === 'Fejlet').length} fakturaer`}
-          note="Fejl vises under Administration"
+          note="Fejl vises under Indstillinger"
           tone="warn"
         />
       </div>
@@ -707,7 +707,7 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
           </TableBody>
         </Table>
       </section>
-      {!orders.length && <div className="mt-4 rounded-xl border border-dashed bg-white p-8 text-center text-sm text-muted-foreground">Ingen Shopify-ordrer er hentet endnu. Forbind Shopify under Administration, og vælg derefter “Hent fra Shopify”.</div>}
+      {!orders.length && <div className="mt-4 rounded-xl border border-dashed bg-white p-8 text-center text-sm text-muted-foreground">Ingen Shopify-ordrer er hentet endnu. Forbind Shopify under Indstillinger, og vælg derefter “Hent fra Shopify”.</div>}
     </div>
   );
 }
@@ -887,8 +887,8 @@ function Settings({
     <div className="mx-auto max-w-[1180px] px-5 py-7 md:px-8 md:py-9">
       <div className="mb-7">
         <p className="eyebrow">Opsætning</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">
-          {mode === 'dashboard' ? 'Dashboard' : mode === 'integrations' ? 'Integrationer og kontoplan' : mode === 'invoice-email' ? 'Faktura-afsendelse' : 'Lager'}
+        <h1 className="page-title">
+          {mode === 'dashboard' ? 'Indstillinger' : mode === 'integrations' ? 'Integrationer og kontoplan' : mode === 'invoice-email' ? 'Faktura-afsendelse' : 'Lager'}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {mode === 'dashboard' ? 'Overblik over drift, fejl og automatisk behandling.' : mode === 'integrations' ? 'Forbind systemerne, vælg historik og bestem hvordan posteringerne skal lande i Dinero.' : mode === 'invoice-email' ? 'Styr mailafsendelse, tilpas skabelonen og send en afgrænset test.' : 'Vælg lagerkonti og styr automatisk nedskrivning ved afsendte salg.'}
@@ -919,7 +919,7 @@ function Settings({
         <div className="p-5"><p className="mb-4 text-sm font-semibold">Automatiske moduler</p><div className="grid gap-3 sm:grid-cols-2">
           {[
             {key:'sales',bookingKey:'salesBookDinero',label:'Salg',description:'Behandl realiserede ordrer'},
-            {key:'refunds',bookingKey:'refundsBookDinero',label:'Tilbagebetalinger',description:'Behandl gennemførte refunderinger'},
+            {key:'refunds',bookingKey:'refundsBookDinero',label:'Tilbagebetalinger',description:'Behandl gennemførte tilbagebetalinger'},
             {key:'payouts',bookingKey:'payoutsBookDinero',label:'Udbetalinger',description:'Behandl udbetalinger fra indløsere'},
           ].map(module => <div key={module.key} className="rounded-xl border bg-muted/30 p-4"><div className="flex items-center justify-between gap-4"><div><p className="text-sm font-medium">{module.label}</p><p className="mt-1 text-xs text-muted-foreground">{module.description}</p></div><Switch checked={automation[module.key as keyof typeof automation]} onCheckedChange={value => toggleAutomation(module.key as keyof typeof automation,value)} aria-label={`Automatisk ${module.label}`} /></div><label className="mt-4 block"><span className="text-xs font-medium text-muted-foreground">Dinero-behandling</span><NativeSelect className="mt-1.5 w-full" value={automation[module.bookingKey as keyof typeof automation] ? 'book' : 'draft'} onChange={event => toggleAutomation(module.bookingKey as keyof typeof automation,event.target.value === 'book')}><NativeSelectOption value="draft">Opret kun kladde</NativeSelectOption><NativeSelectOption value="book">Bogfør automatisk</NativeSelectOption></NativeSelect></label></div>)}
         </div></div>
@@ -959,7 +959,7 @@ function Settings({
       <div className="mb-8 grid items-start gap-3 md:grid-cols-2">
         {integrations.filter(item => library.selection?.selected.includes(item.provider) || Boolean(connected[item.provider])).map(({ name, provider, detail, icon: Icon, connected: isConnected }) => (
           <IntegrationCard key={name} name={name} description={detail} icon={Icon} connected={isConnected} expanded={expandedIntegration===provider} onToggle={()=>setExpandedIntegration(current=>current===provider?null:provider)} panelId={`${provider}-connection-panel`} footer={!isConnected&&<RemoveIntegration state={library} provider={provider} disabled={connecting!==null}/>}> 
-                <p className="mb-4 text-xs text-muted-foreground">{provider === 'shopify' ? 'Den installerede app udveksler automatisk oplysningerne til et kortlivet adgangstoken. Testen læser kun butikkens navn.' : 'Personlig integration med læsetest.'}</p>
+                <p className="mb-4 text-xs text-muted-foreground">{provider === 'shopify' ? 'Den installerede app udveksler automatisk oplysningerne til et kortlivet adgangstoken. Testen læser kun butikkens navn.' : 'Forbind Dinero for at hente økonomi og kontoplan samt overføre bilag.'}</p>
                 {provider === 'shopify' ? (
                   <div className="space-y-3">
                     <Input value={shopify.shop} onChange={(event) => setShopify((current) => ({ ...current, shop: event.target.value }))} placeholder="butik.myshopify.com" aria-label="Shopify butiksadresse" />
@@ -1019,20 +1019,20 @@ function Settings({
         </div>
         <div className="grid gap-5 p-5 sm:grid-cols-2">
           <div className="sm:col-span-2 grid gap-5 sm:grid-cols-2">
-            <Field name="vatCode" label="Momskode for salg m/moms" />
-            <Field name="noVatCode" label="Momskode for salg u/moms" />
+            <Field name="vatCode" label="Momskode for salg med moms" />
+            <Field name="noVatCode" label="Momskode for salg uden moms" />
           </div>
           <div>
             <h3 className="mb-3 border-b pb-3 font-medium text-[#c06452]">
               Kontoplan for salg
             </h3>
             <div className="space-y-4">
-              <Field name="goodsVat" label="Salg af varer m/moms" />
-              <Field name="goodsNoVat" label="Salg af varer u/moms" />
-              <Field name="shippingVat" label="Salg af fragt m/moms" />
-              <Field name="shippingNoVat" label="Salg af fragt u/moms" />
-              <Field name="servicesVat" label="Salg af ydelser m/moms" />
-              <Field name="servicesNoVat" label="Salg af ydelser u/moms" />
+              <Field name="goodsVat" label="Salg af varer med moms" />
+              <Field name="goodsNoVat" label="Salg af varer uden moms" />
+              <Field name="shippingVat" label="Salg af fragt med moms" />
+              <Field name="shippingNoVat" label="Salg af fragt uden moms" />
+              <Field name="servicesVat" label="Salg af ydelser med moms" />
+              <Field name="servicesNoVat" label="Salg af ydelser uden moms" />
             </div>
           </div>
           <div>
@@ -1042,27 +1042,27 @@ function Settings({
             <div className="space-y-4">
               <Field
                 name="refundGoodsVat"
-                label="Refundering af varer m/moms"
+                label="Refundering af varer med moms"
               />
               <Field
                 name="refundGoodsNoVat"
-                label="Refundering af varer u/moms"
+                label="Refundering af varer uden moms"
               />
               <Field
                 name="refundShippingVat"
-                label="Refundering af fragt m/moms"
+                label="Refundering af fragt med moms"
               />
               <Field
                 name="refundShippingNoVat"
-                label="Refundering af fragt u/moms"
+                label="Refundering af fragt uden moms"
               />
               <Field
                 name="refundServicesVat"
-                label="Refundering af ydelser m/moms"
+                label="Refundering af ydelser med moms"
               />
               <Field
                 name="refundServicesNoVat"
-                label="Refundering af ydelser u/moms"
+                label="Refundering af ydelser uden moms"
               />
             </div>
           </div>

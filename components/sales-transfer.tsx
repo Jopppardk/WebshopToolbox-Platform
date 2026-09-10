@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import type { Voucher } from '@/lib/dinero-sale';
 type Result = { enabled: boolean; draftTestAllowed?: boolean; error?: string; state: null | { phase: string; version: string; draftTest?: boolean; guid?: string; voucherNumber?: number; organizationId: string; message?: string; snapshot: { invoiceNumber: string; gross: number; attach: boolean; voucher: Voucher; expected: { net: number; tax: number; gross: number }[] } } };
-const labels: Record<string, string> = { prepared: 'Forslag klar – ikke overført', creating: 'Opretter kladde – afvent status', draft: 'Kladde i Dinero – ikke bogført', booking: 'Bogføring igang – afvent status', booked: 'Bogført i Dinero', uncertain: 'Kræver kontrol i Dinero', archived: 'Ældre overførsel – spærret for gentagelse' };
+const labels: Record<string, string> = { prepared: 'Forslag klar – ikke overført', creating: 'Opretter kladde – afvent status', draft: 'Kladde i Dinero – ikke bogført', booking: 'Bogføring i gang – afvent status', booked: 'Bogført i Dinero', uncertain: 'Kræver kontrol i Dinero', archived: 'Ældre overførsel – spærret for gentagelse' };
 export function SalesTransfer({ externalId, disabled = false, onBooked }: { externalId: string; disabled?: boolean; onBooked?: () => void }) {
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [result, setResult] = useState<Result | null>(null), [error, setError] = useState('');
   const [date, setDate] = useState(''), [noOtherBooking, setNoOtherBooking] = useState(false), [storebuddyStopped, setStorebuddyStopped] = useState(false), [confirmNumber, setConfirmNumber] = useState('');
@@ -31,7 +31,7 @@ export function SalesTransfer({ externalId, disabled = false, onBooked }: { exte
   return <>
     <Button variant="outline" size="sm" onClick={() => setOpen(true)} disabled={disabled} title={disabled ? 'Salget er allerede bogført i Dinero' : undefined}>{disabled ? 'Bogført' : 'Overfør til Dinero'}</Button>
     <Sheet open={open} onOpenChange={setOpen}><SheetContent className="data-[side=right]:w-full data-[side=right]:sm:max-w-3xl overflow-y-auto">
-      <SheetHeader><SheetTitle>Manuel salgsoverførsel</SheetTitle><SheetDescription>Kun fuldt afsendte salg. Betalinger og udbetalinger overføres ikke her. Ingen automatisk bogføring.</SheetDescription></SheetHeader>
+      <SheetHeader><SheetTitle>Manuel salgsoverførsel</SheetTitle><SheetDescription>Kontrollér og overfør fuldt afsendte salg til Dinero. Den automatiske behandling styres under Indstillinger.</SheetDescription></SheetHeader>
       <div className="space-y-5 px-4 pb-8 text-sm">
         {result && !result.enabled && <p className="rounded-xl border bg-amber-50 p-4">{result.draftTestAllowed ? 'Kun en testkladde er tilladt for denne ordre. Bogføring er spærret. Forbered forslaget igen for at vælge kladdetesten; Storebuddy behøver ikke stoppes.' : 'Produktionsoverførsel er låst, indtil vi har aftalt den første bogføring og overgangen fra Storebuddy. Du kan forberede og kontrollere forslaget nu.'}</p>}
         {state?.draftTest && state.phase !== 'prepared' && <p className="rounded-xl border bg-amber-50 p-4">Dette er en testkladde. Den kan ikke bogføres fra Sablen Toolbox, heller ikke når normal bogføring senere åbnes. Slet den i Dinero efter kontrollen og giv besked, så vi kan afklare testregistreringen her. Opret ikke en ny kladde som genforsøg.</p>}
@@ -63,3 +63,4 @@ export function SalesTransfer({ externalId, disabled = false, onBooked }: { exte
     </SheetContent></Sheet>
   </>;
 }
+

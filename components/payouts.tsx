@@ -108,7 +108,7 @@ export function LivePayouts({ syncRevision = 0 }: { syncRevision?: number }) {
           <h1 className="mt-1 text-3xl font-semibold">Udbetalinger</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Overførsler mellem Shopify Payments og banken · perioden følger
-            Administration → Fælles historik.
+            Indstillinger → Fælles historik.
           </p>
         </div>
         <Button onClick={sync} disabled={syncing}>
@@ -237,3 +237,4 @@ export function LivePayouts({ syncRevision = 0 }: { syncRevision?: number }) {
     </div>
   );
 }
+
