@@ -426,7 +426,7 @@ export default function Home() {
               <Tabs value={settingsTab} onValueChange={value => setSettingsTab(value as typeof settingsTab)}>
                 <div className="overflow-x-auto pb-1">
                   <TabsList aria-label="Indstillinger">
-                    <TabsTrigger value="dashboard" className="px-4">Dashboard</TabsTrigger>
+                    <TabsTrigger value="dashboard" className="px-4">Generelt</TabsTrigger>
                     <TabsTrigger value="integrations" className="px-4">Integrationer og kontoplan</TabsTrigger>
                     <TabsTrigger value="invoice-email" className="px-4">Faktura-afsendelse</TabsTrigger>
                     <TabsTrigger value="inventory" className="px-4">Lager</TabsTrigger>
@@ -707,7 +707,7 @@ function Invoices({ orders, onGenerated, onSync, syncing }: { orders: OrderView[
           </TableBody>
         </Table>
       </section>
-      {!orders.length && <div className="mt-4 rounded-xl border border-dashed bg-white p-8 text-center text-sm text-muted-foreground">Ingen Shopify-ordrer er hentet endnu. Forbind Shopify under Indstillinger, og vælg derefter “Synkronisér nu”.</div>}
+      {!orders.length && <div className="mt-4 rounded-xl border border-dashed bg-white p-8 text-center text-sm text-muted-foreground">Ingen Shopify-ordrer er hentet endnu. Forbind Shopify under Indstillinger, og vælg derefter “Hent fra Shopify”.</div>}
     </div>
   );
 }
@@ -888,7 +888,7 @@ function Settings({
       <div className="mb-7">
         <p className="eyebrow">Opsætning</p>
         <h1 className="page-title">
-          {mode === 'dashboard' ? 'Dashboard' : mode === 'integrations' ? 'Integrationer og kontoplan' : mode === 'invoice-email' ? 'Faktura-afsendelse' : 'Lager'}
+          {mode === 'dashboard' ? 'Indstillinger' : mode === 'integrations' ? 'Integrationer og kontoplan' : mode === 'invoice-email' ? 'Faktura-afsendelse' : 'Lager'}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {mode === 'dashboard' ? 'Overblik over drift, fejl og automatisk behandling.' : mode === 'integrations' ? 'Forbind systemerne, vælg historik og bestem hvordan posteringerne skal lande i Dinero.' : mode === 'invoice-email' ? 'Styr mailafsendelse, tilpas skabelonen og send en afgrænset test.' : 'Vælg lagerkonti og styr automatisk nedskrivning ved afsendte salg.'}
@@ -1019,20 +1019,20 @@ function Settings({
         </div>
         <div className="grid gap-5 p-5 sm:grid-cols-2">
           <div className="sm:col-span-2 grid gap-5 sm:grid-cols-2">
-            <Field name="vatCode" label="Momskode for salg inkl. moms" />
-            <Field name="noVatCode" label="Momskode for salg ekskl. moms" />
+            <Field name="vatCode" label="Momskode for salg med moms" />
+            <Field name="noVatCode" label="Momskode for salg uden moms" />
           </div>
           <div>
             <h3 className="mb-3 border-b pb-3 font-medium text-[#c06452]">
               Kontoplan for salg
             </h3>
             <div className="space-y-4">
-              <Field name="goodsVat" label="Salg af varer inkl. moms" />
-              <Field name="goodsNoVat" label="Salg af varer ekskl. moms" />
-              <Field name="shippingVat" label="Salg af fragt inkl. moms" />
-              <Field name="shippingNoVat" label="Salg af fragt ekskl. moms" />
-              <Field name="servicesVat" label="Salg af ydelser inkl. moms" />
-              <Field name="servicesNoVat" label="Salg af ydelser ekskl. moms" />
+              <Field name="goodsVat" label="Salg af varer med moms" />
+              <Field name="goodsNoVat" label="Salg af varer uden moms" />
+              <Field name="shippingVat" label="Salg af fragt med moms" />
+              <Field name="shippingNoVat" label="Salg af fragt uden moms" />
+              <Field name="servicesVat" label="Salg af ydelser med moms" />
+              <Field name="servicesNoVat" label="Salg af ydelser uden moms" />
             </div>
           </div>
           <div>
@@ -1042,27 +1042,27 @@ function Settings({
             <div className="space-y-4">
               <Field
                 name="refundGoodsVat"
-                label="Refundering af varer inkl. moms"
+                label="Refundering af varer med moms"
               />
               <Field
                 name="refundGoodsNoVat"
-                label="Refundering af varer ekskl. moms"
+                label="Refundering af varer uden moms"
               />
               <Field
                 name="refundShippingVat"
-                label="Refundering af fragt inkl. moms"
+                label="Refundering af fragt med moms"
               />
               <Field
                 name="refundShippingNoVat"
-                label="Refundering af fragt ekskl. moms"
+                label="Refundering af fragt uden moms"
               />
               <Field
                 name="refundServicesVat"
-                label="Refundering af ydelser inkl. moms"
+                label="Refundering af ydelser med moms"
               />
               <Field
                 name="refundServicesNoVat"
-                label="Refundering af ydelser ekskl. moms"
+                label="Refundering af ydelser uden moms"
               />
             </div>
           </div>
