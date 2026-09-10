@@ -38,7 +38,7 @@ export function SalesPreview({ externalId, mode = 'sale', disabled = false }: { 
               <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-sm"><thead><tr className="border-b text-left"><th className="p-2">Salg / fragt</th><th>Kreditkonto</th><th>Momskode</th><th className="text-right">Netto kredit</th><th className="text-right">Moms kredit*</th></tr></thead><tbody>{result.draft.lines.map((line, i) => <tr className="border-b" key={i}><td className="p-2">{line.title}</td><td>{line.account || 'Mangler'}</td><td>{line.vatCode === '' ? 'Ingen moms' : line.vatCode ?? 'Mangler'}</td><td className="text-right">{format(line.net)}</td><td className="text-right">{format(line.tax)}</td></tr>)}</tbody></table></div>
               <p>Debet — mellemregning: <strong>{result.draft.clearing || 'Mangler konto'}</strong> · {format(result.draft.debit)}</p><p>Debet i alt: {format(result.draft.debit)} · Kredit inkl. moms: {format(result.draft.credit)}</p>{result.draft.inventory && <p className="rounded-xl border bg-muted/30 p-3">Lager: {format(result.draft.inventory.cost)} debiteres <strong>{result.draft.inventory.adjustmentAccount}</strong> og krediteres <strong>{result.draft.inventory.account}</strong>.</p>}<p className="text-xs text-muted-foreground">* Momsen vises særskilt til kontrol. Hvis lagerautomatik er aktiv, indgår vareforbruget uden moms i samme finansbilag som salget.</p>
             </section>}
-            <div className="space-y-2 rounded-xl bg-muted p-4 text-sm">{result.notes.map(note => <p key={note}>{note}</p>)}<p className="text-xs text-muted-foreground">Kontrolleret {new Date(result.checkedAt).toLocaleString('da-DK')}</p></div>
+            <div className="space-y-2 rounded-xl bg-muted p-4 text-sm">{result.notes.map(note => <p key={note}>{note}</p>)}<p className="text-xs text-muted-foreground">Kontrolleret {new Date(result.checkedAt).toLocaleString('da-DK', { timeZone: 'Europe/Copenhagen' })}</p></div>
             <Button variant="outline" onClick={() => setRetry(n => n + 1)}>Hent og kontrollér igen</Button>
           </>}
         </div>
@@ -46,3 +46,4 @@ export function SalesPreview({ externalId, mode = 'sale', disabled = false }: { 
     </Sheet>
   </>;
 }
+

@@ -229,7 +229,7 @@ export function DevelopmentRequests() {
       <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="eyebrow">System · Produktudvikling</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-[-.035em]">
+          <h1 className="page-title">
             Udvikling
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -534,3 +534,4 @@ function Summary({
     </div>
   );
 }
+

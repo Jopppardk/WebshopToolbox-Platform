@@ -62,7 +62,7 @@ export function JobInsights({ initialStatus = '' }: { initialStatus?: string }) 
   const pages = Math.max(1, Math.ceil(total / 100));
   const successRate = useMemo(() => { const completed = (data?.summary.succeeded || 0) + (data?.summary.failed || 0); return completed ? Math.round((data!.summary.succeeded / completed) * 100) : 0; }, [data]);
   return <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
-    <div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">System · Drift</p><h1 className="mt-1 text-3xl font-semibold tracking-[-.035em]">Indsigt</h1><p className="mt-2 text-sm text-muted-foreground">Se alle automatiske jobs, deres seneste resultat og den fulde kørselslog.</p></div><Button variant="outline" onClick={refresh} disabled={busy}><RefreshCw className={busy ? 'animate-spin' : ''}/>{busy ? 'Opdaterer…' : 'Opdatér'}</Button></div>
+    <div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">System · Drift</p><h1 className="page-title">Indsigt</h1><p className="mt-2 text-sm text-muted-foreground">Se alle automatiske jobs, deres seneste resultat og den fulde kørselslog.</p></div><Button variant="outline" onClick={refresh} disabled={busy}><RefreshCw className={busy ? 'animate-spin' : ''}/>{busy ? 'Opdaterer…' : 'Opdatér'}</Button></div>
     {error && <p role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p>}
     <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       <Summary icon={<Activity/>} label="Kørsler seneste 24 timer" value={data?.summary.total ?? 0} onClick={() => showHistory('')} actionLabel="Vis alle kørsler i jobhistorikken" disabled={!data}/>
@@ -94,4 +94,3 @@ function Summary({ icon, label, value, note, tone, onClick, actionLabel, disable
     <span className="mt-1 min-h-4 text-xs text-muted-foreground">{note || '\u00a0'}</span>
   </button>;
 }
-

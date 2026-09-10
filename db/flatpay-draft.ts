@@ -28,7 +28,7 @@ export async function flatpayDraftAction(body:{externalId:string;action:string;f
  const settingsRow=await db.prepare("SELECT setting_value FROM app_settings WHERE tenant=? AND setting_key='admin_settings'").bind(tenant).first<{setting_value:string}>();
  if(!settingsRow)throw new TransferError('Gem bank-, gebyr- og fordelingskonto under Indstillinger først.');
  const settings=validateSettings(JSON.parse(settingsRow.setting_value));
- const flatpay=body.action==='create'?state?.proposal.voucher.Lines[0].AccountNumber:body.flatpayAccount;
+ const flatpay=body.action==='create'?state?.proposal.voucher.Lines[0].AccountNumber:(body.flatpayAccount??Number(settings.accounts.flatpayClearing?.match(/^\d+/)?.[0]));
  if(!flatpay)return {accounts:chart.filter(a=>!a.hidden&&!a.vatCode),phase:'select-account'};
  const accounts={flatpay,bank:Number(settings.accounts.bank.match(/^\d+/)?.[0]),fees:Number(settings.accounts.fees.match(/^\d+/)?.[0]),clearing:Number(settings.accounts.clearing.match(/^\d+/)?.[0])};
  for(const n of Object.values(accounts))if(!chart.some(a=>Number(a.number)===n&&!a.hidden&&!a.vatCode))throw new TransferError(`Konto ${n} skal være aktiv og uden moms i Dinero.`);

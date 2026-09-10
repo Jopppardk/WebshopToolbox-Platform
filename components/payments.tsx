@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { BookingStatus } from '@/components/booking-status';
 import { BookingAction } from '@/components/booking-action';
 import { Input } from '@/components/ui/input';
 import {
@@ -185,7 +186,7 @@ export function Payments({
       <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <p className="eyebrow">{refund?'Samlet oversigt':'Shopify Payments'}</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-[36px]">
+          <h1 className="page-title">
             {title}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -194,7 +195,7 @@ export function Payments({
               : 'Gennemførte betalinger med gebyrer og nettobeløb.'}
           </p>
         </div>
-        <div className="flex items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3">
         {refund&&<label className="text-sm">Hent fra<select className="mt-1 block h-10 rounded-lg border px-3" value={provider} disabled={syncing} onChange={e=>setProvider(e.target.value)}><option value="shopify">Shopify Payments</option><option value="flatpay">Flatpay</option></select></label>}
         <Button
           className="h-10 rounded-xl px-4"
@@ -244,7 +245,7 @@ export function Payments({
           Søg {refund ? 'tilbagebetaling' : 'betaling'}
           <Input
             className="mt-1"
-            placeholder="Ordrenummer eller transaktions-id"
+            placeholder="Ordrenummer eller transaktions-ID"
             value={search}
             disabled={syncing}
             onChange={(event) => {
@@ -291,7 +292,7 @@ export function Payments({
       ))}
       <p className="mb-4 text-sm text-muted-foreground">
         {refund
-          ? 'Når modulet er aktiveret under Indstillinger, bogføres nye Shopify Payments-refunderinger automatisk i Dinero. Flatpay vises til kontrol og bogføres ikke automatisk. Flatpay-beløb vises med API’ets fortegn; gebyrer og netto afrundes til visning. En afregning er ikke nødvendigvis udbetalt endnu.'
+          ? 'Når modulet er aktiveret under Indstillinger, bogføres nye tilbagebetalinger fra Shopify Payments automatisk i Dinero. Flatpay vises til kontrol og bogføres ikke automatisk. Flatpay-beløb vises med API’ets fortegn; gebyrer og netto afrundes til visning. En afregning er ikke nødvendigvis udbetalt endnu.'
           : 'Bogføring i Dinero er ikke aktiveret for betalinger. Testbetalinger og tilbagebetalinger indgår ikke her.'}
       </p>
       <section
@@ -365,11 +366,7 @@ export function Payments({
                     </div>
                   </TableCell>
                   <TableCell>
-                    {payment.provider==='flatpay'?'Ikke aktiveret':payment.bookingStatus === 'booked'
-                      ? 'Bogført'
-                      : payment.bookingStatus === 'failed'
-                        ? 'Fejlet'
-                        : 'Afventer'}
+                    <BookingStatus status={payment.provider==='flatpay'?'not_enabled':payment.bookingStatus || 'pending'} />
                   </TableCell>
                   <TableCell>
                     {refund && payment.provider!=='flatpay' && payment.bookingStatus !== 'booked' ? (
@@ -380,7 +377,7 @@ export function Payments({
                       />
                     ) : (
                       <span className="text-sm text-muted-foreground">
-                        {payment.bookingStatus === 'booked' ? 'Færdig' : '—'}
+                        {payment.bookingStatus === 'booked' ? 'Bogført' : '—'}
                       </span>
                     )}
                   </TableCell>

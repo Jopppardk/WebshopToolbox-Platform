@@ -40,7 +40,7 @@ export function Dashboard({onJobs,onIntegrations}:{onJobs:(status:string)=>void;
   const data=errors.finance?null:finance?.data, stats=errors.platform?null:platform;
   return <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
     <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
-      <div><p className="eyebrow">Sablen · Overblik</p><h1 className="mt-1 text-3xl font-semibold tracking-[-.035em] md:text-4xl">Dashboard</h1><p className="mt-2 text-sm text-muted-foreground">Din økonomi og drift, samlet ét sted.</p></div>
+      <div><p className="eyebrow">Sablen · Overblik</p><h1 className="page-title">Dashboard</h1><p className="mt-2 text-sm text-muted-foreground">Din økonomi og drift, samlet ét sted.</p></div>
       <Button variant="outline" disabled={loading} onClick={()=>setRevision(v=>v+1)}><RefreshCw className={loading?'animate-spin':''}/>{loading?'Opdaterer…':'Opdatér'}</Button>
     </header>
     <section aria-label="Dagens aktivitet og systemstatus" className="mb-8 overflow-hidden rounded-2xl border border-[#e3d8c7] bg-white shadow-[0_8px_30px_rgba(70,50,20,0.05)]">
@@ -48,7 +48,7 @@ export function Dashboard({onJobs,onIntegrations}:{onJobs:(status:string)=>void;
       <ActivityRow icon={<Package className="size-5"/>} label="Salg" counts={stats?.activity.orders}/>
       <ActivityRow icon={<Wallet className="size-5"/>} label="Udbetalinger" counts={stats?.activity.payouts}/>
       <div className="border-t border-[#e9e2d7] bg-[#faf8f5] p-4 md:p-5">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 text-sm font-semibold"><Activity className="size-4 text-[#9b7742]"/>System-status</h2><span className="text-[11px] text-muted-foreground">Seneste gennemførte opdateringer</span></div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 text-sm font-semibold"><Activity className="size-4 text-[#9b7742]"/>Systemstatus</h2><span className="text-[11px] text-muted-foreground">Seneste gennemførte opdateringer</span></div>
         <div className="grid grid-cols-1 gap-2.5 min-[400px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
           <Update label="Salg" value={stats?.activity.updated.sales}/>
           <Update label="Tilbagebetalinger" value={stats?.activity.updated.refunds}/>
