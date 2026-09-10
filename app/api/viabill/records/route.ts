@@ -1,3 +1,4 @@
+import {payoutImportStatements} from '@/db/payout-events';
 import { NextRequest, NextResponse } from 'next/server';
 import { prepareDatabase } from '@/db/database';
 import { loadCredentials } from '@/db/credentials';
@@ -80,12 +81,12 @@ export async function POST(request: NextRequest) {
       if (!record || record.date < dates.from || record.date > dates.to) { skipped++; continue; }
       records.push(record);
     }
-    const statements = records.map(record => db.prepare(`INSERT INTO integration_records
+    const statements = records.flatMap(record => {const write=db.prepare(`INSERT INTO integration_records
       (id, tenant, record_type, external_id, occurred_at, amount_minor, currency, booking_status, payload_json, expires_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
       ON CONFLICT(tenant, record_type, external_id) DO UPDATE SET occurred_at = excluded.occurred_at,
         amount_minor = excluded.amount_minor, currency = excluded.currency, payload_json = excluded.payload_json, expires_at = excluded.expires_at`)
-      .bind(`${type}:${record.id}`, tenant, type, record.id, midnight(record.date), record.amountMinor, record.currency, JSON.stringify(record), shiftMonths(new Date(midnight(record.date)), policy.months).toISOString()));
+      .bind(`${type}:${record.id}`, tenant, type, record.id, midnight(record.date), record.amountMinor, record.currency, JSON.stringify(record), shiftMonths(new Date(midnight(record.date)), policy.months).toISOString());return type==='payout'?payoutImportStatements(db,record.id,'viabill',record,write):[write];});
     if (statements.length) await db.batch(statements);
     return reply({ synced: records.length, skipped, mismatches: records.filter(row => row.reconciled === false).length,
       next: rows.length === pageLength ? { kind: type, accountId, ...dates, first: first + pageLength, hash } : null });

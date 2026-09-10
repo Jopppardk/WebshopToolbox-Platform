@@ -1,3 +1,4 @@
+import {savePayoutReceipt} from './payout-events';
 import {database} from './database';
 import {loadCredentials} from './credentials';
 import {readDineroAccounts} from './dinero-accounts';
@@ -36,7 +37,7 @@ export async function flatpayDraftAction(body:{externalId:string;action:string;f
  try{generated=await ensureFlatpayReport(db,body.externalId);}catch(e){throw new TransferError(e instanceof Error?e.message:'Rapporten kunne ikke dannes.');}
  if(generated.source.settlements.length!==1)throw new TransferError('Kladden kræver én afregning.');
  const proposal:Proposal={...flatpayDraft(generated.source.payment,generated.source.settlements[0],accounts),report:generated.report};
- async function save(next:State){const raw=JSON.stringify(next);const result=stored?await db.prepare('UPDATE app_settings SET setting_value=?,updated_at=CURRENT_TIMESTAMP WHERE tenant=? AND setting_key=? AND setting_value=?').bind(raw,tenant,key,stored.setting_value).run():await db.prepare('INSERT INTO app_settings(tenant,setting_key,setting_value) VALUES(?,?,?) ON CONFLICT DO NOTHING').bind(tenant,key,raw).run();if(result.meta.changes!==1)throw new TransferError('Kladdestatus blev ændret. Hent status igen.');stored={setting_value:raw};state=next;}
+ async function save(next:State){const raw=JSON.stringify(next);const write=stored?db.prepare('UPDATE app_settings SET setting_value=?,updated_at=CURRENT_TIMESTAMP WHERE tenant=? AND setting_key=? AND setting_value=?').bind(raw,tenant,key,stored.setting_value):db.prepare('INSERT INTO app_settings(tenant,setting_key,setting_value) VALUES(?,?,?) ON CONFLICT DO NOTHING').bind(tenant,key,raw);const result=await savePayoutReceipt(db,write,key,body.externalId,stored?JSON.parse(stored.setting_value):null,next,raw);if(result.meta.changes!==1)throw new TransferError('Kladdestatus blev ændret. Hent status igen.');stored={setting_value:raw};state=next;}
  if(body.action==='preview'){await save({phase:'prepared',version:crypto.randomUUID(),organizationId:dinero.organizationId,proposal,updatedAt:new Date().toISOString()});return publicState();}
  if(!state||state.phase!=='prepared'||body.version!==state.version||JSON.stringify(state.proposal)!==JSON.stringify(proposal))throw new TransferError('Forslaget er ændret. Kontrollér en ny forhåndsvisning.');
  const client=await dineroClient(dinero);

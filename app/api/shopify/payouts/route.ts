@@ -1,3 +1,4 @@
+import {payoutImportStatements} from '@/db/payout-events';
 import { shopifyFetch, shopifyFailure } from '@/lib/shopify-request';
 import { recordFailure } from '@/db/errors';
 import { NextRequest, NextResponse } from 'next/server';
@@ -45,11 +46,12 @@ export async function POST(request: NextRequest) {
     if (!connection) throw new Error('Ingen tilgængelig Shopify Payments-konto');
     if (connection.pageInfo.hasNextPage && (!connection.pageInfo.endCursor || connection.pageInfo.endCursor === after)) throw new Error('Shopify returnerede en ugyldig fortsættelse');
     const payouts = connection.nodes.filter(item => new Date(item.issuedAt) >= cutoff);
-    const statements = payouts.map(item => {
+    const statements = payouts.flatMap(item => {
       const expires = shiftMonths(new Date(item.issuedAt), policy.months);
-      return db.prepare(`INSERT INTO integration_records (id, tenant, record_type, external_id, occurred_at, amount_minor, currency, booking_status, payload_json, expires_at) VALUES (?, 'sablen.dk', 'payout', ?, ?, ?, ?, 'pending', ?, ?) ON CONFLICT(tenant, record_type, external_id) DO UPDATE SET occurred_at = excluded.occurred_at, amount_minor = excluded.amount_minor, currency = excluded.currency, payload_json = CASE WHEN json_extract(integration_records.payload_json,'$.reportKey') IS NULL THEN excluded.payload_json ELSE json_set(excluded.payload_json,'$.reportKey',json_extract(integration_records.payload_json,'$.reportKey'),'$.reportFingerprint',json_extract(integration_records.payload_json,'$.reportFingerprint'),'$.reportEtag',json_extract(integration_records.payload_json,'$.reportEtag'),'$.reportVersion',json_extract(integration_records.payload_json,'$.reportVersion'),'$.transactions',json_extract(integration_records.payload_json,'$.transactions')) END, expires_at = excluded.expires_at`).bind(`shopify-payout:${item.id}`, item.id, item.issuedAt, minorUnits(item.net.amount, item.net.currencyCode), item.net.currencyCode, JSON.stringify({ ...item, provider: 'shopify_payments' }), expires.toISOString());
+      const write = db.prepare(`INSERT INTO integration_records (id, tenant, record_type, external_id, occurred_at, amount_minor, currency, booking_status, payload_json, expires_at) VALUES (?, 'sablen.dk', 'payout', ?, ?, ?, ?, 'pending', ?, ?) ON CONFLICT(tenant, record_type, external_id) DO UPDATE SET occurred_at = excluded.occurred_at, amount_minor = excluded.amount_minor, currency = excluded.currency, payload_json = CASE WHEN json_extract(integration_records.payload_json,'$.reportKey') IS NULL THEN excluded.payload_json ELSE json_set(excluded.payload_json,'$.reportKey',json_extract(integration_records.payload_json,'$.reportKey'),'$.reportFingerprint',json_extract(integration_records.payload_json,'$.reportFingerprint'),'$.reportEtag',json_extract(integration_records.payload_json,'$.reportEtag'),'$.reportVersion',json_extract(integration_records.payload_json,'$.reportVersion'),'$.transactions',json_extract(integration_records.payload_json,'$.transactions')) END, expires_at = excluded.expires_at`).bind(`shopify-payout:${item.id}`, item.id, item.issuedAt, minorUnits(item.net.amount, item.net.currencyCode), item.net.currencyCode, JSON.stringify({ ...item, provider: 'shopify_payments' }), expires.toISOString());
+      return payoutImportStatements(db,item.id,'shopify_payments',item,write);
     });
-    if (statements.length) await db.batch(statements);
+    for(let i=0;i<statements.length;i+=60)await db.batch(statements.slice(i,i+60));
     const reportWarnings: string[] = [];
     // Generate in bounded batches to stay safely within one Worker's resource limits.
     const missingReports = await db.prepare("SELECT external_id FROM integration_records WHERE tenant='sablen.dk' AND record_type='payout' AND json_extract(payload_json,'$.provider')='shopify_payments' AND json_extract(payload_json,'$.status')='PAID' AND json_extract(payload_json,'$.transactionType')='DEPOSIT' AND (json_extract(payload_json,'$.reportKey') IS NULL OR COALESCE(json_extract(payload_json,'$.reportVersion'),0)<2) ORDER BY occurred_at DESC LIMIT 5").all<{ external_id: string }>();

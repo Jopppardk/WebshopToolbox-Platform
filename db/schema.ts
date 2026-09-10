@@ -1,6 +1,13 @@
 export const retentionMonths = 24;
 
 export const schemaStatements = [
+  `CREATE TABLE IF NOT EXISTS payout_events (
+    id TEXT PRIMARY KEY, tenant TEXT NOT NULL, external_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL,
+    at TEXT NOT NULL, data_json TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_payout_events_record ON payout_events(tenant,external_id,at DESC,id)`,
+
   `CREATE TABLE IF NOT EXISTS emballage_submissions (
     tenant TEXT NOT NULL, organisation TEXT NOT NULL, test_mode INTEGER NOT NULL, report_id INTEGER NOT NULL,
     request_key TEXT NOT NULL, payload_json TEXT NOT NULL, state TEXT NOT NULL,
@@ -52,6 +59,7 @@ export const schemaStatements = [
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (tenant, setting_key)
   )`,
+  `CREATE INDEX IF NOT EXISTS idx_manual_booking_log ON app_settings(tenant,json_extract(setting_value,'$.externalId')) WHERE setting_key GLOB 'manual_booking:*'`,
   `CREATE TABLE IF NOT EXISTS invoice_email_deliveries (
     id TEXT PRIMARY KEY,
     tenant TEXT NOT NULL DEFAULT 'sablen.dk',
