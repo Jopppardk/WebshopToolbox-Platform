@@ -14,9 +14,9 @@ export function UnifiedPayouts({syncRevision=0}:{syncRevision?:number}){
  async function sync(){setBusy(true);setError('');setNotice('Henter…');let next:unknown=null;const seen=new Set<string>();try{for(let page=0;page<200;page++){
  const endpoint=provider==='shopify'?'/api/shopify/payouts':provider==='viabill'?'/api/viabill/records':'/api/flatpay/records';
  const body=provider==='shopify'?{after:next}:provider==='viabill'?{kind:'payout',from,to,next}:{kind:'payments',start:from,end:to};
- const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json() as {error?:string;hasNextPage?:boolean;endCursor?:string;next?:unknown};if(!r.ok)throw Error(d.error||'Hentningen fejlede.');
+ const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json() as {error?:string;reportWarnings?:string[];hasNextPage?:boolean;endCursor?:string;next?:unknown};if(!r.ok)throw Error(d.error||'Hentningen fejlede.');
  next=provider==='shopify'?(d.hasNextPage?d.endCursor:null):provider==='viabill'?d.next:null;
- if(provider==='shopify'&&d.hasNextPage&&!next)throw Error('Hentningen mangler en fortsættelse.');if(!next){setNotice('Udbetalingerne er hentet.');break;}
+ if(provider==='shopify'&&d.hasNextPage&&!next)throw Error('Hentningen mangler en fortsættelse.');if(!next){setNotice('Udbetalingerne er hentet.'+(d.reportWarnings?.length?' '+d.reportWarnings.join(' '):''));break;}
  const key=JSON.stringify(next);if(seen.has(key)||page===199)throw Error('Hentningen er ikke afsluttet. Prøv igen.');seen.add(key);
  }}catch(e){setError(e instanceof Error?e.message:'Hentningen fejlede.');setNotice('Eventuelle allerede hentede poster vises i oversigten.');}finally{setBusy(false);setOffset(0);setRevision(v=>v+1);}}
  const date=(value:string)=>Number.isFinite(Date.parse(value))?new Intl.DateTimeFormat('da-DK',{dateStyle:'medium',timeZone:'Europe/Copenhagen'}).format(new Date(value)):'—';
