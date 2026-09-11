@@ -149,7 +149,7 @@ export async function runTransfer(body: { externalId: string; action: string; da
     if (current.state.phase !== 'booked') {
       try { await save(externalId, current, { ...current.state, phase: 'uncertain', message }); } catch { /* Existing durable claim still blocks duplicate creation. */ }
     }
-    await recordFailure('Dinero · salgsoverførsel');
+    await recordFailure('Dinero · salgsoverførsel',{category:'dinero',reference:externalId,organizationId:current.state.organizationId,cause:message,action:'Kontrollér salget i Dinero, før du forsøger igen. Usikker oprettelse eller bogføring kræver manuel afklaring.'});
     throw new TransferError(message);
   }
   return transferStatus(externalId);

@@ -30,7 +30,7 @@ async function processPayoutInner(externalId:string,credentials:Record<string,st
   const receipt=await save(externalId,current,{...current.state,phase:'booked',voucherNumber:booked.VoucherNumber});if(!receipt)throw new TransferError('Bogføringskvitteringen kunne ikke gemmes.');
   await database().prepare("UPDATE integration_records SET booking_status='booked' WHERE tenant=? AND record_type='payout' AND external_id=?").bind(tenant,externalId).run();
   return true;
- }catch(error){const message=error instanceof Error?error.message:'Automatisk udbetaling blev afbrudt.';try{await save(externalId,current,{...current.state,phase:'uncertain',message});}catch{}await recordFailure('Dinero · automatisk udbetaling');return false;}
+ }catch(error){const message=error instanceof Error?error.message:'Automatisk udbetaling blev afbrudt.';try{await save(externalId,current,{...current.state,phase:'uncertain',message});}catch{}await recordFailure('Dinero · automatisk udbetaling',{category:'dinero',reference:externalId,organizationId:credentials.organizationId,cause:message,action:'Kontrollér udbetalingen i Dinero og brug Bogfør manuelt efter afklaring. Automatisk genforsøg af usikker bogføring er blokeret.'});return false;}
 }
 async function processPayout(externalId:string,credentials:Record<string,string>){
  try{return await processPayoutInner(externalId,credentials);}catch(error){await payoutAttemptFailed(database(),externalId,error,credentials.organizationId);throw error;}

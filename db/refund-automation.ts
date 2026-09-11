@@ -396,7 +396,7 @@ async function processRefund(
           message: error instanceof Error ? error.message : 'Ukendt fejl',
         });
       } catch {}
-    await recordFailure('Dinero Â· automatisk tilbagebetaling');
+    await recordFailure('Dinero · automatisk tilbagebetaling',{category:'dinero',reference:row.external_id,organizationId:credentials.organizationId,cause:error instanceof Error?error.message:'Overførslen blev afbrudt.',action:'Kontrollér tilbagebetalingen i Dinero. Afklar en eventuel eksisterende postering, før du bruger Bogfør manuelt.'});
     return false;
   }
 }

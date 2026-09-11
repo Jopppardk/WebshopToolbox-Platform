@@ -1,11 +1,16 @@
+import {loadCredentials} from '@/db/credentials';
+import {recoverConfirmedBookings} from '@/db/incident-recovery';
 import { NextRequest, NextResponse } from 'next/server';
 import { prepareDatabase } from '@/db/database';
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 export async function GET() {
   try {
     const db = await prepareDatabase();
+    const dinero=await loadCredentials('dinero',true);
+    if(dinero?.organizationId)await recoverConfirmedBookings(db,dinero.organizationId);
+    const counts=await db.prepare("SELECT SUM(CASE WHEN json_valid(details_json) AND json_extract(details_json,'$.severity')='warning' THEN 1 ELSE 0 END) AS warnings,SUM(CASE WHEN json_valid(details_json) AND json_extract(details_json,'$.severity')='warning' THEN 0 ELSE 1 END) AS alarms FROM system_errors WHERE tenant='sablen.dk' AND resolved_at IS NULL").first<{warnings:number;alarms:number}>();
     const rows = await db.prepare("SELECT setting_value FROM app_settings WHERE tenant=? AND setting_key LIKE 'notice:emballage:%' AND json_extract(setting_value,'$.read')=0 ORDER BY json_extract(setting_value,'$.createdAt') DESC").bind('sablen.dk').all<{setting_value:string}>();
-    return json({ notifications: rows.results.map(r => JSON.parse(r.setting_value)) });
+    return json({ incidents:{warnings:counts?.warnings||0,alarms:counts?.alarms||0}, notifications: rows.results.map(r => JSON.parse(r.setting_value)) });
   } catch { return json({error:'Beskeder kunne ikke hentes.'},503); }
 }
 export async function POST(request: NextRequest) {

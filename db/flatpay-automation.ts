@@ -1,3 +1,5 @@
+import {flatpayIncident} from '@/lib/incident-policy';
+import {recoverConfirmedBookings} from './incident-recovery';
 import {savePayoutReceipt,payoutAttemptFailed} from './payout-events';
 import {database} from './database';
 import {loadCredentials} from './credentials';
@@ -12,6 +14,7 @@ import {recordFailure} from './errors';
 export async function runFlatpayAutomation(){
  const db=database(),c=await loadCredentials('flatpay',true),dinero=await loadCredentials('dinero',true);
  if(!c||!dinero?.organizationId)return {status:'skipped' as const,message:'Forbind Flatpay og Dinero først.'};
+ await recoverConfirmedBookings(db,dinero.organizationId);
  const configRow=await db.prepare("SELECT setting_value FROM app_settings WHERE tenant='sablen.dk' AND setting_key='flatpay_production'").first<{setting_value:string}>();
  const config=configRow?JSON.parse(configRow.setting_value):null;
  if(config?.enabled!==true||config.merchantID!==c.merchantID||config.agreementId!==c.agreementId||config.organizationId!==dinero.organizationId)return {status:'skipped' as const,message:'Flatpay-overførsel til Dinero afventer driftsaktivering for denne konto.'};
@@ -33,9 +36,10 @@ export async function runFlatpayAutomation(){
    if(state.phase!=='draft'&&state.phase!=='booked')throw Error('Flatpay-overførslen har en igangværende eller usikker status.');
    if(state.phase==='draft'&&settings.automation.payoutsBookDinero)await bookFlatpay(payout.setting_key,dinero);
    completed++;
-  }catch(error){failed++;await payoutAttemptFailed(db,payout.setting_key,error,dinero.organizationId);await recordFailure('Dinero · Flatpay-udbetaling',{category:'dinero',reference:payout.setting_key,cause:error instanceof Error?error.message:'Overførslen fejlede.',action:'Kontrollér afregningsgrundlaget og Dinero før et nyt forsøg.'});await db.prepare("UPDATE app_settings SET updated_at=CURRENT_TIMESTAMP WHERE tenant='sablen.dk' AND setting_key=?").bind(payout.setting_key).run();}
+  }catch(error){failed++;await payoutAttemptFailed(db,payout.setting_key,error,dinero.organizationId);const receipt=await db.prepare("SELECT setting_value FROM app_settings WHERE tenant='sablen.dk' AND setting_key=?").bind(prefix+payout.setting_key).first<{setting_value:string}>();const phase=receipt?JSON.parse(receipt.setting_value).phase:undefined;const cause=error instanceof Error?error.message:'Overførslen fejlede.';await recordFailure('Dinero · Flatpay-udbetaling',{category:'dinero',reference:payout.setting_key,organizationId:dinero.organizationId,cause,...flatpayIncident(cause,phase)});await db.prepare("UPDATE app_settings SET updated_at=CURRENT_TIMESTAMP WHERE tenant='sablen.dk' AND setting_key=?").bind(payout.setting_key).run();}
  }
- if(failed)throw Error(`${failed} Flatpay-udbetalinger kræver kontrol af afregning, konti eller Dinero-status; ${completed} gennemført. Vælg Bogfør manuelt på udbetalingen efter kontrol af Dinero.`);
+ await recoverConfirmedBookings(db,dinero.organizationId);
+ if(failed)throw Error(`${failed} Flatpay-udbetalinger afventer nyt forsøg eller manuel afklaring; ${completed} gennemført. Se beskedoversigten for næste skridt.`);
  if(held&&!completed)return {status:'skipped' as const,message:`${held} tidligere testudbetaling afventer afklaring af Dinero-status. Øvrige udbetalinger behandles automatisk.`};
  return {message:`${completed} Flatpay-udbetalinger ${settings.automation.payoutsBookDinero?'bogført':'oprettet som kladde'} med rapport.`};
 }
