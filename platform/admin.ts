@@ -101,14 +101,14 @@ export async function handleAdmin(
       return reply({ id }, 201);
     }
   }
-  if (path === '/api/platform/users') {
+  if (path === '/api/platform/settings/admins') {
     admin(actor);
     if (method === 'GET')
       return reply({
         users: (
           await db
             .prepare(
-              'SELECT id,email,status,identity_issuer,identity_subject FROM users ORDER BY email,id',
+              'SELECT u.id,u.email,u.status,u.identity_issuer,u.identity_subject FROM users u JOIN platform_admins a ON a.user_id=u.id ORDER BY u.email,u.id',
             )
             .all()
         ).results,
@@ -130,12 +130,13 @@ export async function handleAdmin(
             'INSERT INTO users(id,email,identity_issuer,identity_subject) VALUES(?,?,?,?)',
           )
           .bind(id, email, issuer, subject),
-        audit(db, actor, null, 'user.created', id, { email }),
+        db.prepare('INSERT INTO platform_admins(user_id) VALUES(?)').bind(id),
+        audit(db, actor, null, 'portal_admin.created', id, { email }),
       ]);
       return reply({ id }, 201);
     }
   }
-  const userMatch = path.match(/^\/api\/platform\/users\/([\w-]+)$/);
+  const userMatch = path.match(/^\/api\/platform\/settings\/admins\/([\w-]+)$/);
   if (userMatch && method === 'PATCH') {
     admin(actor);
     const input = await body(request),
@@ -143,29 +144,43 @@ export async function handleAdmin(
       target = userMatch[1];
     if (target === actor.id)
       throw new HttpError(409, 'Du kan ikke deaktivere din egen bruger.');
-    // Platform administrator lifecycle is deliberately outside the first UI slice.
-    if (
-      await db
-        .prepare('SELECT user_id FROM platform_admins WHERE user_id=?')
-        .bind(target)
-        .first()
-    )
-      throw new HttpError(
-        409,
-        'Platformadministratorer administreres særskilt.',
-      );
-    if (
-      !(await db
-        .prepare('SELECT id FROM users WHERE id=?')
-        .bind(target)
-        .first())
-    )
-      throw new HttpError(404, 'Brugeren findes ikke.');
+    if (!(await db.prepare('SELECT user_id FROM platform_admins WHERE user_id=?').bind(target).first()))
+      throw new HttpError(404, 'Portaladministratoren findes ikke.');
     await db.batch([
       db.prepare('UPDATE users SET status=? WHERE id=?').bind(next, target),
       audit(db, actor, null, 'user.status', target, { status: next }),
     ]);
     return reply({ ok: true });
+  }
+  const companyUser = path.match(/^\/api\/platform\/companies\/([\w-]+)\/users(?:\/([\w-]+))?$/);
+  if (companyUser) {
+    const company = companyUser[1], target = companyUser[2];
+    await requireCompany(db, actor, company, true);
+    if (!target && method === 'POST') {
+      const input = await body(request), id = crypto.randomUUID();
+      const email = text(input, 'email', 254), issuer = text(input, 'issuer', 250), subject = text(input, 'subject', 250);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^(https:\/\/|urn:)/.test(issuer))
+        throw new HttpError(400, 'Ugyldig email eller identitetsudsteder.');
+      if (!['admin','member'].includes(String(input.role))) throw new HttpError(400, 'Ugyldig virksomhedsrolle.');
+      if (input.role === 'admin') admin(actor);
+      await db.batch([
+        db.prepare('INSERT INTO users(id,email,identity_issuer,identity_subject,company_id) VALUES(?,?,?,?,?)').bind(id,email,issuer,subject,company),
+        db.prepare('INSERT INTO company_memberships(company_id,user_id,role) VALUES(?,?,?)').bind(company,id,input.role),
+        audit(db,actor,company,'user.created',id,{email,role:input.role}),
+      ]);
+      return reply({id},201);
+    }
+    if (target && method === 'PATCH') {
+      const input = await body(request), next = status(input);
+      if (!(await db.prepare('SELECT id FROM users WHERE id=? AND company_id=?').bind(target,company).first()))
+        throw new HttpError(404, 'Brugeren findes ikke i virksomheden.');
+      if (target === actor.id) throw new HttpError(409, 'Du kan ikke deaktivere din egen bruger.');
+      await db.batch([
+        db.prepare('UPDATE users SET status=? WHERE id=? AND company_id=?').bind(next,target,company),
+        audit(db,actor,company,'user.status',target,{status:next}),
+      ]);
+      return reply({ok:true});
+    }
   }
   const companyMatch = path.match(
     /^\/api\/platform\/companies\/([\w-]+)(?:\/(webshops|members|audit))?$/,
@@ -244,8 +259,8 @@ export async function handleAdmin(
           user = text(input, 'userId');
         if (
           !(await db
-            .prepare("SELECT id FROM users WHERE id=? AND status='active'")
-            .bind(user)
+            .prepare("SELECT id FROM users WHERE id=? AND company_id=? AND status='active'")
+            .bind(user, company)
             .first())
         )
           throw new HttpError(400, 'Vælg en aktiv bruger.');

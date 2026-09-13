@@ -156,7 +156,7 @@ async function listCompanies() {
   );
   $('#new-company').hidden = !actor.platformAdmin;
   $('#companies-tab').classList.add('active');
-  $('#users-tab').classList.remove('active');
+  $('#settings-tab').classList.remove('active');
   content.replaceChildren();
   const stats = el('div', undefined, 'stats');
   for (const [label, value] of [
@@ -272,40 +272,20 @@ async function company(c) {
   );
   content.append(box);
   if (canManage) {
-    const members = panel(
-      'Brugeradgang',
-      actor.platformAdmin
-        ? button('Tilknyt bruger', async () => {
-            const users = (await api('/users')).users.filter(
-              (u) => u.status === 'active',
-            );
-            edit(
-              'Tilknyt bruger',
-              [
-                {
-                  name: 'userId',
-                  label: 'Bruger',
-                  options: users.map((u) => [u.id, u.email]),
-                },
-                {
-                  name: 'role',
-                  label: 'Virksomhedsrolle',
-                  options: Object.entries(roles).filter(([r]) =>
-                    ['admin', 'member'].includes(r),
-                  ),
-                },
-              ],
-              async (data) => {
-                await api(`/companies/${c.id}/members`, 'POST', data);
-                await company(c);
-              },
-            );
-          })
-        : null,
-    );
+    const members = panel('Brugere', button('Opret bruger', () => edit(
+      'Opret bruger i ' + c.name,
+      [
+        { name: 'email', label: 'Email', type: 'email', max: 254 },
+        { name: 'issuer', label: 'Identitetsudsteder', max: 250 },
+        { name: 'subject', label: 'Brugerens identitets-ID', max: 250 },
+        { name: 'role', label: 'Virksomhedsrolle', options: actor.platformAdmin ? [['member','Medlem'],['admin','Virksomhedsadministrator']] : [['member','Medlem']] },
+      ],
+      async data => { await api(`/companies/${c.id}/users`, 'POST', data); await company(c); },
+      'Brugeren tilhører kun denne virksomhed. Brug den verificerede loginidentitet. Ingen invitation sendes.'
+    )));
     table(
       members,
-      ['Bruger', 'Virksomhedsrolle', 'Webshopadgang', ''],
+      ['Bruger', 'Status', 'Virksomhedsrolle', 'Webshopadgang', ''],
       memberData.members.map((u) => {
         const grants = el('div', undefined, 'grant');
         for (const g of memberData.grants.filter((g) => g.user_id === u.id)) {
@@ -353,26 +333,17 @@ async function company(c) {
             },
           ),
         );
-        const controls = actor.platformAdmin
-          ? actions(
-              access,
-              button('Fjern medlemskab', () =>
-                edit(
-                  'Fjern medlemskab',
-                  [],
-                  async () => {
-                    await api(`/companies/${c.id}/members`, 'DELETE', {
-                      userId: u.id,
-                    });
-                    await company(c);
-                  },
-                  `Fjern ${u.email} fra virksomheden og alle dens webshops.`,
-                ),
-              ),
-            )
-          : actions(access);
+        const controls = actions(access);
+        if (u.id !== actor.id) controls.append(button(u.status === 'active' ? 'Deaktivér' : 'Aktivér', async () => {
+          await api(`/companies/${c.id}/users/${u.id}`, 'PATCH', {status: u.status === 'active' ? 'inactive' : 'active'});
+          await company(c);
+        }));
+        if (actor.platformAdmin) controls.append(button('Redigér rolle', () => edit('Virksomhedsrolle', [
+          {name:'role', label:'Rolle', value:u.role, options:[['member','Medlem'],['admin','Virksomhedsadministrator']]}
+        ], async data => { await api(`/companies/${c.id}/members`, 'POST', {userId:u.id,...data}); await company(c); })));
         return [
           u.email,
+          badge(u.status),
           roles[u.role],
           u.role === 'admin' ? 'Alle virksomhedens webshops' : grants,
           controls,
@@ -405,32 +376,32 @@ async function company(c) {
     content.append(history);
   }
 }
-async function listUsers() {
+async function portalSettings() {
   clear();
   $('#new-company').hidden = true;
   $('#companies-tab').classList.remove('active');
-  $('#users-tab').classList.add('active');
+  $('#settings-tab').classList.add('active');
   heading(
-    'Brugere',
-    'Opret kendte loginidentiteter og administrér deres status.',
+    'Portalindstillinger',
+    'Administrér adgangen til selve Toolbox-administrationen.',
   );
-  const users = (await api('/users')).users;
+  const users = (await api('/settings/admins')).users;
   content.replaceChildren();
   const box = panel(
-    'Brugere',
-    button('Opret bruger', () =>
+    'Portaladministratorer',
+    button('Opret portaladministrator', () =>
       edit(
-        'Opret bruger',
+        'Opret portaladministrator',
         [
           { name: 'email', label: 'Email', type: 'email', max: 254 },
           { name: 'issuer', label: 'Identitetsudsteder', max: 250 },
           { name: 'subject', label: 'Brugerens identitets-ID', max: 250 },
         ],
         async (data) => {
-          await api('/users', 'POST', data);
-          await listUsers();
+          await api('/settings/admins', 'POST', data);
+          await portalSettings();
         },
-        'Brug den verificerede identitet fra loginudbyderen. Email giver ikke i sig selv adgang. Ingen invitation eller kundemail sendes.',
+        'Portaladministratorer kan administrere alle virksomheder. Virksomhedsbrugere oprettes inde i virksomheden. Brug den verificerede loginidentitet.',
       ),
     ),
   );
@@ -443,21 +414,21 @@ async function listUsers() {
       u.id === actor.id
         ? 'Din bruger'
         : button(u.status === 'active' ? 'Deaktivér' : 'Aktivér', async () => {
-            await api(`/users/${u.id}`, 'PATCH', {
+            await api(`/settings/admins/${u.id}`, 'PATCH', {
               status: u.status === 'active' ? 'inactive' : 'active',
             });
-            await listUsers();
+            await portalSettings();
           }),
     ]),
   );
   content.append(box);
 }
 $('#companies-tab').onclick = () => listCompanies().catch(showError);
-$('#users-tab').onclick = () => listUsers().catch(showError);
+$('#settings-tab').onclick = () => portalSettings().catch(showError);
 try {
   actor = (await api('/me')).user;
   $('#identity').textContent = actor.email;
-  $('#users-tab').hidden = !actor.platformAdmin;
+  $('#settings-tab').hidden = !actor.platformAdmin;
   await listCompanies();
 } catch (error) {
   content.replaceChildren(

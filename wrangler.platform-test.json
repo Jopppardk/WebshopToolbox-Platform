@@ -16,8 +16,8 @@
     "PLATFORM_AUTH": "cloudflare-access",
     "PLATFORM_EXTERNAL_WRITES": "blocked",
     "PLATFORM_CUSTOMER_EMAIL": "blocked",
-    "PLATFORM_ACCESS_ISSUER": "",
-    "PLATFORM_ACCESS_AUD": ""
+    "PLATFORM_ACCESS_ISSUER": "https://flat-sun-0738.cloudflareaccess.com",
+    "PLATFORM_ACCESS_AUD": "4edbc15bc801d85de33ef29839e2e3803b733ce3cebbe60728d8e3277982e646"
   },
   "d1_databases": [
     {

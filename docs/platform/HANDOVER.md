@@ -1,5 +1,23 @@
 # Overlevering
 
+## Brugerplacering – beslutning 13. september 2026
+
+Brugeren har fravalgt adgang til flere virksomheder for samme virksomhedsbruger. Virksomhedsbrugere oprettes og administreres i den enkelte virksomhed. Portalindstillinger indeholder alene administratorer af Toolbox, som har adgang på tværs af virksomheder i kraft af deres portalrolle.
+
+Implementeret: users.company_id fastholder virksomhedsejerskab; migration 0002 bevarer eksisterende tilknytninger, afviser tvetydige medlemskaber og forhindrer ændring af ejerskab. Virksomhedsbrugere kan ikke gøres til portaladministratorer. De gamle globale /users-ruter er fjernet; /settings/admins er kun for portaladministratorer. Virksomhedsadministratorer kan oprette medlemmer og ændre deres status inden for egen virksomhed; kun portaladministratorer tildeler virksomhedsadministratorrollen. Egen deaktivering er blokeret.
+
+Testet: 281 tests bestået, inklusive 20 platformtests med migration, isolation, portalroller og deaktivering. Testdatabasens eksisterende medlemskaber er kontrolleret uden konflikter. Build, typecheck og begge dry-runs er bestået. Migration 0002 og Worker-version `fae60d2b-7e18-4206-b10e-c393639ce711` er udrullet til testmiljøet. Browserkontrol bekræfter Portalindstillinger med kun portaladministratorer og Brugere inde under virksomheden. Backup før migration ligger lokalt i ignoreret `.wrangler/before-company-users.sql`. Brugeren har godkendt push til platform/admin-foundation. De lokale kontroller er bestået; status for denne revisions Linux-CI skal kontrolleres på GitHub efter push. Ingen ændring af Sablen eller merge til main.
+
+> Loginstatus 13. september 2026: Separat Cloudflare Access-app er oprettet og test-Worker deployet med issuer og egen AUD (version `6a9263ed-d19d-40c4-a2e8-9236b6788072`). Brugerens identitet er verificeret i Cloudflare-dashboardet via aktiv OTP-session for testappen og registreret som platformadministrator i test-D1 med auditspor. Online virksomhedsoversigt er verificeret med rollen Platformadministrator. Sablen er uændret, main er ikke merged, og bogføring/kundemail er fortsat blokeret. Tidligere beskrivelser af manglende Access-login nedenfor er historiske. Remote rolleisolationsprøver med flere rigtige brugere udestår; eksisterende lokale adgangstests er fortsat grundlaget.
+
+## Loginopfølgning – 13. september 2026
+
+- Brugeren har nu godkendt dashboardopsætningen og logget ind. Den tidligere dashboardblokering er løst.
+- Separat Access-app `WebshopToolbox Platform Test` oprettet: `fac8c207-ae43-4178-8452-22dd23f44943`, kun hostname `webshop-toolbox-platform-test.rene-jeppesen.workers.dev`. Egen Allow-politik `Platform Test - Rene` (`1ce89e36-b5f8-4ef1-b103-05f895a22ec1`), kun brugerens mail, eksisterende One-time PIN, 6 timers session. Sablen-app og fælles loginudbydere er ikke ændret.
+- Issuer og ny separat AUD er sat i `wrangler.platform-test.json`. Remote dry-run bestået; test-Worker deployet som `6a9263ed-d19d-40c4-a2e8-9236b6788072`. Begge blokeringer for bogføring/kundemail er bevaret. Browseren viser korrekt Access-login til testappen.
+- Afventer brugerens indtastning af engangskode i browseren. Første verificerede identitet skal stadig registreres som platformadministrator i test-D1; fuldt administrationslogin er endnu ikke testet. Ingen automatisk adminoprettelse eller auth-bypass er tilføjet.
+- GitHub main og platformbranch kontrolleret før konfigurationsændring: fortsat `9a76239477ae03e7e5504f537e52a24277198ab4` og `8e5dd0f91dd83d9f6fe6b59e573613fefe2bead6`. Loginopfølgningens lokale ændringer er endnu ikke committed/pushet. Afsnittet nedenfor beskriver tilstanden før denne opfølgning.
+
 ## Aktuel overlevering – 13. september 2026
 
 - Branch `platform/admin-foundation`, bygget videre på etape 0. Ingen merge til main eller ændring af Sablen-produktionsressourcer. Gamle emballage-/ViaBill-afvigelser er fortsat udeladt.
