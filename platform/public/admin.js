@@ -385,7 +385,22 @@ async function company(c) {
     table(
       history,
       ['Tidspunkt', 'Handling', 'Ressource'],
-      events.map((e) => [e.created_at, e.action, e.resource_id]),
+      events.map((e) => [
+        new Date(e.created_at.replace(' ', 'T') + 'Z').toLocaleString('da-DK'),
+        ({
+          'company.created': 'Virksomhed oprettet',
+          'company.updated': 'Virksomhed ændret',
+          'webshop.created': 'Webshop oprettet',
+          'webshop.updated': 'Webshop ændret',
+          'membership.saved': 'Virksomhedsadgang gemt',
+          'membership.removed': 'Virksomhedsadgang fjernet',
+          'grant.saved': 'Webshopadgang gemt',
+          'grant.removed': 'Webshopadgang fjernet',
+        })[e.action] || e.action,
+        shops.find((s) => s.id === e.resource_id)?.name ||
+          memberData.members.find((u) => u.id === e.resource_id)?.email ||
+          (e.resource_id === c.id ? c.name : 'Tidligere registrering'),
+      ]),
     );
     content.append(history);
   }

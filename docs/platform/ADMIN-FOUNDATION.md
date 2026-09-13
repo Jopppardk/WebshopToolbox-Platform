@@ -20,6 +20,7 @@ Status 13. september 2026. Arbejdsbranch: `platform/admin-foundation`. Sablen er
 | Worker | `webshop-toolbox-platform-test` | Deployet særskilt |
 | URL | https://webshop-toolbox-platform-test.rene-jeppesen.workers.dev | Health virker; administration afvist indtil loginopsætning |
 | Worker-version ved første deploy | `fabb4b43-32e1-482b-a5b8-603f63e3948a` | 13. september 2026 |
+| Seneste testversion | `ef89fc82-108a-4d8d-bf5e-4bb742eeca2a` | Endelig pakke efter frisk npm ci, 13. september 2026 |
 | D1 | `webshop-toolbox-platform-test` / `438fde65-c538-4719-aa2e-9502ae37c7e6` | Skema og syntetisk seed anvendt |
 | R2 | `webshop-toolbox-platform-test-documents` | Oprettet; 0 objekter / 0 B ved kontrol |
 | Secrets på test-Worker | Tom liste | Ingen produktions-/providersecrets overført |
@@ -45,12 +46,13 @@ npm run platform:dev
 
 Åbn `http://127.0.0.1:8790/local-login`, og brug `token` fra den ignorerede `.wrangler/platform-local-session.json`. Token gælder én time. `npm run platform:session -- local-a` / `local-b` / `local-reader` giver fixturebrugere med begrænset adgang. Sessionen bliver til en HttpOnly/SameSite-cookie; lokalt login er ikke tilgængeligt i fjernmiljøet.
 
-Teststate ligger i `.wrangler/platform-state`; den gamle snapshots `.wrangler`, data og credentials bruges ikke. Lokal Node resolver dependencies fra snapshotets node_modules i den hidtidige kontrol; frisk `npm ci` og Linux-CI er særskilte valideringer.
+Teststate ligger i `.wrangler/platform-state`; den gamle snapshots `.wrangler`, data og credentials bruges ikke. Frisk `npm ci` er gennemført i klonen. De afsluttende kontroller bruger klonens egne låste dependencies og Node 26.5.1. Linux-CI med Node 22.23.2 er endnu ikke kørt.
 
 ## Verifikation
 
-- 277 tests bestod i hele repositoryet før to supplerende tests blev tilføjet. De seneste 18 platformtests bestod derefter, inklusive komplet legacy-routeafvisning og cookie-login.
-- Repositoryets build og typekontrol bestod lokalt. Platform Worker dry-run bestod for både lokal og fjernkonfiguration. Linux-CI-status registreres i HANDOVER.md, når den foreligger.
+- Efter frisk `npm ci`: 279 tests bestået, 0 fejl, 0 sprunget over, inklusive 18 platformtests og eksisterende Workerd-test.
+- Repositoryets build og typekontrol samt både legacy- og platform-Worker dry-run bestod lokalt med klonens egne dependencies. Fjernkonfigurationens dry-run bestod også før testdeploy.
+- Linux-CI er ikke kørt: pushet af `platform/admin-foundation` til `Jopppardk/WebshopToolbox` blev afvist af automatisk godkendelseskontrol som eksport til en ikke-verificeret destination uden specifik pushgodkendelse. Der er ikke forsøgt en alternativ pushvej. Brugerens konkrete godkendelse er nødvendig for at fortsætte med dette push; ingen merge til main er foreslået.
 - Negativ adgang: forfalsket signatur, forkert issuer/audience, udløbet token, email-header, deaktiveret bruger, krydsvirksomheds-ID, manglende webshoprolle, CSRF, ugyldig FK, dublet og tilbagekaldelse.
 - To virksomheder har hver en kildepost med eksternt ID `123`; scoped læsning viser kun egen post. Det er ikke en pilot af delte regnskaber eller idempotent bogføring.
 - Live testsmoke: `/healthz` returnerer 200 med testmiljø og begge blokeringer. `/`, `/api/platform/companies`, `/admin.js`, `/local-login` og `/api/invoices/email` returnerer 503, fordi Access endnu ikke er konfigureret, også med forfalsket Sablen-email-header. Ingen administrationsdata eksponeres.
