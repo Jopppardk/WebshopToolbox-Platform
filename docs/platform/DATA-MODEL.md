@@ -1,6 +1,6 @@
 # Forslag til datamodel og dataejerskab
 
-Status 12. september 2026: forslag til beslutning i P01. Ingen tabeller, migrationsfiler eller produktionsdata er ændret.
+Oprindeligt forslag 12. september 2026. Standardvalg er nu besluttet i ADR-001.md. Administrationens tabeller er implementeret i separat test-D1; regnskaber, aftaler, bogføringsoperationer og de øvrige integrationsdele nedenfor er fortsat målbillede. Ingen produktionsdata er ændret. Se ADMIN-FOUNDATION.md for det præcise implementerede udsnit.
 
 ## Anbefalet udgangspunkt
 

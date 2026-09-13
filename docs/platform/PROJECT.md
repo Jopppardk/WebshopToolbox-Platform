@@ -11,11 +11,12 @@ Genbrug repository Jopppardk/WebshopToolbox og integrationslogikken. Byg i isole
 Skeln mellem virksomhed, webshop og regnskabsforbindelse. Flere webshops kan tilhøre samme virksomhed og eventuelt samme regnskab. Antag ikke én webshop pr. Dinero-organisation.
 
 ## Status
+- Opdatering 13. september 2026: første administrationsudsnit er implementeret og lokalt testet. Egne testressourcer er oprettet på den eksisterende Cloudflare-konto efter brugerens valg; test-Worker er deployet, men afviser administration, fordi Access-login mangler. Se ADMIN-FOUNDATION.md og ADR-001.md.
 - Produktion: https://integration.sablen.dk
 - Eksisterende løsninger: salg/fakturaer, tilbagebetalinger, udbetalinger, rapporter, lager, emballage, indsigt, dashboard og integrationer.
 - Databasen har tenant-felter, men login, forespørgsler, credentials og scheduler indeholder Sablen-specifikke værdier. Reel isolation mellem webshops er ikke implementeret.
 - Senest verificerede produktionscommit i denne samtale: 9a76239477ae03e7e5504f537e52a24277198ab4 (PR 55). Kontrollér GitHub igen før nye ændringer.
-- Platformsprojektet er endnu ikke bygget. Der er endnu ikke oprettet et testmiljø eller en GitHub Projects-tavle.
+- Integrationsplatformen som helhed er ikke bygget. GitHub Projects er ikke oprettet; administrationens testmiljø er etableret med den ovennævnte loginbegrænsning.
 
 ## Organisering
 Brug et lokalt Codex-projekt med denne mappe som hovedmappe. Brug en separat opgave pr. afgrænset leverance. Gem beslutninger og acceptkrav i repository. GitHub Issues/Projects anbefales til opgavestatus, og pull requests til kodegennemgang.
@@ -28,6 +29,7 @@ Den rigtige klon er etableret 12. september 2026 i `work/platform` under det opr
 - STAGE-0.md: klon, bevarelse og lokal revision.
 - BACKLOG.md: klargjort lokal opgavetavle med acceptkrav og afhængigheder.
 - DATA-MODEL.md og TEST-ENVIRONMENT.md: forslag, endnu ikke implementeret eller sat i drift.
+- ADR-001.md: valgte standarder og afgrænsning; ADMIN-FOUNDATION.md: faktisk implementering/drift; ISOLATION-INVENTORY.md: reproducerbar fortegnelse over legacy-ruter og ressourceadgang.
 
 ## Åbne beslutninger
 - Kun administratoroprettede webshops eller senere selvbetjent oprettelse?

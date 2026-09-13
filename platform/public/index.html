@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="da">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>WebshopToolbox · Administration</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/admin.js"></script>
+  </head>
+  <body>
+    <aside>
+      <a class="brand" href="/">W<span>WebshopToolbox</span></a>
+      <p class="eyebrow">Administration</p>
+      <nav>
+        <button id="companies-tab" class="nav active">Virksomheder</button
+        ><button id="users-tab" class="nav" hidden>Brugere</button>
+      </nav>
+      <div class="aside-bottom">
+        <span class="badge">Testmiljø</span>
+        <p>Bogføring og kundemail er blokeret.</p>
+        <small id="identity">Indlæser bruger…</small>
+      </div>
+    </aside>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">
+            Platform / <span id="breadcrumb">Virksomheder</span>
+          </p>
+          <h1 id="title">Virksomheder</h1>
+          <p id="subtitle">
+            Administrér virksomheder, webshops og adgang ét sted.
+          </p>
+        </div>
+        <button id="new-company" hidden>Opret virksomhed</button>
+      </header>
+      <div id="message" role="status" aria-live="polite"></div>
+      <section id="content" aria-label="Administration">
+        <p>Indlæser…</p>
+      </section>
+      <dialog id="editor">
+        <form id="editor-form">
+          <h2 id="editor-title"></h2>
+          <div id="editor-fields"></div>
+          <p id="editor-error" role="alert"></p>
+          <footer>
+            <button type="button" id="cancel" class="secondary">Annullér</button
+            ><button type="submit" id="save">Gem</button>
+          </footer>
+        </form>
+      </dialog>
+    </main>
+  </body>
+</html>

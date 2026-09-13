@@ -5,13 +5,13 @@ Lokal opgavetavle, 12. september 2026. Dette er klargjorte udviklingsopgaver, ik
 | ID | Leverance | Afhænger af | Status |
 | --- | --- | --- | --- |
 | P00 | Klon, revision og bevarelse | – | Lokalt udført; se STAGE-0.md |
-| P01 | Beslut datamodel, roller og miljøvalg | P00 | Klar til beslutning |
-| P02 | Fuld kortlægning af dataadgang og Sablen-afhængigheder | P00 | Klar til udvikling |
-| P03 | Separat testkonfiguration og central blokering af writes/mail | P01, P02 | Planlagt |
-| P04 | Opret testressourcer og isoleret CI | P03 | Planlagt |
-| P05 | Skema, syntetiske fixtures og servervalideret adgang | P01, P04 | Planlagt |
+| P01 | Beslut datamodel, roller og miljøvalg | P00 | Standardvalg besluttet, ADR-001; integrationstabeller ikke implementeret |
+| P02 | Fuld kortlægning af dataadgang og Sablen-afhængigheder | P00 | 43 ruter/53 runtimefiler registreret; semantisk gennemgang af dynamiske nøgler udestår ved integrationsoverførsel |
+| P03 | Separat testkonfiguration og central blokering af writes/mail | P01, P02 | Implementeret og testet for selvstændig admin-Worker; ingen live adapters medtaget |
+| P04 | Opret testressourcer og isoleret CI | P03 | Ressourcer og aflåst Worker i drift; Access og begrænset deploy-adgang udestår |
+| P05 | Skema, syntetiske fixtures og servervalideret adgang | P01, P04 | Adminskema og lokale adgangstests implementeret; rigtigt fjernlogin udestår |
 | P06 | Scoped repositories, credentials, dokumenter og historik | P02, P05 | Planlagt |
-| P07 | Administration og integrationsindstillinger | P05, P06 | Planlagt |
+| P07 | Administration og integrationsindstillinger | P05, P06 | Virksomheder/webshops/brugeradgang implementeret lokalt; integrationsindstillinger udestår |
 | P08 | Scheduler, leases, cursors og bogføringskvitteringer | P06 | Planlagt |
 | P09 | Pilot med overlap, fælles regnskab og fejlgenopretning | P07, P08 | Planlagt |
 | P10 | Sablen-migrationsplan og separat overgangsbeslutning | P09 | Senere; ingen produktionsflytning autoriseret |

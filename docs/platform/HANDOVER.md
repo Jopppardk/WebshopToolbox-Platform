@@ -1,5 +1,20 @@
 # Overlevering
 
+## Aktuel overlevering – 13. september 2026
+
+- Branch `platform/admin-foundation`, bygget videre på etape 0. Ingen merge til main eller ændring af Sablen-produktionsressourcer. Gamle emballage-/ViaBill-afvigelser er fortsat udeladt.
+- P01: standardvalg besluttet i ADR-001.md. Brugeren valgte egne testressourcer på den eksisterende Cloudflare-konto.
+- P02: ISOLATION-INVENTORY.md registrerer 43 API-ruter og 53 runtimefiler. Komplet statisk fortegnelse og afvisningstests; dynamiske nøgler kræver fortsat semantisk gennemgang ved P06. Genér med `node scripts/platform-inventory.mjs`.
+- P03/P05/P07: separat `platform/worker.ts`, migrationsskema, signerede identiteter, scoped medlemskaber, admin-API og UI for virksomheder, webshops og brugere. Ingen legacy-integrationer, mailbinding, providercredentials eller cron i test-Worker.
+- P04: test-D1, R2 og Worker er oprettet og deployet. `/healthz` er 200, administration/assets afvises med 503 indtil Access-login. Det er ikke et færdigt online adminlogin. Inventar, URL, version, testresultater og kørevejledning står i ADMIN-FOUNDATION.md.
+- Access-app-oprettelse blev afvist med `403 auth.forbidden`. Automatisk godkendelseskontrol afviste efterfølgende åbning af Cloudflare-dashboardet som alternativ vej. Fortsæt ikke den vej uden brugerens godkendelse. Næste nødvendige brugerhandling er at godkende den konkrete testloginopsætning i dashboardet eller selv oprette appen og levere issuer/audience samt første verificerede brugeridentitet.
+- Der findes ingen automatisk administratoroprettelse ud fra email og ingen remote mulighed for at bruge lokale fixturetokens. Registrér første rigtige bruger eksplicit i test-D1 efter verifikation.
+- Backup af remote syntetisk D1 er gendannet lokalt separat: 2 virksomheder, 3 webshops, 4 brugere, 2 kildeposter, ingen FK-fejl. R2 er tom; dokument-/bogføringsrestore udestår.
+- Eksisterende fuld testpakke bestod med 277 tests; efter lokale login-/routeforbedringer bestod alle 18 platformtests. Build/typecheck og begge platform-dry-runs bestod. CI-resultat opdateres efter branchkontrol; det nye platformworkflow har ingen secrets/deployjob.
+- Lokal browserkontrol bekræftede login, webshopoprettelse og audit. `npm run platform:dev` bruger kun loopback og separat lokal state. Se ADMIN-FOUNDATION.md; seed ikke den allerede etablerede database igen.
+
+De følgende afsnit er historisk overlevering fra etape 0 og den oprindelige samtale.
+
 ## Opdatering fra etape 0 – 12. september 2026
 
 - Arbejd fremover i den rigtige klon `C:/Users/rj/Documents/Codex/2026-09-07/je/work/WebshopToolbox/work/platform`, branch `platform/stage-0`. Den oprindelige hovedmappe er bevaret som snapshot.

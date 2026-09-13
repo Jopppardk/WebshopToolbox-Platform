@@ -1,5 +1,7 @@
 # Udviklingsplan
 
+Opdatering 13. september 2026: Se ADR-001.md, ADMIN-FOUNDATION.md og BACKLOG.md for den aktuelle delvise gennemførelse af etape 1–3/5. Selvstændig test-Worker og adminskema er etableret, men Access-login er endnu ikke konfigureret. Ingen integrationer er flyttet og ingen produktionsetape er startet. Beskrivelsen nedenfor bevarer den oprindelige samlede plan.
+
 Etape 0 er lokalt gennemført for klon, revision, instruktioner og opgavegrundlag den 12. september 2026. En fælles GitHub-tavle er endnu ikke oprettet, så etape 0's fulde oprindelige acceptkrav er ikke afsluttet. Etape 1–10 er fortsat planlagt; forslag til etape 1–2 ligger i DATA-MODEL.md og TEST-ENVIRONMENT.md. Konkrete udviklingsopgaver står i BACKLOG.md.
 
 | Etape | Leverance | Acceptkrav |

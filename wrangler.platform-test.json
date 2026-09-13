@@ -1,0 +1,37 @@
+{
+  "name": "webshop-toolbox-platform-test",
+  "account_id": "cab062dd85faea98c9b8c4969175c39f",
+  "main": "platform/worker.ts",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "platform/public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "vars": {
+    "PLATFORM_ENV": "remote-test",
+    "PLATFORM_AUTH": "cloudflare-access",
+    "PLATFORM_EXTERNAL_WRITES": "blocked",
+    "PLATFORM_CUSTOMER_EMAIL": "blocked",
+    "PLATFORM_ACCESS_ISSUER": "",
+    "PLATFORM_ACCESS_AUD": ""
+  },
+  "d1_databases": [
+    {
+      "binding": "PLATFORM_DB",
+      "database_name": "webshop-toolbox-platform-test",
+      "database_id": "438fde65-c538-4719-aa2e-9502ae37c7e6",
+      "migrations_dir": "platform/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "PLATFORM_DOCUMENTS",
+      "bucket_name": "webshop-toolbox-platform-test-documents"
+    }
+  ],
+  "triggers": { "crons": [] }
+}

@@ -1,6 +1,6 @@
 # Forslag til separat udviklings- og testmiljø
 
-Status 12. september 2026: design og acceptkrav klargjort. Ingen Cloudflare-ressourcer, secrets, domæner eller testkonti er oprettet. Nedenstående navne er forslag, ikke eksisterende ressourcer.
+Oprindeligt miljøforslag 12. september 2026. Opdatering 13. september: separate D1/R2/Worker-ressourcer er oprettet på den eksisterende konto, som brugeren valgte. Lokal administration er testet; fjernmiljø er deployet med blokeret adgang indtil Access-opsætning. Ingen providersecrets er overført. ADMIN-FOUNDATION.md er autoritet for faktiske ID'er, validering, backup og udeståender; nedenstående beskriver det bredere målbillede.
 
 ## Ressourcer
 

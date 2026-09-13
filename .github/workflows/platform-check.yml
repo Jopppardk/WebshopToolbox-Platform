@@ -1,0 +1,26 @@
+name: Kontrollér platformens testmiljø
+on:
+  push:
+    branches: ['platform/**']
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  platform-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.23.2
+          cache: npm
+      - run: npm ci
+      - run: node scripts/platform.mjs check
+      - run: npm test
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npx wrangler deploy --config wrangler.direct.jsonc --dry-run
+      - run: node scripts/platform.mjs build
+      # Deliberately no deploy job and no environment/repository secrets.
