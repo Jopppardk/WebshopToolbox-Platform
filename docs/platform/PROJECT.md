@@ -21,7 +21,7 @@ Skeln mellem virksomhed, webshop og regnskabsforbindelse. Flere webshops kan til
 ## Organisering
 Brug et lokalt Codex-projekt med denne mappe som hovedmappe. Brug en separat opgave pr. afgrænset leverance. Gem beslutninger og acceptkrav i repository. GitHub Issues/Projects anbefales til opgavestatus, og pull requests til kodegennemgang.
 
-Den rigtige klon er etableret 12. september 2026 i `work/platform` under det oprindelige snapshot. Aktuel branch er `platform/admin-foundation`, videreført fra `platform/stage-0`. Dokumentation er overført og lokale afvigelser gennemgået; snapshot og sikkerhedskopi er bevaret. Brug klonen som hovedmappe til platformarbejde. Se STAGE-0.md for præcis placering og revision. Test-Worker er deployet; GitHub-push er afvist af automatisk godkendelseskontrol og afventer brugerens godkendelse. Produktion er ikke deployet som led i denne opgave.
+Den rigtige klon er etableret 12. september 2026 i `work/platform` under det oprindelige snapshot. Aktuel branch er `platform/admin-foundation`, videreført fra `platform/stage-0`. Dokumentation er overført og lokale afvigelser gennemgået; snapshot og sikkerhedskopi er bevaret. Brug klonen som hovedmappe til platformarbejde. Se STAGE-0.md for præcis placering og revision. Test-Worker er deployet. Brugeren godkendte push 13. september 2026; platformbranchen er pushet, og Linux-CI er bestået. Cloudflare Access-login udestår fortsat. Produktion er ikke deployet som led i denne opgave.
 
 ## Læs videre
 - ROADMAP.md: etaper og acceptkrav.

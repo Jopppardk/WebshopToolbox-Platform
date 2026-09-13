@@ -46,13 +46,13 @@ npm run platform:dev
 
 Åbn `http://127.0.0.1:8790/local-login`, og brug `token` fra den ignorerede `.wrangler/platform-local-session.json`. Token gælder én time. `npm run platform:session -- local-a` / `local-b` / `local-reader` giver fixturebrugere med begrænset adgang. Sessionen bliver til en HttpOnly/SameSite-cookie; lokalt login er ikke tilgængeligt i fjernmiljøet.
 
-Teststate ligger i `.wrangler/platform-state`; den gamle snapshots `.wrangler`, data og credentials bruges ikke. Frisk `npm ci` er gennemført i klonen. De afsluttende kontroller bruger klonens egne låste dependencies og Node 26.5.1. Linux-CI med Node 22.23.2 er endnu ikke kørt.
+Teststate ligger i `.wrangler/platform-state`; den gamle snapshots `.wrangler`, data og credentials bruges ikke. Frisk `npm ci` er gennemført i klonen. De afsluttende kontroller bruger klonens egne låste dependencies og Node 26.5.1. Linux-CI med Node 22.23.2 er også bestået den 13. september 2026.
 
 ## Verifikation
 
 - Efter frisk `npm ci`: 279 tests bestået, 0 fejl, 0 sprunget over, inklusive 18 platformtests og eksisterende Workerd-test.
 - Repositoryets build og typekontrol samt både legacy- og platform-Worker dry-run bestod lokalt med klonens egne dependencies. Fjernkonfigurationens dry-run bestod også før testdeploy.
-- Linux-CI er ikke kørt: pushet af `platform/admin-foundation` til `Jopppardk/WebshopToolbox` blev afvist af automatisk godkendelseskontrol som eksport til en ikke-verificeret destination uden specifik pushgodkendelse. Der er ikke forsøgt en alternativ pushvej. Brugerens konkrete godkendelse er nødvendig for at fortsætte med dette push; ingen merge til main er foreslået.
+- Brugeren godkendte push 13. september 2026. `platform/admin-foundation` er pushet til `Jopppardk/WebshopToolbox`. Linux-CI bestod på kodecommit `46c1fb292cd9dc15eb39411c7570aedf8359bfe4`: npm ci, konfigurationskontrol, tests, build, typecheck og begge Worker-dry-runs. [CI-kørsel](https://github.com/Jopppardk/WebshopToolbox/actions/runs/34748367038). Ingen merge til main eller deployment fra CI.
 - Negativ adgang: forfalsket signatur, forkert issuer/audience, udløbet token, email-header, deaktiveret bruger, krydsvirksomheds-ID, manglende webshoprolle, CSRF, ugyldig FK, dublet og tilbagekaldelse.
 - To virksomheder har hver en kildepost med eksternt ID `123`; scoped læsning viser kun egen post. Det er ikke en pilot af delte regnskaber eller idempotent bogføring.
 - Live testsmoke: `/healthz` returnerer 200 med testmiljø og begge blokeringer. `/`, `/api/platform/companies`, `/admin.js`, `/local-login` og `/api/invoices/email` returnerer 503, fordi Access endnu ikke er konfigureret, også med forfalsket Sablen-email-header. Ingen administrationsdata eksponeres.
