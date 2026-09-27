@@ -214,3 +214,11 @@ Efter brugerens bestilling er destinationen på eksisterende Access-app `ffaf131
 Kontrolleret online efter lagring: prod / giver 303 til /login, /login giver 200 og viser WebshopToolbox-formularen med mailkode uden Cloudflare-login. /admin, /admin/ og /admin/api/platform/me giver 302 til Access. /api/platform/me, /api/platform/companies og ordre-API giver 401 anonymt. /local-login giver 401. Offentlige Worker-svar har noindex, nofollow, noarchive. /healthz giver 200 med environment=production og bogføring/kundemail blocked. Devs samme login-/API-/Access-kontroller bestod også.
 
 Ingen kode-deployment, databaseændring eller mailafsendelse i denne aktivering. Reel modtagelse af kundens mailkode og fuldt kunde-/administratorlogin er ikke afprøvet her. Seneste kode-CI og begge GitHub-deployments er bestået. Tidligere noter om domænedækkende produktions-Access er nu historiske.
+
+## 27. september 2026 – info-konto til Tier 0
+
+Efter brugerens ønske er info@webshoptoolbox.dk oprettet som ventende Tier 0-administrator i både dev og prod. Eksisterende administrator bevares som reserve. Der findes ingen særskilt primærrolle i datamodellen; info-adressen er den aftalte fremtidige konto med samme administratorrettigheder.
+
+Oprettet atomisk i hvert miljø: bruger uden virksomhed, platform_admins-række, 48-timers invitation med hashet token og auditpost. Efterkontrol bekræfter tier0=1, status=inactive og invitation=pending indtil mailverificeret onboarding. Personlige aktiveringslinks findes kun i ignoreret .wrangler/info-admin-activation.html og er ikke sendt med mail eller committet. Brugeren skal logge ind med info-adressen via Access og udfylde profil for hvert miljø. Ingen eksisterende konti eller kundedata er ændret.
+
+Info-adressen er tilføjet de to eksisterende Tier 0 Access-politikker; øvrige adresser, session og autentificering bevares. Ingen ændring af Sablen. Ingen deployment nødvendig.
