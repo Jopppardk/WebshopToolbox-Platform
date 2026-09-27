@@ -247,3 +247,8 @@ Kodecommit `47e1815bebfca0040fa040f20af2790a193506d4` er udgivet fra det separat
 Migration 0025 anvendt i begge D1-databaser efter Time Travel-bookmarks. FK-kontrol OK, begge nye tabeller tomme efter migration. Prod gav først Cloudflare 7403; read-only whoami bekræftede rigtig konto og D1-write-rettighed, d1 info bekræftede rigtig database. Nyt forsøg med samme autoriserede login lykkedes. Ingen rettigheder eller credentials ændret.
 
 Begge miljøers health/login giver 200, admin giver 302 til egen Access-destination, anonym ordre-API giver 401. Bogføring og normal kundemail fortsat blocked. Ingen historik hentet, datoer sat eller bilag afstemt for kunder. Sablen uændret. Live Dinero-afstemning og visuel browserkontrol er ikke udført; funktionens API og klient er testet/bygget med syntetiske data og CI. Afstemningen er manuel pr. bilag, ikke automatisk masseafstemning. Se BOOKING-ONBOARDING.md.
+
+
+## 27. september 2026 – Flatpay: én historikdato
+
+Det gamle Startdato-felt ved aftalevalg er fjernet fra Tier 1. Flatpay bruger den gemte effektive historikdato fra IntegrationStartDate, når forbindelsesrequesten ikke indeholder en legacy-startDate. Gem startdatoer før forbindelse. Bogføringsstart er fortsat selvstændig. Efter datolagring genhentes forbindelsesrevisionen, så samme side ikke sender en forældet revision. Eksisterende klienter og API-kontrakter bevares. Ingen migration eller kundedataændring. Målrettet integrationstest verificerer forbindelseslagring uden ekstra dato samt adskilt bogføringsdato; begge typechecks bestået. Udgivelse afventer.

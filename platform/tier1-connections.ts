@@ -1,3 +1,4 @@
+import { dataStartDate } from './tier1-history';
 import { requireCompany } from './auth';
 import { handleAccounting } from './accounting';
 import { seal, website } from './connections';
@@ -45,7 +46,7 @@ export async function handleTier1Connections(request:Request,env:PlatformEnv,act
     const b=await jsonBody(request);
     if(!['validate','discover','connect','save'].includes(String(b.action)))throw new HttpError(400,'Genindtast adgangsoplysninger for at ændre forbindelsen og startdatoen.');
     const discovery=b.action==='validate'||b.action==='discover';
-    const response=await handlePayments(forwarded(request,{...b,action:discovery?'discover':'connect',name:b.accountName}),env,actor,company,shop,provider,'connection');
+    const response=await handlePayments(forwarded(request,{...b,...(!discovery&&provider==='flatpay'&&b.startDate===undefined?{startDate:await dataStartDate(env,company,shop,provider)}:{}),action:discovery?'discover':'connect',name:b.accountName}),env,actor,company,shop,provider,'connection');
     if(!response.ok)return response;
     const data=await response.json() as {accounts?:unknown[]};
     return reply(discovery?(provider==='flatpay'?{agreements:data.accounts}:{accounts:data.accounts}):{connected:true,name:typeof b.accountName==='string'?b.accountName:provider});
