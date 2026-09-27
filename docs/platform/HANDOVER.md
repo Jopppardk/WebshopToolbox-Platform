@@ -255,3 +255,8 @@ Det gamle Startdato-felt ved aftalevalg er fjernet fra Tier 1. Flatpay bruger de
 
 
 Flatpay-rettelsen er udgivet på kodecommit `0d9ff2e2c4acbfa535d88bacffa282dc47894401`. CI `36347805009`, dev `36347805355` og prod `36347807975` bestået med 355/355 tests og obligatoriske builds/typechecks. Dev Worker `ae861e94-8347-497e-9534-02dd7d5095f1`, prod Worker `4c0f73ac-d116-4d34-a59c-04e6fd4ea20e`. Begge health/login 200, admin 302 til Access, anonym ordre-API 401. Ingen migration, kundedata, økonomiske kald eller Sablen-ændringer. UI er typechecket og bygget, ikke browserkontrolleret.
+
+
+## 27. september 2026 – Præcis Cloudflare-guide
+
+Guiden under Afsender og eget maildomæne er udvidet med konto-ID-søgning, direkte link til brugerens API Tokens, Create Custom Token, Account → Email Sending → Edit, afgrænsning til Specific account, engangsvisning af tokenværdien samt Gem afsender og afsendertest. Generisk for hver kundes egen konto; intet WebshopToolbox/Sablen-konto-ID indsat. Officielle Cloudflare-kilder linket i dialogen. Kun hjælpetekst/layout ændret; ingen mail, DNS, credentials eller databaseændringer. Udgivelse afventer.
