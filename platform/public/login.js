@@ -1,0 +1,10 @@
+const emailForm=document.querySelector('#email-form'),codeForm=document.querySelector('#code-form'),message=document.querySelector('#message'),error=document.querySelector('#error');
+const invitation=new URL(location.href).searchParams.get('invitation')||'';
+history.replaceState(null,'','/login');
+let challenge='';
+if(invitation){document.querySelector('h1').textContent='Velkommen til WebshopToolbox';document.querySelector('#intro').textContent='Bekræft din mailadresse med en engangskode, og udfyld din profil.';document.querySelector('#profile').hidden=false;document.querySelector('#name').required=true;}
+async function send(action,body){const response=await fetch('/auth/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const result=await response.json();if(!response.ok)throw Error(result.error||'Prøv igen om lidt.');return result;}
+function busy(form,value){for(const button of form.querySelectorAll('button'))button.disabled=value;}
+emailForm.onsubmit=async event=>{event.preventDefault();busy(emailForm,true);error.textContent='';try{const result=await send('start',{email:emailForm.email.value.trim(),invitation});challenge=result.challenge;message.textContent=result.message+(result.previewCode&&['localhost','127.0.0.1','[::1]'].includes(location.hostname)?' Lokal testkode: '+result.previewCode:'');emailForm.hidden=true;codeForm.hidden=false;document.querySelector('#code').focus();}catch(e){error.textContent=e.message;}finally{busy(emailForm,false);}};
+codeForm.onsubmit=async event=>{event.preventDefault();busy(codeForm,true);error.textContent='';try{await send('verify',{challenge,code:document.querySelector('#code').value,name:document.querySelector('#name').value,phone:document.querySelector('#phone').value});location.replace('/');}catch(e){error.textContent=e.message;busy(codeForm,false);}};
+document.querySelector('#restart').onclick=()=>{challenge='';codeForm.reset();codeForm.hidden=true;emailForm.hidden=false;message.textContent='';error.textContent='';emailForm.email.focus();};

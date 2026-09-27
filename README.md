@@ -1,37 +1,25 @@
-# Sablen Toolbox
+# WebshopToolbox Platform
 
-Den komplette produktions- og gendannelsesvejledning findes i [DRIFTSMANUAL.md](./DRIFTSMANUAL.md).
+Selvstændigt repository til Tier 0-administration og Tier 1-kundeportal.
 
-Sablen Toolbox er Sablens interne integrationsplatform til Shopify, Dinero og
-tilknyttede bogførings- og dokumentflows. Produktionsmiljøet kører på Cloudflare
-Workers med D1 og R2 og er tilgængeligt på `integration.sablen.dk`.
+- Dev: https://dev.webshoptoolbox.dk
+- Prod: https://portal.webshoptoolbox.dk
+- Kilde: https://github.com/Jopppardk/WebshopToolbox-Platform
 
-## Lokal udvikling
+Læs [projektstatus](docs/platform/PROJECT.md), [overlevering](docs/platform/HANDOVER.md) og [repository-adskillelsen](docs/platform/REPOSITORY-SPLIT.md).
 
-Krav: Node.js 22.13 eller nyere.
+## Udvikling
 
-```bash
-npm ci
-npm run dev
-```
+Node.js 22.23.2 eller nyere. Kør `npm ci`, `npm run platform:init`, `npm run platform:seed` og `npm run platform:dev` til et separat lokalt testmiljø. Fixtures er syntetiske og må ikke indlæses i produktion.
 
-Kør kvalitetstjek før en ændring sendes til GitHub:
+`npm test`, `npm run platform:tier1:typecheck`, `npm run build`, `npm run typecheck` og platformens build/dry-run kontrollerer løsningen.
 
-```bash
-npm test
-npm run build
-```
+## Udgivelse
 
-## Deployment
+Push deployer ikke. GitHub Actions-workflowet **Udgiv WebshopToolbox** startes manuelt på main med dev eller prod. Der skal først konfigureres en passende Cloudflare API-token som `CLOUDFLARE_API_TOKEN` i det valgte GitHub Environment. Der er ikke overført secrets fra Sablen eller lokale credentials. Migrationer kræver særskilt backup og udføres ikke automatisk.
 
-Push til `main` starter GitHub Actions-workflowet i
-`.github/workflows/deploy.yml`. Workflowet tester og bygger først løsningen og
-deployes kun derefter til Cloudflare Worker `sablen-integrationshub`.
+Lokal, eksplicit udgivelse: `npm run deploy:dev` eller `npm run deploy:prod`. Begge scripts kontrollerer repository og de separate Cloudflare-ressourcer. Bogføring, automatisk kundemail og cron er fortsat blokeret.
 
-Repositoryet skal have disse GitHub Actions-secrets:
+## Forholdet til Sablen
 
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN`
-
-Integrationsnøgler til Shopify, Dinero og ViaBill må aldrig gemmes i GitHub.
-De håndteres fortsat i produktionsløsningen og Cloudflare.
+Git-historikken er bevaret fra platformbranchen i det oprindelige repository. Fælles biblioteker, regressionstests og ældre kildekode er bevaret, fordi platformen stadig bruger dele af dem. Historiske Sablen-driftsvejledninger og `wrangler.direct.jsonc` er reference/CI dry-run, ikke denne platforms udgivelsesvej. Sablens automatiske deployment-workflow er fjernet i dette repository. Det oprindelige repository og de kørende løsninger ændres ikke af adskillelsen.

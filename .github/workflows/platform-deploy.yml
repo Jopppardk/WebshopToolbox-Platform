@@ -1,0 +1,50 @@
+name: Udgiv WebshopToolbox
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Miljø
+        required: true
+        type: choice
+        options: [dev, prod]
+permissions:
+  contents: read
+concurrency:
+  group: webshoptoolbox-${{ inputs.target }}
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.repository == 'Jopppardk/WebshopToolbox-Platform' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: ${{ inputs.target }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.23.2
+          cache: npm
+      - run: npm ci
+      - run: node scripts/platform.mjs check
+      - run: node scripts/platform-production.mjs check
+      - run: npm test
+      - run: npm run platform:tier1:typecheck
+      - run: npm run build
+      - run: npm run typecheck
+      - name: Deploy valgt miljø
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "Miljøet mangler CLOUDFLARE_API_TOKEN."
+            exit 1
+          fi
+          if [ "$TARGET" = dev ]; then
+            node scripts/platform.mjs deploy
+          elif [ "$TARGET" = prod ]; then
+            node scripts/platform-production.mjs deploy
+          else
+            exit 1
+          fi
+      # Migrationer køres separat efter backup. Ingen Sablen-kommandoer.

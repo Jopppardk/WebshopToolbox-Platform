@@ -1,0 +1,271 @@
+{
+  "repository": "Jopppardk/WebshopToolbox",
+  "commit": "73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9",
+  "files": [
+    {
+      "path": "app/globals.css",
+      "sha256": "e96fc119b089f1758d9156c2234660487be14a68aa20dcdf30b09b02a42a6e98"
+    },
+    {
+      "path": "app/page.tsx",
+      "sha256": "6e946da1b640b74aa22028834045c68e65a16d7082aad3fe55cd0a8153f608d9"
+    },
+    {
+      "path": "components/booking-status.tsx",
+      "sha256": "aa0b9a6d37f288357e2408542670f690f7360f92bae15f0079da90a9f3c4aa35"
+    },
+    {
+      "path": "components/dashboard.tsx",
+      "sha256": "031901a356646ed24499a0a50ba0ae0dc84730ffcaa352b4d4f022ba41b3c04d"
+    },
+    {
+      "path": "components/documents.tsx",
+      "sha256": "82324f4ab5ae1422d8fd218eaa0b3ef51d5e1020bd558a67bd023a99b0f956e3"
+    },
+    {
+      "path": "components/emballage-connection.tsx",
+      "sha256": "4805537374cff4490a01b5fe3755dbe58645be29ecf7ce9be4f1d5a757784c97"
+    },
+    {
+      "path": "components/error-overview.tsx",
+      "sha256": "04acca1fb41de2a85f02acd4bb5283fe1bdebb1b3400314b6448bbae3c1b63a0"
+    },
+    {
+      "path": "components/flatpay-connection.tsx",
+      "sha256": "b12396b65f5c8aa19f48b93a413c49fe17cdda2a138b4bf9d95dfe2d649b1a50"
+    },
+    {
+      "path": "components/flatpay-records.tsx",
+      "sha256": "dbcd8d369e221d3219e5729bae03a0006f2f8068586ee083865e2b14cd48f366"
+    },
+    {
+      "path": "components/history-settings.tsx",
+      "sha256": "fae9c5832c8af66bc3b5991977d1e9216f99a11f8e3c324557dcb11623b4524d"
+    },
+    {
+      "path": "components/integration-card.tsx",
+      "sha256": "bf2f31ac24abac03c3a5ee91a16c911505224b1a0469032898862da916cc614c"
+    },
+    {
+      "path": "components/integration-library.tsx",
+      "sha256": "083a081eee5d3ce9a3f40024de9cf279f92b1bb1b38ac5fd87727c81fd29a6e4"
+    },
+    {
+      "path": "components/integration-start-date.tsx",
+      "sha256": "feeb6fa01efdfc5964240904bb4fc94a54effe49e8bf9f21466817c12c3e439d"
+    },
+    {
+      "path": "components/inventory.tsx",
+      "sha256": "1f40c2cb26a6411bad53f9eca1df8cc781c8e29ca78fa3561f2959920e4de21b"
+    },
+    {
+      "path": "components/job-insights.tsx",
+      "sha256": "7d57bbb4a6960b0bec329be1ade701671aea7373403e844a95308a2eb827aba9"
+    },
+    {
+      "path": "components/manual-booking-action.tsx",
+      "sha256": "76295fb8a355941e045b7ddd0343d2f98b8553afb4c329e5183fa2d650cb28ef"
+    },
+    {
+      "path": "components/notification-bell.tsx",
+      "sha256": "0fc76a34b68be1e899f83fbbac8d3d4129550b6ddc1247fcef230ea06795c29b"
+    },
+    {
+      "path": "components/order-log.tsx",
+      "sha256": "0b1c06b64cd3d0adfa25009ed5af5e2d9d663e674a6e1a62be4290242e1c40f2"
+    },
+    {
+      "path": "components/packaging-reporting.tsx",
+      "sha256": "3379332c345c4a0d6d8f2b8f1118dcb3a572dbf2448e51b9c054c434f7aa4ab3"
+    },
+    {
+      "path": "components/packaging-supplier.tsx",
+      "sha256": "103df45dfbc2a527da12baa345b94309d40f20fc5dc83213b2404f192d8c4f8c"
+    },
+    {
+      "path": "components/packaging.tsx",
+      "sha256": "462f7503c1843a103ad56eeb0ed673cec37c28abaa6ecddc1dedb8ed7f57d4c6"
+    },
+    {
+      "path": "components/payments.tsx",
+      "sha256": "1aac7816c0d6d3a2c653c3f7af9fc3e45e67d99bcbbaccbd18d5294302504cf4"
+    },
+    {
+      "path": "components/payout-log.tsx",
+      "sha256": "c6a1315b2cc56d61d2d3acfec7c2f6ead8a94fa083b6fb3d43ec47780ab568ea"
+    },
+    {
+      "path": "components/provider-ledger.tsx",
+      "sha256": "2a944b36352dc8901ea66604d4a094eb80d94cb19c0cb6d882c53fea9f077b5e"
+    },
+    {
+      "path": "components/sales-preview.tsx",
+      "sha256": "1a8fc09d4fc5323fc1c28210068abf67f47b1f987dd2ad342ab877f4bad1b77a"
+    },
+    {
+      "path": "components/sync-status.tsx",
+      "sha256": "3d30bab1ee4827244ff591555538b92788b325afb27b98757509d75f3650871e"
+    },
+    {
+      "path": "components/ui/badge.tsx",
+      "sha256": "052b4c0fbcd05b23eae84f124b8a868d79f97ee934e16e8546a60a392601814c"
+    },
+    {
+      "path": "components/ui/button.tsx",
+      "sha256": "3bdad93ebda47079beeee08aa9068455ed7792e4f595e66ddc47f66af6f133b1"
+    },
+    {
+      "path": "components/ui/checkbox.tsx",
+      "sha256": "3215e1b81f76f6473faf8ee45ff2004cc458bbc216213707d1ddaccefb17d009"
+    },
+    {
+      "path": "components/ui/dialog.tsx",
+      "sha256": "0c5e7e92817adfdfd6091c88fd984f4e3114dab0fa948ae80447c178602a3c9a"
+    },
+    {
+      "path": "components/ui/input.tsx",
+      "sha256": "9ba5a924b7b430dcd88a3ddad591854a467299e833d7046927e0bf74c78c6ea8"
+    },
+    {
+      "path": "components/ui/native-select.tsx",
+      "sha256": "adc7e4ce047d7e619e9f3161eca2e4dc197399429d8f474a948f2a957a603971"
+    },
+    {
+      "path": "components/ui/sheet.tsx",
+      "sha256": "12db77b80dbd5e7549c11d9da9d8fa9e4dc0d452c99cacaafd5ea3d5b8b4afb8"
+    },
+    {
+      "path": "components/ui/switch.tsx",
+      "sha256": "cda57e3b380185d3ffe4195856bc533f595eccbd01b103a2bb1d9a0635d6c51a"
+    },
+    {
+      "path": "components/ui/table.tsx",
+      "sha256": "0dba4e4cc69b8ca88c106096d16a6b7a20308a314b997b26b4b1266a202591ff"
+    },
+    {
+      "path": "components/ui/tabs.tsx",
+      "sha256": "e9e02515c9212cfd5fa149f67668c4117a0b1b961c9752eaa4d7547e829da998"
+    },
+    {
+      "path": "components/ui/textarea.tsx",
+      "sha256": "bd2878c7058d27bca7d97a01cc4dd4868e097184005ebf8b4176db93b2f3e22b"
+    },
+    {
+      "path": "components/unified-payouts.tsx",
+      "sha256": "6bc0d7027581c0b282d6e2e668051d4ef2c2ab2f4bc144dd5597b9facecf065d"
+    },
+    {
+      "path": "components/viabill-connection.tsx",
+      "sha256": "1ac5e72b96853e435e47cb288beccc1a47952ad3eb762d6c7a83d3035ec131f1"
+    },
+    {
+      "path": "components/viabill-records.tsx",
+      "sha256": "b65b122096882a468ac3b3a9dc2332d8f57e8fc6c24d448b5a59940c517bbeeb"
+    },
+    {
+      "path": "lib/admin-settings.ts",
+      "sha256": "ac248917436ea6878e6b4cb9529c86c10a48509844a4c76288f4f2add83391a2"
+    },
+    {
+      "path": "lib/booking-status.ts",
+      "sha256": "d1f79a54e18a52ee3e0674049587d195c7618067dabf34a39d11de3e0248abf6"
+    },
+    {
+      "path": "lib/dashboard-finance.ts",
+      "sha256": "a4abb1e1c523713284537d9fa760ebec14c03f4b060f5f859f712ff35ff4d446"
+    },
+    {
+      "path": "lib/diagnostics.ts",
+      "sha256": "663ecb9067d02797dd89d5dfc46d2c2531ecf1909fea65e4525511adfbe77abe"
+    },
+    {
+      "path": "lib/dinero-suppliers.ts",
+      "sha256": "79bac9061d57cc1ef423f9b9e17967a729574103828f17dcf318806a26e50764"
+    },
+    {
+      "path": "lib/emballage-api.ts",
+      "sha256": "e3f580fae05e9dd43d75cf11c7f046c5b5b02a13af36fafe8e17849a71408326"
+    },
+    {
+      "path": "lib/emballage-reporting.ts",
+      "sha256": "efff15a486dfc9334d93a2edebc41d144a8aeca47f898f785006ba7c78a4d16b"
+    },
+    {
+      "path": "lib/flatpay-api.ts",
+      "sha256": "b090e43f95b342ce02a357731a07b203b0005f92d0b4b4b283735b0f92ee9ec5"
+    },
+    {
+      "path": "lib/history-policy.ts",
+      "sha256": "bcdf1d5a91dbae055d8b41c95dfbc19d88cf465c00c066ee331a898efd2f22eb"
+    },
+    {
+      "path": "lib/integration-catalog.ts",
+      "sha256": "4f999eb4011587e1751510d15934303480aba962d684b684ce59a966d5ff8322"
+    },
+    {
+      "path": "lib/inventory.ts",
+      "sha256": "b9fa60a0a3bdb7789f5b6c3153ac7458f8e2f331e89cbdd29a11c93e4192ef7a"
+    },
+    {
+      "path": "lib/invoice-check.ts",
+      "sha256": "2a7b69e8baf7e75d004110720b835bc28d6e4b421fbdf9379f775aca958dea05"
+    },
+    {
+      "path": "lib/order-log.ts",
+      "sha256": "468e2d20a270a3e273b2a8e9ac72395900ec53b1aa510cc6358326fa5b4272c5"
+    },
+    {
+      "path": "lib/order-period.ts",
+      "sha256": "bc10addeea2abe4860298a1ebba39983e4a885fcee10218e3fb0b1982d41d9d5"
+    },
+    {
+      "path": "lib/packaging.ts",
+      "sha256": "b9598006fc63b37f29d32c0ca4470d12fe09845c32af260dc115407c2ffc5997"
+    },
+    {
+      "path": "lib/payout-log.ts",
+      "sha256": "5a58d13563f4c0281c9aa6a97804a869e05a0745acd17dfdef8df775fe536a3c"
+    },
+    {
+      "path": "lib/payout-status.ts",
+      "sha256": "4e70bcf938d8529dffa38242ee5780250ea3233694af70778322728f892f6fac"
+    },
+    {
+      "path": "lib/sales-preview.ts",
+      "sha256": "4bf83513033697f5347b1ead76f619f3b744f961efa09e4e74e0d7a2bdefc3b4"
+    },
+    {
+      "path": "lib/shopify-payments.ts",
+      "sha256": "eecd760277011f6c6d317b1a90564396289783b7abfe4ef3bfeb6401bcfc4c0b"
+    },
+    {
+      "path": "lib/sync-schedule.ts",
+      "sha256": "bf63805a7ce87070232ed85a8cf2d41bab3868488221e200aca85f1f90a967b3"
+    },
+    {
+      "path": "lib/unified-payouts.ts",
+      "sha256": "52cb3a76b329f5a9d90ed222b30c35adf88c7179cd032a21af40abb404cf61cf"
+    },
+    {
+      "path": "lib/utils.ts",
+      "sha256": "4b705c7d7e5c7a2dd73d26ad35e9c0583d3d3655e2a5be1e67cea21458f29c01"
+    },
+    {
+      "path": "lib/vat-code-options.ts",
+      "sha256": "da616c4c5f80d379d979abe5cf83a83a5832f7e68c4a05c9c12e827986a53b47"
+    },
+    {
+      "path": "lib/viabill.ts",
+      "sha256": "d51584a7597ea37ffb377ee6741530b4ee617dcb797f4effbac7bc3a1553e11e"
+    }
+  ],
+  "excluded": [
+    "components/development-requests.tsx"
+  ],
+  "changes": [
+    "Company identity and WebshopToolbox branding",
+    "Development replaced with Support",
+    "Scoped API transport and PDF URLs",
+    "Removed unscoped browser settings migration"
+  ]
+}

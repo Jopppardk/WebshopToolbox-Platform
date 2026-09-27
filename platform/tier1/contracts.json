@@ -1,0 +1,402 @@
+{
+  "referenceCommit": "73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9",
+  "contracts": [
+    {
+      "path": "/api/admin/errors",
+      "method": "GET",
+      "status": "Gemte importfejl og kvittering tilsluttet; automatisk mailnotifikation ikke aktiveret"
+    },
+    {
+      "path": "/api/admin/errors",
+      "method": "POST",
+      "status": "Gemte importfejl og kvittering tilsluttet; automatisk mailnotifikation ikke aktiveret"
+    },
+    {
+      "path": "/api/admin/feature-requests",
+      "method": "GET",
+      "status": "Fravalgt; erstattet af Support"
+    },
+    {
+      "path": "/api/admin/feature-requests",
+      "method": "POST",
+      "status": "Fravalgt; erstattet af Support"
+    },
+    {
+      "path": "/api/admin/feature-requests",
+      "method": "PATCH",
+      "status": "Fravalgt; erstattet af Support"
+    },
+    {
+      "path": "/api/admin/history",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/admin/history",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/admin/insights",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/admin/settings",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/admin/settings",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/admin/sync-status",
+      "method": "GET",
+      "status": "Manuelle importkørsler; ingen cron eller automatisk bogføring"
+    },
+    {
+      "path": "/api/bookkeeping/manual",
+      "method": "POST",
+      "status": "Blokeret i dev; ingen eksterne writes eller kundemail"
+    },
+    {
+      "path": "/api/dashboard/finance",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/dashboard/platform",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/dinero/accounts",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/dinero/accounts",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/dinero/suppliers",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/dinero/suppliers",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/documents",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/documents",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/emballage/connection",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/emballage/connection",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/emballage/reporting",
+      "method": "GET",
+      "status": "Læseoversigt og Shopify-hentning tilsluttet; ekstern indberetning blokeret"
+    },
+    {
+      "path": "/api/emballage/reporting",
+      "method": "POST",
+      "status": "Læseoversigt og Shopify-hentning tilsluttet; ekstern indberetning blokeret"
+    },
+    {
+      "path": "/api/flatpay/connection",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/flatpay/connection",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/flatpay/draft",
+      "method": "POST",
+      "status": "Blokeret i dev; ingen eksterne writes eller kundemail"
+    },
+    {
+      "path": "/api/flatpay/production",
+      "method": "GET",
+      "status": "Blokeret i dev; ingen eksterne writes eller kundemail"
+    },
+    {
+      "path": "/api/flatpay/production",
+      "method": "POST",
+      "status": "Blokeret i dev; ingen eksterne writes eller kundemail"
+    },
+    {
+      "path": "/api/flatpay/records",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/flatpay/refunds",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/flatpay/sync",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/integrations",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/integrations",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/integrations/selection",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/integrations/selection",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/integrations/start-date",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/integrations/start-date",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/invoices/email",
+      "method": "POST",
+      "status": "Blokeret i dev; ingen eksterne writes eller kundemail"
+    },
+    {
+      "path": "/api/invoices/email-test",
+      "method": "POST",
+      "status": "Eksplicit test af seneste PDF til egen allowlistede loginadresse"
+    },
+    {
+      "path": "/api/invoices/pdf",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/invoices",
+      "method": "GET",
+      "status": "Status og PDF-generering tilsluttet; gemte bilag bevares, ingen regenerering"
+    },
+    {
+      "path": "/api/invoices",
+      "method": "POST",
+      "status": "Status og PDF-generering tilsluttet; gemte bilag bevares, ingen regenerering"
+    },
+    {
+      "path": "/api/notifications",
+      "method": "GET",
+      "status": "Gemte importfejl og kvittering tilsluttet; automatisk mailnotifikation ikke aktiveret"
+    },
+    {
+      "path": "/api/notifications",
+      "method": "POST",
+      "status": "Gemte importfejl og kvittering tilsluttet; automatisk mailnotifikation ikke aktiveret"
+    },
+    {
+      "path": "/api/payouts/log",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/payouts/overview",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/payouts/transfer",
+      "method": "POST",
+      "status": "Blokeret i dev; ingen eksterne writes eller kundemail"
+    },
+    {
+      "path": "/api/refunds/overview",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/refunds/transfer",
+      "method": "POST",
+      "status": "Blokeret i dev; ingen eksterne writes eller kundemail"
+    },
+    {
+      "path": "/api/sales/log",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/sales/preview",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/sales/transfer",
+      "method": "POST",
+      "status": "Blokeret i dev; ingen eksterne writes eller kundemail"
+    },
+    {
+      "path": "/api/shopify/inventory",
+      "method": "GET",
+      "status": "Læseadgang og optællingssimulering tilsluttet; commit blokeret"
+    },
+    {
+      "path": "/api/shopify/inventory",
+      "method": "POST",
+      "status": "Læseadgang og optællingssimulering tilsluttet; commit blokeret"
+    },
+    {
+      "path": "/api/shopify/orders",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/shopify/orders",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/shopify/packaging",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/shopify/packaging",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/shopify/payments",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/shopify/payments",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/shopify/payouts",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/shopify/payouts",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/shopify/refunds",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/shopify/refunds",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/viabill/connection",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/viabill/connection",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/viabill/records",
+      "method": "GET",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/viabill/records",
+      "method": "POST",
+      "status": "Implementeret med virksomhed/webshopafgrænsning; udgivet på dev, testet med fixtures"
+    },
+    {
+      "path": "/api/invoices/settings",
+      "method": "GET",
+      "status": "Fakturadesigner/afsender; implementeret, testet og udgivet på dev"
+    },
+    {
+      "path": "/api/invoices/settings",
+      "method": "PUT",
+      "status": "Fakturadesigner/afsender; implementeret, testet og udgivet på dev"
+    },
+    {
+      "path": "/api/invoices/logo",
+      "method": "GET",
+      "status": "Fakturadesigner/afsender; implementeret, testet og udgivet på dev"
+    },
+    {
+      "path": "/api/invoices/logo",
+      "method": "PUT",
+      "status": "Fakturadesigner/afsender; implementeret, testet og udgivet på dev"
+    },
+    {
+      "path": "/api/invoices/logo",
+      "method": "DELETE",
+      "status": "Fakturadesigner/afsender; implementeret, testet og udgivet på dev"
+    },
+    {
+      "path": "/api/invoices/preview",
+      "method": "GET",
+      "status": "Fakturadesigner/afsender; implementeret, testet og udgivet på dev"
+    },
+    {
+      "path": "/api/invoices/sender",
+      "method": "GET",
+      "status": "Fakturadesigner/afsender; implementeret, testet og udgivet på dev"
+    },
+    {
+      "path": "/api/invoices/sender",
+      "method": "PUT",
+      "status": "Fakturadesigner/afsender; implementeret, testet og udgivet på dev"
+    },
+    {
+      "path": "/api/invoices/sender/test",
+      "method": "POST",
+      "status": "Fakturadesigner/afsender; implementeret, testet og udgivet på dev"
+    }
+  ],
+  "fullParity": false,
+  "deployment": {
+    "environment": "dev",
+    "version": "7553d17c-bd95-4024-85d3-cb976a675895",
+    "incompleteReleaseAuthorizedByUser": true
+  },
+  "devVersion": "c5eac4cb-de7d-4d6f-8312-97cedd6e1d03"
+}

@@ -1,0 +1,76 @@
+{
+  "name": "webshop-toolbox-platform-production",
+  "account_id": "cab062dd85faea98c9b8c4969175c39f",
+  "main": "platform/worker.ts",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "platform/public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "vars": {
+    "PLATFORM_ENV": "production",
+    "PLATFORM_AUTH": "cloudflare-access",
+    "PLATFORM_EXTERNAL_WRITES": "blocked",
+    "PLATFORM_CUSTOMER_EMAIL": "blocked",
+    "PLATFORM_ACCESS_ISSUER": "https://flat-sun-0738.cloudflareaccess.com",
+    "PLATFORM_ACCESS_AUD": "8029826e98be59c035aba9af67ee49560bea48baae6567048d989d16d465b72f",
+    "PLATFORM_INVITATION_MODE": "registered",
+    "PLATFORM_INVITATION_FROM": "no-reply@webshoptoolbox.dk",
+    "PLATFORM_MAIL_FROM": "faktura@webshoptoolbox.dk",
+    "PLATFORM_MAIL_TEST_RECIPIENTS": "rj@itm8.com,rene.jeppesen@live.dk",
+    "PLATFORM_CUSTOMER_LOGIN": "enabled"
+  },
+  "d1_databases": [
+    {
+      "binding": "PLATFORM_DB",
+      "database_name": "webshop-toolbox-platform-production",
+      "database_id": "c3775354-8cc9-4f68-9343-1bde30776245",
+      "migrations_dir": "platform/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "PLATFORM_DOCUMENTS",
+      "bucket_name": "webshop-toolbox-platform-production-documents"
+    }
+  ],
+  "triggers": {
+    "crons": []
+  },
+  "send_email": [
+    {
+      "name": "PLATFORM_INVITATIONS",
+      "allowed_sender_addresses": [
+        "no-reply@webshoptoolbox.dk"
+      ]
+    },
+    {
+      "name": "PLATFORM_MAIL_TEST",
+      "allowed_sender_addresses": [
+        "faktura@webshoptoolbox.dk"
+      ],
+      "allowed_destination_addresses": [
+        "rj@itm8.com",
+        "rene.jeppesen@live.dk"
+      ]
+    },
+    {
+      "name": "PLATFORM_AUTH_MAIL",
+      "allowed_sender_addresses": [
+        "no-reply@webshoptoolbox.dk"
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "pattern": "portal.webshoptoolbox.dk",
+      "custom_domain": true
+    }
+  ]
+}

@@ -362,3 +362,105 @@ footer {
     min-height: 40px;
   }
 }
+/* Customer workspace base theme. */
+body.customer { background:#f7f5f0; color:#292723; }
+.customer aside { background:#252923; }
+.customer .nav.active { background:#424638; color:#fff; box-shadow:inset 3px 0 #c09960; }
+.customer button:not(.nav):not(.secondary):not(.link) { background:#75603f; }
+.customer .panel,.customer .stat { border-color:#e9e2d7; }
+.customer .panel-head { border-color:#eee8df; }
+.customer .stat strong { font-size:22px; line-height:1.4; }
+.customer .empty { line-height:1.65; }
+.customer .stats { flex-wrap:wrap; }
+.customer .stat { min-width:180px; }
+@media(max-width:620px) { .customer nav { flex-wrap:wrap; } }
+
+.api-status {white-space:nowrap;font-weight:600;} .api-status.available {color:#187345;} .api-status.disrupted {color:#aa3029;} .api-status.unknown {color:#6b7280;}
+
+.logout-form {margin-top:12px;} .logout-form button {border:1px solid #69837c;} @media(max-width:620px) { .aside-bottom {display:block;margin-top:18px;} .aside-bottom > p,.aside-bottom > .badge {display:none;} .logout-form button {width:100%;} }
+/* Customer portal: same layout tokens and navigation geometry as the existing UI. */
+body.customer {background:#f7f7f8;color:#232323;font-family:Arial,Helvetica,sans-serif;}
+.customer aside {width:246px;padding:0 12px 20px;background:#232323;border-right:1px solid #353535;overflow-y:auto;z-index:20;}
+.customer .brand {height:96px;padding:0 12px;flex-shrink:0;color:white;}
+.customer aside > .eyebrow {margin:0 12px 12px;color:#aaa59d;letter-spacing:.05em;}
+.customer aside nav {display:flex;flex-direction:column;gap:2px;}
+.customer aside .nav {display:flex;align-items:center;gap:11px;height:42px;min-height:42px;padding:0 12px;border-radius:8px;font-size:13px;font-weight:500;color:#bbb7b0;}
+.customer aside .nav svg {width:17px;height:17px;flex-shrink:0;}
+.customer aside .nav.active {background:#c09960;color:white;box-shadow:0 8px 24px #c099601f;}
+.customer aside .nav:hover {background:#ffffff0d;color:white;}
+.customer aside .nav.active:hover {background:#b28b52;}
+.customer-group {padding:0 12px 8px;margin:26px 0 0;color:#817c75;font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;}
+.customer .aside-bottom {padding:24px 12px 0;margin-top:auto;color:#bbb7b0;}
+.customer main {margin-left:246px;width:calc(100% - 246px);padding:0 32px 40px;max-width:none;}
+.customer-topbar {height:80px;margin:0 -32px 36px;padding:0 32px;display:flex;align-items:center;gap:14px;background:white;border-bottom:1px solid #e3dfda;}
+.workspace-name {font-size:14px;color:#676869;}
+.top-identity {margin-left:auto;display:grid;text-align:right;gap:5px;font-size:13px;}
+.top-identity strong {font-weight:500;}.top-identity small {color:#676869;}
+.avatar {display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:#f1e7d7;color:#6d5430;font-size:12px;font-weight:700;}
+.mobile-menu {display:none;}
+.customer main > header,.customer #content,.customer #message {max-width:1376px;margin-left:auto;margin-right:auto;}
+.customer h1 {font-size:36px;font-weight:600;line-height:1.2;letter-spacing:-.035em;margin:4px 0 10px;}
+.customer main > header .eyebrow {font-size:0;}.customer #breadcrumb {font-size:10px;color:#c16452;letter-spacing:.14em;}
+.customer #subtitle {font-size:14px;color:#676869;line-height:1.6;}
+.customer button:not(.nav):not(.secondary):not(.link):not(.update-link) {background:#c09960;}
+.customer .panel {border:1px solid #e3dfda;border-radius:12px;box-shadow:0 1px 2px #00000005;}
+.customer .panel-head {padding:20px;border-color:#e3dfda;}.customer .panel-head h2 {font-size:16px;font-weight:600;}
+.customer th {background:#f3f1ee73;color:#676869;text-transform:none;letter-spacing:0;font-size:12px;font-weight:500;white-space:nowrap;}
+.customer td {font-size:13px;}.customer td.empty {text-align:center;padding:48px 20px;color:#676869;}
+.customer .activity-row {display:grid;grid-template-columns:minmax(150px,.9fr) repeat(4,minmax(0,1fr));gap:12px;padding:20px 24px;border-bottom:1px solid #eee8df;align-items:center;}
+.activity-title {display:grid;grid-template-columns:40px 1fr;gap:4px 12px;align-items:center;font-size:14px;}.activity-title svg {width:40px;height:40px;padding:10px;background:#f4eadc;color:#8a6636;border-radius:12px;grid-row:span 2;}.activity-title small {font-size:11px;color:#676869;}
+.customer-metric {border:1px solid #e3dfda;border-radius:16px;background:white;padding:22px;min-width:0;}
+.customer-metric h3 {font-size:14px;font-weight:500;margin:0;color:#676869;}
+.customer-metric strong {display:block;font-size:30px;font-weight:600;letter-spacing:-.03em;margin-top:18px;}
+.customer-metric p {font-size:12px;line-height:1.6;color:#676869;margin:10px 0 0;}
+.activity-row .customer-metric {border:0;border-radius:12px;background:#fafaf9;padding:12px;text-align:center;}.activity-row .customer-metric h3 {font-size:11px;}.activity-row .customer-metric strong {margin-top:8px;}.activity-row .customer-metric p {display:none;}
+.activity-row .success {background:#ecfdf580;color:#065f46;}.activity-row .success h3 {color:#065f46;}.activity-row .waiting {background:#fffbeb;color:#92400e;}.activity-row .waiting h3 {color:#92400e;}
+.section-heading {font-size:18px;font-weight:600;margin:24px 0 16px;}.activity-panel .section-heading {font-size:14px;padding:0 24px;}
+.update-grid {display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;padding:0 24px 20px;}
+.update-grid .customer-metric {padding:14px;border-radius:12px;height:100%;}.update-grid .customer-metric h3 {font-size:12px;}.update-grid .customer-metric strong {font-size:13px;margin-top:12px;}.update-grid .customer-metric p {font-size:10px;}
+.customer .update-link {padding:0;color:inherit;text-align:left;background:transparent;font-weight:400;border:0;}
+.dashboard-note {font-size:11px;color:#676869;line-height:1.7;margin:14px 0;}.activity-panel > .dashboard-note {padding:12px 24px;margin:0;border-top:1px solid #e3dfda;}
+.revenue-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}.revenue-grid .customer-metric {padding:28px;min-height:190px;}.revenue-grid strong {font-size:40px;}.customer-metric.accent {background:#f7efe3;border-color:#d9c4a2;}
+.metric-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:16px;}
+.module-notice {display:flex;align-items:center;justify-content:space-between;gap:16px;background:#f7efe3;border:1px solid #e3d2b7;border-radius:10px;padding:16px 20px;margin-bottom:24px;font-size:13px;line-height:1.6;}
+.customer-tabs {display:flex;gap:6px;padding:12px 16px;border-bottom:1px solid #e3dfda;overflow:auto;}.customer .customer-tabs button {background:transparent!important;color:#676869;white-space:nowrap;}.customer .customer-tabs button.active {background:#f1e7d7!important;color:#6d5430;}
+@media(max-width:1200px){.update-grid {grid-template-columns:repeat(3,minmax(0,1fr));}.customer .activity-row {grid-template-columns:repeat(4,minmax(0,1fr));}.activity-title {grid-column:1/-1;}}
+@media(max-width:1023px){.customer aside {transform:translateX(-100%);transition:transform .2s;position:fixed;inset:80px auto 0 0;width:246px;}.customer.menu-open aside {transform:translateX(0);box-shadow:15px 0 40px #0003;}.customer main {margin:0;width:100%;padding:0 20px 30px;}.customer-topbar {margin:0 -20px 28px;padding:0 20px;position:sticky;top:0;z-index:30;}.mobile-menu {display:block;}.customer aside .eyebrow {display:block;}.customer .aside-bottom {display:block;}}
+@media(max-width:620px){.top-identity {display:none;}.workspace-name {flex:1;}.customer h1 {font-size:30px;}.customer .activity-row {grid-template-columns:repeat(2,minmax(0,1fr));padding:16px;}.update-grid {grid-template-columns:repeat(2,minmax(0,1fr));padding:0 16px 16px;}.revenue-grid,.metric-grid {grid-template-columns:1fr;}.module-notice {align-items:flex-start;flex-direction:column;}.customer .brand {margin-bottom:0;}}
+
+@media(max-width:1023px){.customer aside {visibility:hidden;}.customer.menu-open aside {visibility:visible;}}
+
+.support-banner{position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:14px;background:#fff0c2;color:#392e15;border:2px solid #c09960;margin-bottom:16px;font-size:14px}
+
+body.customer .support-banner{top:80px}
+
+/* Shared platform branding for Tier 0 and Tier 1. */
+.brand,.customer .brand{background:transparent;border-radius:0;padding:8px 10px;min-height:64px;height:auto;display:flex;align-items:center;margin:12px 0 22px;flex-shrink:0;}
+.brand-logo{display:block;width:100%;height:auto;max-width:220px;}
+.welcome-brand{display:block;max-width:320px;background:transparent;border-radius:0;padding:8px 14px;margin-bottom:24px;}
+.welcome-brand img{display:block;width:100%;height:auto;}
+.top-brand{display:flex;flex-shrink:0;align-items:center;}
+.top-brand img{display:block;width:36px;height:36px;border-radius:7px;}
+@media(max-width:620px){.brand{max-width:230px;margin:0 0 16px;}.customer .brand{margin:12px 0 20px;}.customer-topbar{gap:10px;}.workspace-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}}
+
+/* Dashboard setup guidance: configuration never implies a live connection. */
+.connection-notice{border:1px solid #e8cd92;background:#fffaf0;border-radius:16px;padding:24px;margin-bottom:24px;}
+.connection-notice h2{margin:0 0 8px;font-size:21px;}
+.connection-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:20px;}
+.connection-card{background:#fff;border:1px solid #eee2c8;border-radius:12px;padding:20px;}
+.connection-card h3{font-size:17px;margin:12px 0 8px;}
+.connection-card p{line-height:1.5;}
+.connection-card a{display:inline-block;color:#17604f;font-weight:700;margin-top:8px;text-underline-offset:4px;}
+.connection-status{display:inline-block;color:#795000;background:#fff0c7;border-radius:20px;padding:5px 10px;font-size:12px;font-weight:700;}
+#integration-accounting,#integration-webshops{scroll-margin-top:90px;}
+@media(max-width:700px){.connection-cards{grid-template-columns:1fr;}.connection-notice{padding:18px;}}
+
+/* Light logo on dark navigation, without a surrounding card. */
+aside .brand-logo{filter:brightness(0) invert(1);}
+.settings-tabs { margin-bottom: 24px; }
+textarea { width:100%; box-sizing:border-box; border:1px solid #cbd5e1; border-radius:8px; padding:10px; font:inherit; }
+.mail-preview { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; }
+
+.ticket-message{margin:1rem 0;padding:1rem;border:1px solid #ddd;border-radius:8px}.ticket-message.support{border-left:4px solid #b68b37}.ticket-message small{display:block;color:#666;margin-top:.3rem}.ticket-message p{white-space:pre-wrap;overflow-wrap:anywhere}
+
+.customer .panel > form,.customer .panel > label,.customer .panel > details,.customer .panel > .panel{margin:20px}.customer .panel > p:not(.empty),.customer .panel > .actions{margin:16px 20px}.customer .ticket-message{margin:20px}.customer .panel > button{margin:12px 20px}.customer .panel > select{margin:16px 20px;max-width:calc(100% - 40px)}

@@ -38,3 +38,6 @@ next-env.d.ts
 /work/
 *.tsbuildinfo
 .dev.vars*
+
+# Reproducible Tier 1 browser bundle
+/platform/public/tier1-next/

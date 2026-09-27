@@ -1,5 +1,8 @@
 # Forslag til datamodel og dataejerskab
 
+> Kundeportal 13. september 2026: Brugeren har besluttet direkte adgang til én virksomhed, flere webshops under Integrationer og ét fælles regnskab. Første kundeportal er implementeret og testet; faktisk tilslutning/import er fortsat planlagt. Se [CUSTOMER-PORTAL.md](CUSTOMER-PORTAL.md).
+> Seneste arbejde: invitation via mail og førstegangsprofil er implementeret og lokalt testet, men endnu ikke deployet eller pushet. Første inviterede bruger bliver virksomhedsadministrator; virksomhedsadministratorer kan nu selv styre virksomhedens roller. Afsender er valgt til no-reply@webshoptoolbox.dk. Maildomænets aktivering, ekstra testmodtager og Google/Microsoft-opsætning udestår. Brugeren arbejder på domænet. Se [INVITATIONS.md](INVITATIONS.md) for faktisk status og næste handling.
+
 ## Brugerplacering – beslutning 13. september 2026
 
 Brugeren har fravalgt adgang til flere virksomheder for samme virksomhedsbruger. Virksomhedsbrugere oprettes og administreres i den enkelte virksomhed. Portalindstillinger indeholder alene administratorer af Toolbox, som har adgang på tværs af virksomheder i kraft af deres portalrolle.
@@ -74,3 +77,6 @@ En indledende søgning efter `sablen|SABLEN|45036871|LA Trading` fandt 76 runtim
 To virksomheder med hver sin webshop bruger samme eksterne ordre-, refund- og udbetalings-ID. Begge importer bevares; krydsadgang afvises på alle operationer. To webshops i samme virksomhed deler Dinero-regnskab og betalingsaftale: én fælles udbetaling bogføres én gang, med korrekt fordeling og begrænset visning. FK-tests afviser blandede virksomhedsejere. Parallelle forsøg, timeout efter ekstern oprettelse, genstart og lease-udløb giver ingen dobbeltbogføring. Dokumenter, cache, fejl, mails og restore indgår i samme testmatrix.
 
 Åbne beslutninger: godkend roller/databasevalg, loginudbyder, regler for delte aftaler og dataopbevaring. Overgang af Sablen er fortsat etape 9; ingen migration startes ud fra dette forslag.
+
+## Produktfeeds (0024, dev)
+product_feeds har composite FK til webshops(company_id,id), unikt public_token, revisionskontrol, refresh-lock, R2-snapshotreference og fejloplysninger. Konfiguration er adskilt pr. webshop; XML-objektnøgle indeholder miljø, virksomhed, webshop og feed. Se PRODUCT-FEEDS.md.

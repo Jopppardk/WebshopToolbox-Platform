@@ -1,17 +1,19 @@
 <!doctype html>
 <html lang="da">
-  <head>
+  <head><meta name="robots" content="noindex, nofollow, noarchive">
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>WebshopToolbox · Administration</title>
+    <link rel="icon" type="image/png" href="/favicon.png?v=transparent-1"><link rel="apple-touch-icon" href="/favicon.png?v=transparent-1"><title>WebshopToolbox · Administration</title>
     <link rel="stylesheet" href="/styles.css" />
     <script type="module" src="/admin.js"></script>
   </head>
   <body>
     <aside>
-      <a class="brand" href="/">W<span>WebshopToolbox</span></a>
+      <a class="brand" href="/" aria-label="WebshopToolbox – startside"><img class="brand-logo" src="/brand/webshoptoolbox-logo.png" alt="WebshopToolbox" width="2172" height="724"></a>
       <p class="eyebrow">Administration</p>
       <nav>
+        <button id="tickets-tab" class="nav" hidden>Support</button>
+        <button id="catalog-tab" class="nav" hidden>Integrationer</button>
         <button id="companies-tab" class="nav active">Virksomheder</button
         ><button id="settings-tab" class="nav" hidden>Portalindstillinger</button>
       </nav>
@@ -19,6 +21,9 @@
         <span class="badge">Testmiljø</span>
         <p>Bogføring og kundemail er blokeret.</p>
         <small id="identity">Indlæser bruger…</small>
+        <form action="/logout" method="post" class="logout-form">
+          <button type="submit" class="nav" id="logout">Log ud</button>
+        </form>
       </div>
     </aside>
     <main>

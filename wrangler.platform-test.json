@@ -3,7 +3,9 @@
   "account_id": "cab062dd85faea98c9b8c4969175c39f",
   "main": "platform/worker.ts",
   "compatibility_date": "2026-05-15",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "workers_dev": true,
   "preview_urls": false,
   "assets": {
@@ -17,7 +19,13 @@
     "PLATFORM_EXTERNAL_WRITES": "blocked",
     "PLATFORM_CUSTOMER_EMAIL": "blocked",
     "PLATFORM_ACCESS_ISSUER": "https://flat-sun-0738.cloudflareaccess.com",
-    "PLATFORM_ACCESS_AUD": "4edbc15bc801d85de33ef29839e2e3803b733ce3cebbe60728d8e3277982e646"
+    "PLATFORM_ACCESS_AUD": "4edbc15bc801d85de33ef29839e2e3803b733ce3cebbe60728d8e3277982e646",
+    "PLATFORM_INVITATION_MODE": "restricted",
+    "PLATFORM_INVITATION_FROM": "no-reply@webshoptoolbox.dk",
+    "PLATFORM_INVITATION_RECIPIENTS": "rj@itm8.com",
+    "PLATFORM_MAIL_FROM": "faktura@webshoptoolbox.dk",
+    "PLATFORM_MAIL_TEST_RECIPIENTS": "rj@itm8.com,rene.jeppesen@live.dk",
+    "PLATFORM_CUSTOMER_LOGIN": "enabled"
   },
   "d1_databases": [
     {
@@ -33,5 +41,44 @@
       "bucket_name": "webshop-toolbox-platform-test-documents"
     }
   ],
-  "triggers": { "crons": [] }
+  "triggers": {
+    "crons": []
+  },
+  "send_email": [
+    {
+      "name": "PLATFORM_INVITATIONS",
+      "allowed_sender_addresses": [
+        "no-reply@webshoptoolbox.dk"
+      ],
+      "allowed_destination_addresses": [
+        "rj@itm8.com"
+      ]
+    },
+    {
+      "name": "PLATFORM_MAIL_TEST",
+      "allowed_sender_addresses": [
+        "faktura@webshoptoolbox.dk"
+      ],
+      "allowed_destination_addresses": [
+        "rj@itm8.com",
+        "rene.jeppesen@live.dk"
+      ]
+    },
+    {
+      "name": "PLATFORM_AUTH_MAIL",
+      "allowed_sender_addresses": [
+        "no-reply@webshoptoolbox.dk"
+      ],
+      "allowed_destination_addresses": [
+        "rj@itm8.com",
+        "rene.jeppesen@live.dk"
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "pattern": "dev.webshoptoolbox.dk",
+      "custom_domain": true
+    }
+  ]
 }

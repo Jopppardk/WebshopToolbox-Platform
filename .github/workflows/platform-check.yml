@@ -1,7 +1,7 @@
 name: Kontrollér platformens testmiljø
 on:
   push:
-    branches: ['platform/**']
+    branches: [main, 'platform/**']
   pull_request:
     branches: [main]
 permissions:
@@ -19,8 +19,11 @@ jobs:
       - run: npm ci
       - run: node scripts/platform.mjs check
       - run: npm test
+      - run: npm run platform:tier1:typecheck
+      - run: npm run platform:tier1:build
       - run: npm run build
       - run: npm run typecheck
       - run: npx wrangler deploy --config wrangler.direct.jsonc --dry-run
       - run: node scripts/platform.mjs build
-      # Deliberately no deploy job and no environment/repository secrets.
+      - run: node scripts/platform-production.mjs build
+      # Validation only; deployment is a separate manual workflow.

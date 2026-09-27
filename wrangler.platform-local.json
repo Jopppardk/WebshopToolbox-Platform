@@ -2,7 +2,9 @@
   "name": "webshop-toolbox-platform-local",
   "main": "platform/worker.ts",
   "compatibility_date": "2026-05-15",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "workers_dev": false,
   "preview_urls": false,
   "assets": {
@@ -14,7 +16,9 @@
     "PLATFORM_ENV": "local-test",
     "PLATFORM_AUTH": "local-jwt",
     "PLATFORM_EXTERNAL_WRITES": "blocked",
-    "PLATFORM_CUSTOMER_EMAIL": "blocked"
+    "PLATFORM_CUSTOMER_EMAIL": "blocked",
+    "PLATFORM_INVITATION_MODE": "preview",
+    "PLATFORM_CUSTOMER_LOGIN": "enabled"
   },
   "d1_databases": [
     {
@@ -30,5 +34,7 @@
       "bucket_name": "webshop-toolbox-platform-local-documents"
     }
   ],
-  "triggers": { "crons": [] }
+  "triggers": {
+    "crons": []
+  }
 }

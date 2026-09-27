@@ -1,5 +1,19 @@
+import { financeService } from './finance-source';
+import { jsonBody } from './invitations';
+import { handleStocktake } from './stocktake';
+import { handlePayments } from './payments';
+import { handleDocuments } from './documents';
+import { handlePackaging } from './packaging';
+import { handleAccounting } from './accounting';
+import { handleOperations, dashboardData } from './operations';
+import { handleTickets } from './tickets';
+import { handleInvoices } from './invoices';
+import { handleMail } from './mail';
+import { connectionStatement, website } from './connections';
+import { invite, renewInvitation } from './invitations';
+import { catalog, apiStatus } from './catalog';
 import { requireCompany, requireWebshop } from './auth';
-import { HttpError, reply, type Actor } from './types';
+import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 
 type Body = Record<string, unknown>;
 function text(body: Body, key: string, max = 120): string {
@@ -23,6 +37,9 @@ function domain(body: Body) {
   if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(value))
     throw new HttpError(400, 'Angiv et domæne uden https eller sti.');
   return value;
+}
+function customerShopManager(actor: Actor) {
+  if(actor.platformAdmin || actor.support) throw new HttpError(403,'Webshops oprettes og opsættes af virksomhedens administrator i Tier 1. Tier 0 har kun visningsadgang.');
 }
 function admin(actor: Actor) {
   if (!actor.platformAdmin)
@@ -60,10 +77,10 @@ function audit(
     .bind(
       crypto.randomUUID(),
       company,
-      actor.id,
+      actor.support?.adminId || actor.id,
       action,
       resource,
-      JSON.stringify(details),
+      JSON.stringify({...details,...(actor.support?{supportSession:actor.support.sessionId,impersonatedUser:actor.id}:{})}),
     );
 }
 
@@ -71,12 +88,101 @@ export async function handleAdmin(
   request: Request,
   db: D1Database,
   actor: Actor,
+  env: PlatformEnv,
 ): Promise<Response> {
   const url = new URL(request.url),
     path = url.pathname,
     method = request.method;
+  const finance=path.match(/^\/api\/platform\/companies\/([\w-]+)\/finance$/);
+  if(finance){await requireCompany(db,actor,finance[1],true);const service=financeService(env,finance[1]);if(method==='GET')return reply(await service.dashboardFinance());if(method==='POST'&&!actor.support){await jsonBody(request);try{return reply(await service.syncDashboardFinance());}catch{throw new HttpError(409,'Regnskabstal kunne ikke hentes komplet. Se status på dashboardet.');}}throw new HttpError(403,'Regnskabstal kan kun opdateres af virksomhedsadministratoren.');}
+  const stocktake=path.match(/^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/stocktake$/);
+  if(stocktake)return handleStocktake(request,env,actor,stocktake[1],stocktake[2]);
+  const payment=path.match(/^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/payments\/(flatpay|viabill)\/(connection|records)$/);
+  if(payment)return handlePayments(request,env,actor,payment[1],payment[2],payment[3],payment[4]);
+  const dashboard=path.match(/^\/api\/platform\/companies\/([\w-]+)\/dashboard$/);
+  if(dashboard&&method==='GET')return dashboardData(env,actor,dashboard[1]);
+  const documents=path.match(/^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/documents$/);
+  if(documents)return handleDocuments(request,env,actor,documents[1],documents[2]);
+  const packaging=path.match(/^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/packaging$/);
+  if(packaging)return handlePackaging(request,env,actor,packaging[1],packaging[2]);
+  const accountingAction=path.match(/^\/api\/platform\/companies\/([\w-]+)\/accounting\/(connection|mapping)$/);
+  if(accountingAction)return handleAccounting(request,env,actor,accountingAction[1],accountingAction[2]);
+  const operation=path.match(/^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/data\/(orders|refunds|payouts|inventory|insights|sales-preview|connection-test)$/);
+  if(operation)return handleOperations(request,env,actor,operation[1],operation[2],operation[3]);
+  const tickets=path.match(/^\/api\/platform(?:\/companies\/([\w-]+))?\/tickets(?:\/([\w-]+))?$/);
+  if(tickets)return handleTickets(request,env,actor,tickets[1],tickets[2]);
+  const invoiceMatch=path.match(/^\/api\/platform\/companies\/([\w-]+)\/invoices(?:\/(settings|logo|sync|generate|check|pdf|test|test-latest))?$/);
+  if(invoiceMatch)return handleInvoices(request,env,actor,invoiceMatch[1],invoiceMatch[2]);
+  const mailMatch=path.match(/^\/api\/platform\/companies\/([\w-]+)\/mail(?:\/(test))?$/);
+  if(mailMatch)return handleMail(request,env,actor,mailMatch[1],mailMatch[2]);
   if (path === '/api/platform/me' && method === 'GET')
     return reply({ user: actor });
+  if (path === '/api/platform/catalog' && method === 'GET') {
+    if(!actor.platformAdmin) {
+      const own=await db.prepare('SELECT company_id FROM users WHERE id=?').bind(actor.id).first<{company_id:string}>();
+      if(!own?.company_id) throw new HttpError(403,'Ingen virksomhed.');
+      await requireCompany(db,actor,own.company_id);
+    }
+    return reply({integrations:catalog});
+  }
+  if(path==='/api/platform/catalog/status' && method==='GET') {
+    admin(actor);
+    return reply({integrations:await apiStatus()});
+  }
+  const selectionMatch=path.match(/^\/api\/platform\/companies\/([\w-]+)\/integrations$/);
+  if(selectionMatch) {
+    const company=selectionMatch[1];
+    await requireCompany(db,actor,company,method!=='GET');
+    if(method==='GET') return reply({selected:(await db.prepare('SELECT integration_id FROM company_integrations WHERE company_id=? ORDER BY integration_id').bind(company).all()).results});
+    if(method==='POST' || method==='DELETE') {
+      const input=await body(request),id=text(input,'integrationId');
+      if(!['flatpay','viabill','emballage'].includes(id)) throw new HttpError(400,'Regnskab og webshops administreres særskilt.');
+      await db.batch([
+        db.prepare(method==='POST'?'INSERT OR IGNORE INTO company_integrations(company_id,integration_id) VALUES(?,?)':'DELETE FROM company_integrations WHERE company_id=? AND integration_id=?').bind(company,id),
+        audit(db,actor,company,method==='POST'?'integration.selected':'integration.removed',company,{integrationId:id}),
+      ]);
+      return reply({ok:true});
+    }
+  }
+  if (path === '/api/platform/workspace' && method === 'GET') {
+    const company = await db.prepare(`SELECT c.*,m.role FROM users u
+      JOIN companies c ON c.id=u.company_id
+      JOIN company_memberships m ON m.company_id=c.id AND m.user_id=u.id
+      WHERE u.id=? AND c.status='active'`).bind(actor.id).first();
+    if (!company) throw new HttpError(403, 'Din bruger har ikke adgang til en aktiv virksomhed.');
+    return reply({company});
+  }
+  const connectionMatch=path.match(/^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/connection$/);
+  if(connectionMatch && method==='PUT') {
+    customerShopManager(actor);
+    const [,company,shop]=connectionMatch;
+    await requireCompany(db,actor,company,true);
+    await requireWebshop(db,actor,company,shop);
+    if(actor.support) throw new HttpError(403,'Afslut supportadgang før ændring af adgangsoplysninger.');
+    const input=await body(request);
+    const statement=await connectionStatement(env,company,shop,input);
+    await db.batch([statement,audit(db,actor,company,'webshop.connection.saved',shop,{provider:'shopify'})]);
+    return reply({ok:true});
+  }
+  const accountingMatch = path.match(/^\/api\/platform\/companies\/([\w-]+)\/accounting$/);
+  if (accountingMatch) {
+    const company = accountingMatch[1];
+    await requireCompany(db, actor, company, method !== 'GET');
+    if (method === 'GET') return reply({accounting: await db.prepare(
+      'SELECT provider,account_name,status FROM company_accounting WHERE company_id=?'
+    ).bind(company).first()});
+    if (method === 'PUT') {
+      const input = await body(request);
+      const provider = text(input, 'provider'), name = text(input, 'accountName');
+      if (!['dinero','e-conomic'].includes(provider)) throw new HttpError(400, 'Vælg et understøttet regnskabsprogram.');
+      await db.batch([
+        db.prepare(`INSERT INTO company_accounting(company_id,provider,account_name) VALUES(?,?,?)
+          ON CONFLICT(company_id) DO UPDATE SET provider=excluded.provider,account_name=excluded.account_name,updated_at=CURRENT_TIMESTAMP`).bind(company,provider,name),
+        audit(db,actor,company,'accounting.configured',company,{provider,accountName:name}),
+      ]);
+      return reply({ok:true});
+    }
+  }
   if (path === '/api/platform/companies') {
     if (method === 'GET') {
       const rows = actor.platformAdmin
@@ -108,34 +214,14 @@ export async function handleAdmin(
         users: (
           await db
             .prepare(
-              'SELECT u.id,u.email,u.status,u.identity_issuer,u.identity_subject FROM users u JOIN platform_admins a ON a.user_id=u.id ORDER BY u.email,u.id',
+              'SELECT u.id,u.email,u.status,u.full_name,i.state invitation_state,i.delivery,i.expires_at FROM users u JOIN platform_admins a ON a.user_id=u.id LEFT JOIN invitations i ON i.user_id=u.id ORDER BY u.email,u.id',
             )
             .all()
         ).results,
       });
-    if (method === 'POST') {
-      const input = await body(request),
-        id = crypto.randomUUID(),
-        email = text(input, 'email', 254),
-        issuer = text(input, 'issuer', 250),
-        subject = text(input, 'subject', 250);
-      if (
-        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
-        !/^(https:\/\/|urn:)/.test(issuer)
-      )
-        throw new HttpError(400, 'Ugyldig email eller identitetsudsteder.');
-      await db.batch([
-        db
-          .prepare(
-            'INSERT INTO users(id,email,identity_issuer,identity_subject) VALUES(?,?,?,?)',
-          )
-          .bind(id, email, issuer, subject),
-        db.prepare('INSERT INTO platform_admins(user_id) VALUES(?)').bind(id),
-        audit(db, actor, null, 'portal_admin.created', id, { email }),
-      ]);
-      return reply({ id }, 201);
-    }
+    if(method==='POST') return invite(request,env,actor,null);
   }
+
   const userMatch = path.match(/^\/api\/platform\/settings\/admins\/([\w-]+)$/);
   if (userMatch && method === 'PATCH') {
     admin(actor);
@@ -146,35 +232,26 @@ export async function handleAdmin(
       throw new HttpError(409, 'Du kan ikke deaktivere din egen bruger.');
     if (!(await db.prepare('SELECT user_id FROM platform_admins WHERE user_id=?').bind(target).first()))
       throw new HttpError(404, 'Portaladministratoren findes ikke.');
+    if(await db.prepare("SELECT id FROM invitations WHERE user_id=? AND state<>'accepted'").bind(target).first()) throw new HttpError(409,'Brug invitationshandlingerne for denne bruger.');
     await db.batch([
       db.prepare('UPDATE users SET status=? WHERE id=?').bind(next, target),
       audit(db, actor, null, 'user.status', target, { status: next }),
     ]);
     return reply({ ok: true });
   }
+  const invitationMatch=path.match(/^\/api\/platform\/(?:companies\/([\w-]+)\/users|settings\/admins)\/([\w-]+)\/invitation$/);
+  if(invitationMatch && ['POST','DELETE'].includes(method)) return renewInvitation(request,env,actor,invitationMatch[1]||null,invitationMatch[2]);
   const companyUser = path.match(/^\/api\/platform\/companies\/([\w-]+)\/users(?:\/([\w-]+))?$/);
   if (companyUser) {
     const company = companyUser[1], target = companyUser[2];
     await requireCompany(db, actor, company, true);
-    if (!target && method === 'POST') {
-      const input = await body(request), id = crypto.randomUUID();
-      const email = text(input, 'email', 254), issuer = text(input, 'issuer', 250), subject = text(input, 'subject', 250);
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^(https:\/\/|urn:)/.test(issuer))
-        throw new HttpError(400, 'Ugyldig email eller identitetsudsteder.');
-      if (!['admin','member'].includes(String(input.role))) throw new HttpError(400, 'Ugyldig virksomhedsrolle.');
-      if (input.role === 'admin') admin(actor);
-      await db.batch([
-        db.prepare('INSERT INTO users(id,email,identity_issuer,identity_subject,company_id) VALUES(?,?,?,?,?)').bind(id,email,issuer,subject,company),
-        db.prepare('INSERT INTO company_memberships(company_id,user_id,role) VALUES(?,?,?)').bind(company,id,input.role),
-        audit(db,actor,company,'user.created',id,{email,role:input.role}),
-      ]);
-      return reply({id},201);
-    }
+    if (!target && method==='POST') return invite(request,env,actor,company);
     if (target && method === 'PATCH') {
       const input = await body(request), next = status(input);
       if (!(await db.prepare('SELECT id FROM users WHERE id=? AND company_id=?').bind(target,company).first()))
         throw new HttpError(404, 'Brugeren findes ikke i virksomheden.');
       if (target === actor.id) throw new HttpError(409, 'Du kan ikke deaktivere din egen bruger.');
+      if(await db.prepare("SELECT id FROM invitations WHERE user_id=? AND state<>'accepted'").bind(target).first()) throw new HttpError(409,'Brug invitationshandlingerne for denne bruger.');
       await db.batch([
         db.prepare('UPDATE users SET status=? WHERE id=? AND company_id=?').bind(next,target,company),
         audit(db,actor,company,'user.status',target,{status:next}),
@@ -209,7 +286,7 @@ export async function handleAdmin(
       await requireCompany(db, actor, company, method !== 'GET');
       if (method === 'GET') {
         const rows = await db
-          .prepare(`SELECT w.* FROM webshops w WHERE w.company_id=? AND (?=1 OR
+          .prepare(`SELECT w.*,k.provider,k.shop_domain,k.verified_at,CASE WHEN k.webshop_id IS NULL THEN 0 ELSE 1 END AS credentials_saved FROM webshops w LEFT JOIN webshop_connections k ON k.company_id=w.company_id AND k.webshop_id=w.id WHERE w.company_id=? AND (?=1 OR
           EXISTS(SELECT 1 FROM company_memberships c WHERE c.company_id=w.company_id AND c.user_id=? AND c.role='admin') OR
           (w.status='active' AND EXISTS(SELECT 1 FROM webshop_memberships m WHERE m.company_id=w.company_id AND m.webshop_id=w.id AND m.user_id=?))) ORDER BY w.name,w.id`)
           .bind(company, actor.platformAdmin ? 1 : 0, actor.id, actor.id)
@@ -217,16 +294,21 @@ export async function handleAdmin(
         return reply({ webshops: rows.results });
       }
       if (method === 'POST') {
+        customerShopManager(actor);
         const input = await body(request),
           id = crypto.randomUUID(),
           name = text(input, 'name'),
-          host = domain(input);
+          host = website(input.domain);
+        if(actor.support && input.provider) throw new HttpError(403,'Afslut supportadgang før ændring af adgangsoplysninger.');
+        const connection=input.provider ? await connectionStatement(env,company,id,input) : null;
+        if(!input.provider && ('clientSecret' in input || 'clientId' in input || 'shopDomain' in input)) throw new HttpError(400,'Vælg webshopplatform.');
         await db.batch([
           db
             .prepare(
               'INSERT INTO webshops(id,company_id,name,domain) VALUES(?,?,?,?)',
             )
             .bind(id, company, name, host),
+          ...(connection ? [connection] : []),
           audit(db, actor, company, 'webshop.created', id, {
             name,
             domain: host,
@@ -240,7 +322,7 @@ export async function handleAdmin(
       if (method === 'GET') {
         const members = await db
           .prepare(
-            'SELECT u.id,u.email,u.status,m.role FROM company_memberships m JOIN users u ON u.id=m.user_id WHERE m.company_id=? ORDER BY u.email',
+            'SELECT u.id,u.email,u.status,u.full_name,m.role,i.state invitation_state,i.delivery,i.expires_at FROM company_memberships m JOIN users u ON u.id=m.user_id LEFT JOIN invitations i ON i.user_id=u.id WHERE m.company_id=? ORDER BY u.email',
           )
           .bind(company)
           .all();
@@ -253,8 +335,7 @@ export async function handleAdmin(
         return reply({ members: members.results, grants: grants.results });
       }
       if (method === 'POST' || method === 'DELETE') {
-        // Only platform admins assign company-wide roles. Company admins may assign webshop grants below.
-        admin(actor);
+        // Company administrators manage roles only inside their own company.
         const input = await body(request),
           user = text(input, 'userId');
         if (
@@ -264,6 +345,7 @@ export async function handleAdmin(
             .first())
         )
           throw new HttpError(400, 'Vælg en aktiv bruger.');
+        if (user === actor.id) throw new HttpError(409, 'Du kan ikke fjerne eller ændre din egen administratorrolle.');
         if (method === 'DELETE') {
           await db.batch([
             db
@@ -301,7 +383,7 @@ export async function handleAdmin(
         events: (
           await db
             .prepare(
-              'SELECT * FROM audit_events WHERE company_id=? ORDER BY created_at DESC,id DESC LIMIT 100',
+              'SELECT e.*,u.email AS actor_email FROM audit_events e JOIN users u ON u.id=e.actor_id WHERE e.company_id=? ORDER BY e.created_at DESC,e.id DESC LIMIT 100',
             )
             .bind(company)
             .all()
@@ -317,6 +399,7 @@ export async function handleAdmin(
       shop = shopMatch[2],
       section = shopMatch[3];
     if (!section && method === 'PATCH') {
+      customerShopManager(actor);
       await requireCompany(db, actor, company, true);
       if (
         !(await db

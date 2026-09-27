@@ -1,5 +1,5 @@
 {
-  "name": "sites-project",
+  "name": "webshoptoolbox-platform",
   "version": "0.1.0",
   "private": true,
   "engines": {
@@ -10,7 +10,7 @@
     "test": "node --test lib/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "build": "vinext build",
-    "deploy:cloudflare": "wrangler deploy --config wrangler.direct.jsonc",
+    "deploy:cloudflare": "node scripts/platform.mjs deploy",
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint",
     "format": "oxfmt",
@@ -19,7 +19,11 @@
     "platform:seed": "node scripts/platform.mjs seed-local",
     "platform:dev": "node scripts/platform.mjs dev",
     "platform:session": "node scripts/platform.mjs local-session",
-    "platform:build": "node scripts/platform.mjs build"
+    "platform:build": "node scripts/platform.mjs build",
+    "platform:tier1:build": "vite build --config platform/tier1/vite.config.mjs",
+    "platform:tier1:typecheck": "tsc --noEmit --project platform/tier1/tsconfig.json",
+    "deploy:dev": "node scripts/platform.mjs deploy",
+    "deploy:prod": "node scripts/platform-production.mjs deploy"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

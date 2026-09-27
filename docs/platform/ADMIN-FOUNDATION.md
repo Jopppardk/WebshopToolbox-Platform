@@ -1,5 +1,8 @@
 # Administration – implementering, drift og næste handling
 
+> Kundeportal 13. september 2026: Brugeren har besluttet direkte adgang til én virksomhed, flere webshops under Integrationer og ét fælles regnskab. Første kundeportal er implementeret og testet; faktisk tilslutning/import er fortsat planlagt. Se [CUSTOMER-PORTAL.md](CUSTOMER-PORTAL.md).
+> Seneste arbejde: invitation via mail og førstegangsprofil er deployet til testmiljøet som a310b9db-6ff5-40aa-b305-034bf74e4310. Maildomænet er aktiveret efter brugerens konkrete DNS-godkendelse. Afsender er no-reply@webshoptoolbox.dk; eneste tilladte invitationsmodtager er rj@itm8.com. Førstegangsprofil er gemt, og testinvitationen er sendt med automatisk virksomhedsadministratorrolle. Modtagelse/accept og Google/Microsoft-login udestår. Ændringerne er endnu ikke committed/pushet. Se [INVITATIONS.md](INVITATIONS.md) for faktisk status og næste handling.
+
 ## Brugerplacering – beslutning 13. september 2026
 
 Brugeren har fravalgt adgang til flere virksomheder for samme virksomhedsbruger. Virksomhedsbrugere oprettes og administreres i den enkelte virksomhed. Portalindstillinger indeholder alene administratorer af Toolbox, som har adgang på tværs af virksomheder i kraft af deres portalrolle.

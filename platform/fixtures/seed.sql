@@ -13,3 +13,5 @@ INSERT INTO company_memberships VALUES ('company-a','local-a','admin'),('company
 INSERT INTO webshop_memberships VALUES ('company-a','shop-a1','local-reader','reader');
 INSERT INTO source_records VALUES
  ('record-a','company-a','shop-a1','fixture','123','order'),('record-b','company-b','shop-b1','fixture','123','order');
+
+UPDATE users SET full_name='Testbruger';

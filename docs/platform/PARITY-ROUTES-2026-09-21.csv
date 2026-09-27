@@ -1,0 +1,45 @@
+﻿Sablen-rute;Metoder;Platformstatus;Kilde
+/api/admin/errors;GET, POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/admin/errors/route.ts
+/api/admin/feature-requests;GET, POST, PATCH;Bevidst fravalgt: udviklingssiden skal ikke være i Tier 1.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/admin/feature-requests/route.ts
+/api/admin/history;GET, POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/admin/history/route.ts
+/api/admin/insights;GET;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/admin/insights/route.ts
+/api/admin/settings;GET, POST;"Delvis: virksomhedsfaktura/mail findes; kontoplan og automatik mangler.";https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/admin/settings/route.ts
+/api/admin/sync-status;GET;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/admin/sync-status/route.ts
+/api/bookkeeping/manual;POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/bookkeeping/manual/route.ts
+/api/dashboard/finance;GET;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/dashboard/finance/route.ts
+/api/dashboard/platform;GET;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/dashboard/platform/route.ts
+/api/dinero/accounts;GET, POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/dinero/accounts/route.ts
+/api/dinero/suppliers;GET, POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/dinero/suppliers/route.ts
+/api/documents;GET, POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/documents/route.ts
+/api/emballage/connection;GET, POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/emballage/connection/route.ts
+/api/emballage/reporting;GET, POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/emballage/reporting/route.ts
+/api/flatpay/connection;GET, POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/flatpay/connection/route.ts
+/api/flatpay/draft;POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/flatpay/draft/route.ts
+/api/flatpay/production;GET, POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/flatpay/production/route.ts
+/api/flatpay/records;POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/flatpay/records/route.ts
+/api/flatpay/refunds;POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/flatpay/refunds/route.ts
+/api/flatpay/sync;POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/flatpay/sync/route.ts
+/api/integrations;GET, POST;"Delvis: katalog og Shopify-oplysninger; de øvrige forbindelser mangler.";https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/integrations/route.ts
+/api/integrations/selection;GET, POST;Delvis: valg findes, funktionelle adaptere mangler.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/integrations/selection/route.ts
+/api/integrations/start-date;GET, POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/integrations/start-date/route.ts
+/api/invoices/email;POST;"Ikke flyttet; almindelig kundemail er desuden bevidst blokeret.";https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/invoices/email/route.ts
+/api/invoices/email-test;POST;Delvis: kun godkendt egen loginadresse og valgt faktura.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/invoices/email-test/route.ts
+/api/invoices/pdf;GET;Delvis: scoped PDF, men ældre layout og andre handlinger.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/invoices/pdf/route.ts
+/api/invoices;GET, POST;Delvis: egen fakturaoversigt og manuel generering.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/invoices/route.ts
+/api/notifications;GET, POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/notifications/route.ts
+/api/payouts/log;GET;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/payouts/log/route.ts
+/api/payouts/overview;GET;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/payouts/overview/route.ts
+/api/payouts/transfer;POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/payouts/transfer/route.ts
+/api/refunds/overview;GET;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/refunds/overview/route.ts
+/api/refunds/transfer;POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/refunds/transfer/route.ts
+/api/sales/log;GET;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/sales/log/route.ts
+/api/sales/preview;POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/sales/preview/route.ts
+/api/sales/transfer;POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/sales/transfer/route.ts
+/api/shopify/inventory;GET, POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/shopify/inventory/route.ts
+/api/shopify/orders;GET, POST;"Delvis: separat import til fakturaer; ikke fuld salgsimport.";https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/shopify/orders/route.ts
+/api/shopify/packaging;GET, POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/shopify/packaging/route.ts
+/api/shopify/payments;GET, POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/shopify/payments/route.ts
+/api/shopify/payouts;GET, POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/shopify/payouts/route.ts
+/api/shopify/refunds;GET, POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/shopify/refunds/route.ts
+/api/viabill/connection;GET, POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/viabill/connection/route.ts
+/api/viabill/records;GET, POST;Ikke flyttet til fungerende Tier 1-modul.;https://github.com/Jopppardk/WebshopToolbox/blob/73e45ac80568c6c6de3057fd41dcbe3c8dd2e6e9/app/api/viabill/records/route.ts
