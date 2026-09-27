@@ -42,3 +42,11 @@ Brugeren bad herefter om publicering på dev. Access-app fac8c207-ae43-4178-8452
 Verificeret eksternt: `/login` 200 med WebshopToolbox-branding, `/admin/` og `/admin/api/platform/me` 302 til korrekt Access-host/audience, `/api/platform/me` 401 uden session. Browser-loginformularen blev anvendt én gang til rj@itm8.com; D1-optælling viste én aktuel challenge med delivery=accepted. Første read-only statusforespørgsel fik Cloudflare 7403; gentaget læsning lykkedes. Ingen mail genudsendt. Modtagelse i indbakke og fuldt login med rigtig kode afventer brugeren. Koden skal bruges i den browserfane, der anmodede om den, inden for 10 minutter.
 
 Dev er således sat i drift på version 219bed18-f7dd-4c81-bb93-c6976ef3affc. Tidligere noter om ugemt dev-formular er historiske. Produktion er fortsat uændret; seneste bestilling afgrænsede aktiveringen til dev.
+
+## 27. september 2026 – produktionslogin opdelt og aktiveret
+
+Efter brugerens bestilling er destinationen på eksisterende Access-app `ffaf131f-cd7e-48a1-aad8-94dc4c709aa3` ændret fra hele portal.webshoptoolbox.dk til `portal.webshoptoolbox.dk/admin`. App, audience, administratorpolitik `c3b21df3-4275-415c-9d16-607420e7550c`, mailkode og seks timers session er bevaret. Sablen og dev er ikke ændret. Der oprettes ikke separat admin-domæne; Tier 0 tilgås på /admin i hvert miljø.
+
+Kontrolleret online efter lagring: prod / giver 303 til /login, /login giver 200 og viser WebshopToolbox-formularen med mailkode uden Cloudflare-login. /admin, /admin/ og /admin/api/platform/me giver 302 til Access. /api/platform/me, /api/platform/companies og ordre-API giver 401 anonymt. /local-login giver 401. Offentlige Worker-svar har noindex, nofollow, noarchive. /healthz giver 200 med environment=production og bogføring/kundemail blocked. Devs samme login-/API-/Access-kontroller bestod også.
+
+Ingen kode-deployment, databaseændring eller mailafsendelse i denne aktivering. Reel modtagelse af kundens mailkode og fuldt kunde-/administratorlogin er ikke afprøvet her. Seneste kode-CI og begge GitHub-deployments er bestået. Tidligere noter om domænedækkende produktions-Access er nu historiske.

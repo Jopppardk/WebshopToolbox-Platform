@@ -206,3 +206,11 @@ Begge kørsler bestod 352 tests, begge typechecks, build og upload/trigger-deplo
 Tidlige forsøg: første stoppet før upload af origin-kontrollen; andet uploadede dev-kode men fejlede under workers.dev-triggeropsætning; tredje stoppet af den fælles config-validering. Endelige kørsler ovenfor er begge fuldt gennemført.
 
 Efterkontrol: dev healthz/login 200, anonymt ordre-API 401, /admin/ 302 til Access, bookkeeping/customerEmail blocked. Prod-ruter svarer fortsat 302 til den eksisterende domænedækkende Access-app; kundelogin og autentificeret brugerflow er derfor stadig ikke færdigverificeret. Denne deployment ændrede ingen Access-politikker. Ingen migrationer, økonomiske posteringer eller testmails kørt. Sablen-repository og -ressourcer er ikke ændret.
+
+## 27. september 2026 – produktionslogin opdelt og aktiveret
+
+Efter brugerens bestilling er destinationen på eksisterende Access-app `ffaf131f-cd7e-48a1-aad8-94dc4c709aa3` ændret fra hele portal.webshoptoolbox.dk til `portal.webshoptoolbox.dk/admin`. App, audience, administratorpolitik `c3b21df3-4275-415c-9d16-607420e7550c`, mailkode og seks timers session er bevaret. Sablen og dev er ikke ændret. Der oprettes ikke separat admin-domæne; Tier 0 tilgås på /admin i hvert miljø.
+
+Kontrolleret online efter lagring: prod / giver 303 til /login, /login giver 200 og viser WebshopToolbox-formularen med mailkode uden Cloudflare-login. /admin, /admin/ og /admin/api/platform/me giver 302 til Access. /api/platform/me, /api/platform/companies og ordre-API giver 401 anonymt. /local-login giver 401. Offentlige Worker-svar har noindex, nofollow, noarchive. /healthz giver 200 med environment=production og bogføring/kundemail blocked. Devs samme login-/API-/Access-kontroller bestod også.
+
+Ingen kode-deployment, databaseændring eller mailafsendelse i denne aktivering. Reel modtagelse af kundens mailkode og fuldt kunde-/administratorlogin er ikke afprøvet her. Seneste kode-CI og begge GitHub-deployments er bestået. Tidligere noter om domænedækkende produktions-Access er nu historiske.

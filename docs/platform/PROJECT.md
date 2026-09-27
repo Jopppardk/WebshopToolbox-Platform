@@ -1,5 +1,7 @@
 # WebshopToolbox – fælles platform
 
+> 27. september 2026 – Produktionslogin er nu opdelt: eget kundelogin på portal.webshoptoolbox.dk og Access-beskyttet Tier 0 på /admin. Anonyme API-kald afvises; bogføring/kundemail forbliver blokeret. Se PRODUCTION.md. Reel mailkode/login er endnu ikke afprøvet.
+
 > 27. september 2026 – Dev og prod er nu begge deployet succesfuldt fra GitHub Actions på commit `354c194`. 352 tests og builds bestået. Dev bruger kun dev.webshoptoolbox.dk; workers.dev-alias er lukket. Prod-login afventer fortsat Access-tilpasningen. Se REPOSITORY-SPLIT.md for kørsler og versioner.
 
 > 27. september 2026 – Separat privat repository klargjort: Jopppardk/WebshopToolbox-Platform. Fremtidig arbejdsmappe work/WebshopToolbox-Platform. Se [REPOSITORY-SPLIT.md](REPOSITORY-SPLIT.md).
