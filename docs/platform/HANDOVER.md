@@ -252,3 +252,6 @@ Begge miljøers health/login giver 200, admin giver 302 til egen Access-destinat
 ## 27. september 2026 – Flatpay: én historikdato
 
 Det gamle Startdato-felt ved aftalevalg er fjernet fra Tier 1. Flatpay bruger den gemte effektive historikdato fra IntegrationStartDate, når forbindelsesrequesten ikke indeholder en legacy-startDate. Gem startdatoer før forbindelse. Bogføringsstart er fortsat selvstændig. Efter datolagring genhentes forbindelsesrevisionen, så samme side ikke sender en forældet revision. Eksisterende klienter og API-kontrakter bevares. Ingen migration eller kundedataændring. Målrettet integrationstest verificerer forbindelseslagring uden ekstra dato samt adskilt bogføringsdato; begge typechecks bestået. Udgivelse afventer.
+
+
+Flatpay-rettelsen er udgivet på kodecommit `0d9ff2e2c4acbfa535d88bacffa282dc47894401`. CI `36347805009`, dev `36347805355` og prod `36347807975` bestået med 355/355 tests og obligatoriske builds/typechecks. Dev Worker `ae861e94-8347-497e-9534-02dd7d5095f1`, prod Worker `4c0f73ac-d116-4d34-a59c-04e6fd4ea20e`. Begge health/login 200, admin 302 til Access, anonym ordre-API 401. Ingen migration, kundedata, økonomiske kald eller Sablen-ændringer. UI er typechecket og bygget, ikke browserkontrolleret.
