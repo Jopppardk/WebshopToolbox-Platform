@@ -267,3 +267,5 @@ Guide-opdateringen er udgivet på kodecommit `ebec0ad5d5ba3c191484400943e9db7262
 ## 27. september 2026 – Skjul domæneadvarsel efter godkendelse
 
 Den røde Cloudflare DNS-advarsel skjules, når serveren returnerer verified for den gemte egne afsender, eget domæne er valgt og formularen ikke er ændret. Ved ændringer/standardafsender/pending vises advarslen igen. Under indlæsning vises den ikke. Kun visning ændret, ingen ny testmail eller ændring af godkendelse, data eller mailregler. Udgivelse afventer.
+
+Advarselsændringen er udgivet på dev og portal fra `2c1ec73fdf7b889a6e29ecac2a7957ae7cc18999`. CI `36349682249`, dev `36349682280` og prod `36349684268` bestået. Begge miljøers health/login 200, admin Access-redirect 302, anonym ordre-API 401. Ingen testmail afsendt eller kundedata ændret.
