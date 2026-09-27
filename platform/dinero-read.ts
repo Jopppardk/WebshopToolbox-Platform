@@ -1,3 +1,4 @@
+import { HttpError } from './types';
 
 export type PreviewAccount={number:string;name:string;vatCode:string;kind:'entry'|'deposit';hidden:boolean};
 
@@ -91,4 +92,19 @@ export async function readDineroSuppliers(credentials: Record<string, string>): 
     if (rows.length !== 1000) throw Error('Dinero returnerede en ufuldstændig kontaktliste. Prøv igen.');
   }
   throw Error('Leverandørlisten er for stor til én hentning.');
+}
+
+const guidPattern=/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i;
+export async function readExistingVoucher(credentials:Record<string,string>,guid:string){
+ if(!guidPattern.test(guid))throw new HttpError(400,'Angiv bilagets GUID fra Dinero.');
+ const tokenResponse=await fetch('https://authz.dinero.dk/dineroapi/oauth/token',{method:'POST',redirect:'manual',signal:AbortSignal.timeout(20000),headers:{Authorization:`Basic ${btoa(`${credentials.clientId}:${credentials.clientSecret}`)}`,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'password',scope:'read write',username:credentials.apiKey,password:credentials.apiKey})});
+ if(!tokenResponse.ok)throw new HttpError(409,'Dinero-adgangen kunne ikke fornyes.');
+ const token=await tokenResponse.json() as {access_token?:string};
+ if(!token.access_token)throw new HttpError(409,'Dinero-adgangen kunne ikke fornyes.');
+ const response=await fetch(`https://api.dinero.dk/v1/${encodeURIComponent(credentials.organizationId)}/vouchers/manuel/${guid}`,{method:'GET',redirect:'manual',cache:'no-store',signal:AbortSignal.timeout(20000),headers:{Authorization:`Bearer ${token.access_token}`,Accept:'application/json'}});
+ if(!response.ok)throw new HttpError(409,'Bilaget kunne ikke læses fra den tilknyttede Dinero-organisation.');
+ const raw=await response.json() as Record<string,any>;
+ const voucher={guid:String(raw.Guid??raw.guid??'').toLowerCase(),status:raw.Status??raw.status,timestamp:raw.Timestamp??raw.timestamp,date:raw.VoucherDate??raw.voucherDate,reference:raw.ExternalReference??raw.externalReference??'',number:raw.VoucherNumber??raw.voucherNumber??null,lines:raw.Lines??raw.lines};
+ if(voucher.guid!==guid.toLowerCase()||!['Booked','Draft'].includes(voucher.status)||typeof voucher.timestamp!=='string'||!voucher.timestamp||typeof voucher.date!=='string'||!Array.isArray(voucher.lines)||!voucher.lines.length)throw new HttpError(409,'Dinero returnerede et ufuldstændigt eller ukendt bilag.');
+ return voucher;
 }

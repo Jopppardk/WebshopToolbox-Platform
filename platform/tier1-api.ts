@@ -1,3 +1,4 @@
+import { handleReconciliation } from './booking-onboarding';
 import { handleTier1Emballage } from './tier1-emballage';
 import { handleFeeds } from './feeds';
 import { handleTier1Data } from './tier1-data';
@@ -23,6 +24,7 @@ export async function handleTier1(request:Request, env:PlatformEnv, actor:Actor)
   if(path==='/feeds'||path.startsWith('/feeds/'))return handleFeeds(request,env,actor,company.company_id,shop,path);
   if(path==='/emballage/connection'||path==='/emballage/reporting')return handleTier1Emballage(request,env,actor,company.company_id,shop,path);
   if(path==='/admin/history'||path==='/integrations/start-date')return handleHistory(request,env,actor,company.company_id,shop,path);
+  if(path==='/integrations/reconciliation')return handleReconciliation(request,env,actor,company.company_id,shop);
   const data=await handleTier1Data(request,env,actor,company.company_id,shop,path);if(data)return data;
   if(path==='/integrations' || path==='/integrations/selection' || /^\/(flatpay|viabill)\/connection$/.test(path))return handleTier1Connections(request,env,actor,company.company_id,shop,path);
   if(path==='/admin/settings') {

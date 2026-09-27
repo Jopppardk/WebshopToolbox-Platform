@@ -230,3 +230,8 @@ Brugerens første info-login blev sendt til den lukkede workers.dev-adresse via 
 Fjernet præcis den gamle destination fra eksisterende app fac8c207-ae43-4178-8452-22dd23f44943. Eneste destination er nu dev.webshoptoolbox.dk/admin. Politik, audience og loginmetode bevares. Prod/Sablen uændret, ingen kode eller databaseændring.
 
 Verificeret efter lagring: dev healthz/login 200, admin 302 til Access, anonym ordre-API 401. Det eksisterende aktiveringslink er genåbnet i brugerens fejlfane, og browseren viser nu onboarding på dev med identiteten info@webshoptoolbox.dk. Profilfelter står tomme, og brugeren skal selv udfylde navn og trykke Opret min bruger. Ingen ny kode sendt og invitationen er ikke accepteret af agenten.
+
+
+## 27. september 2026 – Generel kundestyret bogføringsopstart (klargjort)
+
+Separate historik-/bogføringsdatoer og assisteret manuel Dinero-afstemning implementeret. Ingen kundedatoer, import eller afstemning startet. Migration 0025 er additiv. 355/355 tests samt efterfølgende 5 målrettede tests med kladdeafvisning bestået. Begge typechecks og miljøkonfigurationskontroller bestået; GitHub CI og udgivelse afventer. Bogføring/kundemail fortsat blokeret. Se [BOOKING-ONBOARDING.md](BOOKING-ONBOARDING.md) for funktion, begrænsninger og verifikation.

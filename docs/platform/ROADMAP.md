@@ -81,3 +81,8 @@ Etape 0 er lokalt gennemført for klon, revision, instruktioner og opgavegrundla
 
 ## Flytning af Sablen
 Flytteplanen skal omfatte konfiguration, krypterede nøgler, ordrer, fakturaer, udbetalinger, refunderinger, dokumenter, jobhistorik, låse, sidekurser og bogføringskvitteringer. Bevar tilknytning til Dinero-organisation og eksisterende bilags-ID'er. En tilbageførsel skal også tage højde for posteringer oprettet efter skiftet; database-restore alene må ikke give genbogføring.
+
+
+## 27. september 2026 – Generel kundestyret bogføringsopstart (klargjort)
+
+Separate historik-/bogføringsdatoer og assisteret manuel Dinero-afstemning implementeret. Ingen kundedatoer, import eller afstemning startet. Migration 0025 er additiv. 355/355 tests samt efterfølgende 5 målrettede tests med kladdeafvisning bestået. Begge typechecks og miljøkonfigurationskontroller bestået; GitHub CI og udgivelse afventer. Bogføring/kundemail fortsat blokeret. Se [BOOKING-ONBOARDING.md](BOOKING-ONBOARDING.md) for funktion, begrænsninger og verifikation.
