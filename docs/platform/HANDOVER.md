@@ -189,3 +189,7 @@ Konklusion: ingen 1:1-paritet. Mail har skjult dialog, 2500 mod 4000 tegn, anden
 Se PARITY-IMPLEMENTATION-2026-09-21.md. Bruger har udtrykkeligt autoriseret kun dev og forbudt flytning/ændring af Sablen. Supporttickets og første driftsudsnit er implementeret; resten af fuld paritet er oplistet som manglende, ikke færdigt. Migrationer 0011–0016 er additive og prøvet på dev-backup uden datatab. Ingen main-merge eller push.
 
 Dev-udrulning gennemført: version 00bfed86-f337-45a0-8718-423dc730ada5. Migration 0011–0016 anvendt, login/API/Access/noindex kontrolleret online. Hele testpakken 321/321, derefter afsluttende platformpakke 59/59. Build, typecheck og begge dry-runs bestået. Se paritetsnotatet for resterende funktioner og utestede rigtige providerflows.
+
+## 27. september 2026 – GitHub-udgivelsesnøgler
+
+Separat dev/prod-token gemt som miljøsecret i Jopppardk/WebshopToolbox-Platform. Begge aktive og afgrænset til egen Worker samt webshoptoolbox.dk-routes; læseadgang til Sablen afvist med 403. Udløb 28. september 2027. Ingen deployment startet; se REPOSITORY-SPLIT.md for præcis verifikation og begrænsninger.
