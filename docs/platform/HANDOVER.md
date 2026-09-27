@@ -193,3 +193,16 @@ Dev-udrulning gennemført: version 00bfed86-f337-45a0-8718-423dc730ada5. Migrati
 ## 27. september 2026 – GitHub-udgivelsesnøgler
 
 Separat dev/prod-token gemt som miljøsecret i Jopppardk/WebshopToolbox-Platform. Begge aktive og afgrænset til egen Worker samt webshoptoolbox.dk-routes; læseadgang til Sablen afvist med 403. Udløb 28. september 2027. Ingen deployment startet; se REPOSITORY-SPLIT.md for præcis verifikation og begrænsninger.
+
+## 27. september 2026 – første GitHub-deployment gennemført
+
+Begge miljøer er udgivet via det nye repositories manuelle workflow fra commit `354c194731f5c27fc46b5c25171b51a17eb9afab`:
+
+- Dev: https://github.com/Jopppardk/WebshopToolbox-Platform/actions/runs/36341400602 – success, Worker-version `ac18c8aa-7834-4baf-8681-31213d4a7139`.
+- Prod: https://github.com/Jopppardk/WebshopToolbox-Platform/actions/runs/36341619641 – success, Worker-version `c868b7f3-2e4c-4ad5-b416-a7b59585c257`.
+
+Begge kørsler bestod 352 tests, begge typechecks, build og upload/trigger-deployment. Repository-guard accepterer nu også GitHub Actions' præcise HTTPS-origin uden `.git`; andre repositories afvises fortsat. Dev bruger nu kun custom domain `dev.webshoptoolbox.dk` og har `workers_dev=false`, ligesom prod. Den gamle workers.dev-adresse er dermed lukket. Dette undgår Wranglers kontoovergribende subdomain-opslag; API-tokenrettigheder er ikke udvidet. Produktionsvalidatorens normalisering er tilpasset samme regel.
+
+Tidlige forsøg: første stoppet før upload af origin-kontrollen; andet uploadede dev-kode men fejlede under workers.dev-triggeropsætning; tredje stoppet af den fælles config-validering. Endelige kørsler ovenfor er begge fuldt gennemført.
+
+Efterkontrol: dev healthz/login 200, anonymt ordre-API 401, /admin/ 302 til Access, bookkeeping/customerEmail blocked. Prod-ruter svarer fortsat 302 til den eksisterende domænedækkende Access-app; kundelogin og autentificeret brugerflow er derfor stadig ikke færdigverificeret. Denne deployment ændrede ingen Access-politikker. Ingen migrationer, økonomiske posteringer eller testmails kørt. Sablen-repository og -ressourcer er ikke ændret.
