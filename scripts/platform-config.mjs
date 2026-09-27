@@ -30,7 +30,7 @@ export function validateConfig(config, remote = false) {
     config.name !== name ||
     config.main !== 'platform/worker.ts' ||
     config.preview_urls !== false ||
-    config.workers_dev !== remote
+    config.workers_dev !== false
   )
     fail();
   if(remote) {
