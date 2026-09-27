@@ -260,3 +260,5 @@ Flatpay-rettelsen er udgivet på kodecommit `0d9ff2e2c4acbfa535d88bacffa282dc478
 ## 27. september 2026 – Præcis Cloudflare-guide
 
 Guiden under Afsender og eget maildomæne er udvidet med konto-ID-søgning, direkte link til brugerens API Tokens, Create Custom Token, Account → Email Sending → Edit, afgrænsning til Specific account, engangsvisning af tokenværdien samt Gem afsender og afsendertest. Generisk for hver kundes egen konto; intet WebshopToolbox/Sablen-konto-ID indsat. Officielle Cloudflare-kilder linket i dialogen. Kun hjælpetekst/layout ændret; ingen mail, DNS, credentials eller databaseændringer. Udgivelse afventer.
+
+Guide-opdateringen er udgivet på kodecommit `ebec0ad5d5ba3c191484400943e9db72624f5409`. CI `36349426876` og deployruns dev `36349427504` / prod `36349429596` bestået, 355/355 tests. Dev Worker `5c33c581-a2e4-48ff-b3d8-8144c5575a24`; prod Worker `30bb3d87-e0de-450c-b7ea-00d0aa33c054`. Begge health/login 200, admin Access-redirect 302, anonym ordre-API 401. Dialogen er typechecket/bygget; ingen browserkontrol eller testmail udført.
