@@ -86,3 +86,15 @@ Flytteplanen skal omfatte konfiguration, krypterede nøgler, ordrer, fakturaer, 
 ## 27. september 2026 – Generel kundestyret bogføringsopstart (klargjort)
 
 Separate historik-/bogføringsdatoer og assisteret manuel Dinero-afstemning implementeret. Ingen kundedatoer, import eller afstemning startet. Migration 0025 er additiv. 355/355 tests samt efterfølgende 5 målrettede tests med kladdeafvisning bestået. Begge typechecks og miljøkonfigurationskontroller bestået; GitHub CI og udgivelse afventer. Bogføring/kundemail fortsat blokeret. Se [BOOKING-ONBOARDING.md](BOOKING-ONBOARDING.md) for funktion, begrænsninger og verifikation.
+
+
+## 27. september 2026 – Bogføringsopstart udgivet på dev og portal
+
+Kodecommit `47e1815bebfca0040fa040f20af2790a193506d4` er udgivet fra det separate GitHub-repository:
+- Dev: run `36346884449`, Worker `1f93b5da-eb81-4689-bba8-e712054a57e3`.
+- Prod: run `36347101084`, Worker `eedf78d0-2750-456a-b5c1-935ed082b9eb`.
+- CI `36346770841` samt begge deployjobs bestået, hver med 355/355 tests og obligatoriske builds/typechecks.
+
+Migration 0025 anvendt i begge D1-databaser efter Time Travel-bookmarks. FK-kontrol OK, begge nye tabeller tomme efter migration. Prod gav først Cloudflare 7403; read-only whoami bekræftede rigtig konto og D1-write-rettighed, d1 info bekræftede rigtig database. Nyt forsøg med samme autoriserede login lykkedes. Ingen rettigheder eller credentials ændret.
+
+Begge miljøers health/login giver 200, admin giver 302 til egen Access-destination, anonym ordre-API giver 401. Bogføring og normal kundemail fortsat blocked. Ingen historik hentet, datoer sat eller bilag afstemt for kunder. Sablen uændret. Live Dinero-afstemning og visuel browserkontrol er ikke udført; funktionens API og klient er testet/bygget med syntetiske data og CI. Afstemningen er manuel pr. bilag, ikke automatisk masseafstemning. Se BOOKING-ONBOARDING.md.

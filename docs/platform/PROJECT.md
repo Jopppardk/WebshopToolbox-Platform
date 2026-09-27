@@ -123,3 +123,6 @@ Offentlig hjemmeside er udgivet separat på webshoptoolbox.dk. Formularen gemmer
 Egen loginform med mailkode, browserbundne engangskoder, serverbaserede kundesessioner og adskilt Tier 0 på /admin er implementeret/testet. Dev er deployet; Access-aktivering og produktionsudrulning afventer. Detaljer: [CUSTOMER-LOGIN.md](CUSTOMER-LOGIN.md).
 
 Dev-status opdateret: Eget kundelogin er aktiveret på https://dev.webshoptoolbox.dk/login efter brugerens godkendelse. /admin er fortsat Access-beskyttet. Loginmail til godkendt testadresse accepteret af mailtjenesten; fuldt login med rigtig mailkode endnu ikke verificeret. Produktionsaktivering er ikke udført.
+
+
+27. september 2026: Generel kundestyret bogføringsopstart med separate datoer og manuel verificering af eksisterende Dinero-bilag er udgivet på dev og portal. Ingen kundehistorik hentet. Se [BOOKING-ONBOARDING.md](BOOKING-ONBOARDING.md) og seneste HANDOVER for begrænsninger og udgivelsesbevis.
