@@ -222,3 +222,11 @@ Efter brugerens ønske er info@webshoptoolbox.dk oprettet som ventende Tier 0-ad
 Oprettet atomisk i hvert miljø: bruger uden virksomhed, platform_admins-række, 48-timers invitation med hashet token og auditpost. Efterkontrol bekræfter tier0=1, status=inactive og invitation=pending indtil mailverificeret onboarding. Personlige aktiveringslinks findes kun i ignoreret .wrangler/info-admin-activation.html og er ikke sendt med mail eller committet. Brugeren skal logge ind med info-adressen via Access og udfylde profil for hvert miljø. Ingen eksisterende konti eller kundedata er ændret.
 
 Info-adressen er tilføjet de to eksisterende Tier 0 Access-politikker; øvrige adresser, session og autentificering bevares. Ingen ændring af Sablen. Ingen deployment nødvendig.
+
+## 27. september 2026 – dev Access-callback rettet
+
+Brugerens første info-login blev sendt til den lukkede workers.dev-adresse via Access' /cdn-cgi/access/authorized. Dev Access-appens gamle primære workers.dev-destination var bevaret efter lukningen af aliaset; dette blev overset ved den første deploymentkontrol, som kun testede anonym redirect.
+
+Fjernet præcis den gamle destination fra eksisterende app fac8c207-ae43-4178-8452-22dd23f44943. Eneste destination er nu dev.webshoptoolbox.dk/admin. Politik, audience og loginmetode bevares. Prod/Sablen uændret, ingen kode eller databaseændring.
+
+Verificeret efter lagring: dev healthz/login 200, admin 302 til Access, anonym ordre-API 401. Det eksisterende aktiveringslink er genåbnet i brugerens fejlfane, og browseren viser nu onboarding på dev med identiteten info@webshoptoolbox.dk. Profilfelter står tomme, og brugeren skal selv udfylde navn og trykke Opret min bruger. Ingen ny kode sendt og invitationen er ikke accepteret af agenten.
