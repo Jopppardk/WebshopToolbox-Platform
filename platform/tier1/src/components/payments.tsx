@@ -57,6 +57,7 @@ const payoutStatuses: Record<string, string> = {
   CANCELED: 'Annulleret',
 };
 
+const pageSize = 25;
 export function Payments({
   kind = 'payment',
   syncRevision = 0,
@@ -100,7 +101,7 @@ export function Payments({
     const timer = setTimeout(async () => {
       try {
         const response = await fetch(
-          `${endpoint}?${new URLSearchParams({ from, to, search, offset: String(offset) })}`,
+          `${endpoint}?${new URLSearchParams({ from, to, search, offset: String(offset), limit: String(pageSize) })}`,
           { signal: controller.signal },
         );
         const data = (await response.json()) as {
@@ -392,21 +393,21 @@ export function Payments({
         <div className="flex items-center justify-between gap-3 border-t px-5 py-4 text-sm">
           <span>
             {total
-              ? `${offset + 1}–${Math.min(offset + 50, total)} af ${total} ${plural}`
+              ? `${offset + 1}–${Math.min(offset + pageSize, total)} af ${total} ${plural}`
               : `0 ${plural}`}
           </span>
           <div className="flex gap-2">
             <Button
               variant="outline"
               disabled={loading || syncing || offset === 0}
-              onClick={() => setOffset((value) => Math.max(0, value - 50))}
+              onClick={() => setOffset((value) => Math.max(0, value - pageSize))}
             >
               Forrige
             </Button>
             <Button
               variant="outline"
-              disabled={loading || syncing || offset + 50 >= total}
-              onClick={() => setOffset((value) => value + 50)}
+              disabled={loading || syncing || offset + pageSize >= total}
+              onClick={() => setOffset((value) => value + pageSize)}
             >
               Næste
             </Button>
