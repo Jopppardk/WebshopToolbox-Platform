@@ -130,3 +130,19 @@ DEV forbliver blokeret. Guideudgivelsen fra PR #6 ændrede ikke runtime-funktion
 - Read-only kontrol af gammel Sablen-opsætning: sales/payments/refunds/payouts=false,
   invoiceEmails/inventory=true. Den gamle løsning er således ikke helt stoppet.
   Ingen indstillinger dér blev ændret.
+
+## Genoprettelse bekræftet – 28. september kl. 20.08 dansk tid
+
+Første normale Cron-kørsel startede 18:05:56 UTC og afsluttede 18:07:55 UTC efter
+triggerens genoprettelse 17:49:54 UTC. Alle observerede import-/køoperationer i
+kørslen er success: Shopify-ordrer/refunderinger/udbetalinger, Flatpay, ViaBill,
+emballagehistorik samt salg/refunderinger/udbetalinger/Flatpay-køer.
+Production receipts viser én orders/booked og én payments/booked (Flatpay).
+Dette er den godkendte normale produktionsdrift, ikke økonomiske testposteringer.
+Runtime-låsen er frigivet (lease_until=0), og next_run_at er sat til 1790619175609.
+
+Tidligere afsnit om manglende første kørsel er historiske og erstattes af denne
+observation. Ingen kodeændring var nødvendig: genoprettelse af Cloudflare-triggeren
+blev efterfulgt af normal drift. Den præcise interne årsag hos Cloudflare er ikke
+fastslået. Gamle Sablen-ressourcer er uændrede. Automatisk fakturamail og lagerkost
+på den nye platform følger fortsat kundens fravalg.
