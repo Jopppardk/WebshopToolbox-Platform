@@ -86,7 +86,8 @@ async function flatpay(ctx:BookingContext):Promise<PreparedBooking>{
  const source={payment:{paymentID:String(p.paymentID),paidDate:String(p.paidDate),currency:String(p.currency),payoutAmount:Number(p.payoutAmount),settlements:String(p.settlements)},settlements:[settlement],transactions:tx};checkFlatpayReport(source);
  const companyRow=await env.PLATFORM_DB.prepare('SELECT name FROM companies WHERE id=?').bind(company).first<{name:string}>();
  const report=await reportFile(ctx,source,()=>buildFlatpayReport(source,undefined,companyRow!.name));
- return {file:report.file,snapshot:{voucher:proposal.voucher,expected:proposal.expected,source,pdfKey:report.pdfKey,pdfEtag:report.pdfEtag,paymentRevision:connection.revision,book:JSON.parse(ctx.prefs.preferences_json).automation.payoutsBookDinero===true}};
+ const attach=JSON.parse(ctx.prefs.preferences_json).automation.attachments===true;
+ return {file:attach?report.file:undefined,snapshot:{attach,voucher:proposal.voucher,expected:proposal.expected,source,pdfKey:report.pdfKey,pdfEtag:report.pdfEtag,paymentRevision:connection.revision,book:JSON.parse(ctx.prefs.preferences_json).automation.payoutsBookDinero===true}};
 }
 export function handleProductionOther(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string,kind:string){
  if(kind==='payout')return handleProductionBooking(request,env,actor,company,shop,kind,'payouts','shopify',/^gid:\/\/shopify\/ShopifyPaymentsPayout\/\d{1,30}$/,payout);
