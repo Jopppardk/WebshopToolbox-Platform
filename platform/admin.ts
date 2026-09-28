@@ -1,4 +1,5 @@
 import { financeService } from './finance-source';
+import { signupSettings,signupOverview } from './signup';
 import { jsonBody } from './invitations';
 import { handleStocktake } from './stocktake';
 import { handlePayments } from './payments';
@@ -93,6 +94,8 @@ export async function handleAdmin(
   const url = new URL(request.url),
     path = url.pathname,
     method = request.method;
+  if(path==='/api/platform/settings/welcome')return signupSettings(request,env,actor);
+  if(path==='/api/platform/settings/signups')return signupOverview(request,env,actor);
   const finance=path.match(/^\/api\/platform\/companies\/([\w-]+)\/finance$/);
   if(finance){await requireCompany(db,actor,finance[1],true);const service=financeService(env,finance[1]);if(method==='GET')return reply(await service.dashboardFinance());if(method==='POST'&&!actor.support){await jsonBody(request);try{return reply(await service.syncDashboardFinance());}catch{throw new HttpError(409,'Regnskabstal kunne ikke hentes komplet. Se status på dashboardet.');}}throw new HttpError(403,'Regnskabstal kan kun opdateres af virksomhedsadministratoren.');}
   const stocktake=path.match(/^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/stocktake$/);
