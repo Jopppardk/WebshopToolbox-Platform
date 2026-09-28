@@ -109,3 +109,24 @@ udløst økonomiske testposteringer eller genstartet usikre writes.
 Næste trin er at afklare Cloudflares manglende planlagte invocation og derefter
 kontrollere første normale kørsel. PROD tillader stadig de godkendte operationer;
 DEV forbliver blokeret. Guideudgivelsen fra PR #6 ændrede ikke runtime-funktionerne.
+
+## Fejlsøgning af Cron Trigger – 28. september 2026
+
+- Cloudflare GraphQL workersInvocationsScheduled returnerede ingen kald til
+  webshop-toolbox-platform-production siden 17:00 UTC. Samme statistik viste
+  løbende vellykkede kald til sablen-integrationshub. Produktionsjobtabellen var tom.
+- Script og service/environment viser begge den rigtige production-worker med
+  fetch- og scheduled-handler samt tidsplanen */5 * * * *.
+- Den målrettede production scheduler-test med rigtig syntetisk SQLite bestod:
+  DEV blokeres, samtidige kørsler låses, og én fejlet ordre standser ikke andre.
+- Den gamle kode bruger ctx.waitUntil; den nye returnerer sin Promise. Begge
+  understøttes af Cloudflare: https://developers.cloudflare.com/workers/runtime-apis/handlers/scheduled/.
+  Der er derfor ikke lavet en spekulativ ændring af handleren.
+- Tidsplanen blev fjernet og straks genoprettet med identisk cron via Cloudflare API
+  kl. 17:49:54 UTC. Begge operationer svarede success. Ingen Worker-kode, bindings,
+  credentials, bogføringsdata eller gamle Sablen-ressourcer blev ændret.
+- Normal første kørsel efter genoprettelsen er endnu ikke bekræftet. Registrering
+  alene er ikke bevis for drift; kontrollér både Cloudflare-statistik og production_jobs.
+- Read-only kontrol af gammel Sablen-opsætning: sales/payments/refunds/payouts=false,
+  invoiceEmails/inventory=true. Den gamle løsning er således ikke helt stoppet.
+  Ingen indstillinger dér blev ændret.
