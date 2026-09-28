@@ -70,7 +70,11 @@ export async function handleOperations(request:Request,env:PlatformEnv,actor:Act
    if(module==='inventory'){
     if(n.unitCost)money(n.unitCost);
     if(!Array.isArray(n.inventoryLevels?.nodes)||n.inventoryLevels.pageInfo?.hasNextPage!==false)throw new HttpError(409,'Lageret har flere lokationer end denne import kan vise. Ingen delvis lagerlinje gemmes.');
-    for(const level of n.inventoryLevels.nodes)if(!level.location?.id||!level.quantities?.some((q:any)=>q.name==='on_hand'&&Number.isSafeInteger(q.quantity)))throw new HttpError(409,'Ufuldstændigt lagerantal.');
+    // Only tracked items at active locations are shown and counted; Shopify may omit on_hand elsewhere.
+    for(const level of n.inventoryLevels.nodes){
+     if(!level.location?.id||typeof level.location.isActive!=='boolean')throw new HttpError(409,'Ufuldstændig lagerlokation.');
+     if(n.tracked&&level.location.isActive&&!level.quantities?.some((q:any)=>q.name==='on_hand'&&Number.isSafeInteger(q.quantity)))throw new HttpError(409,`Ufuldstændigt lagerantal for ${n.variant?.product?.title||'ukendt vare'}${n.variant?.sku?' (SKU '+n.variant.sku+')':''} på ${level.location.name||'ukendt lokation'}.`);
+    }
    }
    return db.prepare('INSERT INTO operation_snapshots(company_id,webshop_id,module,external_id,occurred_at,payload_json) VALUES(?,?,?,?,?,?) ON CONFLICT(company_id,webshop_id,module,external_id) DO UPDATE SET occurred_at=excluded.occurred_at,payload_json=excluded.payload_json,imported_at=CURRENT_TIMESTAMP').bind(company,shop,module,n.id,new Date(date).toISOString(),JSON.stringify(n));
   });
