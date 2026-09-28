@@ -1,3 +1,5 @@
+import {runProductionJobs} from './production-jobs';
+import {productionWrites} from './production-policy';
 import { customerActor, customerLogin, customerLogout } from './customer-auth';
 import { publicSignup } from './signup';
 import { publicFeed } from './feeds';
@@ -15,7 +17,7 @@ async function asset(request:Request,env:PlatformEnv,admin=false){
  const response=await env.ASSETS.fetch(request);
  if(!response.headers.get('content-type')?.includes('text/html'))return response;
  let body=await response.text();
- if(env.PLATFORM_ENV==='production')body=body.replaceAll('Testmiljø','Portal · begrænset drift');
+ if(env.PLATFORM_ENV==='production')body=body.replaceAll('Testmiljø','Produktionsportal');
  if(admin)body=body.replaceAll('src="/admin.js"','src="/admin/admin.js"').replaceAll('src="/onboarding.js"','src="/admin/onboarding.js"').replaceAll('action="/logout"','action="/admin/logout"').replaceAll('href="/"','href="/admin/"');
  const headers=new Headers(response.headers);for(const key of ['Content-Length','Content-Encoding','ETag'])headers.delete(key);
  return new Response(body,{status:response.status,headers});
@@ -86,8 +88,8 @@ export default {
           reply({
             status: 'ok',
             environment: env.PLATFORM_ENV,
-            bookkeeping: 'blocked',
-            customerEmail: 'blocked',
+            bookkeeping: env.PLATFORM_EXTERNAL_WRITES,
+            customerEmail: env.PLATFORM_CUSTOMER_EMAIL,
           }),
         );
       if (
@@ -201,6 +203,6 @@ export default {
   },
   async scheduled(_event: ScheduledController, env: PlatformEnv) {
     assertTestRuntime(env);
-    return scheduled();
+    return productionWrites(env)?runProductionJobs(env):scheduled();
   },
 };

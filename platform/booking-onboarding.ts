@@ -16,7 +16,8 @@ export function onboardingStatus(date:string, sourceDate:string, dineroDate:stri
 export async function bookingStatuses(env:PlatformEnv,company:string,shop:string){
  const dates=(await env.PLATFORM_DB.prepare('SELECT provider,start_date FROM booking_start_dates WHERE company_id=? AND webshop_id=?').bind(company,shop).all<{provider:string;start_date:string}>()).results;
  const receipts=(await env.PLATFORM_DB.prepare('SELECT r.* FROM accounting_reconciliations r JOIN accounting_connections c ON c.company_id=r.company_id AND c.organization_id=r.organization_id WHERE r.company_id=? AND r.webshop_id=?').bind(company,shop).all<any>()).results;
- return (provider:string,module:string,id:string,date:string,sourceJson:string)=>onboardingStatus(date,dates.find(d=>d.provider===provider)?.start_date||'',dates.find(d=>d.provider==='dinero')?.start_date||'',receipts.find(r=>r.provider===provider&&r.module===module&&r.external_id===id),sourceJson);
+ const live=(await env.PLATFORM_DB.prepare('SELECT r.* FROM production_receipts r JOIN accounting_connections c ON c.company_id=r.company_id AND c.organization_id=r.destination WHERE r.company_id=? AND r.webshop_id=?').bind(company,shop).all<any>()).results;
+ return (provider:string,module:string,id:string,date:string,sourceJson:string)=>{const found=live.find(r=>r.provider===provider&&r.module===module&&r.external_id===id);if(found)return found.phase==='booked'&&JSON.parse(found.payload_json).sourceJson!==sourceJson?'booked_changed':found.phase;return onboardingStatus(date,dates.find(d=>d.provider===provider)?.start_date||'',dates.find(d=>d.provider==='dinero')?.start_date||'',receipts.find(r=>r.provider===provider&&r.module===module&&r.external_id===id),sourceJson);};
 }
 
 const guidPattern=/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i;

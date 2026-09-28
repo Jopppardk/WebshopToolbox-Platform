@@ -1,5 +1,7 @@
 # Udviklingsplan
 
+> 28. september 2026 – Produktionsaktivering er godkendt; brugeren har stoppet den gamle Sablen-integration. Ny kode til varige produktionskvitteringer, salgsbogføring og fakturamail er lokalt implementeret og testet (364 tests), men ikke tilkoblet eller udgivet. PROD/DEV er fortsat uændrede. Se [arbejdsstatus og rester](PRODUCTION-RUNTIME-2026-09-28.md).
+
 > 27. september 2026 – Separat privat repository klargjort: Jopppardk/WebshopToolbox-Platform. Fremtidig arbejdsmappe work/WebshopToolbox-Platform. Se [REPOSITORY-SPLIT.md](REPOSITORY-SPLIT.md).
 
 > 27. september 2026 – Efter brugerens bestilling er den samlede dev-løsning udgivet på WebshopToolbox Prod som `019381d6-d94d-48a2-a125-8d4829a54629`. Tier 1-klient/API og produktfeeds er åbnet for production-miljøet; produktionsscript bygger nu klienten. Migration 0010–0024 anvendt efter backup `.wrangler/prod-before-release-20260927.sql` og kopiprøve med eksisterende rækker bevaret i 19 tabeller. Remote FK-kontrol OK; 1 bruger/administrator og 0 virksomheder, ingen dev-data kopieret. Separat krypteringsnøgle genetableret og separat login-secret oprettet i ignoreret secret-backup. 349/349 tests, begge typechecks, produktionsbuild/dry-run bestået. DNS og certifikat verificeret; alle portalstier giver endnu 302 til den gamle, domænedækkende Access-app. **Kundelogin er derfor ikke færdigverificeret:** Cloudflare-dashboard kræver brugerlogin; Wrangler OAuth kan ikke ændre Access. Brugeren er bedt logge ind i den åbne fane. Næste skridt: begræns eksisterende produktions-Access-app til Tier 0, behold administratorpolitik/audience og kontrollér kunde-login/feed samt adminbeskyttelse. Admin-domænet er fortsat ikke tilknyttet. Bogføring/kundemail/cron er fortsat blokeret. Dev, Sablen og hjemmeside uændret; ingen merge/push. Remote main er nu fc6c8cbcf6be1d771971844180fa05d8ed82e1ee; disse urelaterede ændringer er ikke hentet eller overført.
@@ -126,3 +128,11 @@ Alle fem Cloud-leverancer er samlet via PR #1 og udgivet på dev og portal fra 8
 Implementeret: tre trin (design, mailtekst, afsender/test), foldbar valgfri Cloudflare-opsætning og grønt flueben efter accepteret test af gemt konfiguration. Én demo-testmail kontrollerer nu også en endnu ikke verificeret egen afsender; fejl falder ikke tilbage til standardafsender. Status genhentes efter testen. Gemte designs bruges fortsat, idempotens og tenantkontrol bevares. Tests og udgivelse afventer. Ingen migration, rigtige testmails eller Sablen-ændringer.
 
 Udgivet via PR #2 fra `76e12bd148b9d028d357f3b98c25ec47e6618111`. Obligatorisk PR-CI bestået (run 36379542557), 359/359 tests; begge deployforløb gentog 359/359 tests samt builds/typechecks. Dev run 36379750291, Worker 769786c9-1be8-4e00-81d7-10d05e7fe6c4. Prod run 36379989591, Worker 4f63f886-3e93-4e0d-adeb-df149200c10b. Begge health/login 200, admin 302 til Access og anonym ordre-API 401. Fold-ud, grønt flueben og ændret-konfiguration-status browserkontrolleret lokalt med syntetiske data; ingen rigtig mail sendt og ingen autentificeret online-UI-test. Ingen migration eller ændring af Sablen. Bogføring/normal kundemail fortsat blokeret.
+
+## 28. september 2026 – Opdateret ekstern frigivelsesvurdering
+
+NO-GO til almindelig kundedrift; betinget læse-/demopilot efter afgrænset accept. Aktuel GitHub/HTTP-status og begge npm-audits er verificeret. 359-test CI er grøn, men økonomiske writes, normal kundemail og scheduler er stadig kodeblokeret. Lint fejler; samlet leverandørpilot og D1+R2-restore mangler som releasebevis. Se [RELEASE-READINESS-2026-09-28.md](RELEASE-READINESS-2026-09-28.md) for prioriteret plan og afgrænsninger. Denne vurdering ændrer ingen runtime, data eller udgivelse.
+
+
+## Produktionskørsel – 28. september 2026
+Implementeret på platform/production-runtime; endnu ikke udgivet. Se PRODUCTION-RUNTIME-2026-09-28.md for adapters, sikkerhedsgrænser, tests og driftsstatus. Samlet udgivelse koordineres med tilmeldingsopgaven.

@@ -1,3 +1,5 @@
+import {productionWrites} from './production-policy';
+import type {PlatformEnv} from './types';
 // Public contract: https://app.emballageindberetning.dk/docs/public-api (2026-09-09).
 export type EIReport = {
   id: number;
@@ -74,8 +76,9 @@ export async function eiRequest<T>(
   method = 'GET',
   body?: unknown,
   idempotencyKey?: string,
+  env?: PlatformEnv,
 ): Promise<{ data: T; meta: { next_cursor?: string | null } }> {
-  if(method!=='GET')throw new Error('Indberetning er blokeret i dev.');
+  if(method!=='GET' && !(method==='POST' && /^\/reports\/\d+\/submit$/.test(path) && idempotencyKey && env && productionWrites(env)))throw new Error('Indberetning er blokeret i dette miljø.');
   if (
     !/^\/(me|reports(?:\/\d+(?:\/(schema|data|submit))?)?)(?:\?.*)?$/.test(path)
   )

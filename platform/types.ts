@@ -3,8 +3,8 @@ export interface PlatformEnv {
   PLATFORM_DOCUMENTS: R2Bucket;
   ASSETS: Fetcher;
   PLATFORM_ENV: 'local-test' | 'remote-test' | 'production';
-  PLATFORM_EXTERNAL_WRITES: 'blocked';
-  PLATFORM_CUSTOMER_EMAIL: 'blocked';
+  PLATFORM_EXTERNAL_WRITES: 'blocked' | 'enabled';
+  PLATFORM_CUSTOMER_EMAIL: 'blocked' | 'enabled';
   PLATFORM_AUTH: 'local-jwt' | 'cloudflare-access';
   PLATFORM_ACCESS_ISSUER?: string;
   PLATFORM_ACCESS_AUD?: string;

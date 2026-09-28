@@ -1,5 +1,7 @@
 # WebshopToolbox – fælles platform
 
+> 28. september 2026 – Produktionsaktivering er godkendt; brugeren har stoppet den gamle Sablen-integration. Ny kode til varige produktionskvitteringer, salgsbogføring og fakturamail er lokalt implementeret og testet (364 tests), men ikke tilkoblet eller udgivet. PROD/DEV er fortsat uændrede. Se [arbejdsstatus og rester](PRODUCTION-RUNTIME-2026-09-28.md).
+
 > 27. september 2026 – Produktionslogin er nu opdelt: eget kundelogin på portal.webshoptoolbox.dk og Access-beskyttet Tier 0 på /admin. Anonyme API-kald afvises; bogføring/kundemail forbliver blokeret. Se PRODUCTION.md. Reel mailkode/login er endnu ikke afprøvet.
 
 > 27. september 2026 – Dev og prod er nu begge deployet succesfuldt fra GitHub Actions på commit `354c194`. 352 tests og builds bestået. Dev bruger kun dev.webshoptoolbox.dk; workers.dev-alias er lukket. Prod-login afventer fortsat Access-tilpasningen. Se REPOSITORY-SPLIT.md for kørsler og versioner.
@@ -152,3 +154,11 @@ Alle fem Cloud-leverancer er samlet via PR #1 og udgivet på dev og portal fra 8
 Implementeret: tre trin (design, mailtekst, afsender/test), foldbar valgfri Cloudflare-opsætning og grønt flueben efter accepteret test af gemt konfiguration. Én demo-testmail kontrollerer nu også en endnu ikke verificeret egen afsender; fejl falder ikke tilbage til standardafsender. Status genhentes efter testen. Gemte designs bruges fortsat, idempotens og tenantkontrol bevares. Tests og udgivelse afventer. Ingen migration, rigtige testmails eller Sablen-ændringer.
 
 Udgivet via PR #2 fra `76e12bd148b9d028d357f3b98c25ec47e6618111`. Obligatorisk PR-CI bestået (run 36379542557), 359/359 tests; begge deployforløb gentog 359/359 tests samt builds/typechecks. Dev run 36379750291, Worker 769786c9-1be8-4e00-81d7-10d05e7fe6c4. Prod run 36379989591, Worker 4f63f886-3e93-4e0d-adeb-df149200c10b. Begge health/login 200, admin 302 til Access og anonym ordre-API 401. Fold-ud, grønt flueben og ændret-konfiguration-status browserkontrolleret lokalt med syntetiske data; ingen rigtig mail sendt og ingen autentificeret online-UI-test. Ingen migration eller ændring af Sablen. Bogføring/normal kundemail fortsat blokeret.
+
+## 28. september 2026 – Opdateret ekstern frigivelsesvurdering
+
+NO-GO til almindelig kundedrift; betinget læse-/demopilot efter afgrænset accept. Aktuel GitHub/HTTP-status og begge npm-audits er verificeret. 359-test CI er grøn, men økonomiske writes, normal kundemail og scheduler er stadig kodeblokeret. Lint fejler; samlet leverandørpilot og D1+R2-restore mangler som releasebevis. Se [RELEASE-READINESS-2026-09-28.md](RELEASE-READINESS-2026-09-28.md) for prioriteret plan og afgrænsninger. Denne vurdering ændrer ingen runtime, data eller udgivelse.
+
+
+## Produktionskørsel – 28. september 2026
+Implementeret på platform/production-runtime; endnu ikke udgivet. Se PRODUCTION-RUNTIME-2026-09-28.md for adapters, sikkerhedsgrænser, tests og driftsstatus. Samlet udgivelse koordineres med tilmeldingsopgaven.

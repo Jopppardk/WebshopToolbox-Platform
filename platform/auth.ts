@@ -118,6 +118,8 @@ export async function requireCompany(
     (manage && membership.role !== 'admin')
   )
     throw new HttpError(403, 'Ingen adgang til virksomheden.');
+  const trial = await db.prepare('SELECT trial_ends_at FROM public_signups WHERE company_id=?').bind(companyId).first<{trial_ends_at:number|null}>();
+  if(trial?.trial_ends_at && trial.trial_ends_at<=Math.floor(Date.now()/1000)) throw new HttpError(403,'Prøveperioden er udløbet. Kontakt info@webshoptoolbox.dk.');
   return company;
 }
 

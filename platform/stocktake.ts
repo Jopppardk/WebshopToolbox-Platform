@@ -1,3 +1,5 @@
+import {commitStocktake} from './production-stocktake';
+import {productionWrites} from './production-policy';
 import { requireCompany,requireWebshop } from './auth';
 import { jsonBody } from './invitations';
 import { readInventory } from './inventory-source';
@@ -16,7 +18,7 @@ async function accounts(db:D1Database,company:string){
 export async function handleStocktake(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string){
  const db=env.PLATFORM_DB;await requireWebshop(db,actor,company,shop);
  if(request.method==='GET'){
-  if(new URL(request.url).searchParams.has('history'))return reply({rows:(await db.prepare('SELECT id,phase,payload_json,created_at FROM stocktakes WHERE company_id=? AND webshop_id=? ORDER BY created_at DESC,id DESC LIMIT 100').bind(company,shop).all()).results});
+  if(new URL(request.url).searchParams.has('history'))return reply({rows:(await db.prepare(`SELECT s.id,COALESCE(r.phase,s.phase) phase,COALESCE(r.payload_json,s.payload_json) payload_json,s.created_at FROM stocktakes s LEFT JOIN production_receipts r ON r.company_id=s.company_id AND r.webshop_id=s.webshop_id AND r.provider='shopify' AND r.module='stocktake' AND r.external_id=s.id AND r.destination=json_extract(s.payload_json,'$.account.organizationId') WHERE s.company_id=? AND s.webshop_id=? ORDER BY s.created_at DESC,s.id DESC LIMIT 100`).bind(company,shop).all()).results});
   return reply(await readInventory(env,company,shop));
  }
  if(request.method!=='POST')throw new HttpError(405,'Ugyldig handling.');
@@ -37,12 +39,13 @@ export async function handleStocktake(request:Request,env:PlatformEnv,actor:Acto
   const voucher=adjustmentMinor===0?null:{VoucherDate:date,ExternalReference:`toolbox:${company}:${shop}:stocktake:${id}`,Lines:[{Description:`Lagerregulering · ${changes.length} lagerlinjer`,AccountNumber:account.adjustment,BalancingAccountNumber:account.inventory,Amount:-adjustmentMinor/100,AccountVatCode:'none',BalancingAccountVatCode:'none'}]};
   const payload={changes:costed,account,adjustmentMinor,voucher,expiresAt:Date.now()+600000};
   await db.prepare("INSERT INTO stocktakes(company_id,webshop_id,id,version,phase,payload_json,created_by) VALUES(?,?,?,?,'prepared',?,?)").bind(company,shop,id,version,JSON.stringify(payload),actor.id).run();
-  return reply({id,version,...payload,mode:'simulation',externalWrites:'blocked'});
+  return reply({id,version,...payload,mode:productionWrites(env)?'production':'simulation',externalWrites:productionWrites(env)?'enabled':'blocked'});
  }
- if(b.action==='commit')throw new HttpError(403,'Eksterne lagerændringer og bogføring er blokeret i dev. Brug simulering.');
+ if(b.action==='commit')return commitStocktake(env,actor,company,shop,b);
  if(!['simulate','cancel'].includes(String(b.action))||typeof b.id!=='string'||typeof b.version!=='string')throw new HttpError(400,'Ugyldig handling.');
  const state=await db.prepare('SELECT * FROM stocktakes WHERE company_id=? AND webshop_id=? AND id=?').bind(company,shop,b.id).first<Saved>();
  if(!state||state.version!==b.version||state.phase!=='prepared')throw new HttpError(409,'Forslaget er ændret eller allerede behandlet.');
+ const receipt=await db.prepare("SELECT 1 FROM production_receipts WHERE company_id=? AND webshop_id=? AND provider='shopify' AND module='stocktake' AND external_id=?").bind(company,shop,b.id).first();if(receipt)throw new HttpError(409,'Lagerreguleringen er allerede behandlet eller afventer afklaring.');
  const value=JSON.parse(state.payload_json);
  if(b.action==='simulate'){
   if(b.confirmation!==true||value.expiresAt<Date.now())throw new HttpError(409,'Godkend et aktuelt forslag.');
