@@ -1,6 +1,14 @@
 # Statusvisning for salg og udbetalinger
 
-Implementeret 28. september 2026; udgivelse afventer GitHub CI/deployment.
+Implementeret og merged i PR #12 den 28. september 2026. GitHub CI bestod på
+7049eb9, inklusive 376 tests og de obligatoriske builds/typechecks.
+Udgivelsen bruger main-commit c889caf17e7e8116708b8825a5c4e34d333863a3.
+Den verificerbare udgivelsesstatus findes i disse miljøspecifikke workflows:
+
+- [DEV](https://github.com/Jopppardk/WebshopToolbox-Platform/actions/runs/36465584277)
+- [PROD](https://github.com/Jopppardk/WebshopToolbox-Platform/actions/runs/36465589921)
+
+Kun et gennemført success-resultat i den pågældende kørsel bekræfter udgivelsen.
 
 - En ikke-afsendt Shopify-ordre uden tidligere kvittering/fejl vises som Afventer,
   også før bogføringsstart er valgt. En eksisterende bogføringskvittering har forrang.

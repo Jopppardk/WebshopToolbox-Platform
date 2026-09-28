@@ -1,6 +1,6 @@
 # Overlevering
 
-> Statusvisning 28. september: Rettelse klargjort til DEV/PROD. Ikke-afsendte salg uden kvittering vises som Afventer; registrerede bogføringsfejl skelner mellem automatisk genforsøg og manuel handling. Udbetalinger bruger fælles danske betegnelser. Se STATUS-DISPLAY.md for afgrænsning og udgivelsesstatus.
+> Statusvisning 28. september: Rettelse merged i PR #12 med bestået CI. Miljøspecifikke udgivelseskørsler er linket i STATUS-DISPLAY.md. Ikke-afsendte salg uden kvittering vises som Afventer; registrerede bogføringsfejl skelner mellem automatisk genforsøg og manuel handling. Udbetalinger bruger fælles danske betegnelser. Se STATUS-DISPLAY.md for afgrænsning og udgivelsesstatus.
 
 > 28. september 2026: Brugeren har udtrykkeligt godkendt fuld deaktivering af integration.sablen.dk. Alle seks automatiske moduler er slået fra i legacy-indstillingerne; cron og custom domain er fjernet. Worker, D1, R2 og credentials bevares. Se LEGACY-DEACTIVATION.md. Genaktivér ikke legacy som del af en platformudgivelse.
 
