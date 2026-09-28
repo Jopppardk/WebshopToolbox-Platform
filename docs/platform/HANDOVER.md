@@ -285,3 +285,9 @@ Advarselsændringen er udgivet på dev og portal fra `2c1ec73fdf7b889a6e29ecac2a
 
 
 Ovenstående fem Cloud-leverancer er samlet på platform/cloud-release-20260928. Lokale og GitHub-kontroller samt udgivelse af den samlede version afventer. Ingen migrationer, kundedata eller Sablen-ændringer. Bogføring og almindelig kundemail forbliver blokeret.
+
+
+## 28. september 2026 – Samlet Cloud-udgivelse afsluttet
+
+Alle fem Cloud-leverancer er samlet via PR #1 og udgivet på dev og portal fra 8fd86ce. 358/358 tests, obligatorisk CI og begge deployworkflows bestået. Health/login 200, admin Access 302 og anonym ordre-API 401 på begge miljøer. Bogføring/normal kundemail fortsat blocked; ingen Sablen- eller dataændringer. Se [CLOUD-RELEASE-2026-09-28.md](CLOUD-RELEASE-2026-09-28.md) for kildeopgaver, runs, versioner og resterende live-verifikation.
+
