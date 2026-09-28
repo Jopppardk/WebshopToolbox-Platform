@@ -187,14 +187,14 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
  if(!get){const module=path.includes('payout')?'payouts':path.includes('refund')?'refunds':'payments';const response=await handleOperations(request,env,actor,company,shop,module);if(!response.ok)return response;const data=await response.json() as any;return reply({...data,synced:data.count});}
  const module=path.includes('payout')?'payouts':path.includes('refund')?'refunds':'payments';
  const bookingStatus=await bookingStatuses(env,company,shop);
- const from=await dataCutoff(env,company,shop),offset=pageNumber(url.searchParams.get('offset'),0);
+ const from=await dataCutoff(env,company,shop),offset=pageNumber(url.searchParams.get('offset'),0),limit=pageNumber(url.searchParams.get('limit'),50,100)||50;
  const rows=(await db.prepare('SELECT payload_json FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module=? AND occurred_at>=? ORDER BY occurred_at DESC,external_id LIMIT 10001').bind(company,shop,module,from).all<{payload_json:string}>()).results.map(r=>JSON.parse(r.payload_json));
  if(rows.length>10000)throw new HttpError(409,'Vælg en kortere historik.');
  if(module==='payouts'){
   const payments=(await db.prepare("SELECT provider,kind,payload_json,occurred_at,external_id FROM payment_records WHERE company_id=? AND webshop_id=? AND kind IN ('payments','payout') AND occurred_at>=? ORDER BY occurred_at DESC LIMIT 10001").bind(company,shop,from).all<any>()).results;
   const list=rows.map(p=>({id:p.id,provider:'shopify_payments',label:'Shopify Payments',date:p.issuedAt,amount:Number(p.net.amount),currency:p.net.currencyCode,status:payoutStatusLabel(p.status),booking:bookingStatus('shopify','payouts',p.id,p.issuedAt,JSON.stringify(p)),canBook:false,detail:{}}));
   for(const row of payments){const p=JSON.parse(row.payload_json);list.push({id:row.external_id,provider:row.provider,label:row.provider==='flatpay'?'Flatpay':'ViaBill',date:row.occurred_at,amount:row.provider==='flatpay'?p.payoutAmount:p.amountMinor/10**new Intl.NumberFormat('en',{style:'currency',currency:p.currency}).resolvedOptions().maximumFractionDigits!,currency:p.currency,status:row.provider==='flatpay'?(p.paidDate?'Udbetalt':'Kommende'):'Udbetalt',booking:bookingStatus(row.provider,row.kind,row.external_id,row.occurred_at,row.payload_json),canBook:false,detail:p});}
-  list.sort((a,b)=>b.date.localeCompare(a.date));return reply({total:list.length,payouts:list.slice(offset,offset+50)});
+  list.sort((a,b)=>b.date.localeCompare(a.date));return reply({total:list.length,payouts:list.slice(offset,offset+limit)});
  }
  const refundSources=new Map<string,{externalId:string;json:string}>();
  if(module==='refunds'){
@@ -204,5 +204,5 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
  }
  const filtered=rows.filter(p=>(!url.searchParams.get('from')||p.transactionDate.slice(0,10)>=url.searchParams.get('from')!)&&(!url.searchParams.get('to')||p.transactionDate.slice(0,10)<=url.searchParams.get('to')!)&&(!url.searchParams.get('search')||JSON.stringify(p).toLowerCase().includes(url.searchParams.get('search')!.toLowerCase())));
  const summary:Record<string,any>={};for(const p of filtered){const c=p.amount.currencyCode;const s=summary[c]??={currency:c,count:0,gross:0,fees:0,net:0};s.count++;s.gross+=minor(p.amount.amount,c);s.fees+=minor(p.fee.amount,c);s.net+=minor(p.net.amount,c);}
- return reply({payments:filtered.slice(offset,offset+50).map(p=>({...p,logExternalId:refundSources.get(p.id)?.externalId||p.id,bookingStatus:module==='payments'?'not_enabled':bookingStatus(p.provider==='flatpay'?'flatpay':'shopify',p.provider==='flatpay'?'transactions':'refunds',refundSources.get(p.id)?.externalId||p.id,p.transactionDate,refundSources.get(p.id)?.json||JSON.stringify(p))})),summary:Object.values(summary)});
+ return reply({payments:filtered.slice(offset,offset+limit).map(p=>({...p,logExternalId:refundSources.get(p.id)?.externalId||p.id,bookingStatus:module==='payments'?'not_enabled':bookingStatus(p.provider==='flatpay'?'flatpay':'shopify',p.provider==='flatpay'?'transactions':'refunds',refundSources.get(p.id)?.externalId||p.id,p.transactionDate,refundSources.get(p.id)?.json||JSON.stringify(p))})),summary:Object.values(summary)});
 }
