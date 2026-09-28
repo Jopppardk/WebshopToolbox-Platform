@@ -55,6 +55,12 @@ export async function handleOperations(request:Request,env:PlatformEnv,actor:Act
  const run=crypto.randomUUID();await db.prepare("INSERT INTO operation_runs(id,company_id,webshop_id,module,status) VALUES(?,?,?,?,'running')").bind(run,company,shop,module).run();
  try{
   const access=await shopAccess(env,company,shop);
+  // Without read_all_orders Shopify silently returns only the last 60 days of orders.
+  let warning:string|undefined;
+  if(module==='orders'&&after===null&&from<new Date(Date.now()-59*86400000).toISOString()){
+   const scopes=await orderQuery<{currentAppInstallation:{accessScopes:Array<{handle:string}>}}>(access,'query OrderHistoryAccess{currentAppInstallation{accessScopes{handle}}}',{},'Shopify-appens adgang kunne ikke kontrolleres.');
+   if(!scopes.currentAppInstallation?.accessScopes?.some(s=>s.handle==='read_all_orders'))warning='Shopify-appen mangler read_all_orders. Shopify returnerer derfor kun ordrer fra de seneste 60 dage, selvom historikken går længere tilbage. Anmod om read_all_orders i Shopify-appen for at hente ældre ordrer.';
+  }
   const data=await orderQuery<Record<string,any>>(access,queries[module],{after,...(module==='inventory'?{}:{query:module==='orders'?'created_at:>='+from:module==='payments'?`processed_at:>='${from}'`:module==='refunds'?`transaction_type:refund processed_at:>='${from}'`:`issued_at:>='${from}'`})},'Data kunne ikke hentes. Kontrollér Shopify-appens læseadgang til ordrer, Payments eller lager.');
   const connection:Page=module==='orders'?data.orders:module==='inventory'?data.inventoryItems:['refunds','payments'].includes(module)?data.shopifyPaymentsAccount?.balanceTransactions:data.shopifyPaymentsAccount?.payouts;
   if(!Array.isArray(connection?.nodes)||typeof connection.pageInfo?.hasNextPage!=='boolean'||connection.pageInfo.hasNextPage&&(!connection.pageInfo.endCursor||connection.pageInfo.endCursor===after))throw new HttpError(409,'Udbyderen returnerede en ufuldstændig side.');
@@ -79,8 +85,8 @@ export async function handleOperations(request:Request,env:PlatformEnv,actor:Act
    return db.prepare('INSERT INTO operation_snapshots(company_id,webshop_id,module,external_id,occurred_at,payload_json) VALUES(?,?,?,?,?,?) ON CONFLICT(company_id,webshop_id,module,external_id) DO UPDATE SET occurred_at=excluded.occurred_at,payload_json=excluded.payload_json,imported_at=CURRENT_TIMESTAMP').bind(company,shop,module,n.id,new Date(date).toISOString(),JSON.stringify(n));
   });
   if(module==='orders')for(const n of nodes)statements.push(db.prepare('INSERT INTO invoice_orders(company_id,webshop_id,external_id,name,created_at,payload_json) VALUES(?,?,?,?,?,?) ON CONFLICT(company_id,webshop_id,external_id) DO UPDATE SET name=excluded.name').bind(company,shop,n.id,n.name,n.createdAt,JSON.stringify(n)));
-  await db.batch([...statements,db.prepare("UPDATE operation_runs SET status='success',count=?,finished_at=CURRENT_TIMESTAMP WHERE id=?").bind(nodes.length,run)]);
-  return reply({count:nodes.length,...connection.pageInfo});
+  await db.batch([...statements,db.prepare("UPDATE operation_runs SET status='success',count=?,message=?,finished_at=CURRENT_TIMESTAMP WHERE id=?").bind(nodes.length,warning||'',run)]);
+  return reply({count:nodes.length,...connection.pageInfo,...(warning?{warning}:{})});
  }catch(error){
   const message=error instanceof HttpError?error.message:'Importen kunne ikke gennemføres. Ingen eksterne ændringer er foretaget.';
   await db.prepare("UPDATE operation_runs SET status='failed',message=?,finished_at=CURRENT_TIMESTAMP WHERE id=?").bind(message,run).run();
