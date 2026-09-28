@@ -1,5 +1,7 @@
 # Overlevering
 
+> 28. september 2026: Brugeren har udtrykkeligt godkendt fuld deaktivering af integration.sablen.dk. Alle seks automatiske moduler er slået fra i legacy-indstillingerne; cron og custom domain er fjernet. Worker, D1, R2 og credentials bevares. Se LEGACY-DEACTIVATION.md. Genaktivér ikke legacy som del af en platformudgivelse.
+
 > 28. september kl. 20.08: Cron er nu bekræftet i drift efter genoprettelse af Cloudflare-triggeren. Første kørsel 18:05:56–18:07:55 UTC gennemførte import/køer uden registrerede fejl; én salgsordre og én Flatpay-post har booked-kvitteringer. Låsen er frigivet og næste kørsel planlagt. Se seneste afsnit i PRODUCTION-RUNTIME-2026-09-28.md.
 
 > Seneste efterkontrol kl. 19.41: PROD er udgivet, men første cron-kørsel er endnu ikke observeret trods registreret tidsplan. Automatisk drift må derfor ikke regnes som verificeret. Se PRODUCTION-RUNTIME-2026-09-28.md.
