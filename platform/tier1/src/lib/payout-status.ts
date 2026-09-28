@@ -5,7 +5,7 @@ const labels: Record<string, string> = {
   IN_TRANSIT: 'Under overførsel', 'Under overførsel': 'Under overførsel',
   FAILED: 'Fejlet', Fejlet: 'Fejlet',
   CANCELED: 'Annulleret', CANCELLED: 'Annulleret', Annulleret: 'Annulleret',
-  Afregnet: 'Afregnet', Beløbsdifference: 'Beløbsdifference',
+  Afregnet: 'Udbetalt', Beløbsdifference: 'Beløbsdifference',
 };
 export const payoutStatusLabel = (status: string) => labels[status] || status || 'Ukendt status';
 export function payoutBookingStatus(status: string, upcoming: boolean) {
