@@ -58,3 +58,14 @@ fil. Migrationerne er additive og afprøves på en syntetisk kopi af tidligere s
 Ved driftsproblem blokeres writes/kundemail og cron først. Kvitteringer må aldrig
 rulles tilbage eller slettes efter eksterne writes, da det kan medføre dubletter.
 Produktionsmoduler følger kundens gemte valg, også når den globale runtime åbnes.
+
+## Udgivelseskontrol
+
+- Migration 0026/0027 anvendt på PROD og DEV efter 0028 fra signup-opgaven.
+- Syntetisk opgraderingsprøve bevarer 44 eksisterende tabeller; nul FK-fejl.
+- Remote PROD-kontrol: nul FK-fejl, 1 virksomhed og 48 ordresnapshots bevaret.
+- Pre-runtime PROD Time Travel: `0000002a-00000004-000050f4-ce4afce59bcbd75407da21902c21c26b`.
+- Pre-runtime DEV Time Travel: `00000070-00000000-000050f4-53190f6366efffc4d973e33cbdb991aa`.
+- Aktuelle PROD-valg er salg/refunderinger/udbetalinger=true; automatisk kundemail,
+  lagerkost og bilagsupload=false. Kundens valg bevares; ingen præferenceændring udført.
+- Fuld GitHub-CI for 3d15d73 bestået; sidste status-/tekstjustering afventer endelig CI.
