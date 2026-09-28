@@ -95,3 +95,17 @@ Teknisk produktionsaktivering er ikke dokumentation for kommerciel Dinero-onboar
 - Den tidligere PROD-run `36455572877` blev annulleret før deploy for at få
   rettelsen af bilagsfravalget med. Det var ikke en tilbageførsel af levende data.
 - Indbakkelevering og økonomiske writes er ikke afprøvet med testtransaktioner i PROD.
+
+## Efterkontrol af automatik – 28. september kl. 19.41 dansk tid
+
+Produktionskode og konfiguration er udgivet, men automatisk drift er endnu ikke
+verificeret. Cloudflare API viser scheduled-handler og cron `*/5 * * * *`, oprettet
+17:15:57 UTC og senest opdateret 17:21:21 UTC. Efter kontrollen af 17:40-intervallet
+var production_jobs fortsat tom, og ingen nye operation_runs eller scheduled-events
+var observeret. Én aktiv webshop har en egnet virksomhedsadministrator. Årsagen er
+ikke fastslået; det må ikke beskrives som en bestået første kørsel. Der er ikke
+udløst økonomiske testposteringer eller genstartet usikre writes.
+
+Næste trin er at afklare Cloudflares manglende planlagte invocation og derefter
+kontrollere første normale kørsel. PROD tillader stadig de godkendte operationer;
+DEV forbliver blokeret. Guideudgivelsen fra PR #6 ændrede ikke runtime-funktionerne.

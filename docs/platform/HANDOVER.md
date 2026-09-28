@@ -1,5 +1,7 @@
 # Overlevering
 
+> Seneste efterkontrol kl. 19.41: PROD er udgivet, men første cron-kørsel er endnu ikke observeret trods registreret tidsplan. Automatisk drift må derfor ikke regnes som verificeret. Se PRODUCTION-RUNTIME-2026-09-28.md.
+
 ## Drift 28. september 2026 – aktiveret på PROD
 
 PR #3 og #5 er udgivet fra `739b1860af09c0b082af0acc7e4127572802f9b1` via
