@@ -12,7 +12,7 @@ type Platform={inactive:number;activity:{today:string;orders:ActivityCount;payou
 const money=(value:number|null|undefined)=>value==null?'—':new Intl.NumberFormat('da-DK',{style:'currency',currency:'DKK',maximumFractionDigits:0}).format(value/100);
 const date=(value:string)=>new Intl.DateTimeFormat('da-DK',{dateStyle:'short',timeZone:'Europe/Copenhagen'}).format(new Date(value));
 const timestamp=(value:string)=>new Intl.DateTimeFormat('da-DK',{dateStyle:'short',timeStyle:'short',timeZone:'Europe/Copenhagen'}).format(new Date(value));
-type DashboardProps={onJobs:(status:string)=>void;onIntegrations:(provider?:'dinero'|'shopify')=>void};
+type DashboardProps={onIntegrations:(provider?:'dinero'|'shopify')=>void};
 export function Dashboard(props:DashboardProps) {
   const [connections,setConnections]=useState<Set<string>|null>(null);
   const [error,setError]=useState('');
@@ -45,7 +45,7 @@ export function Dashboard(props:DashboardProps) {
     </div>
   </section>;
 }
-function ConnectedDashboard({onJobs,onIntegrations}:{onJobs:(status:string)=>void;onIntegrations:()=>void}) {
+function ConnectedDashboard({onIntegrations}:{onIntegrations:()=>void}) {
   const [finance,setFinance]=useState<Finance|null>(null),[platform,setPlatform]=useState<Platform|null>(null);
   const [errors,setErrors]=useState<Record<string,string>>({}),[revision,setRevision]=useState(0),[loading,setLoading]=useState(true);
   useEffect(()=>{
@@ -83,12 +83,11 @@ function ConnectedDashboard({onJobs,onIntegrations}:{onJobs:(status:string)=>voi
       <ActivityRow icon={<Wallet className="size-5"/>} label="Udbetalinger" counts={stats?.activity.payouts}/>
       <div className="border-t border-[#e9e2d7] bg-[#faf8f5] p-4 md:p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="flex items-center gap-2 text-sm font-semibold"><Activity className="size-4 text-[#9b7742]"/>Systemstatus</h2><span className="text-[11px] text-muted-foreground">Seneste gennemførte opdateringer</span></div>
-        <div className="grid grid-cols-1 gap-2.5 min-[400px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+        <div className="grid grid-cols-1 gap-2.5 min-[400px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
           <Update label="Salg" value={stats?.activity.updated.sales}/>
           <Update label="Tilbagebetalinger" value={stats?.activity.updated.refunds}/>
           <Update label="Lagerværdi" value={!errors.finance && finance?.data?.inventory != null ? finance.checkedAt : null}/>
           <Update label="Emballage" value={stats?.activity.updated.packaging}/>
-          <button onClick={()=>onJobs('failed')} className="group rounded-xl border border-[#e9e2d7] bg-white p-3.5 text-left transition hover:border-[#c09960] hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"><div className="mb-3 flex items-center justify-between"><TriangleAlert className={'size-4 '+(stats?.failed?'text-red-600':'text-stone-400')}/><ArrowRight className="size-3.5 text-stone-400 transition group-hover:translate-x-0.5"/></div><p className="text-xs text-muted-foreground">Fejlede kørsler</p><p className={'mt-1 text-xl font-semibold tabular-nums '+(stats?.failed?'text-red-700':'')}>{stats?.failed ?? '—'}</p><p className="mt-1 text-[10px] text-muted-foreground">Seneste 24 timer</p></button>
           <button onClick={onIntegrations} className="group rounded-xl border border-[#e9e2d7] bg-white p-3.5 text-left transition hover:border-[#c09960] hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"><div className="mb-3 flex items-center justify-between"><Link2 className="size-4 text-[#9b7742]"/><ArrowRight className="size-3.5 text-stone-400 transition group-hover:translate-x-0.5"/></div><p className="text-xs text-muted-foreground">Integrationer</p><p className="mt-1 text-sm font-semibold">{stats?stats.connected+' aktive / '+stats.inactive+' inaktive':'—'}</p><p className="mt-1 text-[10px] text-muted-foreground">Aktive = tilsluttede</p></button>
         </div>
       </div>

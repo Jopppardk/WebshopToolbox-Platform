@@ -27,7 +27,7 @@ function invitationControls(u,base,refresh) {
 async function completeProfile() {
   heading('Din profil','Udfyld dit navn, før du åbner administrationen.');
   content.replaceChildren(); $('#new-company').hidden=true;
-  $('#companies-tab').hidden=true;$('#settings-tab').hidden=true;$('#catalog-tab').hidden=true;
+  $('#insights-tab').hidden=true;$('#companies-tab').hidden=true;$('#settings-tab').hidden=true;$('#catalog-tab').hidden=true;
   const form=el('form');
   for(const [name,label,required] of [['name','Fulde navn',true],['phone','Telefonnummer (valgfrit)',false]]) {
     const row=el('label',label),input=el('input'); input.name=name; input.required=required;input.maxLength=name==='name'?120:40;row.append(input);form.append(row);
@@ -641,6 +641,7 @@ try {
     setTimeout(()=>location.reload(),Math.max(0,actor.support.expiresAt*1000-Date.now()+1000));
   }
   $('#identity').textContent = actor.email;
+  $('#insights-tab').hidden = !actor.platformAdmin || !!actor.support;
   $('#tickets-tab').hidden = !actor.platformAdmin;
   $('#settings-tab').hidden = !actor.platformAdmin;
   $('#catalog-tab').hidden = !actor.platformAdmin;
@@ -904,3 +905,31 @@ async function stocktakeView(c,manage,shopId=''){
  })]:[])));
  const history=await api(base+'?history=1');if(history.rows.length){const details=el('details');details.append(el('summary','Tidligere optællinger'));table(details,['Oprettet','Status','Værdiændring'],history.rows.map(r=>[new Date(r.created_at).toLocaleString('da-DK'),{prepared:'Afventer godkendelse',simulated:'Simuleret · ingen eksterne ændringer',cancelled:'Annulleret'}[r.phase],JSON.parse(r.payload_json).adjustmentMinor/100+' DKK']));box.append(details);}
 }
+
+let insightsRevision=0;
+async function insightsView(companyId='',shopId='',status='',page=1){
+ const revision=++insightsRevision;document.querySelectorAll('aside .nav.active').forEach(n=>n.classList.remove('active'));$('#insights-tab').classList.add('active');
+ clear();heading('Indsigt','Automatiske jobs og kørselslog pr. virksomhed og webshop');$('#new-company').hidden=true;
+ const box=panel('Kørselslog');content.replaceChildren(box);
+ const companySelect=el('select'),shopSelect=el('select'),statusSelect=el('select');
+ companySelect.setAttribute('aria-label','Virksomhed');shopSelect.setAttribute('aria-label','Webshop');statusSelect.setAttribute('aria-label','Status');
+ const list=(await api('/companies')).companies;if(revision!==insightsRevision)return;
+ if(!list.length){box.append(el('p','Ingen virksomheder endnu.'));return;}
+ for(const c of list){const o=el('option',c.name);o.value=c.id;companySelect.append(o);}if(companyId)companySelect.value=companyId;
+ companyId=companySelect.value;
+ const shops=(await api(`/companies/${companyId}/webshops`)).webshops;if(revision!==insightsRevision)return;
+ for(const shop of shops){const o=el('option',shop.name);o.value=shop.id;shopSelect.append(o);}if(shopId)shopSelect.value=shopId;
+ const labels={succeeded:'Gennemført',failed:'Fejlet',running:'Kører',skipped:'Sprunget over'};
+ for(const [value,label] of [['','Alle statusser'],...Object.entries(labels)]){const o=el('option',label);o.value=value;statusSelect.append(o);}statusSelect.value=status;
+ const refresh=()=>insightsView(companySelect.value,shopSelect.value,statusSelect.value,1);
+ companySelect.onchange=()=>insightsView(companySelect.value).catch(showError);shopSelect.onchange=()=>refresh().catch(showError);statusSelect.onchange=()=>refresh().catch(showError);
+ box.append(actions(companySelect,shopSelect,statusSelect,button('Opdatér',refresh)));
+ if(!shops.length){box.append(el('p','Virksomheden har ingen webshops.'));return;}
+ const data=await api(`/companies/${companyId}/webshops/${shopSelect.value}/insights?`+new URLSearchParams({status,page}));if(revision!==insightsRevision)return;
+ box.append(el('p',`${data.summary.total} kørsler · ${data.summary.failed} fejlede · ${data.summary.running} igangværende. Viser op til de seneste 1.000 kørsler.`,'hint'));
+ table(box,['Job','Status','Start','Slut','Antal','Detaljer'],data.runs.map(r=>[r.job_name,labels[r.status]||r.status,r.started_at,r.finished_at||'—',r.count??'—',r.message||'—']));
+ const nav=actions();if(page>1)nav.append(button('Forrige',()=>insightsView(companyId,shopSelect.value,status,page-1)));if(page*50<data.pagination.total)nav.append(button('Næste',()=>insightsView(companyId,shopSelect.value,status,page+1)));box.append(nav);
+}
+$('#insights-tab').onclick=()=>insightsView().catch(showError);
+
+for(const id of ['companies-tab','tickets-tab','catalog-tab','settings-tab'])$('#'+id).addEventListener('click',()=>{insightsRevision++;$('#insights-tab').classList.remove('active');});
