@@ -55,6 +55,7 @@ function localSecret() {
   return match[1];
 }
 if(['deploy','migrate-remote','seed-remote'].includes(task))assertPlatformRepository();
+if(task==='deploy'&&process.env.GITHUB_ACTIONS==='true'&&!process.env.CLOUDFLARE_API_TOKEN?.trim())throw Error('GitHub Environment dev mangler CLOUDFLARE_API_TOKEN. Ingen build/upload startet.');
 if (['dev','build','build-remote','deploy'].includes(task)) {
   const build = spawnSync(process.execPath, [resolve(root,'node_modules/vite/bin/vite.js'),'build','--config','platform/tier1/vite.config.mjs'], {stdio:'inherit'});
   if(build.error) throw build.error;

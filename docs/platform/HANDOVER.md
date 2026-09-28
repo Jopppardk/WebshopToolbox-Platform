@@ -1,5 +1,7 @@
 # Overlevering
 
+> 28. september 2026 – Ny fast procedure til Codex Cloud er klargjort på `platform/cloud-deploy`; se [CODEX-CLOUD-DEPLOY.md](CODEX-CLOUD-DEPLOY.md). Brug `scripts/platform-release.mjs` til GitHub-dispatch af en godkendt main-SHA. `prod` går altid gennem dev og HTTP-gate. Manglende Cloud-runtime-token/netværksadgang kan ikke løses af repositorykode; setup-secrets må ikke persisteres. Ingen deployment følger automatisk af denne ændring.
+
 > Statusvisning 28. september: Rettelse merged i PR #12 med bestået CI. Miljøspecifikke udgivelseskørsler er linket i STATUS-DISPLAY.md. Ikke-afsendte salg uden kvittering vises som Afventer; registrerede bogføringsfejl skelner mellem automatisk genforsøg og manuel handling. Udbetalinger bruger fælles danske betegnelser. Se STATUS-DISPLAY.md for afgrænsning og udgivelsesstatus.
 
 > 28. september 2026: Brugeren har udtrykkeligt godkendt fuld deaktivering af integration.sablen.dk. Alle seks automatiske moduler er slået fra i legacy-indstillingerne; cron og custom domain er fjernet. Worker, D1, R2 og credentials bevares. Se LEGACY-DEACTIVATION.md. Genaktivér ikke legacy som del af en platformudgivelse.

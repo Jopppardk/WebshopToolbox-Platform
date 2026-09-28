@@ -1,5 +1,7 @@
 # Udviklingsplan
 
+> 28. september 2026 – Deployment fra Codex Cloud: implementeret bestillingsscript og samlet GitHub-kæde (CI → dev → HTTP-gate → prod → HTTP-gate). Resterende accept: PR/CI, Cloud-runtime-adgang og en faktisk Cloud-bestilt udgivelse. Se [CODEX-CLOUD-DEPLOY.md](CODEX-CLOUD-DEPLOY.md). Eksisterende produktionsdrift er ikke ændret af klargøringen.
+
 ## Drift 28. september 2026 – aktiveret på PROD
 
 PR #3 og #5 er udgivet fra `739b1860af09c0b082af0acc7e4127572802f9b1` via
