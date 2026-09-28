@@ -1,5 +1,7 @@
 # WebshopToolbox – fælles platform
 
+> 28. september 2026 – Produktionsaktivering er godkendt; brugeren har stoppet den gamle Sablen-integration. Ny kode til varige produktionskvitteringer, salgsbogføring og fakturamail er lokalt implementeret og testet (364 tests), men ikke tilkoblet eller udgivet. PROD/DEV er fortsat uændrede. Se [arbejdsstatus og rester](PRODUCTION-RUNTIME-2026-09-28.md).
+
 > 27. september 2026 – Produktionslogin er nu opdelt: eget kundelogin på portal.webshoptoolbox.dk og Access-beskyttet Tier 0 på /admin. Anonyme API-kald afvises; bogføring/kundemail forbliver blokeret. Se PRODUCTION.md. Reel mailkode/login er endnu ikke afprøvet.
 
 > 27. september 2026 – Dev og prod er nu begge deployet succesfuldt fra GitHub Actions på commit `354c194`. 352 tests og builds bestået. Dev bruger kun dev.webshoptoolbox.dk; workers.dev-alias er lukket. Prod-login afventer fortsat Access-tilpasningen. Se REPOSITORY-SPLIT.md for kørsler og versioner.

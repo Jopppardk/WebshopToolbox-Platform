@@ -4,7 +4,7 @@ import { historyPolicy } from './tier1-history';
 import { requireCompany, requireWebshop } from './auth';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 import { jsonBody } from './invitations';
-import { handleMail } from './mail';
+import { handleMail, sendCustomerInvoice } from './mail';
 import { buildInvoicePdf } from './invoice-pdf';
 import { shopAccess, listInvoiceOrders, loadCompleteOrder } from './invoice-source';
 import { checkInvoice, invoiceFingerprint, type InvoiceSource } from './order-check';
@@ -76,7 +76,7 @@ export async function handleInvoices(request:Request,env:PlatformEnv,actor:Actor
  const input=request.method==='GET'?Object.fromEntries(url.searchParams):await jsonBody(request);
  const shop=typeof input.webshopId==='string'?input.webshopId:'';
  await requireWebshop(db,actor,company,shop);
- if(actor.support&&['sync','generate','test'].includes(action))throw new HttpError(403,'Afslut supportadgang før import, generering eller testmail.');
+ if(actor.support&&['sync','generate','test','send'].includes(action))throw new HttpError(403,'Afslut supportadgang før import, generering eller testmail.');
  if(action==='sync'&&request.method==='POST'){
   const after=typeof input.after==='string'?input.after:null;if(after&&after.length>2048)throw new HttpError(400,'Ugyldig fortsættelse.');
   const access=await shopAccess(env,company,shop),data=await listInvoiceOrders(access,after,cutoff(s));
@@ -93,7 +93,7 @@ export async function handleInvoices(request:Request,env:PlatformEnv,actor:Actor
   const object=await env.PLATFORM_DOCUMENTS.get(saved.r2_key);if(!object)throw new HttpError(404,'Den gemte PDF mangler. Den genoprettes ikke automatisk.');
   return new Response(object.body,{headers:{'Content-Type':'application/pdf','Content-Disposition':'attachment; filename="faktura-'+id.split('/').pop()+'.pdf"'}});
  }
- if(!['generate','check','test'].includes(action)||request.method!=='POST')throw new HttpError(404,'Fakturafunktionen findes ikke.');
+ if(!['generate','check','test','send'].includes(action)||request.method!=='POST')throw new HttpError(404,'Fakturafunktionen findes ikke.');
  const source=await db.prepare('SELECT external_id FROM invoice_orders WHERE company_id=? AND webshop_id=? AND external_id=? AND created_at>=?').bind(company,shop,id,cutoff(s)).first();
  if(!source)throw new HttpError(404,'Hent ordren fra Shopify først; den skal ligge inden for din historik.');
  const order=await loadCompleteOrder(id,await shopAccess(env,company,shop),checkInvoice);
@@ -118,6 +118,7 @@ export async function handleInvoices(request:Request,env:PlatformEnv,actor:Actor
  const file=await env.PLATFORM_DOCUMENTS.get(saved.r2_key);if(!file)throw new HttpError(409,'PDF-fakturaen mangler.');
  const bytes=await file.arrayBuffer();if(bytes.byteLength>3500000)throw new HttpError(413,'PDF er for stor til testmail.');
  const rendered=invoiceText(s,order);
+ if(action==='send')return sendCustomerInvoice(env,actor,company,shop,saved.id,order.email||'',rendered.subject,rendered.text,{content:bytes,filename:'faktura-'+id.split('/').pop()+'.pdf',type:'application/pdf',disposition:'attachment'});
  const mailRequest=new Request(request.url,{method:'POST',headers:request.headers,body:JSON.stringify({requestId:input.requestId,mode:input.mode})});
  return handleMail(mailRequest,env,actor,company,'test',{subject:'[TEST] '+rendered.subject,text:rendered.text+'\n\nTESTMAIL – sendt til din loginadresse, ikke til kunden.',attachment:{content:bytes,filename:'faktura-'+id.split('/').pop()+'.pdf',type:'application/pdf',disposition:'attachment'}});
 }

@@ -1,4 +1,5 @@
-import { requireCompany } from './auth';
+import {readReceipt,saveReceipt,uncertainReceipt,type ReceiptKey} from './production-receipts';
+import { requireCompany, requireWebshop } from './auth';
 import { seal, unseal } from './connections';
 import { jsonBody } from './invitations';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
@@ -116,4 +117,38 @@ export async function handleMail(request:Request,env:PlatformEnv,actor:Actor,com
   if(custom)await env.PLATFORM_DB.prepare('UPDATE company_mail SET verified_revision=NULL WHERE company_id=? AND revision=?').bind(company,settings!.revision).run();
   return reply({status:'uncertain',recipient,sender:from});
  }
+}
+
+// Ordinary invoice delivery is separate from the demo endpoint and can only use
+// the Shopify-derived recipient and a persisted invoice selected by the server.
+export async function sendCustomerInvoice(env:PlatformEnv,actor:Actor,company:string,shop:string,invoiceId:string,recipientValue:string,subject:string,text:string,attachment:{content:ArrayBuffer;filename:string;type:string;disposition:"attachment"}){
+ await requireCompany(env.PLATFORM_DB,actor,company,true);
+ if(actor.support||actor.platformAdmin||env.PLATFORM_ENV!=='production'||String(env.PLATFORM_CUSTOMER_EMAIL)!=='enabled')throw new HttpError(403,'Kundeafsendelse er ikke aktiveret her.');
+ await requireWebshop(env.PLATFORM_DB,actor,company,shop);
+ const invoice=await env.PLATFORM_DB.prepare("SELECT id FROM platform_invoices WHERE company_id=? AND webshop_id=? AND id=? AND status='generated'").bind(company,shop,invoiceId).first();
+ if(!invoice)throw new HttpError(404,'Den genererede faktura findes ikke i webshoppen.');
+ const recipient=mailAddress(recipientValue),settings=await row(env,company),from=effectiveSender(settings,standardFrom(env));
+ const name=settings?.sender_name||await defaultSenderName(env,company);
+ const key:ReceiptKey={company,shop,provider:'invoice',module:'email',externalId:invoiceId,destination:'customer'};
+ let current=await readReceipt(env,key);
+ if(current?.phase==='accepted')return reply({sent:true,recipient:current.payload.recipient,existing:true,status:'accepted'});
+ if(current)throw new HttpError(409,'Fakturamailen er allerede under afsendelse eller har et uafklaret resultat. Den genafsendes ikke automatisk.');
+ const custom=!!settings?.custom_from&&from===settings.custom_from;
+ const secret=custom?await unseal(env,[company,'mail',from,settings!.account_id],settings!.credentials_encrypted!):null;
+ if(!custom&&!env.PLATFORM_MAIL_TEST)throw new HttpError(503,'Mailtjenesten er ikke konfigureret.');
+ current=await saveReceipt(env,key,null,'sending',{recipient,from,invoiceId,actorId:actor.id});
+ try{
+  let receipt:string;
+  if(custom){
+   const response=await fetch(`https://api.cloudflare.com/client/v4/accounts/${settings!.account_id}/email/sending/send`,{method:'POST',redirect:'manual',signal:AbortSignal.timeout(15000),headers:{Authorization:'Bearer '+secret!.token,'Content-Type':'application/json'},body:JSON.stringify({from:{address:from,name},to:recipient,subject,text,...(settings?.reply_to?{reply_to:settings.reply_to}:{}),attachments:[{...attachment,content:btoa(Array.from(new Uint8Array(attachment.content),b=>String.fromCharCode(b)).join(''))}]})});
+   const result=await response.json() as {success?:boolean;result?:{delivered?:string[];queued?:string[];permanent_bounces?:string[]}};
+   if(!response.ok||!result.success||result.result?.permanent_bounces?.includes(recipient)||!(result.result?.delivered?.includes(recipient)||result.result?.queued?.includes(recipient)))throw Error('Unconfirmed');
+   receipt=JSON.stringify(result.result);
+  }else{
+   const result=await env.PLATFORM_MAIL_TEST!.send({from:{email:from,name},to:recipient,...(settings?.reply_to?{replyTo:settings.reply_to}:{}),subject,text,attachments:[attachment]});
+   if(!result?.messageId)throw Error('Unconfirmed');receipt=result.messageId;
+  }
+  current=await saveReceipt(env,key,current,'accepted',{...current.payload,receipt});
+ }catch{await uncertainReceipt(env,key,current);throw new HttpError(409,'Mailafsendelsen er uafklaret. Kontrollér leveringsloggen før yderligere handling.');}
+ return reply({sent:true,recipient,status:'accepted'});
 }
