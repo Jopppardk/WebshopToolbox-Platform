@@ -8,7 +8,6 @@ export const customerPages = [
  ['packaging','Emballage','box',''],
  ['invoices','Fakturaer','file','Dokumenter'],
  ['documents','Udbetalingsrapporter','file',''],
- ['insights','Indsigt','activity','System'],
  ['integrations','Integrationer','link',''],
  ['tickets','Support','file',''],
  ['settings','Indstillinger','settings',''],

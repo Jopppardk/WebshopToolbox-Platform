@@ -9,7 +9,6 @@ import { FlatpayConnection } from '@/components/flatpay-connection';
 import { EmballageConnection } from '@/components/emballage-connection';
 import { ViaBillConnection } from '@/components/viabill-connection';
 import { HistorySettings } from '@/components/history-settings';
-import { ErrorOverview } from '@/components/error-overview';
 import { OrderLog } from '@/components/order-log';
 import { SalesPreview } from '@/components/sales-preview';
 import { ManualBookingAction } from '@/components/manual-booking-action';
@@ -20,7 +19,6 @@ import { Inventory } from '@/components/inventory';
 import { NotificationBell } from '@/components/notification-bell';
 import { Packaging } from '@/components/packaging';
 import { Dashboard } from '@/components/dashboard';
-import { JobInsights } from '@/components/job-insights';
 import {ProductFeeds} from '@/components/product-feeds';
 import {IntegrationRequired} from '@/components/integration-required';
 import {Rss} from 'lucide-react';
@@ -30,7 +28,7 @@ import { vatCodeOptions } from '@/lib/vat-code-options';
 import { emptyAccounts, defaultAutomation, defaultInvoiceEmail, validateSettings, type Accounts, type Automation, type AdminSettings, type InvoiceEmailSettings } from '@/lib/admin-settings';
 import { orderPeriods, type OrderPeriod } from '@/lib/order-period';
 import {hasRequiredIntegration,integrationRequirements,type IntegrationGatedView} from '@/lib/integration-visibility';
-import { SyncStatus, useSyncStatus } from '@/components/sync-status';
+import { useSyncStatus } from '@/components/sync-status';
 import { syncIntervals } from '@/lib/sync-schedule';
 import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -113,10 +111,9 @@ export default function Home() {
   const [orderTotal, setOrderTotal] = useState(0);
   const [orderRevision, setOrderRevision] = useState(0);
   const [syncingOrders, setSyncingOrders] = useState(false);
-  const [insightFilter, setInsightFilter] = useState('');
   const [packagingEntry,setPackagingEntry]=useState({tab:'consumption' as 'consumption'|'reporting',key:0});
   const [view, setView] = useState<
-    'dashboard' | 'orders' | 'invoices' | 'documents' | 'refunds' | 'payouts' | 'inventory' | 'packaging' | 'insights' | 'support' | 'feeds' | 'settings'
+    'dashboard' | 'orders' | 'invoices' | 'documents' | 'refunds' | 'payouts' | 'inventory' | 'packaging' | 'support' | 'feeds' | 'settings'
   >('dashboard');
   useEffect(() => {
     if (sessionStorage.getItem('toolbox-refresh-sales') === '1') {
@@ -130,20 +127,13 @@ export default function Home() {
   const [accounts, setAccounts] = useState<Accounts>(emptyAccounts);
   const [automation, setAutomation] = useState<Automation>(defaultAutomation);
   const [invoiceEmail, setInvoiceEmail] = useState<InvoiceEmailSettings>(defaultInvoiceEmail);
-  const [syncIntervalMinutes, setSyncIntervalMinutes] = useState(5);
+  const [syncIntervalMinutes, setSyncIntervalMinutes] = useState(15);
   const [settingsReady, setSettingsReady] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsRevision, setSettingsRevision] = useState<string | null>(null);
   const [settingsMessage, setSettingsMessage] = useState('');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [orderError, setOrderError] = useState('');
-  const [openErrorCount, setOpenErrorCount] = useState(0);
-  useEffect(() => {
-    let active = true;
-    const refresh = () => fetch('/api/admin/errors', { cache: 'no-store' }).then(async response => await response.json() as { errors?: unknown[]; openCount?: number }).then(data => { if (active) setOpenErrorCount(data.openCount ?? data.errors?.length ?? 0); }).catch(() => undefined);
-    void refresh(); const timer = window.setInterval(refresh, 60000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, []);
   useEffect(() => {
     fetch('/api/admin/settings').then(async response => {
       const data = await response.json() as { settings: AdminSettings | null; revision: string | null; error?: string };
@@ -260,7 +250,6 @@ export default function Home() {
           </button>
           <button className={`nav-item w-full ${view === 'documents' ? 'active' : ''}`} onClick={() => setView('documents')}><BookOpenCheck />Udbetalingsrapporter</button>
           <p className="nav-label mt-7">System</p>
-          <button className={`nav-item w-full ${view === 'insights' ? 'active' : ''}`} onClick={() => { setInsightFilter(''); setView('insights'); }}><Activity />Indsigt</button>
           <button className={`nav-item w-full ${view === 'feeds' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('feeds'); }}><Rss />Produktfeeds</button>
           <button className={`nav-item w-full ${view === 'support' ? 'active' : ''}`} onClick={() => setView('support')}><Lightbulb />Support</button>
           <button
@@ -274,7 +263,6 @@ export default function Home() {
         <div className="mx-4 mb-3 overflow-hidden rounded-xl border border-white/10 bg-black/30 shadow-lg">
           <img src="/brand/webshoptoolbox-logo.png" alt="WebshopToolbox" className="h-auto w-full" />
         </div>
-        <SyncStatus state={syncState} />
       </aside>
       <section className="min-w-0">
         <header className="flex h-20 items-center justify-between border-b border-border bg-white px-5 md:px-8">
@@ -320,7 +308,6 @@ export default function Home() {
           </button>
           <button className={`nav-item w-full ${view === 'documents' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('documents'); }}><BookOpenCheck />Udbetalingsrapporter</button>
           <p className="nav-label mt-7">System</p>
-          <button className={`nav-item w-full ${view === 'insights' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setInsightFilter(''); setView('insights'); }}><Activity />Indsigt</button>
           <button className={`nav-item w-full ${view === 'feeds' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('feeds'); }}><Rss />Produktfeeds</button>
           <button className={`nav-item w-full ${view === 'support' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('support'); }}><Lightbulb />Support</button>
           <button
@@ -340,11 +327,11 @@ export default function Home() {
             <WebshopSelector />
           </div>
           <div className="ml-auto flex items-center gap-3">
-            <NotificationBell errorCount={openErrorCount} onErrors={()=>{setSettingsTab('dashboard');setView('settings');}} onReporting={()=>{setPackagingEntry(p=>({tab:'reporting',key:p.key+1}));setView('packaging');}}/>
+            <NotificationBell errorCount={0} onErrors={()=>{setSettingsTab('dashboard');setView('settings');}} onReporting={()=>{setPackagingEntry(p=>({tab:'reporting',key:p.key+1}));setView('packaging');}}/>
             <CustomerIdentity />
           </div>
         </header>
-        {view === 'dashboard' && <Dashboard onJobs={status => { setInsightFilter(status); setView('insights'); }} onIntegrations={provider => { setIntegrationTarget(provider ?? null); setSettingsTab('integrations'); setView('settings'); }}/>}
+        {view === 'dashboard' && <Dashboard onIntegrations={provider => { setIntegrationTarget(provider ?? null); setSettingsTab('integrations'); setView('settings'); }}/>}
         {currentRequirement && connections===null && !connectionsError && <div className="mx-auto max-w-[1440px] px-5 py-16 text-center text-sm text-muted-foreground">Kontrollerer integrationer…</div>}
         {currentRequirement && connectionsError && <div className="mx-auto max-w-[1440px] px-5 py-16 text-center"><p role="alert" className="text-sm text-red-700">{connectionsError}</p><Button className="mt-4" variant="outline" onClick={()=>void refreshConnections()}>Prøv igen</Button></div>}
         {currentRequirement && connections && !integrationAvailable(view) && <IntegrationRequired title={currentRequirement.title} providers={currentRequirement.providers} onIntegrations={()=>{setIntegrationTarget(currentRequirement.providers.length===1&&currentRequirement.providers[0]==='shopify'?'shopify':null);setSettingsTab('integrations');setView('settings');}}/>}
@@ -446,7 +433,6 @@ export default function Home() {
         )}
         {view === 'inventory' && integrationAvailable('inventory') && <Inventory />}
         {view === 'packaging' && integrationAvailable('packaging') && <Packaging key={packagingEntry.key} initialTab={packagingEntry.tab}/>}
-        {view === 'insights' && <JobInsights initialStatus={insightFilter} />}
         {view === 'feeds' && integrationAvailable('feeds') && <ProductFeeds />}
         {view === 'support' && <Support />}
         {view === 'settings' && (
@@ -473,7 +459,6 @@ export default function Home() {
             automation={automation} setAutomation={setAutomation} invoiceEmail={invoiceEmail} setInvoiceEmail={setInvoiceEmail} syncIntervalMinutes={syncIntervalMinutes} setSyncIntervalMinutes={setSyncIntervalMinutes}
             ready={settingsReady} saving={settingsSaving} message={settingsMessage}
             onConnectionsChanged={refreshConnections}
-            onErrorCountChange={setOpenErrorCount}
           />
           </div>
         )}
@@ -489,7 +474,6 @@ export default function Home() {
           {notice}
         </div>
       )}
-      <SyncStatus state={syncState} mobile />
     </main>
   );
 }
@@ -752,7 +736,7 @@ function Settings({
   setAccounts,
   onSave,
   onConnectionsChanged,
-  automation, setAutomation, invoiceEmail, setInvoiceEmail, syncIntervalMinutes, setSyncIntervalMinutes, savedIntervalMinutes, ready, saving, message, onErrorCountChange,
+  automation, setAutomation, invoiceEmail, setInvoiceEmail, syncIntervalMinutes, setSyncIntervalMinutes, savedIntervalMinutes, ready, saving, message,
 }: {
   mode: 'dashboard' | 'integrations' | 'invoice-email' | 'inventory';
   initialIntegration: 'shopify'|'dinero'|null;
@@ -765,7 +749,6 @@ function Settings({
   savedIntervalMinutes?: number;
   ready: boolean; saving: boolean; message: string;
   onConnectionsChanged: () => Promise<void>;
-  onErrorCountChange: (count: number) => void;
 }) {
   const capabilities=useCapabilities();
   const [chart, setChart] = useState<
@@ -933,14 +916,13 @@ function Settings({
         </div>
       )}
       {mode === 'dashboard' && <>
-      <ErrorOverview onCountChange={onErrorCountChange} />
       <fieldset disabled={!ready || saving} className="min-w-0">
       <h2 className="mb-3 text-sm font-semibold">Automatik og bilag</h2>
       <p className="mb-4 text-sm text-muted-foreground">Styr automatisk behandling og vedhæftning af bilag.</p>
       {!ready && !message && <p role="status" className="mb-4 text-sm">Indlæser fælles indstillinger…</p>}
       {message && <p role="status" className="mb-4 rounded-xl border p-4 text-sm">{message}</p>}
       <section className="mb-8 overflow-hidden rounded-2xl border bg-white">
-        <div className="flex flex-col justify-between gap-4 border-b p-5 sm:flex-row sm:items-center"><div><p className="text-sm font-semibold">Synkroniseringsinterval</p><p className="mt-1 text-xs text-muted-foreground">Vælg interval og tryk Gem indstillinger. Kørsler starter på hele minutter; næste kørsel venter, hvis en tidligere stadig arbejder.</p></div><label className="w-full sm:w-52"><span className="mb-2 block text-xs">{savedIntervalMinutes === undefined ? 'Aktivt interval hentes…' : `Gemt interval: ${savedIntervalMinutes} min.`}{savedIntervalMinutes !== undefined && savedIntervalMinutes !== syncIntervalMinutes && <strong className="mt-1 block text-amber-700">Ændringen er ikke gemt endnu</strong>}</span><span className="sr-only">Synkroniseringsinterval</span><NativeSelect className="w-full" value={String(syncIntervalMinutes)} onChange={event => setSyncIntervalMinutes(Number(event.target.value))}>{syncIntervals.map(minutes => <NativeSelectOption key={minutes} value={String(minutes)}>{minutes === 1 ? 'Hvert minut' : `Hvert ${minutes}. minut`}</NativeSelectOption>)}</NativeSelect></label></div>
+        <div className="flex flex-col justify-between gap-4 border-b p-5 sm:flex-row sm:items-center"><div><p className="text-sm font-semibold">Synkroniseringsinterval</p><p className="mt-1 text-xs text-muted-foreground">Vælg interval og tryk Gem indstillinger. Kørsler starter på hele minutter; næste kørsel venter, hvis en tidligere stadig arbejder.</p></div><label className="w-full sm:w-52"><span className="mb-2 block text-xs">{savedIntervalMinutes === undefined ? 'Aktivt interval hentes…' : `Gemt interval: ${savedIntervalMinutes} min.`}{savedIntervalMinutes !== undefined && savedIntervalMinutes !== syncIntervalMinutes && <strong className="mt-1 block text-amber-700">Ændringen er ikke gemt endnu</strong>}</span><span className="sr-only">Synkroniseringsinterval</span><NativeSelect className="w-full" value={String(syncIntervalMinutes)} onChange={event => setSyncIntervalMinutes(Number(event.target.value))}>{syncIntervals.map(minutes => <NativeSelectOption key={minutes} value={String(minutes)}>{`Hvert ${minutes}. minut`}</NativeSelectOption>)}</NativeSelect></label></div>
         <div className="flex items-center justify-between border-b p-5">
           <div><p className="text-sm font-semibold">Upload bilag til regnskabsprogram</p><p className="mt-1 text-xs text-muted-foreground">Vedhæft automatisk faktura eller dokumentation til posteringen i Dinero.</p></div>
           <Switch disabled={!capabilities.bookkeeping} checked={automation.attachments} onCheckedChange={(value) => toggleAutomation('attachments', value)} aria-label="Upload bilag til regnskabsprogram" />

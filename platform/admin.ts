@@ -1,3 +1,4 @@
+import { handleTier1Data } from './tier1-data';
 import { financeService } from './finance-source';
 import { signupSettings,signupOverview } from './signup';
 import { jsonBody } from './invitations';
@@ -96,6 +97,8 @@ export async function handleAdmin(
     method = request.method;
   if(path==='/api/platform/settings/welcome')return signupSettings(request,env,actor);
   if(path==='/api/platform/settings/signups')return signupOverview(request,env,actor);
+  const insights=path.match(/^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/insights$/);
+  if(insights){admin(actor);await requireWebshop(db,actor,insights[1],insights[2]);if(method!=='GET')throw new HttpError(405,'Brug Hent.');return (await handleTier1Data(request,env,actor,insights[1],insights[2],'/admin/insights'))!;}
   const finance=path.match(/^\/api\/platform\/companies\/([\w-]+)\/finance$/);
   if(finance){await requireCompany(db,actor,finance[1],true);const service=financeService(env,finance[1]);if(method==='GET')return reply(await service.dashboardFinance());if(method==='POST'&&!actor.support){await jsonBody(request);try{return reply(await service.syncDashboardFinance());}catch{throw new HttpError(409,'Regnskabstal kunne ikke hentes komplet. Se status på dashboardet.');}}throw new HttpError(403,'Regnskabstal kan kun opdateres af virksomhedsadministratoren.');}
   const stocktake=path.match(/^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/stocktake$/);

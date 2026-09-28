@@ -37,12 +37,14 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
  const blocked=['/bookkeeping/manual','/sales/transfer','/refunds/transfer','/payouts/transfer','/flatpay/draft','/flatpay/production','/invoices/email'];
  if(blocked.includes(path)&&!get)throw new HttpError(403,'Denne overfoersel er ikke tilgaengelig her. Brug Bogfoer manuelt paa posten i produktionsportalen.');
  const runs=async()=> (await db.prepare('SELECT * FROM operation_runs WHERE company_id=? AND webshop_id=? ORDER BY started_at DESC,id DESC LIMIT 1000').bind(company,shop).all<any>()).results;
- if(path==='/admin/sync-status'&&get){const row=(await runs())[0],saved=await db.prepare('SELECT preferences_json FROM tier1_preferences WHERE company_id=? AND webshop_id=?').bind(company,shop).first<{preferences_json:string}>();return reply({automatic:productionWrites(env),intervalMinutes:saved?JSON.parse(saved.preferences_json).syncIntervalMinutes:5,serverNow:Date.now(),status:row?.status==='success'?'succeeded':row?.status||'unknown',startedAt:row?.started_at||null,finishedAt:row?.finished_at||null,blockedUntil:null});}
+ if(path==='/admin/sync-status'&&get){const row=(await runs())[0],saved=await db.prepare('SELECT preferences_json FROM tier1_preferences WHERE company_id=? AND webshop_id=?').bind(company,shop).first<{preferences_json:string}>();return reply({automatic:productionWrites(env),intervalMinutes:Math.max(15,Number(saved?JSON.parse(saved.preferences_json).syncIntervalMinutes:15)||15),serverNow:Date.now(),status:row?.status==='success'?'succeeded':row?.status||'unknown',startedAt:row?.started_at||null,finishedAt:row?.finished_at||null,blockedUntil:null});}
  if(path==='/admin/insights'&&get){
+  if(!actor.platformAdmin||actor.support)throw new HttpError(403,'Joboversigten findes kun i Tier 0.');
   const list=(await runs()).map(r=>({...r,job_key:r.module,job_name:r.module,status:r.status==='success'?'succeeded':r.status,duration_ms:r.finished_at?Date.parse(r.finished_at)-Date.parse(r.started_at):null}));
   const status=url.searchParams.get('status'),filtered=status?list.filter(r=>r.status===status):list,p=Math.max(1,pageNumber(url.searchParams.get('page'),1));
   return reply({summary:{total:list.length,succeeded:list.filter(r=>r.status==='succeeded').length,failed:list.filter(r=>r.status==='failed').length,skipped:0,running:list.filter(r=>r.status==='running').length},latest:list.slice(0,20),runs:filtered.slice((p-1)*50,p*50),pagination:{page:p,pageSize:50,total:filtered.length,until:new Date().toISOString(),since:list.at(-1)?.started_at||new Date().toISOString()}});
  }
+ if(path==='/admin/errors'&&(!actor.platformAdmin||actor.support))throw new HttpError(403,'Jobfejl vises i Tier 0.');
  if(path==='/admin/errors'||path==='/notifications'){
   if(!get){
    if(request.method!=='POST')throw new HttpError(405,'Brug Gem.');await requireCompany(db,actor,company,true);const b=await jsonBody(request);
