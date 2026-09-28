@@ -387,7 +387,7 @@ export default function Home() {
               />
               <Stat
                 label="Kræver handling"
-                value={`${salesOrders.filter((order) => order.status === 'Fejlet').length} ordrer`}
+                value={`${salesOrders.filter((order) => order.status.startsWith('Fejlet')).length} ordrer`}
                 note="Se fejl under Indstillinger"
                 tone="warn"
               />
@@ -547,7 +547,7 @@ function OrderRow({ order, onBooked }: { order: OrderView; onBooked: () => void 
       <TableCell className="text-muted-foreground">{order.realized}</TableCell>
       <TableCell>
         <Badge
-          variant={state === 'Fejlet' ? 'destructive' : 'secondary'}
+          variant={state.startsWith('Fejlet') ? 'destructive' : 'secondary'}
           className={
             state === 'Bogført'
               ? 'badge-booked'

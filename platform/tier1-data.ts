@@ -1,3 +1,4 @@
+import { payoutStatusLabel } from './tier1/src/lib/payout-status';
 import {handleProductionSale} from './production-sales';
 import {handleProductionOther} from './production-proposals';
 import {productionWrites} from './production-policy';
@@ -177,8 +178,8 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
  if(rows.length>10000)throw new HttpError(409,'Vælg en kortere historik.');
  if(module==='payouts'){
   const payments=(await db.prepare("SELECT provider,kind,payload_json,occurred_at,external_id FROM payment_records WHERE company_id=? AND webshop_id=? AND kind IN ('payments','payout') AND occurred_at>=? ORDER BY occurred_at DESC LIMIT 10001").bind(company,shop,from).all<any>()).results;
-  const list=rows.map(p=>({id:p.id,provider:'shopify_payments',label:'Shopify Payments',date:p.issuedAt,amount:Number(p.net.amount),currency:p.net.currencyCode,status:p.status,booking:bookingStatus('shopify','payouts',p.id,p.issuedAt,JSON.stringify(p)),canBook:false,detail:{}}));
-  for(const row of payments){const p=JSON.parse(row.payload_json);list.push({id:row.external_id,provider:row.provider,label:row.provider==='flatpay'?'Flatpay':'ViaBill',date:row.occurred_at,amount:row.provider==='flatpay'?p.payoutAmount:p.amountMinor/10**new Intl.NumberFormat('en',{style:'currency',currency:p.currency}).resolvedOptions().maximumFractionDigits!,currency:p.currency,status:row.provider==='flatpay'?(p.paidDate?'Udbetalt':'Kommende'):'Afregnet',booking:bookingStatus(row.provider,row.kind,row.external_id,row.occurred_at,row.payload_json),canBook:false,detail:p});}
+  const list=rows.map(p=>({id:p.id,provider:'shopify_payments',label:'Shopify Payments',date:p.issuedAt,amount:Number(p.net.amount),currency:p.net.currencyCode,status:payoutStatusLabel(p.status),booking:bookingStatus('shopify','payouts',p.id,p.issuedAt,JSON.stringify(p)),canBook:false,detail:{}}));
+  for(const row of payments){const p=JSON.parse(row.payload_json);list.push({id:row.external_id,provider:row.provider,label:row.provider==='flatpay'?'Flatpay':'ViaBill',date:row.occurred_at,amount:row.provider==='flatpay'?p.payoutAmount:p.amountMinor/10**new Intl.NumberFormat('en',{style:'currency',currency:p.currency}).resolvedOptions().maximumFractionDigits!,currency:p.currency,status:row.provider==='flatpay'?(p.paidDate?'Udbetalt':'Kommende'):'Udbetalt',booking:bookingStatus(row.provider,row.kind,row.external_id,row.occurred_at,row.payload_json),canBook:false,detail:p});}
   list.sort((a,b)=>b.date.localeCompare(a.date));return reply({total:list.length,payouts:list.slice(offset,offset+50)});
  }
  const refundSources=new Map<string,{externalId:string;json:string}>();

@@ -17,7 +17,28 @@ export async function bookingStatuses(env:PlatformEnv,company:string,shop:string
  const dates=(await env.PLATFORM_DB.prepare('SELECT provider,start_date FROM booking_start_dates WHERE company_id=? AND webshop_id=?').bind(company,shop).all<{provider:string;start_date:string}>()).results;
  const receipts=(await env.PLATFORM_DB.prepare('SELECT r.* FROM accounting_reconciliations r JOIN accounting_connections c ON c.company_id=r.company_id AND c.organization_id=r.organization_id WHERE r.company_id=? AND r.webshop_id=?').bind(company,shop).all<any>()).results;
  const live=(await env.PLATFORM_DB.prepare('SELECT r.* FROM production_receipts r JOIN accounting_connections c ON c.company_id=r.company_id AND c.organization_id=r.destination WHERE r.company_id=? AND r.webshop_id=?').bind(company,shop).all<any>()).results;
- return (provider:string,module:string,id:string,date:string,sourceJson:string)=>{const found=live.find(r=>r.provider===provider&&r.module===module&&r.external_id===id);if(found)return found.phase==='booked'&&JSON.parse(found.payload_json).sourceJson!==sourceJson?'booked_changed':found.phase;return onboardingStatus(date,dates.find(d=>d.provider===provider)?.start_date||'',dates.find(d=>d.provider==='dinero')?.start_date||'',receipts.find(r=>r.provider===provider&&r.module===module&&r.external_id===id),sourceJson);};
+ const attempts=(await env.PLATFORM_DB.prepare('SELECT job,external_id,failures FROM production_attempts WHERE company_id=? AND webshop_id=?').bind(company,shop).all<any>()).results;
+ const preferences=await env.PLATFORM_DB.prepare('SELECT preferences_json FROM tier1_preferences WHERE company_id=? AND webshop_id=?').bind(company,shop).first<{preferences_json:string}>();
+ const automation=preferences?JSON.parse(preferences.preferences_json).automation||{}:{};
+ return (provider:string,module:string,id:string,date:string,sourceJson:string)=>{
+  const found=live.find(r=>r.provider===provider&&r.module===module&&r.external_id===id);
+  const receipt=receipts.find(r=>r.provider===provider&&r.module===module&&r.external_id===id);
+  const job=provider==='shopify'?({orders:'sales',refunds:'refunds',payouts:'payouts'} as Record<string,string>)[module]:provider==='flatpay'&&module==='payments'?'flatpay':undefined;
+  const failed=job&&attempts.some(a=>a.job===job&&a.external_id===id&&a.failures>0);
+  if(found){
+   if(found.phase==='booked')return JSON.parse(found.payload_json).sourceJson!==sourceJson?'booked_changed':'booked';
+   if(['uncertain','held'].includes(found.phase))return 'failed_manual';
+   if(failed)return found.phase==='prepared'&&automation[job==='flatpay'?'payouts':job!]?'failed_retry':'failed_manual';
+   return found.phase;
+  }
+  if(receipt)return onboardingStatus(date,'','',receipt,sourceJson);
+  if(failed)return automation[job==='flatpay'?'payouts':job!]?'failed_retry':'failed_manual';
+  if(provider==='shopify'&&module==='orders'){
+   const source=JSON.parse(sourceJson);
+   if(!source.cancelledAt&&typeof source.displayFulfillmentStatus==='string'&&source.displayFulfillmentStatus!=='FULFILLED')return 'pending';
+  }
+  return onboardingStatus(date,dates.find(d=>d.provider===provider)?.start_date||'',dates.find(d=>d.provider==='dinero')?.start_date||'',undefined,sourceJson);
+ };
 }
 
 const guidPattern=/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i;
