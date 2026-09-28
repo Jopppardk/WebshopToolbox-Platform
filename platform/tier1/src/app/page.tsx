@@ -165,17 +165,17 @@ export default function Home() {
   const syncOrders = async () => {
     setSyncingOrders(true);
     try {
-      let after: string | null = null; let synced = 0; let invoices = 0; let warnings = 0; const seen = new Set<string>();
+      let after: string | null = null; let synced = 0; let invoices = 0; let warnings = 0; let historyWarning = ''; const seen = new Set<string>();
       do {
         const response: Response = await fetch('/api/shopify/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ after }) });
-        const data: { orders: OrderView[]; synced: number; invoicesCreated: number; invoiceWarnings?: string[]; hasNextPage: boolean; endCursor: string | null; error?: string } = await response.json();
+        const data: { orders: OrderView[]; synced: number; invoicesCreated: number; invoiceWarnings?: string[]; warning?: string; hasNextPage: boolean; endCursor: string | null; error?: string } = await response.json();
         if (!response.ok) throw new Error(data.error);
-        synced += data.synced; invoices += data.invoicesCreated || 0;
+        synced += data.synced; invoices += data.invoicesCreated || 0; if (data.warning) historyWarning = data.warning;
         warnings += data.invoiceWarnings?.length || 0;
         after = data.hasNextPage ? data.endCursor : null;
         if (data.hasNextPage && (!after || seen.has(after) || seen.size >= 200)) throw new Error("Hentningen blev stoppet ved en ugyldig fortsættelse. Allerede hentede ordrer er bevaret.");
         if (after) seen.add(after);
-        notify(`${synced} Shopify-ordrer hentet · ${invoices} PDF-fakturaer${warnings ? ` · ${warnings} fakturaer kræver kontrol under Indstillinger` : ''}${after ? ' · henter flere…' : ''}`);
+        notify(`${synced} Shopify-ordrer hentet · ${invoices} PDF-fakturaer${warnings ? ` · ${warnings} fakturaer kræver kontrol under Indstillinger` : ''}${after ? ' · henter flere…' : ''}${historyWarning ? ` · ${historyWarning}` : ''}`);
       } while (after);
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Shopify-ordrer kunne ikke synkroniseres');
