@@ -1,6 +1,6 @@
 # WebshopToolbox – fælles platform
 
-> Cloud-deployprocedure 28. september: PR #14 (`1a26ae6`) er merged med bestået CI. Et afgrænset GH_TOKEN er gemt, og en frisk Cloud-terminal har verificeret GitHub-læseadgang. Den nye GitHub-kæde har udgivet dev og prod med beståede HTTP-gates i run `36468362953` fra andet arbejde. Egen bestilling med Cloud-tokenet afventer fortsat kontrol; se CODEX-CLOUD-DEPLOY.md.
+> Cloud-deployprocedure 28. september: PR #14 (`1a26ae6`) er merged med bestået CI. Et afgrænset GH_TOKEN er gemt. En frisk Cloud-terminal har verificeret læseadgang og Actions-write i run `36471598436`, som bevidst blev afvist af versionsgaten før deployment. Den rigtige dev→prod-kæde og HTTP-gates er bestået i runs `36468362953` og `36471085328` fra andet arbejde. Nye Cloud-opgaver skal bruge det opdaterede miljø; se CODEX-CLOUD-DEPLOY.md.
 
 
 ## Drift 28. september 2026 – aktiveret på PROD

@@ -1,6 +1,6 @@
 # Udviklingsplan
 
-> Cloud-deployprocedure 28. september: implementering, PR #14, obligatorisk CI, gemt GH_TOKEN og GitHub-læsekontrol fra Cloud-terminal er afsluttet. Dev→prod-kæden er også bestået i run `36468362953` fra andet arbejde. Resterende accept er en verificeret bestilling med Cloud-tokenet og opfølgning på samme run-ID. Se CODEX-CLOUD-DEPLOY.md.
+> Cloud-deployprocedure 28. september: implementering, PR #14, obligatorisk CI, gemt GH_TOKEN samt Cloud-læse-/Actions-write-kontrol er afsluttet. Run `36471598436` bekræfter Cloud-bestilling og tilsigtet versionsafvisning før deployment; rigtige dev→prod-udgivelser med HTTP-gates er bestået i runs `36468362953` og `36471085328` fra andet arbejde. Brug det opdaterede miljø til nye Cloud-opgaver. Se CODEX-CLOUD-DEPLOY.md for præcis testafgrænsning og fremgangsmåde.
 
 
 ## Drift 28. september 2026 – aktiveret på PROD
