@@ -1,3 +1,4 @@
+import {recordFailure} from './record-history';
 import {requireCompany,requireWebshop} from './auth';
 import {unseal} from './connections';
 import {jsonBody} from './invitations';
@@ -8,7 +9,7 @@ import {HttpError,reply,type Actor,type PlatformEnv} from './types';
 import {productionWrites} from './production-policy';
 export type BookingContext={env:PlatformEnv;company:string;shop:string;id:string;connection:any;credentials:Record<string,string>;prefs:any;mapping:any;sourceRow:any};
 export type PreparedBooking={snapshot:Record<string,any>;file?:R2ObjectBody|null};
-export async function handleProductionBooking(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string,kind:string,module:string,provider:string,pattern:RegExp,prepare:(context:BookingContext)=>Promise<PreparedBooking>){
+async function productionBooking(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string,kind:string,module:string,provider:string,pattern:RegExp,prepare:(context:BookingContext)=>Promise<PreparedBooking>){
  await requireCompany(env.PLATFORM_DB,actor,company,true);await requireWebshop(env.PLATFORM_DB,actor,company,shop);
  if(actor.support||actor.platformAdmin)throw new HttpError(403,'Bogføring kræver en virksomhedsadministrator.');
  if(!productionWrites(env))throw new HttpError(403,'Bogføring er ikke aktiveret i dette miljø.');
@@ -83,4 +84,12 @@ export async function handleProductionBooking(request:Request,env:PlatformEnv,ac
   }
  }catch{await uncertainReceipt(env,key,current);throw new HttpError(409,'Overførslen er uafklaret. Kontrollér status i Dinero; der oprettes ikke et nyt bilag automatisk.');}
  return reply({version:current.version,phase:current.phase,guid:current.payload.guid,message:current.phase==='booked'?'Bogføring bekræftet i Dinero.':'Kladden er oprettet i Dinero.'});
+}
+
+export async function handleProductionBooking(...args:Parameters<typeof productionBooking>){
+ const [request,env,actor,company,shop,kind,module,provider]=args,copy=request.clone();
+ try{return await productionBooking(...args);}catch(error){
+ try{await requireWebshop(env.PLATFORM_DB,actor,company,shop);const body=await copy.json() as any;await recordFailure(env,company,shop,provider,module,body.externalId,'Bogføring: '+kind,error);}catch{/* Preserve the original error; never release an uncertain receipt. */}
+ throw error;
+ }
 }
