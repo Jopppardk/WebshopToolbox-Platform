@@ -68,15 +68,16 @@ export async function runProductionJobs(env:PlatformEnv){
     if(!sourceDate||!dineroDate)throw new HttpError(409,'Gem bogfoeringsstart for integrationen og Dinero.');
     const boundary=[sourceDate,dineroDate].sort()[1];
     const table=provider==='shopify'?'operation_snapshots':'payment_records',filter=provider==='shopify'?'s.module=?':'s.kind=? AND s.provider=?';
+    const eligible=module==='orders'?" AND COALESCE(json_extract(s.payload_json,'$.test'),0)=0 AND json_extract(s.payload_json,'$.cancelledAt') IS NULL AND json_extract(s.payload_json,'$.displayFulfillmentStatus')='FULFILLED' AND substr((SELECT max(json_extract(f.value,'$.createdAt')) FROM json_each(s.payload_json,'$.fulfillments') f WHERE json_extract(f.value,'$.status')='SUCCESS'),1,10)>=?":'';
     const rows=(await db.prepare(`SELECT s.external_id,s.occurred_at FROM ${table} s
  LEFT JOIN production_attempts a ON a.company_id=s.company_id AND a.webshop_id=s.webshop_id AND a.job=? AND a.external_id=s.external_id
- WHERE s.company_id=? AND s.webshop_id=? AND ${filter} AND substr(s.occurred_at,1,10)>=? AND COALESCE(a.next_attempt_at,0)<=?
- ORDER BY COALESCE(a.attempted_at,0),s.occurred_at,s.external_id LIMIT 3`).bind(job,company,id,...(provider==='shopify'?[module]:[module,provider]),module==='orders'?'1970-01-01':plusDay(boundary,-1),Date.now()).all<any>()).results;
+ WHERE s.company_id=? AND s.webshop_id=? AND ${filter}${eligible} AND substr(s.occurred_at,1,10)>=? AND COALESCE(a.next_attempt_at,0)<=?
+ ORDER BY COALESCE(a.attempted_at,0),s.occurred_at,s.external_id LIMIT 10`).bind(job,company,id,...(provider==='shopify'?[module]:[module,provider]),...(module==='orders'?[plusDay(boundary,-1)]:[]),module==='orders'?'1970-01-01':plusDay(boundary,-1),Date.now()).all<any>()).results;
     for(const row of rows){await owns();const externalId=row.external_id;
      await run('auto.'+job,async()=>{
       let succeeded=false;
       try{
-       if(kind==='sale'||email){const checked=await responseValue(await handleInvoices(request({webshopId:id,externalId}),env,actor,company,'check'));await bookingDate(env,company,id,provider,checked.invoice.date);}
+       if(kind==='sale'||email){const checked=await responseValue(await handleInvoices(request({webshopId:id,externalId}),env,actor,company,'check'));const day=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Copenhagen',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(checked.invoice.date));if(day<boundary){succeeded=true;return;}await bookingDate(env,company,id,provider,checked.invoice.date);}
        else await bookingDate(env,company,id,provider,row.occurred_at);
        if(kind==='sale'||email)await responseValue(await handleInvoices(request({webshopId:id,externalId}),env,actor,company,'generate'));
        if(email){await responseValue(await handleInvoices(request({webshopId:id,externalId}),env,actor,company,'send'));}
