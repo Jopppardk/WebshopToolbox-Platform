@@ -30,7 +30,7 @@ export async function handleDocuments(request:Request,env:PlatformEnv,actor:Acto
  }catch{throw new HttpError(409,'Rapporten kunne ikke kontrolleres. Hent udbetalingen igen, og kontrollér Shopify Payments-adgang, status og afstemning. Ingen delvis rapport gemmes.');}
  const doc=crypto.randomUUID(),key=`companies/${company}/webshops/${shop}/payout-reports/${doc}.pdf`;
  const claim=await db.prepare("INSERT INTO platform_payout_documents(company_id,webshop_id,external_id,id,status,r2_key,source_json) VALUES(?,?,?,?,'generating',?,?) ON CONFLICT DO NOTHING").bind(company,shop,b.externalId,doc,key,JSON.stringify(source)).run();
- if(claim.meta.changes!==1)throw new HttpError(409,'Rapporten er allerede under generering.');
+ if(!claim.meta.changes)throw new HttpError(409,'Rapporten er allerede under generering.');
  await env.PLATFORM_DOCUMENTS.put(key,bytes,{httpMetadata:{contentType:'application/pdf'}});
  await db.prepare("UPDATE platform_payout_documents SET status='generated' WHERE id=? AND status='generating'").bind(doc).run();return reply({id:doc});
 }

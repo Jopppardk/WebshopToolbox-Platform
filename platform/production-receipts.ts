@@ -12,7 +12,8 @@ export async function saveReceipt(env:PlatformEnv,key:ReceiptKey,previous:Receip
  if(previous?!transitions[previous.phase].includes(phase):!['prepared','sending'].includes(phase))throw new HttpError(409,'En afsluttet eller uafklaret behandling kan ikke genstartes.');
  const version=crypto.randomUUID();
  const result=previous?await env.PLATFORM_DB.prepare('UPDATE production_receipts SET phase=?,version=?,payload_json=?,updated_at=CURRENT_TIMESTAMP WHERE '+where+' AND version=?').bind(phase,version,JSON.stringify(payload),...args(key),previous.version).run():await env.PLATFORM_DB.prepare('INSERT INTO production_receipts(company_id,webshop_id,provider,module,external_id,destination,phase,version,payload_json) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING').bind(...args(key),phase,version,JSON.stringify(payload)).run();
- if(result.meta.changes!==1)throw new HttpError(409,'Posten behandles allerede eller er ændret. Hent status igen.');
+ // D1 counts rows written by the record_events triggers in meta.changes; only 0 means the claim lost.
+ if(!result.meta.changes)throw new HttpError(409,'Posten behandles allerede eller er ændret. Hent status igen.');
  return {phase,version,payload};
 }
 export async function uncertainReceipt(env:PlatformEnv,key:ReceiptKey,current:Receipt){
