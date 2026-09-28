@@ -1,6 +1,6 @@
 # Produktionsaktivering, 28. september 2026
 
-## Status: implementeret og lokalt testet; udgivelse afventer CI
+## Status: udgivet og aktiveret på PROD; DEV forbliver blokeret
 
 Brugeren har godkendt produktionsaktivering og oplyst, at den gamle Sablen-
 integration er stoppet. Ingen Sablen-installation ændres. Ingen økonomiske
@@ -81,3 +81,17 @@ Kommerciel Dinero-tilslutning er en særskilt udestående opgave: nuværende ada
 bruger personlig API-nøgle. Dinero kræver OAuth2 til en markedsført/solgt integration:
 https://developer.dinero.dk/news/personal-integration/ (kontrolleret 28. september 2026).
 Teknisk produktionsaktivering er ikke dokumentation for kommerciel Dinero-onboarding.
+
+## Sat i drift
+
+- PR #3 og #5 merged; udgivet commit `739b1860af09c0b082af0acc7e4127572802f9b1`.
+- DEV workflow `36456558314`, Worker `f085b4d4-69d2-4e4b-8e7c-0cfbca43978d`.
+- PROD workflow `36456562615`, Worker `b9eaf4f1-fc3c-478b-ab9c-b1472f4bada6`.
+- Begge workflows gentog 375/375 tests og obligatoriske builds/typechecks.
+- Begge miljøer: health/login 200, Tier0 302 til Access, anonym ordre-API 401.
+- PROD health bekræfter bookkeeping/customerEmail enabled; DEV begge blocked.
+- Automatisk kundemail og lagerkost er fortsat fravalgt af kunden; salg,
+  refunderinger og udbetalinger er tilvalgt. Ingen historiske bogføringer er importeret.
+- Den tidligere PROD-run `36455572877` blev annulleret før deploy for at få
+  rettelsen af bilagsfravalget med. Det var ikke en tilbageførsel af levende data.
+- Indbakkelevering og økonomiske writes er ikke afprøvet med testtransaktioner i PROD.
