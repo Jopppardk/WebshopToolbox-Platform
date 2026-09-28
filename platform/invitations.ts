@@ -1,4 +1,5 @@
 import { identity, requireCompany } from './auth';
+import {welcomeTemplate,renderWelcome} from './signup';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 
 export async function jsonBody(request: Request, maxLength = 4096): Promise<Record<string, unknown>> {
@@ -54,10 +55,13 @@ async function deliver(request: Request, env: PlatformEnv, invitation: string, r
   // Mark before sending. A timeout is uncertain and must never be retried blindly.
   await env.PLATFORM_DB.prepare("UPDATE invitations SET delivery='uncertain' WHERE id=?").bind(invitation).run();
   try {
+    const signup=await env.PLATFORM_DB.prepare('SELECT u.full_name name,c.name company FROM public_signups s JOIN users u ON u.id=s.user_id JOIN companies c ON c.id=s.company_id JOIN invitations i ON i.user_id=u.id WHERE i.id=?').bind(invitation).first<{name:string;company:string}>();
+    const welcome=signup?renderWelcome(await welcomeTemplate(env),{...signup,link}):null;
     await env.PLATFORM_INVITATIONS!.send({
       from: env.PLATFORM_INVITATION_FROM!, to: recipient,
       subject: 'Du er inviteret til WebshopToolbox'+(env.PLATFORM_ENV==='production'?'':' (testmiljø)'),
       text: `Du er inviteret til WebshopToolbox. Åbn linket og log ind med denne mailadresse. Udfyld derefter dit navn. Linket gælder i 48 timer og kan kun bruges én gang.\n\n${link}${env.PLATFORM_ENV==='production'?'':'\n\nDette er en testinvitation.'}`,
+      ...(welcome||{}),
     });
   } catch { return { delivery: 'uncertain' }; }
   await env.PLATFORM_DB.prepare("UPDATE invitations SET delivery='sent' WHERE id=?").bind(invitation).run();

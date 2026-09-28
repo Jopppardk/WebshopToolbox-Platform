@@ -562,6 +562,15 @@ async function integrationCatalog() {
   catalogExpiry=setTimeout(()=>{if(!$('#catalog-tab').classList.contains('active'))return;document.querySelectorAll('.api-status').forEach(n=>{n.className='api-status unknown';n.textContent='● Forældet · kontrollér igen';});},300000);
 }
 $('#catalog-tab').onclick=()=>integrationCatalog().catch(showError);
+async function signupPanel() {
+ const {signups}=await api('/settings/signups'),box=panel('Tilmeldinger og gratis prøveperioder');
+ box.append(el('p','Kontakt virksomhederne senest 14 dage før udløb. Kontakt sker manuelt; markér den først, når I har kontaktet virksomheden. Ingen automatisk betaling.'));
+ const date=value=>value?new Date(value*1000).toLocaleDateString('da-DK'):'Afventer aktivering';
+ table(box,['Virksomhed / CVR','Kontakt','Velkomstmail','Prøveperiode udløber','Opfølgning'],signups.map(s=>[
+ s.name+' · '+s.cvr,s.email,({sent:'Accepteret af mailtjenesten',uncertain:'Levering skal undersøges',pending:'Afventer afsendelse',preview:'Lokal test'})[s.delivery]||s.delivery,date(s.trial_ends_at),
+ s.contacted_at?'Kontaktet '+date(s.contacted_at):s.contact_due_at?actions(el('span',(s.contact_due_at*1000<=Date.now()?'Kontakt nu · ':'Kontakt senest ')+date(s.contact_due_at)),button('Markér kontaktet',async()=>{await api('/settings/signups','POST',{companyId:s.company_id});await portalSettings();})):el('span','Afventer aktivering')
+ ]));content.append(box);
+}
 async function portalSettings() {
   clear();
   $('#new-company').hidden = true;
@@ -574,6 +583,14 @@ async function portalSettings() {
   );
   const users = (await api('/settings/admins')).users;
   content.replaceChildren();
+  const welcome=await api('/settings/welcome');
+  const welcomeBox=panel('Velkomstmail til nye virksomheder');
+  welcomeBox.append(el('p','Sendes ved tilmelding. Brug {{name}}, {{company}} og {{link}}. Linket skal være med. Ændringer gælder fremtidige mails.'),el('strong',welcome.subject),el('pre',welcome.body,'welcome-preview'),button('Redigér velkomstmail',()=>edit('Velkomstmail',[
+    {name:'subject',label:'Emne',max:160,value:welcome.subject},
+    {name:'body',label:'Mailtekst',type:'textarea',max:6000,value:welcome.body}
+  ],async data=>{await api('/settings/welcome','PUT',{...data,version:welcome.version});await portalSettings();})));
+  content.append(welcomeBox);
+  await signupPanel();
   const box = panel(
     'Portaladministratorer',
     button('Opret portaladministrator', () =>

@@ -18,7 +18,8 @@
     "PLATFORM_EXTERNAL_WRITES": "blocked",
     "PLATFORM_CUSTOMER_EMAIL": "blocked",
     "PLATFORM_INVITATION_MODE": "preview",
-    "PLATFORM_CUSTOMER_LOGIN": "enabled"
+    "PLATFORM_CUSTOMER_LOGIN": "enabled",
+    "PLATFORM_SIGNUP": "enabled"
   },
   "d1_databases": [
     {
