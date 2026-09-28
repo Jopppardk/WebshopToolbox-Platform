@@ -134,3 +134,5 @@ Denne forbindelse leverer en XML-fil via et feedlink. WebshopToolbox skal ikke h
 - Guideindhold ændrer ingen credentials, forbindelser, bogføring eller indberetninger. Der er ikke foretaget leverandørlogin, oprettet nøgler eller afsendt testmail.
 - Dinero er en udestående produktbegrænsning: den nuværende personlige credentialmodel er ikke den kommercielle OAuth2-model, leverandøren foreskriver. Kundevejledningen viser dette før trinene. Kommerciel Visma Connect-tilslutning er ikke implementeret af denne ændring.
 - Tier 1-typecheck bestået. Bygning og samlet CI/udgivelse koordineres med runtime-opgaven; endnu ikke sat i drift ved oprettelsen af dette dokument.
+
+Lokal visningskontrol: guideknapper og dialoger til Shopify/Dinero er afprøvet uden kundedata. Automatisk fokus er rettet til dialogens overskrift, så lange guides åbner ved trin 1; Escape lukker og returnerer fokus. Typecheck bestået efter rettelsen; klientbuild bestået før fokusrettelsen. Samlet CI afventer.
