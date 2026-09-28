@@ -1,11 +1,13 @@
 'use client';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
+import {useCapabilities} from '@/platform/capabilities';
 import {useState} from 'react';
 import {Button} from '@/components/ui/button';
 import {Checkbox} from '@/components/ui/checkbox';
 import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from '@/components/ui/dialog';
 type Result={version?:string;phase?:string;guid?:string;reference?:string;organizationId?:string;message?:string};
 export function ManualBookingAction({kind,externalId,onDone}:{kind:'sale'|'payout'|'refund'|'flatpay';externalId:string;onDone:()=>void}){
+ const capabilities=useCapabilities();
  const[open,setOpen]=useState(false),[busy,setBusy]=useState(false),[confirmed,setConfirmed]=useState(false),[result,setResult]=useState<Result|null>(null),[error,setError]=useState(''),[done,setDone]=useState(false);
  async function request(action:'inspect'|'retry'){
   setBusy(true);setError('');
@@ -17,7 +19,7 @@ export function ManualBookingAction({kind,externalId,onDone}:{kind:'sale'|'payou
   }catch(e){setError(e instanceof Error?e.message:'Handlingen kunne ikke gennemføres.');if(action==='retry'){setResult(null);setConfirmed(false);onDone();}}
   finally{setBusy(false);}
  }
- return <><Button disabled title="Bogføring er blokeret i dev" size="sm" variant="outline" onClick={()=>{setOpen(true);setResult(null);setConfirmed(false);setDone(false);void request('inspect');}}>Bogfør manuelt</Button>
+ return <><Button disabled={!capabilities.bookkeeping} title={capabilities.bookkeeping?undefined:"Bogfoering er blokeret i testmiljoeet"} size="sm" variant="outline" onClick={()=>{setOpen(true);setResult(null);setConfirmed(false);setDone(false);void request('inspect');}}>Bogfør manuelt</Button>
  <Dialog open={open} onOpenChange={v=>{if(!busy)setOpen(v);}}><DialogContent showCloseButton={!busy} className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
  <DialogHeader><DialogTitle>Manuel bogføring</DialogTitle><DialogDescription>Kontrollér posten i Dinero før et nyt forsøg. Et eksisterende bilag kontrolleres og genbruges. Behandlingen følger valget om kladde eller bogføring under Indstillinger.</DialogDescription></DialogHeader>
  <p className="break-all text-xs text-muted-foreground">{externalId}</p>

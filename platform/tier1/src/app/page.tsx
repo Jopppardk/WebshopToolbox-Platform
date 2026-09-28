@@ -1,4 +1,5 @@
 'use client';
+import {useCapabilities} from '@/platform/capabilities';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
 import { ProviderLedger } from '@/components/provider-ledger';
 import {IntegrationStartDate} from '@/components/integration-start-date';
@@ -567,6 +568,7 @@ function OrderRow({ order, onBooked }: { order: OrderView; onBooked: () => void 
 }
 
 function Invoices({ orders, onGenerated, onSync, syncing, pagination }: { pagination: React.ReactNode; orders: OrderView[]; onGenerated: (count: number) => void; onSync: () => Promise<void>; syncing: boolean }) {
+  const capabilities=useCapabilities();
   const [statuses, setStatuses] = useState<Record<string, string>>({});
   const [pdfVersions, setPdfVersions] = useState<Record<string, string>>({});
   const [emailing, setEmailing] = useState<Record<string, boolean>>({});
@@ -718,7 +720,7 @@ function Invoices({ orders, onGenerated, onSync, syncing, pagination }: { pagina
                   </TableCell>
                   <TableCell className="pr-5 text-right">
                     {status === 'Genereret' ? (
-                      <div className="flex flex-wrap justify-end gap-1"><a className={buttonVariants({ variant: 'outline', size: 'sm' })} href={tier1Url(`/api/invoices/pdf?externalId=${encodeURIComponent(order.externalId || '')}&v=${encodeURIComponent(pdfVersions[order.externalId || ''] || 'legacy')}`)} target="_blank" rel="noreferrer"><FileText />PDF</a><Button variant="outline" size="sm" disabled title="Kundemail er blokeret i dev" onClick={() => sendInvoice(order)}><Mail />{emailing[order.externalId || ''] ? 'Sender…' : 'Send til kunde'}</Button><Button variant="outline" size="sm" disabled title="Eksisterende bilag bevares uændret i dev" onClick={() => generate(order, true)}><RefreshCw />Regenerér</Button></div>
+                      <div className="flex flex-wrap justify-end gap-1"><a className={buttonVariants({ variant: 'outline', size: 'sm' })} href={tier1Url(`/api/invoices/pdf?externalId=${encodeURIComponent(order.externalId || '')}&v=${encodeURIComponent(pdfVersions[order.externalId || ''] || 'legacy')}`)} target="_blank" rel="noreferrer"><FileText />PDF</a><Button variant="outline" size="sm" disabled={!capabilities.customerEmail || emailing[order.externalId || ""]} title={capabilities.customerEmail?undefined:"Kundemail er blokeret i testmiljoeet"} onClick={() => sendInvoice(order)}><Mail />{emailing[order.externalId || ''] ? 'Sender…' : 'Send til kunde'}</Button><Button variant="outline" size="sm" disabled title="Eksisterende bilag bevares uændret i dev" onClick={() => generate(order, true)}><RefreshCw />Regenerér</Button></div>
                     ) : order.shipped === 'Annulleret' ? null : (
                       <div className="flex justify-end gap-1"><Button
                         variant="outline"
@@ -765,6 +767,7 @@ function Settings({
   onConnectionsChanged: () => Promise<void>;
   onErrorCountChange: (count: number) => void;
 }) {
+  const capabilities=useCapabilities();
   const [chart, setChart] = useState<
     Array<{ number: string; name: string; vatCode?: string }>
   >([]);
@@ -940,7 +943,7 @@ function Settings({
         <div className="flex flex-col justify-between gap-4 border-b p-5 sm:flex-row sm:items-center"><div><p className="text-sm font-semibold">Synkroniseringsinterval</p><p className="mt-1 text-xs text-muted-foreground">Vælg interval og tryk Gem indstillinger. Kørsler starter på hele minutter; næste kørsel venter, hvis en tidligere stadig arbejder.</p></div><label className="w-full sm:w-52"><span className="mb-2 block text-xs">{savedIntervalMinutes === undefined ? 'Aktivt interval hentes…' : `Gemt interval: ${savedIntervalMinutes} min.`}{savedIntervalMinutes !== undefined && savedIntervalMinutes !== syncIntervalMinutes && <strong className="mt-1 block text-amber-700">Ændringen er ikke gemt endnu</strong>}</span><span className="sr-only">Synkroniseringsinterval</span><NativeSelect className="w-full" value={String(syncIntervalMinutes)} onChange={event => setSyncIntervalMinutes(Number(event.target.value))}>{syncIntervals.map(minutes => <NativeSelectOption key={minutes} value={String(minutes)}>{minutes === 1 ? 'Hvert minut' : `Hvert ${minutes}. minut`}</NativeSelectOption>)}</NativeSelect></label></div>
         <div className="flex items-center justify-between border-b p-5">
           <div><p className="text-sm font-semibold">Upload bilag til regnskabsprogram</p><p className="mt-1 text-xs text-muted-foreground">Vedhæft automatisk faktura eller dokumentation til posteringen i Dinero.</p></div>
-          <Switch disabled checked={false && automation.attachments} onCheckedChange={(value) => toggleAutomation('attachments', value)} aria-label="Upload bilag til regnskabsprogram" />
+          <Switch disabled={!capabilities.bookkeeping} checked={automation.attachments} onCheckedChange={(value) => toggleAutomation('attachments', value)} aria-label="Upload bilag til regnskabsprogram" />
         </div>
         <div className="p-5"><p className="mb-4 text-sm font-semibold">Automatiske moduler</p><div className="grid gap-3 sm:grid-cols-2">
           {[
@@ -960,7 +963,7 @@ function Settings({
         <section className="mb-8 overflow-hidden rounded-2xl border bg-white">
           <div className="flex items-center justify-between gap-4 border-b p-5">
             <div><h2 className="text-lg font-semibold">2. Mailtekst</h2><p className="mt-1 text-sm text-muted-foreground">Tilpas emne og besked til kunden. Automatisk kundemail er fortsat deaktiveret.</p></div>
-            <Switch disabled checked={false && automation.invoiceEmails} onCheckedChange={(value) => toggleAutomation('invoiceEmails', value)} aria-label="Send faktura automatisk til kunden" />
+            <Switch disabled={!capabilities.customerEmail} checked={automation.invoiceEmails} onCheckedChange={(value) => toggleAutomation('invoiceEmails', value)} aria-label="Send faktura automatisk til kunden" />
           </div>
           <div className="grid gap-4 p-5">
             <label><span className="text-xs font-medium text-muted-foreground">Emne</span><Input className="mt-1.5" value={invoiceEmail.subject} onChange={event => setInvoiceEmail(current => ({ ...current, subject: event.target.value }))} /></label>

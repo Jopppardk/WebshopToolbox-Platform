@@ -3,8 +3,8 @@ import { HttpError, type PlatformEnv } from './types';
 export function assertTestRuntime(env: PlatformEnv) {
   if (
     !['local-test', 'remote-test', 'production'].includes(env.PLATFORM_ENV) ||
-    env.PLATFORM_EXTERNAL_WRITES !== 'blocked' ||
-    env.PLATFORM_CUSTOMER_EMAIL !== 'blocked'
+    !(env.PLATFORM_ENV==='production'?['blocked','enabled']:['blocked']).includes(env.PLATFORM_EXTERNAL_WRITES) ||
+    !(env.PLATFORM_ENV==='production'?['blocked','enabled']:['blocked']).includes(env.PLATFORM_CUSTOMER_EMAIL)
   ) {
     throw new HttpError(503, 'Platformens sikkerhedsindstillinger mangler.');
   }

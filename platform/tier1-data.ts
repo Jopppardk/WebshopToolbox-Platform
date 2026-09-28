@@ -1,3 +1,6 @@
+import {handleProductionSale} from './production-sales';
+import {handleProductionOther} from './production-proposals';
+import {productionWrites} from './production-policy';
 import { bookingStatuses } from './booking-onboarding';
 import { bookingStatusLabel } from './tier1/src/lib/booking-status';
 import {handleMail} from './mail';
@@ -22,10 +25,18 @@ function minor(amount:string,currency:string){const digits=new Intl.NumberFormat
 function pageNumber(value:string|null,fallback:number,max=100000){const n=value===null?fallback:Number(value);if(!Number.isSafeInteger(n)||n<0||n>max)throw new HttpError(400,'Ugyldigt sidetal.');return n;}
 export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string,path:string):Promise<Response|null>{
  const db=env.PLATFORM_DB,url=new URL(request.url),get=request.method==='GET';
+ if(path==='/runtime'&&get)return reply({production:env.PLATFORM_ENV==='production',bookkeeping:productionWrites(env),customerEmail:env.PLATFORM_ENV==='production'&&env.PLATFORM_CUSTOMER_EMAIL==='enabled'});
+ if(path==='/bookkeeping/manual'&&!get&&productionWrites(env)){
+  const b=await jsonBody(request);const next=forwarded(request,b);
+  return b.kind==='sale'?handleProductionSale(next,env,actor,company,shop):handleProductionOther(next,env,actor,company,shop,String(b.kind));
+ }
+ if(path==='/invoices/email'&&!get&&env.PLATFORM_ENV==='production'&&env.PLATFORM_CUSTOMER_EMAIL==='enabled'){
+  const b=await jsonBody(request);return handleInvoices(forwarded(request,{webshopId:shop,externalId:b.externalId}),env,actor,company,'send');
+ }
  const blocked=['/bookkeeping/manual','/sales/transfer','/refunds/transfer','/payouts/transfer','/flatpay/draft','/flatpay/production','/invoices/email'];
- if(blocked.includes(path)&&!get)throw new HttpError(403,'Bogføring, eksterne ændringer og kundemail er blokeret i dev. Du kan hente og kontrollere data.');
+ if(blocked.includes(path)&&!get)throw new HttpError(403,'Denne overfoersel er ikke tilgaengelig her. Brug Bogfoer manuelt paa posten i produktionsportalen.');
  const runs=async()=> (await db.prepare('SELECT * FROM operation_runs WHERE company_id=? AND webshop_id=? ORDER BY started_at DESC,id DESC LIMIT 1000').bind(company,shop).all<any>()).results;
- if(path==='/admin/sync-status'&&get){const row=(await runs())[0];return reply({automatic:false,intervalMinutes:5,serverNow:Date.now(),status:row?.status==='success'?'succeeded':row?.status||'unknown',startedAt:row?.started_at||null,finishedAt:row?.finished_at||null,blockedUntil:null});}
+ if(path==='/admin/sync-status'&&get){const row=(await runs())[0];return reply({automatic:productionWrites(env),intervalMinutes:5,serverNow:Date.now(),status:row?.status==='success'?'succeeded':row?.status||'unknown',startedAt:row?.started_at||null,finishedAt:row?.finished_at||null,blockedUntil:null});}
  if(path==='/admin/insights'&&get){
   const list=(await runs()).map(r=>({...r,job_key:r.module,job_name:r.module,status:r.status==='success'?'succeeded':r.status,duration_ms:r.finished_at?Date.parse(r.finished_at)-Date.parse(r.started_at):null}));
   const status=url.searchParams.get('status'),filtered=status?list.filter(r=>r.status===status):list,p=Math.max(1,pageNumber(url.searchParams.get('page'),1));
@@ -112,6 +123,8 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   const receipt=await db.prepare('SELECT r.* FROM accounting_reconciliations r JOIN accounting_connections c ON c.company_id=r.company_id AND c.organization_id=r.organization_id WHERE r.company_id=? AND r.webshop_id=? AND r.provider=? AND r.module=? AND r.external_id=?').bind(company,shop,provider==='flatpay'||provider==='viabill'?provider:'shopify',path==='/sales/log'?'orders':provider==='flatpay'?'payments':provider==='viabill'?'payout':'payouts',id).first<any>();
   const events=[{id:'import',at:row.imported_at.replace(' ','T')+'Z',title:'Seneste datahentning',detail:'Ingen bogføring udført ved hentningen.'}];
   if(receipt)events.push({id:'reconciliation',at:receipt.created_at.replace(' ','T')+'Z',title:receipt.voucher_status==='Booked'?'Eksisterende bogføring afstemt':'Eksisterende kladde afstemt',detail:`Dinero-bilag ${receipt.voucher_number||receipt.voucher_guid} i organisation ${receipt.organization_id}. ${receipt.source_json===row.payload_json?'Kunden har bekræftet sammenhængen.':'Posten er ændret efter afstemningen og kræver kontrol. Kvitteringen er bevaret.'}`});
+  const live=await db.prepare('SELECT r.* FROM production_receipts r JOIN accounting_connections c ON c.company_id=r.company_id AND c.organization_id=r.destination WHERE r.company_id=? AND r.webshop_id=? AND r.external_id=? AND r.provider=? AND r.module=?').bind(company,shop,id,provider==='flatpay'||provider==='viabill'?provider:'shopify',path==='/sales/log'?'orders':provider==='flatpay'?'payments':provider==='viabill'?'payout':'payouts').first<any>();
+  if(live){const p=JSON.parse(live.payload_json);events.push({id:'production',at:live.updated_at.replace(' ','T')+'Z',title:bookingStatusLabel(live.phase),detail:`Dinero: ${p.guid||'Afventer sikkert bilags-ID'}. ${p.voucherNumber||''}`});}
   return reply({name:JSON.parse(row.payload_json).name||id,events,details:[{label:'Eksternt ID',value:id}],nextOffset:null,legacy:true});
  }
  if(path==='/documents'){
