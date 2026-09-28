@@ -69,3 +69,15 @@ Produktionsmoduler følger kundens gemte valg, også når den globale runtime å
 - Aktuelle PROD-valg er salg/refunderinger/udbetalinger=true; automatisk kundemail,
   lagerkost og bilagsupload=false. Kundens valg bevares; ingen præferenceændring udført.
 - Fuld GitHub-CI for 3d15d73 bestået; sidste status-/tekstjustering afventer endelig CI.
+
+## Sidste driftsafklaring
+
+Den manglende Shopify-mellemregningskonto er efter brugerens udtrykkelige godkendelse
+sat til den eksisterende aktive `55100 - Shopify Payments`; auditpost gemt.
+Andre kundepræferencer er uændrede. Fravalg af bilagsupload håndhæves for både salg,
+Shopify-udbetalinger og Flatpay. Lokal PDF og kvittering bevares også uden upload.
+
+Kommerciel Dinero-tilslutning er en særskilt udestående opgave: nuværende adapter
+bruger personlig API-nøgle. Dinero kræver OAuth2 til en markedsført/solgt integration:
+https://developer.dinero.dk/news/personal-integration/ (kontrolleret 28. september 2026).
+Teknisk produktionsaktivering er ikke dokumentation for kommerciel Dinero-onboarding.

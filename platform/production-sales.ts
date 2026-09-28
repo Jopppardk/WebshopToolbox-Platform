@@ -23,5 +23,5 @@ async function prepareSale({env,company,shop,id,credentials,mapping,prefs}:Booki
  const pdf=await db.prepare("SELECT r2_key,fingerprint FROM platform_invoices WHERE company_id=? AND webshop_id=? AND external_id=? AND status='generated'").bind(company,shop,id).first<any>();
  if(!pdf||pdf.fingerprint!==fingerprint)throw new HttpError(409,'Generér en faktura-PDF, der svarer til den aktuelle ordre, først.');
  const file=await env.PLATFORM_DOCUMENTS.get(pdf.r2_key);if(!file||file.size>6000000)throw new HttpError(409,'Faktura-PDF mangler eller er for stor.');
- return {snapshot:{...proposal,fingerprint,pdfKey:pdf.r2_key,pdfEtag:file.etag,book,number:invoice.number},file};
+ return {snapshot:{...proposal,fingerprint,pdfKey:pdf.r2_key,pdfEtag:file.etag,book,attach:automation?.attachments===true,number:invoice.number},file:automation?.attachments===true?file:undefined};
 }
