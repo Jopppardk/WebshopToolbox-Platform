@@ -1,8 +1,9 @@
 import { requireCompany } from './auth';
 import { seal,unseal } from './connections';
-import { eiRequest,eiReports,isSubmitted,type EIContext,type EISchema } from './emballage-read';
+import { eiConnectionError,eiRequest,eiReports,isSubmitted,type EIContext,type EISchema } from './emballage-read';
 import { jsonBody } from './invitations';
 import { handlePackaging } from './packaging';
+import { syncPackaging } from './packaging-source';
 import { dataCutoff,dataStartDate } from './tier1-history';
 import { HttpError,reply,type Actor,type PlatformEnv } from './types';
 
@@ -22,7 +23,7 @@ export async function handleTier1Emballage(request:Request,env:PlatformEnv,actor
   }else if(b.action==='connect'){
    if(typeof b.apiKey!=='string'||!b.apiKey.trim()||b.apiKey.length>2048)throw new HttpError(400,'Angiv en gyldig API-nøgle.');
    key=b.apiKey.trim();let verified:EIContext;
-   try{verified=(await eiRequest<EIContext>(key,'/me')).data;}catch{throw new HttpError(409,'Emballage Indberetning kunne ikke godkende nøglen. Tidligere oplysninger er bevaret.');}
+   try{verified=(await eiRequest<EIContext>(key,'/me')).data;}catch(error){throw new HttpError(409,eiConnectionError(error));}
    if(!Number.isSafeInteger(verified.organisation?.id)||typeof verified.organisation.name!=='string'||typeof verified.api_key?.is_test!=='boolean'||!Array.isArray(verified.responsibilities))throw new HttpError(409,'Tjenesten returnerede ufuldstændige virksomhedsoplysninger.');
    const identity=String(verified.organisation.id);
    if(saved&&saved.identity!==identity)throw new HttpError(409,'Forbindelsen kan ikke skiftes til en anden organisation.');
@@ -40,7 +41,14 @@ export async function handleTier1Emballage(request:Request,env:PlatformEnv,actor
     if(!mapping||!schema.fields.some(f=>f.name===mapping.household)||!schema.fields.some(f=>f.name===mapping.commercial)||mapping.household===mapping.commercial)throw new HttpError(400,'Vælg to forskellige felter fra rapportens formular.');
     config.mappings[String(schema.form_version_id)]={household:mapping.household,commercial:mapping.commercial};
    }
+   const firstConfiguration=!saved.config_json||!JSON.parse(saved.config_json).startDate;
+   let initialHistory:null|{count:number;stored:number}=null;
+   if(firstConfiguration){
+    try{initialHistory=await syncPackaging(env,company,shop,config.startDate,new Date().toISOString().slice(0,10));}
+    catch(e){if(e instanceof HttpError)throw e;throw new HttpError(409,'Den tidligere emballagehistorik kunne ikke hentes komplet. Opsætningen er ikke gemt; kontrollér Shopify-adgangen og prøv igen.');}
+   }
    const update=await db.prepare('UPDATE emballage_connections SET config_json=?,revision=revision+1 WHERE company_id=? AND webshop_id=? AND revision=?').bind(JSON.stringify(config),company,shop,saved.revision).run();if(!update.meta.changes)throw new HttpError(409,'Opsætningen er ændret. Genindlæs.');
+   if(initialHistory)return reply({ok:true,initialHistory});
   }else throw new HttpError(400,'Ugyldig handling.');
  }
  const reports=key?await eiReports(key):[];

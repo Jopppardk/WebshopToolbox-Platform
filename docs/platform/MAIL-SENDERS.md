@@ -13,12 +13,13 @@ Indtil en rigtig testmail fra egen adresse accepteres af Cloudflare, bruges stan
 
 ## Sikkerhed og afgrænsning
 - Virksomhedsadgang kontrolleres på serveren; kun virksomhedens administrator eller Tier 0 kan ændre og teste. Impersonering kan ikke ændre mailopsætning eller sende testmail.
-- Testmail kan kun sendes til den autentificerede brugers egen, på forhånd tilladte loginadresse. Dev tillader rj@itm8.com og rene.jeppesen@live.dk; ingen vilkårlig modtager, emne, tekst eller vedhæftning fra klienten.
-- Særskilt PLATFORM_MAIL_TEST-binding til standardafsenderen, med samme modtagerbegrænsning som serveren. Invitationsbindingen bevares separat.
-- Egen Cloudflare-konto bruger et fast HTTPS REST-endpoint med valideret Account ID, timeout og uden redirects. Samme testmodtagerbegrænsning håndhæves før dette kald.
+- Den rene afsendertest kan kun sendes til den autentificerede brugers egen, på forhånd tilladte loginadresse. Fakturasidens eksplicitte eksempelfaktura kan sendes til enhver syntaktisk gyldig mailadresse, men kun af en autentificeret virksomhedsadministrator og aldrig under supportimpersonering.
+- Særskilt PLATFORM_MAIL_TEST-binding til standardafsenderen tillader destinationen, mens serveren fastholder forskellen mellem den allowlistede afsendertest og den valgfrie modtager til den faste eksempelfaktura. Invitationsbindingen bevares separat.
+- Egen Cloudflare-konto bruger et fast HTTPS REST-endpoint med valideret Account ID, timeout og uden redirects. Den samme servervalidering af testtypen og modtageren sker før dette kald.
+- Modtagerfeltet kan ikke styre emne, tekst eller vedhæftning. Eksempelfakturaen genereres på serveren med fiktive data, og virksomhedens 60-sekunders cooldown samt holdbare request-ID beskytter fortsat mod gentagen afsendelse.
 - Afsendelsesforsøg har en holdbar company_id/request_id-nøgle og et atomisk cooldown på 60 sekunder pr. virksomhed. Genafspilning af samme request sender aldrig igen. Usikkert resultat bevarer låsen og vises som uafklaret. Ny test kræver en bevidst ny handling.
 - Lokal test viser kun mailen, sender aldrig og kan ikke godkende egen afsender.
-- PLATFORM_CUSTOMER_EMAIL og bogføring er fortsat blocked. Testmailen indeholder ingen faktura. Dette er ikke en aktivering af almindelige kundemails.
+- PLATFORM_CUSTOMER_EMAIL og bogføring er fortsat blocked. Den rene afsendertest indeholder ingen faktura; eksempelfakturatesten vedhæfter en demo-PDF. Dette er ikke en aktivering af almindelige kundemails.
 
 ## Validering og drift
 Migration 0008_company_mail.sql er anvendt lokalt og på test-D1 efter backup i den ignorerede .wrangler/before-company-mail.sql. Ingen produktionsressourcer eller main er ændret. 298 tests, build, typecheck og begge Worker-dry-runs er bestået. Efter præcisering af Cloudflare REST-formatet (address/reply_to kontra Workers email/replyTo) er 37 platformtests og typecheck bestået igen.

@@ -59,6 +59,15 @@ export class EIError extends Error {
     );
   }
 }
+export function eiConnectionError(error: unknown) {
+  if (!(error instanceof EIError))
+    return 'Emballage Indberetning kunne ikke kontaktes. Prøv igen senere. Tidligere oplysninger er bevaret.';
+  const requestId = error.requestId?.match(/^[A-Za-z0-9_-]{1,100}$/)?.[0];
+  const request = requestId ? ` Referencen er ${requestId}.` : '';
+  if (error.status === 401 || error.status === 403)
+    return `Emballage Indberetning kunne ikke godkende nøglen. ${error.message}${request} Tidligere oplysninger er bevaret.`;
+  return `Emballage Indberetning kunne ikke kontrollere nøglen. ${error.message}${request} Tidligere oplysninger er bevaret.`;
+}
 export async function eiRequest<T>(
   key: string,
   path: string,

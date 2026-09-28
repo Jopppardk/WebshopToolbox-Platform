@@ -58,10 +58,6 @@
       "name": "PLATFORM_MAIL_TEST",
       "allowed_sender_addresses": [
         "faktura@webshoptoolbox.dk"
-      ],
-      "allowed_destination_addresses": [
-        "rj@itm8.com",
-        "rene.jeppesen@live.dk"
       ]
     },
     {

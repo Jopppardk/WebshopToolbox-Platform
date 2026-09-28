@@ -35,7 +35,7 @@ async function info(env:PlatformEnv,company:string,actor:Actor){
 function audit(env:PlatformEnv,company:string,actor:Actor,action:string,details:Record<string,unknown>){
  return env.PLATFORM_DB.prepare('INSERT INTO audit_events(id,company_id,actor_id,action,resource_id,details_json) VALUES(?,?,?,?,?,?)').bind(crypto.randomUUID(),company,actor.id,action,company,JSON.stringify(details));
 }
-export async function handleMail(request:Request,env:PlatformEnv,actor:Actor,company:string,action?:string,invoice?:{subject:string;text:string;attachment:{content:ArrayBuffer;filename:string;type:string;disposition:"attachment"}}){
+export async function handleMail(request:Request,env:PlatformEnv,actor:Actor,company:string,action?:string,invoice?:{subject:string;text:string;allowAnyRecipient?:boolean;attachment:{content:ArrayBuffer;filename:string;type:string;disposition:"attachment"}}){
  await requireCompany(env.PLATFORM_DB,actor,company,request.method!=='GET');
  if(request.method==='GET'&&!action)return reply(await info(env,company,actor));
  if(actor.support)throw new HttpError(403,'Afslut impersonering før mailopsætning eller testmail.');
@@ -63,13 +63,16 @@ export async function handleMail(request:Request,env:PlatformEnv,actor:Actor,com
   return reply(await info(env,company,actor));
  }
  if(request.method!=='POST'||action!=='test')throw new HttpError(404,'Mailfunktionen findes ikke.');
- // Test mail only, addressed to the authenticated administrator. Never accept a recipient or message from the browser.
- if(input.recipient!==undefined||input.to!==undefined||input.subject!==undefined||input.text!==undefined)throw new HttpError(400,'Testmail sendes kun til din egen loginadresse.');
+ // Sender checks stay self-only. The invoice demo may use an explicit, validated recipient,
+ // but its subject, text and attachment are still generated exclusively on the server.
+ const allowAnyRecipient=invoice?.allowAnyRecipient===true;
+ if((!allowAnyRecipient&&input.recipient!==undefined)||input.to!==undefined||input.subject!==undefined||input.text!==undefined)throw new HttpError(400,'Testmailens indhold eller modtager kan ikke ændres her.');
  const id=typeof input.requestId==='string'?input.requestId:'';
  if(!/^[a-f0-9-]{36}$/.test(id))throw new HttpError(400,'Testmail mangler et gyldigt forespørgsels-ID.');
  if(!['standard','custom'].includes(String(input.mode)))throw new HttpError(400,'Vælg afsender til testmail.');
- const recipient=mailAddress(actor.email),local=env.PLATFORM_ENV==='local-test';
- if(!local && (!(env.PLATFORM_MAIL_TEST_RECIPIENTS||'').split(',').includes(recipient)||!env.PLATFORM_MAIL_TEST))throw new HttpError(403,'Denne adresse er ikke godkendt som testmodtager i dev.');
+ const recipient=mailAddress(allowAnyRecipient?input.recipient:actor.email),local=env.PLATFORM_ENV==='local-test';
+ const selfAllowed=(env.PLATFORM_MAIL_TEST_RECIPIENTS||'').split(',').includes(recipient);
+ if(!local && (!env.PLATFORM_MAIL_TEST||(!allowAnyRecipient&&!selfAllowed)))throw new HttpError(403,'Denne adresse er ikke godkendt til afsendertest.');
  const previous=await env.PLATFORM_DB.prepare('SELECT actor_id,status,recipient,sender FROM mail_test_deliveries WHERE company_id=? AND request_id=?').bind(company,id).first<{actor_id:string;status:string;recipient:string;sender:string}>();
  if(previous){if(previous.actor_id!==actor.id)throw new HttpError(409,'Testmailen tilhører en anden session.');return reply(previous);}
  const settings=await row(env,company),custom=input.mode==='custom';

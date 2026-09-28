@@ -126,3 +126,17 @@ Dev-status opdateret: Eget kundelogin er aktiveret på https://dev.webshoptoolbo
 
 
 27. september 2026: Generel kundestyret bogføringsopstart med separate datoer og manuel verificering af eksisterende Dinero-bilag er udgivet på dev og portal. Ingen kundehistorik hentet. Se [BOOKING-ONBOARDING.md](BOOKING-ONBOARDING.md) og seneste HANDOVER for begrænsninger og udgivelsesbevis.
+
+
+## Cloud-opgaver samlet 28. september 2026
+
+> 27. september 2026 – Fakturasidens eksempelfaktura er klargjort til en valgfri gyldig mailadresse i både dev og produktion. Serveren genererer fortsat emne, tekst og demo-PDF, kræver virksomhedsadgang, afviser supportimpersonering og bevarer idempotens/cooldown. Den separate afsendertest er fortsat begrænset til brugerens allowlistede loginadresse. Testet lokalt, men endnu ikke udgivet.
+
+> 27. september 2026 – Fejlvisningen ved kontrol af Emballage Indberetning-nøgler er rettet lokalt. Kun HTTP 401/403 beskrives nu som en afvist nøgle; netværks-, rate limit- og tjenestefejl vises som kontrolfejl med den sikre request-reference, når leverandøren sender den. Tidligere krypterede oplysninger bevares fortsat ved alle fejl. Nøgleeksemplet i klienten viser formatet uden vildledende mellemrum. Regressionstest er tilføjet. Ændringen er ikke udgivet.
+
+> 27. september 2026 – Første konfiguration af Emballage Indberetning henter nu automatisk den valgte historik fra den adgangskontrollerede Shopify-webshop, før opsætningen gemmes. En ufuldstændig import afviser opsætningen, så en tom historik ikke kan ligne en færdig konfiguration; senere ændringer genstarter ikke førstegangsimporten. Regressionen kontrollerer webshopisolering og kun én automatisk import. 356/356 tests og Tier 1-typecheck er bestået. Implementeret og lokalt testet, men ikke sat i drift.
+
+> 27. september 2026 – Frigivelsesvurdering: **no-go til almindelig frigivelse for andre virksomheder/webshops**. 355/355 lokale tests, typechecks, builds og konfigurationskontroller består, men flerwebshop-pilot med rigtige testkonti, komplet login/onboarding og autentificeret onlinekontrol mangler. Bogføring, normal kundemail og cron er fortsat blokeret; lint er ikke grøn, og aktuel GitHub-/auditstatus kunne ikke verificeres fra miljøet. Se [RELEASE-READINESS-2026-09-27.md](RELEASE-READINESS-2026-09-27.md).
+
+
+Ovenstående fem Cloud-leverancer er samlet på platform/cloud-release-20260928. Lokale og GitHub-kontroller samt udgivelse af den samlede version afventer. Ingen migrationer, kundedata eller Sablen-ændringer. Bogføring og almindelig kundemail forbliver blokeret.

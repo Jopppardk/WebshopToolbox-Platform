@@ -126,7 +126,6 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   if(path==='/invoices/pdf'){const next=new URL(request.url);next.searchParams.set('webshopId',shop);return handleInvoices(new Request(next,request),env,actor,company,'pdf');}
   if(path==='/invoices/email-test'){
    if(request.method!=='POST')throw new HttpError(405,'Brug Send eksempelfaktura som test.');
-   if(b.recipient!==actor.email)throw new HttpError(400,'Testmail kan kun sendes til din egen godkendte loginadresse.');
    const response=await handleInvoices(forwarded(request,{webshopId:shop,recipient:b.recipient,requestId:b.requestId}),env,actor,company,'example-test');if(!response.ok)return response;const result=await response.json() as any;
    if(result.status!=='accepted')throw new HttpError(409,result.status==='preview'?'Lokal test: mailen er kun forhåndsvist, ikke sendt.':'Mailafsendelsen er usikker. Kontrollér status før nyt forsøg.');return reply({sent:true,recipient:result.recipient,invoiceNumber:'EKSEMPEL-001'});
   }

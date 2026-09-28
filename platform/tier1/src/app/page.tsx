@@ -20,12 +20,14 @@ import { Packaging } from '@/components/packaging';
 import { Dashboard } from '@/components/dashboard';
 import { JobInsights } from '@/components/job-insights';
 import {ProductFeeds} from '@/components/product-feeds';
+import {IntegrationRequired} from '@/components/integration-required';
 import {Rss} from 'lucide-react';
 import { Support } from '@/platform/support';
 import { CustomerIdentity, WebshopSelector } from '@/platform/workspace';
 import { vatCodeOptions } from '@/lib/vat-code-options';
 import { emptyAccounts, defaultAutomation, defaultInvoiceEmail, validateSettings, type Accounts, type Automation, type AdminSettings, type InvoiceEmailSettings } from '@/lib/admin-settings';
 import { orderPeriods, type OrderPeriod } from '@/lib/order-period';
+import {hasRequiredIntegration,integrationRequirements,type IntegrationGatedView} from '@/lib/integration-visibility';
 import { SyncStatus, useSyncStatus } from '@/components/sync-status';
 import { syncIntervals } from '@/lib/sync-schedule';
 import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -87,6 +89,20 @@ type OrderView = {
 
 export default function Home() {
   const syncState = useSyncStatus();
+  const [connections,setConnections]=useState<Set<string>|null>(null);
+  const [connectionsError,setConnectionsError]=useState('');
+  const refreshConnections=async()=>{
+    try {
+      const response=await fetch('/api/integrations',{cache:'no-store'});
+      const data=await response.json() as {integrations?:Array<{provider:string}>;error?:string};
+      if(!response.ok || !Array.isArray(data.integrations))throw new Error(data.error || 'Forbindelsesstatus kunne ikke hentes.');
+      setConnections(new Set(data.integrations.map(item=>item.provider)));
+      setConnectionsError('');
+    } catch(error) {
+      setConnectionsError(error instanceof Error?error.message:'Forbindelsesstatus kunne ikke hentes.');
+    }
+  };
+  useEffect(()=>{void refreshConnections();},[]);
   const [query, setQuery] = useState('');
   const [salesOrders, setSalesOrders] = useState<OrderView[]>([]);
   const [orderPeriod, setOrderPeriod] = useState<OrderPeriod>('all');
@@ -142,6 +158,7 @@ export default function Home() {
       order.status.toLowerCase().includes(query.toLowerCase()),
   );
   useEffect(() => {
+    if(connections===null || !connections.has('shopify') || (view!=='orders' && view!=='invoices'))return;
     const controller = new AbortController();
     setOrdersLoading(true);
     fetch(`/api/shopify/orders?offset=${orderOffset}&limit=${orderPageSize}&period=${activePeriod}`, { signal: controller.signal, cache: 'no-store' })
@@ -152,7 +169,7 @@ export default function Home() {
       .catch(error => { if (!controller.signal.aborted) setOrderError(error.message || 'Ordrer kunne ikke indlæses'); })
       .finally(() => { if (!controller.signal.aborted) setOrdersLoading(false); });
     return () => controller.abort();
-  }, [orderOffset, orderRevision, syncState.revision, view, activePeriod, orderPageSize]);
+  }, [connections, orderOffset, orderRevision, syncState.revision, view, activePeriod, orderPageSize]);
   const syncOrders = async () => {
     setSyncingOrders(true);
     try {
@@ -178,6 +195,11 @@ export default function Home() {
   const notify = (message: string) => {
     setNotice(message);
     window.setTimeout(() => setNotice(''), 2600);
+  };
+  const currentRequirement=view in integrationRequirements?integrationRequirements[view as IntegrationGatedView]:null;
+  const integrationAvailable=(target:typeof view)=>{
+    if(!(target in integrationRequirements))return true;
+    return Boolean(connections && hasRequiredIntegration(target as IntegrationGatedView,connections));
   };
   const saveSettings = async () => {
     setSettingsSaving(true); setSettingsMessage('');
@@ -321,7 +343,10 @@ export default function Home() {
           </div>
         </header>
         {view === 'dashboard' && <Dashboard onJobs={status => { setInsightFilter(status); setView('insights'); }} onIntegrations={provider => { setIntegrationTarget(provider ?? null); setSettingsTab('integrations'); setView('settings'); }}/>}
-        {view === 'orders' && (
+        {currentRequirement && connections===null && !connectionsError && <div className="mx-auto max-w-[1440px] px-5 py-16 text-center text-sm text-muted-foreground">Kontrollerer integrationer…</div>}
+        {currentRequirement && connectionsError && <div className="mx-auto max-w-[1440px] px-5 py-16 text-center"><p role="alert" className="text-sm text-red-700">{connectionsError}</p><Button className="mt-4" variant="outline" onClick={()=>void refreshConnections()}>Prøv igen</Button></div>}
+        {currentRequirement && connections && !integrationAvailable(view) && <IntegrationRequired title={currentRequirement.title} providers={currentRequirement.providers} onIntegrations={()=>{setIntegrationTarget(currentRequirement.providers.length===1&&currentRequirement.providers[0]==='shopify'?'shopify':null);setSettingsTab('integrations');setView('settings');}}/>}
+        {view === 'orders' && integrationAvailable('orders') && (
           <div
             className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9"
             id="orders"
@@ -407,20 +432,20 @@ export default function Home() {
             </section>
           </div>
         )}
-        {view === 'invoices' && (
+        {view === 'invoices' && integrationAvailable('invoices') && (
           <Invoices pagination={orderPagination} orders={salesOrders} onGenerated={(count) => notify(`${count} faktura${count === 1 ? '' : 'er'} er genereret`)} onSync={syncOrders} syncing={syncingOrders} />
         )}
-        {view === 'documents' && <Documents syncRevision={syncState.revision} />}
-        {view === 'refunds' && (
+        {view === 'documents' && integrationAvailable('documents') && <Documents syncRevision={syncState.revision} />}
+        {view === 'refunds' && integrationAvailable('refunds') && (
           <Payments syncRevision={syncState.revision} kind="refund" />
         )}
-        {view === 'payouts' && (
+        {view === 'payouts' && integrationAvailable('payouts') && (
           <ProviderLedger kind="payout" syncRevision={syncState.revision} />
         )}
-        {view === 'inventory' && <Inventory />}
-        {view === 'packaging' && <Packaging key={packagingEntry.key} initialTab={packagingEntry.tab}/>}
+        {view === 'inventory' && integrationAvailable('inventory') && <Inventory />}
+        {view === 'packaging' && integrationAvailable('packaging') && <Packaging key={packagingEntry.key} initialTab={packagingEntry.tab}/>}
         {view === 'insights' && <JobInsights initialStatus={insightFilter} />}
-        {view === 'feeds' && <ProductFeeds />}
+        {view === 'feeds' && integrationAvailable('feeds') && <ProductFeeds />}
         {view === 'support' && <Support />}
         {view === 'settings' && (
           <div>
@@ -445,7 +470,7 @@ export default function Home() {
             onSave={saveSettings}
             automation={automation} setAutomation={setAutomation} invoiceEmail={invoiceEmail} setInvoiceEmail={setInvoiceEmail} syncIntervalMinutes={syncIntervalMinutes} setSyncIntervalMinutes={setSyncIntervalMinutes}
             ready={settingsReady} saving={settingsSaving} message={settingsMessage}
-            onShopifyConnected={syncOrders}
+            onConnectionsChanged={refreshConnections}
             onErrorCountChange={setOpenErrorCount}
           />
           </div>
@@ -723,7 +748,7 @@ function Settings({
   accounts,
   setAccounts,
   onSave,
-  onShopifyConnected,
+  onConnectionsChanged,
   automation, setAutomation, invoiceEmail, setInvoiceEmail, syncIntervalMinutes, setSyncIntervalMinutes, savedIntervalMinutes, ready, saving, message, onErrorCountChange,
 }: {
   mode: 'dashboard' | 'integrations' | 'invoice-email' | 'inventory';
@@ -736,7 +761,7 @@ function Settings({
   syncIntervalMinutes: number; setSyncIntervalMinutes: React.Dispatch<React.SetStateAction<number>>;
   savedIntervalMinutes?: number;
   ready: boolean; saving: boolean; message: string;
-  onShopifyConnected: () => Promise<void>;
+  onConnectionsChanged: () => Promise<void>;
   onErrorCountChange: (count: number) => void;
 }) {
   const [chart, setChart] = useState<
@@ -811,6 +836,7 @@ function Settings({
       const data = await response.json() as { name: string; webshopId?:string; created?:boolean; error?: string };
       if (!response.ok) throw new Error(data.error);
       setConnected((current) => ({ ...current, [provider]: data.name }));
+      await onConnectionsChanged();
       void library.refresh();
       if (provider === 'shopify') setShopify((current) => ({ ...current, clientSecret: '' }));
       else setDinero((current) => ({ ...current, clientSecret: '', apiKey: '' }));
@@ -952,7 +978,7 @@ function Settings({
             <label><span className="text-xs font-medium text-muted-foreground">Emne</span><Input className="mt-1.5" value={invoiceEmail.subject} onChange={event => setInvoiceEmail(current => ({ ...current, subject: event.target.value }))} /></label>
             <label><span className="text-xs font-medium text-muted-foreground">Mailtekst</span><Textarea className="mt-1.5 min-h-40" value={invoiceEmail.body} onChange={event => setInvoiceEmail(current => ({ ...current, body: event.target.value }))} /></label>
             <p className="text-xs text-muted-foreground">Du kan bruge: {'{{kundenavn}}'}, {'{{fakturanummer}}'} og {'{{ordrenummer}}'}.</p>
-            <div className="border-t pt-5"><label className="block max-w-md"><span className="text-xs font-medium text-muted-foreground">Send test til</span><Input className="mt-1.5" type="email" autoComplete="email" value={emailTestRecipient} onChange={event => setEmailTestRecipient(event.target.value)} placeholder="navn@eksempel.dk" /></label><div className="mt-3 flex flex-wrap items-center gap-3"><Button type="button" variant="outline" disabled={emailTestState === 'sending' || !emailTestRecipient.trim()} onClick={sendInvoiceTest}><FileText />{emailTestState === 'sending' ? 'Sender test…' : 'Send eksempelfaktura som test'}</Button><span className="text-xs text-muted-foreground">Samme demo-PDF som “Se gemt eksempel”. Bruger gemt design og mailskabelon. Dev: kun til din egen godkendte loginadresse.</span></div></div>
+            <div className="border-t pt-5"><label className="block max-w-md"><span className="text-xs font-medium text-muted-foreground">Send test til</span><Input className="mt-1.5" type="email" autoComplete="email" value={emailTestRecipient} onChange={event => setEmailTestRecipient(event.target.value)} placeholder="navn@eksempel.dk" /></label><div className="mt-3 flex flex-wrap items-center gap-3"><Button type="button" variant="outline" disabled={emailTestState === 'sending' || !emailTestRecipient.trim()} onClick={sendInvoiceTest}><FileText />{emailTestState === 'sending' ? 'Sender test…' : 'Send eksempelfaktura som test'}</Button><span className="text-xs text-muted-foreground">Samme demo-PDF som “Se gemt eksempel”. Bruger gemt design og mailskabelon. Kan sendes til en valgfri gyldig mailadresse.</span></div></div>
             {emailTestMessage && <p role="status" className="rounded-xl border p-3 text-sm">{emailTestMessage}</p>}
           </div>
           <div className="flex justify-end border-t p-4"><Button className="h-10 rounded-xl px-4" onClick={onSave}><Save />{saving ? 'Gemmer…' : 'Gem indstillinger'}</Button></div>
@@ -993,9 +1019,9 @@ function Settings({
                 {provider === 'shopify' && <div className="mt-4 rounded-xl border bg-white p-4"><p className="mb-3 text-sm font-semibold">Bogføring af Shopify Payments</p><Field name="shopifyPaymentsClearing" label="Mellemregningskonto" /></div>}
           </IntegrationCard>
         ))}
-        {library.selection?.selected.includes('flatpay') && <FlatpayConnection accountField={<Field name="flatpayClearing" label="Mellemregningskonto" />} initialExpanded={expandedFlatpay} onConnected={()=>{void library.refresh();}} footer={<RemoveIntegration state={library} provider="flatpay"/>}/>}
+        {library.selection?.selected.includes('flatpay') && <FlatpayConnection accountField={<Field name="flatpayClearing" label="Mellemregningskonto" />} initialExpanded={expandedFlatpay} onConnected={()=>{void library.refresh();void onConnectionsChanged();}} footer={<RemoveIntegration state={library} provider="flatpay"/>}/>}
         {library.selection?.selected.includes('emballage') && <EmballageConnection initialExpanded={expandedEmballage} onConnected={() => { void library.refresh(); }}  footer={<RemoveIntegration state={library} provider="emballage" />}/>}
-        {library.selection?.selected.includes('viabill') && <ViaBillConnection initialExpanded={expandedViaBill} onConnected={() => { void library.refresh(); }} accountField={<Field name="viaBillClearing" label="Mellemregningskonto" />}  footer={<RemoveIntegration state={library} provider="viabill" />}/>}
+        {library.selection?.selected.includes('viabill') && <ViaBillConnection initialExpanded={expandedViaBill} onConnected={() => { void library.refresh(); void onConnectionsChanged(); }} accountField={<Field name="viaBillClearing" label="Mellemregningskonto" />}  footer={<RemoveIntegration state={library} provider="viabill" />}/>}
       </div>
       {(library.selection?.selected.includes('dinero') || Boolean(connected.dinero)) && <fieldset disabled={!ready || saving} className="min-w-0">
       <section className="rounded-2xl border bg-white">

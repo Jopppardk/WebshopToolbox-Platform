@@ -98,3 +98,19 @@ Kodecommit `47e1815bebfca0040fa040f20af2790a193506d4` er udgivet fra det separat
 Migration 0025 anvendt i begge D1-databaser efter Time Travel-bookmarks. FK-kontrol OK, begge nye tabeller tomme efter migration. Prod gav først Cloudflare 7403; read-only whoami bekræftede rigtig konto og D1-write-rettighed, d1 info bekræftede rigtig database. Nyt forsøg med samme autoriserede login lykkedes. Ingen rettigheder eller credentials ændret.
 
 Begge miljøers health/login giver 200, admin giver 302 til egen Access-destination, anonym ordre-API giver 401. Bogføring og normal kundemail fortsat blocked. Ingen historik hentet, datoer sat eller bilag afstemt for kunder. Sablen uændret. Live Dinero-afstemning og visuel browserkontrol er ikke udført; funktionens API og klient er testet/bygget med syntetiske data og CI. Afstemningen er manuel pr. bilag, ikke automatisk masseafstemning. Se BOOKING-ONBOARDING.md.
+
+
+## Cloud-opgaver samlet 28. september 2026
+
+> 27. september 2026 – Fakturasidens eksempelfaktura er klargjort til en valgfri gyldig mailadresse i både dev og produktion. Serveren genererer fortsat emne, tekst og demo-PDF, kræver virksomhedsadgang, afviser supportimpersonering og bevarer idempotens/cooldown. Den separate afsendertest er fortsat begrænset til brugerens allowlistede loginadresse. Testet lokalt, men endnu ikke udgivet.
+
+> 27. september 2026 – Lokal rettelse til Emballage Indberetning-diagnostik er implementeret: kun 401/403 klassificeres som nøgleafvisning, øvrige API-/netværksfejl beskrives korrekt, og tidligere credentials bevares. Regressionstest er tilføjet. Udgivelse og kontrol med en separat testnøgle er fortsat planlagt; ingen ekstern indberetning er udført.
+
+> 27. september 2026 – Automatisk emballagehistorik ved første opsætning er implementeret og lokalt testet: Shopify-data hentes fra valgt kvartalsstart til dags dato i den servervaliderede virksomheds-/webshopkontekst. En ufuldstændig import afviser opsætningen, senere ændringer gentager den ikke, og regressionen kontrollerer isolation mellem to webshops. 356/356 tests og Tier 1-typecheck bestået. Ikke sat i drift eller afprøvet med rigtige leverandørkonti.
+
+> 27. september 2026 – Implementeret lokalt: dataafhængige Tier 1-sider viser en fælles illustreret integrationsvejledning i stedet for tomme tabeller og starter først sidekomponenternes datahentning, når Shopify eller en relevant betalingsudbyder er forbundet. Regressionstest og Tier 1-typecheck er bestået; browserkontrol, CI og udrulning er fortsat planlagt.
+
+> 27. september 2026 – Release gate: **no-go til almindelig ekstern frigivelse**. Næste milepæl er en lukket pilot med to isolerede testwebshops og virkelige testkonti efter kriterierne i [RELEASE-READINESS-2026-09-27.md](RELEASE-READINESS-2026-09-27.md). Bogføring, normal kundemail og cron forbliver blokeret, indtil pilot, driftsbeslutning og særskilt go/no-go er bestået.
+
+
+Ovenstående fem Cloud-leverancer er samlet på platform/cloud-release-20260928. Lokale og GitHub-kontroller samt udgivelse af den samlede version afventer. Ingen migrationer, kundedata eller Sablen-ændringer. Bogføring og almindelig kundemail forbliver blokeret.
