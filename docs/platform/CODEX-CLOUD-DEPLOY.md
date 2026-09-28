@@ -81,6 +81,12 @@ node scripts/platform-release.mjs status <run-id>
 en faktisk dispatch. Scriptet kræver Node og curl og følger Cloud-miljøets HTTPS-proxy.
 Det bruger kun GitHubs API og sender tokenet til curl via stdin, ikke kommandolinjen.
 
+Ved `Ugyldigt GitHub-tokenformat`: kopiér selve tokenværdien fra GitHubs kopiknap,
+ikke instruktionstekst eller tokenets navn. Et fine-grained token begynder med
+`github_pat_`. Vis aldrig værdien i chat eller terminal. Hvis Cloud-editoren viser
+`Hemmelig værdi er påkrævet`, fjern en eventuel tom Secrets-række; `GH_TOKEN` skal
+fortsat ligge under Environment variables. Gem, og start en frisk terminal/opgave.
+
 `status` giver exitkode 2, mens kørslen venter/kører, 0 ved afsluttet success og 1 ved
 afsluttet fejl/annullering eller læsefejl. Vent og kontrollér samme run-ID; start ikke
 en ekstra deployment for at hente status. Se jobs/logs i workflowet ved fejl eller
@@ -109,7 +115,16 @@ lokale Git-session uden at udskrive eller gemme tokenet.
 
 Cloud-miljøet `WebshopToolbox-Platform` (ID `6ab982a263088191b9af7719815e8331`)
 er inspiceret: `github.com, api.github.com` og alle HTTP-metoder er allerede tilladt.
-Der var ingen miljøvariabler/secrets. GitHub-tokenformular og et tomt `GH_TOKEN`-felt
-er klargjort til brugerens afsluttende oprettelse/lagring. Cloud-adgang og første
-Cloud-bestilte udgivelse er derfor endnu ikke verificeret; ingen deployment er
-startet af dette opsætningsarbejde.
+Et separat fine-grained `GH_TOKEN` er nu oprettet og gemt med brugerens godkendelse:
+kun dette repository, Actions read/write, Contents read-only og Metadata read-only,
+udløb 28. september 2027. Tokenet er ikke lagret i repository eller dokumentation.
+En frisk interaktiv terminal i Cloud-miljøet har bestået `platform-release.mjs check`
+mod main `55b3a415346bd435cbbd00f078bd2d4d670e0ee9`. Dette verificerer gemt token,
+GitHub-læseadgang og aktivt workflow i Cloud-miljøets terminal; det er ikke en ny
+agentopgave. Nye agentopgaver skal bruge samme opdaterede miljø.
+
+Den nye GitHub-kæde er allerede bestået i udgivelse
+[`36468362953`](https://github.com/Jopppardk/WebshopToolbox-Platform/actions/runs/36468362953)
+af `3a455385b11c4c732dc88c676daba04fe0ed1ffb`: 386 tests, alle builds/typechecks/dry-runs,
+dev, dev-HTTP-gate, prod og prod-HTTP-gate. Denne kørsel blev bestilt fra andet arbejde;
+Cloud-tokenets Actions-write og egen bestilling afventer endnu kontrol.

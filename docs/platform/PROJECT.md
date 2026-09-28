@@ -1,8 +1,7 @@
 # WebshopToolbox – fælles platform
 
-> Cloud-deployprocedure 28. september: implementeret, lokalt testet, bestået i GitHub-CI og merged via PR #14 (`1a26ae6`). Cloud-runtime-adgang kræver endnu brugerens tokenopsætning og efterfølgende kontrol. Dev/prod er ikke ændret af arbejdet. Se CODEX-CLOUD-DEPLOY.md.
+> Cloud-deployprocedure 28. september: PR #14 (`1a26ae6`) er merged med bestået CI. Et afgrænset GH_TOKEN er gemt, og en frisk Cloud-terminal har verificeret GitHub-læseadgang. Den nye GitHub-kæde har udgivet dev og prod med beståede HTTP-gates i run `36468362953` fra andet arbejde. Egen bestilling med Cloud-tokenet afventer fortsat kontrol; se CODEX-CLOUD-DEPLOY.md.
 
-> 28. september 2026 – Cloud-deployment er klargjort på `platform/cloud-deploy`: GitHub-workflow med godkendt main-SHA, fuld CI og dev-efterkontrol før prod. Cloudflare-secrets forbliver i GitHub. Cloud kræver særskilt runtime-adgang til GitHub Actions og GET/POST til api.github.com. Implementering er ikke lig med etableret Cloud-adgang eller deployment. Se [CODEX-CLOUD-DEPLOY.md](CODEX-CLOUD-DEPLOY.md).
 
 ## Drift 28. september 2026 – aktiveret på PROD
 
