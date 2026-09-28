@@ -110,7 +110,7 @@ async function invoices(request:Request,env:PlatformEnv,actor:Actor,company:stri
   const issuer={...s,webshopName:webshop!.name,design:invoiceDesign(JSON.parse(s.design_json||'{}'))};
   const bytes=await buildInvoicePdf(order,issuer,logo),doc=crypto.randomUUID(),key=`companies/${company}/webshops/${shop}/invoices/${doc}.pdf`;
   const claim=await db.prepare(`INSERT INTO platform_invoices(company_id,webshop_id,external_id,id,fingerprint,status,r2_key,issuer_json,source_json) VALUES(?,?,?,?,?,'generating',?,?,?) ON CONFLICT DO NOTHING`).bind(company,shop,id,doc,fingerprint,key,JSON.stringify(issuer),JSON.stringify(order)).run();
-  if(claim.meta.changes!==1)throw new HttpError(409,'Fakturaen er allerede genereret eller under generering.');
+  if(!claim.meta.changes)throw new HttpError(409,'Fakturaen er allerede genereret eller under generering.');
   await env.PLATFORM_DOCUMENTS.put(key,bytes,{httpMetadata:{contentType:'application/pdf'}});
   await db.batch([db.prepare("UPDATE platform_invoices SET status='generated' WHERE id=? AND status='generating'").bind(doc),audit(env,actor,company,'invoice.generated',doc)]);
   return reply({id:doc});
