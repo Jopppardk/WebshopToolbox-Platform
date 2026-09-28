@@ -46,7 +46,18 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   return reply({summary:{total:list.length,succeeded:list.filter(r=>r.status==='succeeded').length,failed:list.filter(r=>r.status==='failed').length,skipped:0,running:list.filter(r=>r.status==='running').length},latest:list.slice(0,20),runs:filtered.slice((p-1)*50,p*50),pagination:{page:p,pageSize:50,total:filtered.length,until:new Date().toISOString(),since:list.at(-1)?.started_at||new Date().toISOString()}});
  }
  if(path==='/admin/errors'&&(!actor.platformAdmin||actor.support))throw new HttpError(403,'Jobfejl vises i Tier 0.');
- if(path==='/admin/errors'||path==='/notifications'){
+ if(path==='/notifications'){
+  // Any user with webshop access may mark the failures they were shown as seen; the list itself keeps them.
+  if(!get){
+   const b=await jsonBody(request,8000);
+   if(b.action!=='seen'||!Array.isArray(b.ids)||b.ids.length>100||b.ids.some(id=>typeof id!=='string'||!/^[a-f0-9-]{36}$/.test(id)))throw new HttpError(400,'Ugyldig markering af fejl.');
+   if(b.ids.length)await db.batch(b.ids.map(id=>db.prepare("INSERT OR IGNORE INTO operation_acknowledgements(company_id,run_id) SELECT company_id,id FROM operation_runs WHERE company_id=? AND webshop_id=? AND id=? AND status='failed'").bind(company,shop,id)));
+  }
+  const errors=(await db.prepare("SELECT r.id,r.module AS source,r.message,COALESCE(r.finished_at,r.started_at) AS created_at,EXISTS(SELECT 1 FROM operation_acknowledgements a WHERE a.company_id=r.company_id AND a.run_id=r.id) AS seen FROM operation_runs r WHERE r.company_id=? AND r.webshop_id=? AND r.status='failed' ORDER BY r.started_at DESC,r.id DESC LIMIT 50").bind(company,shop).all<{id:string;source:string;message:string;created_at:string;seen:number}>()).results;
+  const unseen=await db.prepare("SELECT count(*) AS n FROM operation_runs r WHERE r.company_id=? AND r.webshop_id=? AND r.status='failed' AND NOT EXISTS(SELECT 1 FROM operation_acknowledgements a WHERE a.company_id=r.company_id AND a.run_id=r.id)").bind(company,shop).first<{n:number}>();
+  return reply({notifications:[],incidents:{warnings:0,alarms:unseen?.n||0},errors:errors.map(e=>({...e,seen:!!e.seen}))});
+ }
+ if(path==='/admin/errors'){
   if(!get){
    if(request.method!=='POST')throw new HttpError(405,'Brug Gem.');await requireCompany(db,actor,company,true);const b=await jsonBody(request);
    if(typeof b.id!=='string')throw new HttpError(400,'Vælg en fejl til kvittering. Mailnotifikationer er ikke aktiveret i dev.');

@@ -327,7 +327,7 @@ export default function Home() {
             <WebshopSelector />
           </div>
           <div className="ml-auto flex items-center gap-3">
-            <NotificationBell errorCount={0} onErrors={()=>{setSettingsTab('dashboard');setView('settings');}} onReporting={()=>{setPackagingEntry(p=>({tab:'reporting',key:p.key+1}));setView('packaging');}}/>
+            <NotificationBell onReporting={()=>{setPackagingEntry(p=>({tab:'reporting',key:p.key+1}));setView('packaging');}}/>
             <CustomerIdentity />
           </div>
         </header>
