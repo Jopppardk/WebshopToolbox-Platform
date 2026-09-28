@@ -122,7 +122,7 @@ export function validateConfig(config, remote = false) {
     const mail=config.send_email[1];
     if(config.vars.PLATFORM_MAIL_FROM!=='faktura@webshoptoolbox.dk' ||
       config.vars.PLATFORM_MAIL_TEST_RECIPIENTS!=='rj@itm8.com,rene.jeppesen@live.dk' ||
-      JSON.stringify(mail)!==JSON.stringify({name:'PLATFORM_MAIL_TEST',allowed_sender_addresses:['faktura@webshoptoolbox.dk'],allowed_destination_addresses:['rj@itm8.com','rene.jeppesen@live.dk']})) fail();
+      JSON.stringify(mail)!==JSON.stringify({name:'PLATFORM_MAIL_TEST',allowed_sender_addresses:['faktura@webshoptoolbox.dk']})) fail();
   }
   if(config.vars.PLATFORM_ADMIN_HOST!==undefined&&(!remote||config.vars.PLATFORM_ADMIN_HOST!=='admin.webshoptoolbox.dk'||config.vars.PLATFORM_CUSTOMER_LOGIN!=='enabled'))fail();
   if(config.vars.PLATFORM_CUSTOMER_LOGIN!==undefined&&config.vars.PLATFORM_CUSTOMER_LOGIN!=='enabled')fail();

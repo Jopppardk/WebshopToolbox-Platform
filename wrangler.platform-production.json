@@ -23,7 +23,7 @@
     "PLATFORM_INVITATION_MODE": "registered",
     "PLATFORM_INVITATION_FROM": "no-reply@webshoptoolbox.dk",
     "PLATFORM_MAIL_FROM": "faktura@webshoptoolbox.dk",
-    "PLATFORM_MAIL_TEST_RECIPIENTS": "rj@itm8.com,rene.jeppesen@live.dk",
+    "PLATFORM_MAIL_TEST_RECIPIENTS": "rj@itm8.com,rene.jeppesen@live.dk,rene@sablen.dk",
     "PLATFORM_CUSTOMER_LOGIN": "enabled"
   },
   "d1_databases": [
@@ -54,10 +54,6 @@
       "name": "PLATFORM_MAIL_TEST",
       "allowed_sender_addresses": [
         "faktura@webshoptoolbox.dk"
-      ],
-      "allowed_destination_addresses": [
-        "rj@itm8.com",
-        "rene.jeppesen@live.dk"
       ]
     },
     {

@@ -62,12 +62,14 @@ export function EmballageConnection({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         }),
-        d = (await r.json()) as { error?: string };
+        d = (await r.json()) as { error?: string; initialHistory?: { count: number } };
       if (!r.ok) throw Error(d.error);
       setApiKey('');
       await load();
       onConnected();
-      setMessage('Forbindelsen og indstillingerne er gemt.');
+      setMessage(d.initialHistory
+        ? `Forbindelsen og indstillingerne er gemt. Tidligere emballagehistorik blev hentet automatisk (${d.initialHistory.count} linjer).`
+        : 'Forbindelsen og indstillingerne er gemt.');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Kunne ikke gemme.');
     } finally {
@@ -112,7 +114,7 @@ export function EmballageConnection({
               autoComplete="off"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="esk_… . secret"
+              placeholder="esk_….secret"
             />
           </label>
           <Button
@@ -139,7 +141,7 @@ export function EmballageConnection({
                   }
                 />
                 <span className="text-xs text-muted-foreground">
-                  Første dag i det første kvartal, der skal indberettes.
+                  Første dag i det første kvartal, der skal indberettes. Ved første opsætning hentes historikken automatisk fra Shopify.
                 </span>
               </label>
               <label className="block text-sm">

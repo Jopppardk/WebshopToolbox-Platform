@@ -269,3 +269,19 @@ Guide-opdateringen er udgivet på kodecommit `ebec0ad5d5ba3c191484400943e9db7262
 Den røde Cloudflare DNS-advarsel skjules, når serveren returnerer verified for den gemte egne afsender, eget domæne er valgt og formularen ikke er ændret. Ved ændringer/standardafsender/pending vises advarslen igen. Under indlæsning vises den ikke. Kun visning ændret, ingen ny testmail eller ændring af godkendelse, data eller mailregler. Udgivelse afventer.
 
 Advarselsændringen er udgivet på dev og portal fra `2c1ec73fdf7b889a6e29ecac2a7957ae7cc18999`. CI `36349682249`, dev `36349682280` og prod `36349684268` bestået. Begge miljøers health/login 200, admin Access-redirect 302, anonym ordre-API 401. Ingen testmail afsendt eller kundedata ændret.
+
+
+## Cloud-opgaver samlet 28. september 2026
+
+> 27. september 2026 – Fakturasidens eksempelfaktura er klargjort til en valgfri gyldig mailadresse i både dev og produktion. Serveren genererer fortsat emne, tekst og demo-PDF, kræver virksomhedsadgang, afviser supportimpersonering og bevarer idempotens/cooldown. Den separate afsendertest er fortsat begrænset til brugerens allowlistede loginadresse. Testet lokalt, men endnu ikke udgivet.
+
+> 27. september 2026 – Emballage Indberetning-forbindelsen skelner lokalt mellem en faktisk afvist nøgle (HTTP 401/403) og fejl hos netværk/tjeneste/rate limit. Leverandørens sikre request-reference vises ved API-fejl, eksisterende credentials bevares, og klientens nøgleeksempel har ikke længere mellemrum omkring punktummet. Regressionstest er tilføjet. Ikke udgivet; en rigtig leverandørnøgle er ikke anvendt.
+
+> 27. september 2026 – Emballage Indberetnings første opsætning importerer nu automatisk Shopify-emballagehistorik fra den valgte kvartalsstart til i dag. Importen er afgrænset til virksomhed/webshop og skal lykkes komplet, før konfigurationen gemmes; efterfølgende indstillingsændringer importerer ikke historikken igen. Klienten viser resultatet. 356/356 tests og Tier 1-typecheck er bestået. Ikke deployet; ingen rigtige leverandørkonti eller produktionsdata er brugt.
+
+> 27. september 2026 – Integrationstomme Tier 1-sider er implementeret lokalt. Salg, fakturaer, lager, emballage og produktfeeds kræver Shopify; tilbagebetalinger, udbetalinger og rapporter åbner, når mindst én relevant betalingsintegration er forbundet. Uden forbindelse vises en illustreret tomtilstand med direkte link til Integrationer, og de bagvedliggende sidekomponenter/datahentninger startes ikke. Fejl ved statusopslag vises særskilt med genforsøg. Logikken er dækket af regressionstest og Tier 1-typecheck; browserkontrol, GitHub CI og udgivelse er endnu ikke udført. Ingen migration, eksterne writes eller produktionsdata er berørt.
+
+> 27. september 2026 – Frigivelsesvurdering: Platformen er **ikke klar til almindelig frigivelse** for andre virksomheder/webshops. Den kan gå videre mod en lukket pilot i testmiljøet efter de dokumenterede adgangskriterier. Ingen deployment, mail, remote dataændring eller økonomisk postering blev udført. Se [RELEASE-READINESS-2026-09-27.md](RELEASE-READINESS-2026-09-27.md).
+
+
+Ovenstående fem Cloud-leverancer er samlet på platform/cloud-release-20260928. Lokale og GitHub-kontroller samt udgivelse af den samlede version afventer. Ingen migrationer, kundedata eller Sablen-ændringer. Bogføring og almindelig kundemail forbliver blokeret.

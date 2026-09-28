@@ -33,7 +33,7 @@ export async function handleInvoices(request:Request,env:PlatformEnv,actor:Actor
 
  if(action==='preview'&&request.method==='GET'||action==='example-test'&&request.method==='POST'){
   const input=action==='example-test'?await jsonBody(request):{};
-  if(action==='example-test'&&(actor.support||input.recipient!==actor.email))throw new HttpError(403,'Testmail kan kun sendes til din egen godkendte loginadresse.');
+  if(action==='example-test'&&actor.support)throw new HttpError(403,'Afslut supportadgang før testmail.');
   const shop=String(input.webshopId||url.searchParams.get('webshopId')||'');await requireWebshop(db,actor,company,shop);
   const webshop=await db.prepare('SELECT name FROM webshops WHERE company_id=? AND id=?').bind(company,shop).first<{name:string}>();
   let logo:ArrayBuffer|undefined;if(s.logo_key){const f=await env.PLATFORM_DOCUMENTS.get(s.logo_key);if(!f)throw new HttpError(409,'Logoet mangler. Upload det igen.');logo=await f.arrayBuffer();}
@@ -41,8 +41,8 @@ export async function handleInvoices(request:Request,env:PlatformEnv,actor:Actor
   if(action==='example-test'){
    const sender=await db.prepare('SELECT custom_from,revision,verified_revision FROM company_mail WHERE company_id=?').bind(company).first<{custom_from:string;revision:string;verified_revision:string|null}>();
    const rendered=invoiceText(s,exampleInvoice());
-   const mailRequest=new Request(request.url,{method:'POST',headers:request.headers,body:JSON.stringify({requestId:input.requestId,mode:sender?.custom_from&&sender.revision===sender.verified_revision?'custom':'standard'})});
-   return handleMail(mailRequest,env,actor,company,'test',{subject:'[TEST · DEMO] '+rendered.subject,text:rendered.text+'\n\nDEMO – Eksempelfaktura med fiktive data. Ingen rigtig ordre, faktura eller bogføring er oprettet.',attachment:{content:bytes.slice().buffer as ArrayBuffer,filename:'eksempelfaktura.pdf',type:'application/pdf',disposition:'attachment'}});
+   const mailRequest=new Request(request.url,{method:'POST',headers:request.headers,body:JSON.stringify({recipient:input.recipient,requestId:input.requestId,mode:sender?.custom_from&&sender.revision===sender.verified_revision?'custom':'standard'})});
+   return handleMail(mailRequest,env,actor,company,'test',{subject:'[TEST · DEMO] '+rendered.subject,text:rendered.text+'\n\nDEMO – Eksempelfaktura med fiktive data. Ingen rigtig ordre, faktura eller bogføring er oprettet.',allowAnyRecipient:true,attachment:{content:bytes.slice().buffer as ArrayBuffer,filename:'eksempelfaktura.pdf',type:'application/pdf',disposition:'attachment'}});
   }
   return new Response(bytes.slice().buffer as ArrayBuffer,{headers:{'Content-Type':'application/pdf','Content-Disposition':'inline; filename="eksempelfaktura.pdf"','Cache-Control':'no-store'}});
  }
