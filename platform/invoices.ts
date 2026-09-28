@@ -41,7 +41,7 @@ export async function handleInvoices(request:Request,env:PlatformEnv,actor:Actor
   if(action==='example-test'){
    const sender=await db.prepare('SELECT custom_from,revision,verified_revision FROM company_mail WHERE company_id=?').bind(company).first<{custom_from:string;revision:string;verified_revision:string|null}>();
    const rendered=invoiceText(s,exampleInvoice());
-   const mailRequest=new Request(request.url,{method:'POST',headers:request.headers,body:JSON.stringify({recipient:input.recipient,requestId:input.requestId,mode:sender?.custom_from&&sender.revision===sender.verified_revision?'custom':'standard'})});
+   const mailRequest=new Request(request.url,{method:'POST',headers:request.headers,body:JSON.stringify({recipient:input.recipient,requestId:input.requestId,mode:sender?.custom_from?'custom':'standard'})});
    return handleMail(mailRequest,env,actor,company,'test',{subject:'[TEST · DEMO] '+rendered.subject,text:rendered.text+'\n\nDEMO – Eksempelfaktura med fiktive data. Ingen rigtig ordre, faktura eller bogføring er oprettet.',allowAnyRecipient:true,attachment:{content:bytes.slice().buffer as ArrayBuffer,filename:'eksempelfaktura.pdf',type:'application/pdf',disposition:'attachment'}});
   }
   return new Response(bytes.slice().buffer as ArrayBuffer,{headers:{'Content-Type':'application/pdf','Content-Disposition':'inline; filename="eksempelfaktura.pdf"','Cache-Control':'no-store'}});
