@@ -1,3 +1,4 @@
+import {recordHistory} from './record-history';
 import { payoutStatusLabel } from './tier1/src/lib/payout-status';
 import {handleProductionSale} from './production-sales';
 import {handleProductionOther} from './production-proposals';
@@ -71,10 +72,14 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   const connections=await db.prepare('SELECT verified_at FROM webshop_connections WHERE company_id=? AND webshop_id=?').bind(company,shop).first<any>();
   const accounting=await db.prepare('SELECT verified_at FROM accounting_connections WHERE company_id=?').bind(company).first<any>();
   const snapshots=(await db.prepare('SELECT module,sum(CASE WHEN substr(occurred_at,1,10)=? THEN 1 ELSE 0 END) AS total,max(imported_at) AS updated FROM operation_snapshots WHERE company_id=? AND webshop_id=? GROUP BY module').bind(new Date().toISOString().slice(0,10),company,shop).all<any>()).results;
-  const receiptCounts=(await db.prepare("SELECT r.module,r.phase,count(*) n FROM production_receipts r JOIN operation_snapshots s ON s.company_id=r.company_id AND s.webshop_id=r.webshop_id AND s.module=r.module AND s.external_id=r.external_id JOIN accounting_connections c ON c.company_id=r.company_id AND c.organization_id=r.destination WHERE r.company_id=? AND r.webshop_id=? AND r.provider='shopify' AND substr(s.occurred_at,1,10)=? GROUP BY r.module,r.phase").bind(company,shop,new Date().toISOString().slice(0,10)).all<any>()).results;
-  const activity=(module:string)=>{const total=snapshots.find(r=>r.module===module)?.total||0,synced=receiptCounts.filter(r=>r.module===module&&r.phase==='booked').reduce((n,r)=>n+r.n,0),failed=receiptCounts.filter(r=>r.module===module&&r.phase==='uncertain').reduce((n,r)=>n+r.n,0);return {total,synced,failed,pending:Math.max(0,total-synced-failed)};};
+  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Copenhagen',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  const lower=new Date(Date.parse(today)-86400000).toISOString().slice(0,10),upper=new Date(Date.parse(today)+2*86400000).toISOString().slice(0,10);
+  const day=(value:string)=>value.length===10?value:new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Copenhagen',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
+  const sourceRows=(await db.prepare("SELECT 'shopify' provider,module,external_id,occurred_at,payload_json FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module IN ('orders','payouts') AND occurred_at>=? AND occurred_at<? UNION ALL SELECT provider,kind module,external_id,occurred_at,payload_json FROM payment_records WHERE company_id=? AND webshop_id=? AND ((provider='flatpay' AND kind='payments') OR (provider='viabill' AND kind='payout')) AND occurred_at>=? AND occurred_at<?").bind(company,shop,lower,upper,company,shop,lower,upper).all<any>()).results;
+  const statusFor=await bookingStatuses(env,company,shop);
+  const activity=(module:string)=>{const selected=sourceRows.filter(r=>(module==='orders'?r.module==='orders':r.module!=='orders')&&day(r.occurred_at)===today);let synced=0,failed=0;for(const r of selected){const status=statusFor(r.provider,r.module,r.external_id,r.occurred_at,r.payload_json);if(['booked','draft'].includes(status))synced++;else if(['failed_retry','failed_manual','uncertain','held','booked_changed'].includes(status))failed++;}return {total:selected.length,synced,failed,pending:selected.length-synced-failed};};
   const providers=[{key:'shopify',name:'Shopify',connected:!!connections?.verified_at,checkedAt:connections?.verified_at||null,health:'unknown'},{key:'dinero',name:'Dinero',connected:!!accounting,checkedAt:accounting?.verified_at||null,health:'unknown'}];
-  return reply({inactive:providers.filter(p=>!p.connected).length,connected:providers.filter(p=>p.connected).length,providers,failed:count('failed'),succeeded:count('success'),skipped:0,running:count('running'),successRate:list.length?100*count('success')/list.length:null,checkedAt:new Date().toISOString(),activity:{today:new Date().toISOString().slice(0,10),orders:activity('orders'),payouts:activity('payouts'),updated:Object.fromEntries(['sales','refunds','packaging'].map(k=>[k,snapshots.find(r=>r.module===(k==='sales'?'orders':k))?.updated||null]))}});
+  return reply({inactive:providers.filter(p=>!p.connected).length,connected:providers.filter(p=>p.connected).length,providers,failed:count('failed'),succeeded:count('success'),skipped:0,running:count('running'),successRate:list.length?100*count('success')/list.length:null,checkedAt:new Date().toISOString(),activity:{today,orders:activity('orders'),payouts:activity('payouts'),updated:Object.fromEntries(['sales','refunds','packaging'].map(k=>[k,snapshots.find(r=>r.module===(k==='sales'?'orders':k))?.updated||null]))}});
  }
  if(path==='/shopify/packaging'){
   if(shop==='none')throw new HttpError(409,'Forbind webshoppen først.');
@@ -99,7 +104,7 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
  if(path==='/invoices/logo')return handleInvoices(request,env,actor,company,'logo');
  if(path==='/invoices/preview'){if(shop==='none')throw new HttpError(409,'Opret en webshop for at se fakturaeksemplet.');const next=new URL(request.url);next.searchParams.set('webshopId',shop);return handleInvoices(new Request(next,request),env,actor,company,'preview');}
  if(path==='/invoices/settings')return handleInvoices(request,env,actor,company,'settings');
- const dataPaths=['/shopify/orders','/shopify/refunds','/shopify/payouts','/shopify/payments','/refunds/overview','/payouts/overview','/sales/log','/payouts/log','/sales/preview','/shopify/inventory','/documents','/invoices','/invoices/pdf','/invoices/email-test','/flatpay/records','/flatpay/sync','/flatpay/refunds','/viabill/records'];
+ const dataPaths=['/shopify/orders','/shopify/refunds','/shopify/payouts','/shopify/payments','/refunds/overview','/payouts/overview','/sales/log','/payouts/log','/refunds/log','/sales/preview','/shopify/inventory','/documents','/invoices','/invoices/pdf','/invoices/email-test','/flatpay/records','/flatpay/sync','/flatpay/refunds','/viabill/records'];
  if(!dataPaths.includes(path))return null;
  if(shop==='none')throw new HttpError(409,'Forbind en webshop først.');
  if(path==='/shopify/inventory'){
@@ -120,16 +125,12 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   const money=(amount:string,currency:string)=>new Intl.NumberFormat('da-DK',{style:'currency',currency}).format(Number(amount));
   return reply({total:total?.n||0,orders:rows.map(row=>{const o=JSON.parse(row.payload_json),m=o.currentTotalPriceSet.shopMoney;return {id:o.name+(o.test?' (test)':''),externalId:o.id,date:new Date(o.createdAt).toLocaleDateString('da-DK'),createdAt:o.createdAt,shipped:o.cancelledAt?'Annulleret':o.displayFulfillmentStatus==='FULFILLED'?'Afsendt':'Ikke afsendt',amount:money(m.amount,m.currencyCode),realized:money(String(Number(m.amount)-Number(o.totalRefundedSet?.shopMoney.amount||0)),m.currencyCode),status:bookingStatusLabel(bookingStatus('shopify','orders',o.id,o.createdAt,row.payload_json)),currency:m.currencyCode,total:m.amount,paymentStatus:o.displayFinancialStatus,paymentProvider:(o.paymentGatewayNames||[]).join(', ')};})});
  }
- if(path==='/sales/log'||path==='/payouts/log'){
-  const id=url.searchParams.get('externalId'),provider=url.searchParams.get('provider');
-  const row=path==='/payouts/log'&&['flatpay','viabill'].includes(provider||'')?await db.prepare('SELECT payload_json,imported_at FROM payment_records WHERE company_id=? AND webshop_id=? AND provider=? AND external_id=?').bind(company,shop,provider,id).first<any>():await db.prepare('SELECT payload_json,imported_at FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module=? AND external_id=?').bind(company,shop,path==='/sales/log'?'orders':'payouts',id).first<any>();
-  if(!row)throw new HttpError(404,'Posten findes ikke.');
-  const receipt=await db.prepare('SELECT r.* FROM accounting_reconciliations r JOIN accounting_connections c ON c.company_id=r.company_id AND c.organization_id=r.organization_id WHERE r.company_id=? AND r.webshop_id=? AND r.provider=? AND r.module=? AND r.external_id=?').bind(company,shop,provider==='flatpay'||provider==='viabill'?provider:'shopify',path==='/sales/log'?'orders':provider==='flatpay'?'payments':provider==='viabill'?'payout':'payouts',id).first<any>();
-  const events=[{id:'import',at:row.imported_at.replace(' ','T')+'Z',title:'Seneste datahentning',detail:'Ingen bogføring udført ved hentningen.'}];
-  if(receipt)events.push({id:'reconciliation',at:receipt.created_at.replace(' ','T')+'Z',title:receipt.voucher_status==='Booked'?'Eksisterende bogføring afstemt':'Eksisterende kladde afstemt',detail:`Dinero-bilag ${receipt.voucher_number||receipt.voucher_guid} i organisation ${receipt.organization_id}. ${receipt.source_json===row.payload_json?'Kunden har bekræftet sammenhængen.':'Posten er ændret efter afstemningen og kræver kontrol. Kvitteringen er bevaret.'}`});
-  const live=await db.prepare('SELECT r.* FROM production_receipts r JOIN accounting_connections c ON c.company_id=r.company_id AND c.organization_id=r.destination WHERE r.company_id=? AND r.webshop_id=? AND r.external_id=? AND r.provider=? AND r.module=?').bind(company,shop,id,provider==='flatpay'||provider==='viabill'?provider:'shopify',path==='/sales/log'?'orders':provider==='flatpay'?'payments':provider==='viabill'?'payout':'payouts').first<any>();
-  if(live){const p=JSON.parse(live.payload_json);events.push({id:'production',at:live.updated_at.replace(' ','T')+'Z',title:bookingStatusLabel(live.phase),detail:`Dinero: ${p.guid||'Afventer sikkert bilags-ID'}. ${p.voucherNumber||''}`});}
-  return reply({name:JSON.parse(row.payload_json).name||id,events,details:[{label:'Eksternt ID',value:id}],nextOffset:null,legacy:true});
+ if(['/sales/log','/payouts/log','/refunds/log'].includes(path)){
+  if(!get)throw new HttpError(405,'Brug Hent log.');
+  const provider=url.searchParams.get('provider')||'shopify',normalized=provider==='shopify_payments'?'shopify':provider;
+  if(!['shopify','flatpay','viabill'].includes(normalized)||path==='/sales/log'&&normalized!=='shopify')throw new HttpError(400,'Vælg en gyldig udbyder.');
+  const module=path==='/sales/log'?'orders':path==='/refunds/log'?(normalized==='flatpay'?'transactions':'refunds'):normalized==='flatpay'?'payments':normalized==='viabill'?'payout':'payouts';
+  return recordHistory(env,company,shop,normalized,module,url.searchParams.get('externalId')||'',pageNumber(url.searchParams.get('offset'),0));
  }
  if(path==='/documents'){
   if(!get)return handleDocuments(request,env,actor,company,shop);
@@ -192,5 +193,5 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
  }
  const filtered=rows.filter(p=>(!url.searchParams.get('from')||p.transactionDate.slice(0,10)>=url.searchParams.get('from')!)&&(!url.searchParams.get('to')||p.transactionDate.slice(0,10)<=url.searchParams.get('to')!)&&(!url.searchParams.get('search')||JSON.stringify(p).toLowerCase().includes(url.searchParams.get('search')!.toLowerCase())));
  const summary:Record<string,any>={};for(const p of filtered){const c=p.amount.currencyCode;const s=summary[c]??={currency:c,count:0,gross:0,fees:0,net:0};s.count++;s.gross+=minor(p.amount.amount,c);s.fees+=minor(p.fee.amount,c);s.net+=minor(p.net.amount,c);}
- return reply({payments:filtered.slice(offset,offset+50).map(p=>({...p,bookingStatus:module==='payments'?'not_enabled':bookingStatus(p.provider==='flatpay'?'flatpay':'shopify',p.provider==='flatpay'?'transactions':'refunds',refundSources.get(p.id)?.externalId||p.id,p.transactionDate,refundSources.get(p.id)?.json||JSON.stringify(p))})),summary:Object.values(summary)});
+ return reply({payments:filtered.slice(offset,offset+50).map(p=>({...p,logExternalId:refundSources.get(p.id)?.externalId||p.id,bookingStatus:module==='payments'?'not_enabled':bookingStatus(p.provider==='flatpay'?'flatpay':'shopify',p.provider==='flatpay'?'transactions':'refunds',refundSources.get(p.id)?.externalId||p.id,p.transactionDate,refundSources.get(p.id)?.json||JSON.stringify(p))})),summary:Object.values(summary)});
 }

@@ -1,4 +1,5 @@
 'use client';
+import {PayoutLog} from './payout-log';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
 
 import { useEffect, useState } from 'react';
@@ -370,6 +371,7 @@ export function Payments({
                     <BookingStatus status={payment.provider==='flatpay'?'not_enabled':payment.bookingStatus || 'pending'} />
                   </TableCell>
                   <TableCell>
+                    {refund && <PayoutLog kind="refund" provider={payment.provider==='flatpay'?'flatpay':'shopify'} externalId={(payment as PaymentView & {logExternalId?:string}).logExternalId||payment.id}/>}
                     {refund && payment.provider!=='flatpay' && payment.bookingStatus !== 'booked' ? (
                       <ManualBookingAction
                         kind="refund"

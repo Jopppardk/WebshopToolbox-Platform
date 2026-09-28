@@ -1,3 +1,4 @@
+import {recordFailure} from './record-history';
 import {syncPackaging} from './packaging-source';
 import {handleOperations} from './operations';
 import {handleInvoices} from './invoices';
@@ -87,6 +88,9 @@ export async function runProductionJobs(env:PlatformEnv){
         if(inspected.phase!=='booked'&&!(inspected.phase==='draft'&&!book))await responseValue(await invoke({kind,externalId,action:'retry',version:inspected.version,confirmed:true}));
        }
        succeeded=true;
+      }catch(error){
+       try{await recordFailure(env,company,id,provider,module,externalId,'Automatisk behandling: '+job,error);}catch{/* Keep original error and durable claims. */}
+       throw error;
       }finally{
        // Failed sources get a bounded cooldown instead of starving later orders.
        await db.prepare('INSERT INTO production_attempts(company_id,webshop_id,job,external_id,attempted_at,next_attempt_at,failures) VALUES(?,?,?,?,?,?,?) ON CONFLICT(company_id,webshop_id,job,external_id) DO UPDATE SET attempted_at=excluded.attempted_at,next_attempt_at=excluded.next_attempt_at,failures=CASE WHEN excluded.failures=0 THEN 0 ELSE production_attempts.failures+1 END').bind(company,id,job,externalId,Date.now(),Date.now()+(succeeded?86400000:900000),succeeded?0:1).run();

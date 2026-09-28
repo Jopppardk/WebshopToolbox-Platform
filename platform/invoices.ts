@@ -1,3 +1,4 @@
+import {recordFailure} from './record-history';
 import {PDFDocument} from 'pdf-lib';
 import {invoiceDesign,exampleInvoice} from './invoice-design';
 import { historyPolicy } from './tier1-history';
@@ -19,7 +20,7 @@ function cutoff(s:Settings){const d=new Date();d.setUTCMonth(d.getUTCMonth()-s.m
 function ready(s:Settings){if(!s.address||!s.cvr||!s.contact)throw new HttpError(409,'Udfyld virksomhedens fakturaoplysninger under Indstillinger → Fakturaer først.');}
 export function invoiceText(s:Settings,order:InvoiceSource){const i=checkInvoice(order),values:Record<string,string>={kundenavn:i.customer.name,fakturanummer:i.number.replace(/^#/,''),ordrenummer:i.number,virksomhedsnavn:s.name};const apply=(v:string)=>v.replace(/{{\s*([a-zæøå]+)\s*}}/gi,(all,k)=>values[k.toLowerCase()]??all);return {subject:apply(s.subject),text:apply(s.body)};}
 function audit(env:PlatformEnv,actor:Actor,company:string,action:string,id:string){return env.PLATFORM_DB.prepare('INSERT INTO audit_events(id,company_id,actor_id,action,resource_id,details_json) VALUES(?,?,?,?,?,?)').bind(crypto.randomUUID(),company,actor.support?.adminId||actor.id,action,id,JSON.stringify(actor.support?{impersonatedUser:actor.id,supportSession:actor.support.sessionId}:{}));}
-export async function handleInvoices(request:Request,env:PlatformEnv,actor:Actor,company:string,action=''){
+async function invoices(request:Request,env:PlatformEnv,actor:Actor,company:string,action=''):Promise<Response>{
  const url=new URL(request.url),db=env.PLATFORM_DB;
  await requireCompany(db,actor,company,request.method!=='GET');
  const s=await settings(env,company);s.months=(await historyPolicy(env,company)).months;
@@ -121,4 +122,11 @@ export async function handleInvoices(request:Request,env:PlatformEnv,actor:Actor
  if(action==='send')return sendCustomerInvoice(env,actor,company,shop,saved.id,order.email||'',rendered.subject,rendered.text,{content:bytes,filename:'faktura-'+id.split('/').pop()+'.pdf',type:'application/pdf',disposition:'attachment'});
  const mailRequest=new Request(request.url,{method:'POST',headers:request.headers,body:JSON.stringify({requestId:input.requestId,mode:input.mode})});
  return handleMail(mailRequest,env,actor,company,'test',{subject:'[TEST] '+rendered.subject,text:rendered.text+'\n\nTESTMAIL – sendt til din loginadresse, ikke til kunden.',attachment:{content:bytes,filename:'faktura-'+id.split('/').pop()+'.pdf',type:'application/pdf',disposition:'attachment'}});
+}
+
+export async function handleInvoices(request:Request,env:PlatformEnv,actor:Actor,company:string,action=''):Promise<Response>{
+ const copy=request.clone();try{return await invoices(request,env,actor,company,action);}catch(error){
+ if(request.method==='POST'&&['check','generate','send'].includes(action))try{const body=await copy.json() as any;await requireWebshop(env.PLATFORM_DB,actor,company,body.webshopId);await recordFailure(env,company,body.webshopId,'shopify','orders',body.externalId,'Faktura: '+action,error);}catch{/* Preserve the original failure and any durable write claim. */}
+ throw error;
+ }
 }
