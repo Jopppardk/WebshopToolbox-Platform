@@ -7,23 +7,25 @@
     <link rel="stylesheet" href="/styles.css" />
     <script type="module" src="/admin.js"></script>
   </head>
-  <body>
+  <body class="t0">
     <aside>
       <a class="brand" href="/" aria-label="WebshopToolbox – startside"><img class="brand-logo" src="/brand/webshoptoolbox-logo.png" alt="WebshopToolbox" width="2172" height="724"></a>
       <p class="eyebrow">Administration</p>
       <nav>
-        <button id="insights-tab" class="nav" hidden>Indsigt</button>
-        <button id="tickets-tab" class="nav" hidden>Support</button>
-        <button id="catalog-tab" class="nav" hidden>Integrationer</button>
-        <button id="companies-tab" class="nav active">Virksomheder</button
-        ><button id="settings-tab" class="nav" hidden>Portalindstillinger</button>
+        <button id="companies-tab" class="nav active"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5l8-2v18M12 8l8 2v11M3 21h18M7.5 8h1M7.5 12h1M7.5 16h1M15.5 13h1M15.5 17h1"/></svg>Virksomheder</button
+        ><button id="insights-tab" class="nav" hidden><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Indsigt</button
+        ><button id="tickets-tab" class="nav" hidden><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4zM8 9h8M8 12h5"/></svg>Support</button
+        ><button id="catalog-tab" class="nav" hidden><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/></svg>Integrationer</button
+        ><button id="settings-tab" class="nav" hidden><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8M16 5v4M10 15v4"/></svg>Portalindstillinger</button>
       </nav>
       <div class="aside-bottom">
-        <span class="badge">Testmiljø</span>
-        <p>Bogføring og kundemail er blokeret.</p>
+        <div class="env-card">
+          <span class="badge">Testmiljø</span>
+          <p>Bogføring og kundemail er blokeret.</p>
+        </div>
         <small id="identity">Indlæser bruger…</small>
         <form action="/logout" method="post" class="logout-form">
-          <button type="submit" class="nav" id="logout">Log ud</button>
+          <button type="submit" class="nav" id="logout"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10"/></svg>Log ud</button>
         </form>
       </div>
     </aside>
