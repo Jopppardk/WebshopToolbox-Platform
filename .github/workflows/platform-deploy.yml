@@ -1,25 +1,46 @@
 name: Udgiv WebshopToolbox
+run-name: Udgiv ${{ inputs.target }} · ${{ inputs.expected_sha }} · ${{ inputs.request_id }}
 on:
   workflow_dispatch:
     inputs:
       target:
-        description: Miljø
+        description: 'dev = kun dev; prod = dev, efterkontrol, derefter prod'
         required: true
         type: choice
         options: [dev, prod]
+      expected_sha:
+        description: Den godkendte main-commits fulde SHA (40 tegn)
+        required: true
+        type: string
+      request_id:
+        description: Valgfrit sporings-ID fra Codex Cloud
+        type: string
 permissions:
   contents: read
 concurrency:
-  group: webshoptoolbox-${{ inputs.target }}
+  group: webshoptoolbox-release
   cancel-in-progress: false
 jobs:
-  deploy:
+  checks:
     if: github.repository == 'Jopppardk/WebshopToolbox-Platform' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    environment: ${{ inputs.target }}
     steps:
+      - name: Kontrollér godkendt version før checkout
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          ACTUAL_SHA: ${{ github.sha }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          [[ "$EXPECTED_SHA" =~ ^[a-f0-9]{40}$ ]] && [[ "$EXPECTED_SHA" = "$ACTUAL_SHA" ]] || {
+            echo 'Main er ændret, eller SHA er ugyldig. Ingen deployment startet.'
+            exit 1
+          }
+          [[ "$TARGET" = dev || "$TARGET" = prod ]]
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v6
         with:
           node-version: 22.23.2
@@ -29,22 +50,53 @@ jobs:
       - run: node scripts/platform-production.mjs check
       - run: npm test
       - run: npm run platform:tier1:typecheck
+      - run: npm run platform:tier1:build
       - run: npm run build
       - run: npm run typecheck
-      - name: Deploy valgt miljø
+      - run: npx wrangler deploy --config wrangler.direct.jsonc --dry-run
+      - run: node scripts/platform.mjs build
+      - run: node scripts/platform-production.mjs build
+  dev:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: dev
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.23.2
+          cache: npm
+      - run: npm ci
+      - name: Udgiv dev
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          TARGET: ${{ inputs.target }}
-        run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "Miljøet mangler CLOUDFLARE_API_TOKEN."
-            exit 1
-          fi
-          if [ "$TARGET" = dev ]; then
-            node scripts/platform.mjs deploy
-          elif [ "$TARGET" = prod ]; then
-            node scripts/platform-production.mjs deploy
-          else
-            exit 1
-          fi
-      # Migrationer køres separat efter backup. Ingen Sablen-kommandoer.
+        run: node scripts/platform.mjs deploy
+      - name: Kontrollér dev via offentlige læsekald
+        run: node scripts/platform-release-health.mjs dev
+  prod:
+    if: inputs.target == 'prod'
+    needs: dev
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: prod
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.23.2
+          cache: npm
+      - run: npm ci
+      - name: Udgiv prod efter godkendt dev
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/platform-production.mjs deploy
+      - name: Kontrollér prod via offentlige læsekald
+        run: node scripts/platform-release-health.mjs prod
+      # Migrationer kræver separat backup og kontrol. Ingen økonomiske testwrites.
