@@ -303,3 +303,6 @@ Udgivet via PR #2 fra `76e12bd148b9d028d357f3b98c25ec47e6618111`. Obligatorisk P
 ## 28. september 2026 – Opdateret ekstern frigivelsesvurdering
 
 NO-GO til almindelig kundedrift; betinget læse-/demopilot efter afgrænset accept. Aktuel GitHub/HTTP-status og begge npm-audits er verificeret. 359-test CI er grøn, men økonomiske writes, normal kundemail og scheduler er stadig kodeblokeret. Lint fejler; samlet leverandørpilot og D1+R2-restore mangler som releasebevis. Se [RELEASE-READINESS-2026-09-28.md](RELEASE-READINESS-2026-09-28.md) for prioriteret plan og afgrænsninger. Denne vurdering ændrer ingen runtime, data eller udgivelse.
+## 28. september 2026 – Selvbetjent tilmelding
+Se PUBLIC-SIGNUP.md. Implementeret og lokalt testet i isoleret platform/public-signup. Produktionens runtime-opgave koordinerer integration/udgivelse. Endnu ikke sat i drift.
+

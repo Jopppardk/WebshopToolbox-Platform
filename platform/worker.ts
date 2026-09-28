@@ -1,6 +1,7 @@
 import {runProductionJobs} from './production-jobs';
 import {productionWrites} from './production-policy';
 import { customerActor, customerLogin, customerLogout } from './customer-auth';
+import { publicSignup } from './signup';
 import { publicFeed } from './feeds';
 import { handleTier1 } from './tier1-api';
 import { InvoiceCheckError } from '../lib/invoice-check';
@@ -58,6 +59,8 @@ export default {
       if(!admin&&path.startsWith('/feeds/'))return secure(await publicFeed(request,env));
       if(path==='/robots.txt'&&['GET','HEAD'].includes(request.method))return secure(new Response(request.method==='HEAD'?null:'User-agent: *\nDisallow:\n# Indexing is disabled by X-Robots-Tag on every response.\n',{headers:{'Content-Type':'text/plain; charset=utf-8'}}));
       if(customerEnabled&&!admin){
+        if(path==='/auth/signup')return secure(await publicSignup(request,env));
+        if(['/signup','/signup.js'].includes(path)&&request.method==='GET'&&env.PLATFORM_SIGNUP==='enabled')return secure(await asset(path==='/signup'?new Request(new URL('/signup.html',url)):request,env));
         if(['/auth/start','/auth/verify'].includes(path))return secure(await customerLogin(request,env,path.slice(6)));
         if(path==='/logout')return secure(await customerLogout(request,env));
         if(path==='/onboarding'&&request.method==='GET'){

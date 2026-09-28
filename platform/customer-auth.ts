@@ -22,6 +22,7 @@ async function limit(env:PlatformEnv,key:string,max:number,period:number){
  const row=await env.PLATFORM_DB.prepare('INSERT INTO customer_login_limits(key,count,expires_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count').bind(id,(bucket+2)*period).first<{count:number}>();
  if(!row||row.count>max)throw new HttpError(429,'For mange forsøg. Vent lidt, og prøv igen.');
 }
+export const loginLimit=limit;
 export async function customerActor(request:Request,env:PlatformEnv):Promise<Actor>{
  const token=getCookie(request,sessionName);if(!/^[a-f0-9]{64}$/.test(token))throw new HttpError(401,'Log ind for at fortsætte.');
  const now=seconds(),hash=await loginHash(token);
@@ -30,6 +31,8 @@ export async function customerActor(request:Request,env:PlatformEnv):Promise<Act
  AND EXISTS(SELECT 1 FROM company_memberships m WHERE m.company_id=u.company_id AND m.user_id=u.id)
  AND NOT EXISTS(SELECT 1 FROM platform_admins a WHERE a.user_id=u.id)`).bind(hash,now,now-1800).first<{id:string;email:string;full_name:string|null;phone:string|null}>();
  if(!user)throw new HttpError(401,'Din session er udløbet. Log ind igen.');
+ const trial=await env.PLATFORM_DB.prepare('SELECT trial_ends_at FROM public_signups WHERE company_id=(SELECT company_id FROM users WHERE id=?)').bind(user.id).first<{trial_ends_at:number|null}>();
+ if(trial?.trial_ends_at&&trial.trial_ends_at<=now)throw new HttpError(403,'Din gratis prøveperiode er udløbet. Kontakt info@webshoptoolbox.dk for at aftale fortsættelse. Der er ikke opkrævet betaling.');
  await env.PLATFORM_DB.prepare('UPDATE customer_sessions SET last_seen=? WHERE token_hash=?').bind(now,hash).run();
  return {id:user.id,email:user.email,fullName:user.full_name,phone:user.phone,platformAdmin:false};
 }

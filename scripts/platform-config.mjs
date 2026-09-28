@@ -58,6 +58,7 @@ export function validateConfig(config, remote = false) {
     'PLATFORM_ENV',
     'PLATFORM_AUTH',
     'PLATFORM_CUSTOMER_LOGIN',
+    'PLATFORM_SIGNUP',
     'PLATFORM_ADMIN_HOST',
     'PLATFORM_EXTERNAL_WRITES',
     'PLATFORM_CUSTOMER_EMAIL',

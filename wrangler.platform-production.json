@@ -24,7 +24,8 @@
     "PLATFORM_INVITATION_FROM": "no-reply@webshoptoolbox.dk",
     "PLATFORM_MAIL_FROM": "faktura@webshoptoolbox.dk",
     "PLATFORM_MAIL_TEST_RECIPIENTS": "rj@itm8.com,rene.jeppesen@live.dk,rene@sablen.dk",
-    "PLATFORM_CUSTOMER_LOGIN": "enabled"
+    "PLATFORM_CUSTOMER_LOGIN": "enabled",
+    "PLATFORM_SIGNUP": "enabled"
   },
   "d1_databases": [
     {

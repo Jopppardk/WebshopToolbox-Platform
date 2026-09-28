@@ -464,3 +464,5 @@ textarea { width:100%; box-sizing:border-box; border:1px solid #cbd5e1; border-r
 .ticket-message{margin:1rem 0;padding:1rem;border:1px solid #ddd;border-radius:8px}.ticket-message.support{border-left:4px solid #b68b37}.ticket-message small{display:block;color:#666;margin-top:.3rem}.ticket-message p{white-space:pre-wrap;overflow-wrap:anywhere}
 
 .customer .panel > form,.customer .panel > label,.customer .panel > details,.customer .panel > .panel{margin:20px}.customer .panel > p:not(.empty),.customer .panel > .actions{margin:16px 20px}.customer .ticket-message{margin:20px}.customer .panel > button{margin:12px 20px}.customer .panel > select{margin:16px 20px;max-width:calc(100% - 40px)}
+
+.welcome-preview{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.6}

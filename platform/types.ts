@@ -10,6 +10,7 @@ export interface PlatformEnv {
   PLATFORM_ACCESS_AUD?: string;
   PLATFORM_LOCAL_SECRET?: string;
   PLATFORM_CUSTOMER_LOGIN?: 'enabled';
+  PLATFORM_SIGNUP?: 'enabled';
   PLATFORM_ADMIN_HOST?: 'admin.webshoptoolbox.dk';
   PLATFORM_LOGIN_SECRET?: string;
   PLATFORM_AUTH_MAIL?: PlatformEnv['PLATFORM_MAIL_TEST'];
