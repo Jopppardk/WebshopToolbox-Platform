@@ -291,3 +291,7 @@ Ovenstående fem Cloud-leverancer er samlet på platform/cloud-release-20260928.
 
 Alle fem Cloud-leverancer er samlet via PR #1 og udgivet på dev og portal fra 8fd86ce. 358/358 tests, obligatorisk CI og begge deployworkflows bestået. Health/login 200, admin Access 302 og anonym ordre-API 401 på begge miljøer. Bogføring/normal kundemail fortsat blocked; ingen Sablen- eller dataændringer. Se [CLOUD-RELEASE-2026-09-28.md](CLOUD-RELEASE-2026-09-28.md) for kildeopgaver, runs, versioner og resterende live-verifikation.
 
+
+## 28. september 2026 – Samlet fakturamail-opsætning
+
+Implementeret: tre trin (design, mailtekst, afsender/test), foldbar valgfri Cloudflare-opsætning og grønt flueben efter accepteret test af gemt konfiguration. Én demo-testmail kontrollerer nu også en endnu ikke verificeret egen afsender; fejl falder ikke tilbage til standardafsender. Status genhentes efter testen. Gemte designs bruges fortsat, idempotens og tenantkontrol bevares. Tests og udgivelse afventer. Ingen migration, rigtige testmails eller Sablen-ændringer.

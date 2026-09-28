@@ -12,6 +12,7 @@ import { ErrorOverview } from '@/components/error-overview';
 import { OrderLog } from '@/components/order-log';
 import { SalesPreview } from '@/components/sales-preview';
 import { ManualBookingAction } from '@/components/manual-booking-action';
+import { InvoiceSender } from '@/components/invoice-sender';
 import { InvoiceIssuer } from '@/components/invoice-issuer';
 import { Documents } from '@/components/documents';
 import { Inventory } from '@/components/inventory';
@@ -785,9 +786,6 @@ function Settings({
   const [connected, setConnected] = useState<Record<string, string>>({});
   const [shopify, setShopify] = useState({ shop: '', clientId: '', clientSecret: '' });
   const [dinero, setDinero] = useState({ clientId: '', clientSecret: '', apiKey: '', organizationId: '' });
-  const [emailTestState, setEmailTestState] = useState<'idle' | 'sending'>('idle');
-  const [emailTestMessage, setEmailTestMessage] = useState('');
-  const [emailTestRecipient, setEmailTestRecipient] = useState('');
   useEffect(() => {
     fetch('/api/integrations')
       .then((response) => response.json() as Promise<{ integrations: Array<{ provider: string; display_name: string }> }>)
@@ -797,16 +795,6 @@ function Settings({
   const toggleAutomation = (key: keyof typeof automation, value: boolean) => {
     const next = { ...automation, [key]: value };
     setAutomation(next);
-  };
-  const sendInvoiceTest = async () => {
-    setEmailTestState('sending'); setEmailTestMessage('');
-    try {
-      const response = await fetch('/api/invoices/email-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient: emailTestRecipient, requestId:crypto.randomUUID() }) });
-      const data = await response.json() as { sent?: boolean; recipient?: string; invoiceNumber?: string; error?: string };
-      if (!response.ok) throw new Error(data.error || 'Testmailen kunne ikke sendes');
-      setEmailTestMessage(`Eksempelfakturaen med demo-data er sendt til ${data.recipient}.`);
-    } catch (error) { setEmailTestMessage(error instanceof Error ? error.message : 'Testmailen kunne ikke sendes'); }
-    finally { setEmailTestState('idle'); }
   };
   const integrations = [
     {
@@ -971,19 +959,19 @@ function Settings({
         {message && <p role="status" className="mb-4 rounded-xl border p-4 text-sm">{message}</p>}
         <section className="mb-8 overflow-hidden rounded-2xl border bg-white">
           <div className="flex items-center justify-between gap-4 border-b p-5">
-            <div><p className="text-sm font-semibold">Send faktura automatisk til kunden</p><p className="mt-1 text-xs text-muted-foreground">Automatisk kundemail er blokeret i dev. Du kan sende en eksplicit test til din egen godkendte adresse.</p></div>
+            <div><h2 className="text-lg font-semibold">2. Mailtekst</h2><p className="mt-1 text-sm text-muted-foreground">Tilpas emne og besked til kunden. Automatisk kundemail er fortsat deaktiveret.</p></div>
             <Switch disabled checked={false && automation.invoiceEmails} onCheckedChange={(value) => toggleAutomation('invoiceEmails', value)} aria-label="Send faktura automatisk til kunden" />
           </div>
           <div className="grid gap-4 p-5">
             <label><span className="text-xs font-medium text-muted-foreground">Emne</span><Input className="mt-1.5" value={invoiceEmail.subject} onChange={event => setInvoiceEmail(current => ({ ...current, subject: event.target.value }))} /></label>
             <label><span className="text-xs font-medium text-muted-foreground">Mailtekst</span><Textarea className="mt-1.5 min-h-40" value={invoiceEmail.body} onChange={event => setInvoiceEmail(current => ({ ...current, body: event.target.value }))} /></label>
             <p className="text-xs text-muted-foreground">Du kan bruge: {'{{kundenavn}}'}, {'{{fakturanummer}}'} og {'{{ordrenummer}}'}.</p>
-            <div className="border-t pt-5"><label className="block max-w-md"><span className="text-xs font-medium text-muted-foreground">Send test til</span><Input className="mt-1.5" type="email" autoComplete="email" value={emailTestRecipient} onChange={event => setEmailTestRecipient(event.target.value)} placeholder="navn@eksempel.dk" /></label><div className="mt-3 flex flex-wrap items-center gap-3"><Button type="button" variant="outline" disabled={emailTestState === 'sending' || !emailTestRecipient.trim()} onClick={sendInvoiceTest}><FileText />{emailTestState === 'sending' ? 'Sender test…' : 'Send eksempelfaktura som test'}</Button><span className="text-xs text-muted-foreground">Samme demo-PDF som “Se gemt eksempel”. Bruger gemt design og mailskabelon. Kan sendes til en valgfri gyldig mailadresse.</span></div></div>
-            {emailTestMessage && <p role="status" className="rounded-xl border p-3 text-sm">{emailTestMessage}</p>}
+
           </div>
           <div className="flex justify-end border-t p-4"><Button className="h-10 rounded-xl px-4" onClick={onSave}><Save />{saving ? 'Gemmer…' : 'Gem indstillinger'}</Button></div>
         </section>
       </fieldset>}
+      {mode === 'invoice-email' && <InvoiceSender/>}
       {mode === 'inventory' && <fieldset disabled={!ready || saving} className="min-w-0">
         {message && <p role="status" className="mb-4 rounded-xl border p-4 text-sm">{message}</p>}
         <section className="overflow-hidden rounded-2xl border bg-white">
