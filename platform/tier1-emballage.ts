@@ -1,3 +1,5 @@
+import {productionEmballage} from './production-emballage';
+import {productionWrites} from './production-policy';
 import { requireCompany } from './auth';
 import { seal,unseal } from './connections';
 import { eiConnectionError,eiRequest,eiReports,isSubmitted,type EIContext,type EISchema } from './emballage-read';
@@ -17,7 +19,7 @@ export async function handleTier1Emballage(request:Request,env:PlatformEnv,actor
   if(request.method!=='POST')throw new HttpError(405,'Brug Gem.');await requireCompany(db,actor,company,true);
   const b=await jsonBody(request,16000);
   if(path==='/emballage/reporting'){
-   if(b.action!=='sync')throw new HttpError(403,'Ekstern indberetning er blokeret i dev. Du kan hente og kontrollere kvartalerne.');
+   if(b.action!=='sync')return productionEmballage(request,env,actor,company,shop,b);
    const input={action:'sync',start:await dataStartDate(env,company,shop),end:new Date().toISOString().slice(0,10)};
    const response=await handlePackaging(new Request(request.url,{method:'POST',headers:request.headers,body:JSON.stringify(input)}),env,actor,company,shop);if(!response.ok)return response;
   }else if(b.action==='connect'){
@@ -62,7 +64,7 @@ export async function handleTier1Emballage(request:Request,env:PlatformEnv,actor
   const next=new URL(request.url);next.searchParams.set('from',start);next.searchParams.set('to',end);
   const result=await handlePackaging(new Request(next,{headers:request.headers}),env,actor,company,shop);const value=await result.json() as any;if(!result.ok)return reply(value,result.status);
   const report=reports.find(r=>r.period.start_date===start&&r.period.end_date===end&&r.responsibility.code===config.responsibility);
-  const p=value.period;quarters.push({id:start.slice(0,4)+'-Q'+(Math.floor((Number(start.slice(5,7))-1)/3)+1),label:start+' – '+end,start,end,householdGrams:p.householdGrams||0,commercialGrams:p.commercialGrams||0,reportableGrams:p.reportableGrams,unknownAudienceGrams:p.unknownAudienceGrams||0,submitted:!!report&&isSubmitted(report.status),submittedAt:report?.submitted_at||null,reason:'Dev: ekstern indberetning er blokeret.',canSubmit:false,unresolved:p.unconfiguredProductLines});
+  const p=value.period;const reason=!productionWrites(env)?'Dev: ekstern indberetning er blokeret.':!config.startDate||start<config.startDate?'Før integrationens startdato.':!report?'Perioden findes ikke hos udbyderen.':!report.accepts_writes?'Perioden er lukket.':!value.sync||value.sync.coverage_start>start||value.sync.coverage_end<end?'Hent komplet historik først.':p.unresolved||p.unknownAudienceGrams?'Afklar emballagelinjerne først.':'';quarters.push({id:start.slice(0,4)+'-Q'+(Math.floor((Number(start.slice(5,7))-1)/3)+1),label:start+' – '+end,start,end,householdGrams:p.householdGrams||0,commercialGrams:p.commercialGrams||0,reportableGrams:p.reportableGrams,unknownAudienceGrams:p.unknownAudienceGrams||0,submitted:!!report&&isSubmitted(report.status),submittedAt:report?.submitted_at||null,reason,canSubmit:!reason&&!!report&&!isSubmitted(report.status),unresolved:p.unconfiguredProductLines});
  }
  return reply({connected:!!context,testMode:context?.api_key.is_test,organisation:context?.organisation.name,startDate:config.startDate,quarters});
 }

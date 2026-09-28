@@ -36,7 +36,7 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
  const blocked=['/bookkeeping/manual','/sales/transfer','/refunds/transfer','/payouts/transfer','/flatpay/draft','/flatpay/production','/invoices/email'];
  if(blocked.includes(path)&&!get)throw new HttpError(403,'Denne overfoersel er ikke tilgaengelig her. Brug Bogfoer manuelt paa posten i produktionsportalen.');
  const runs=async()=> (await db.prepare('SELECT * FROM operation_runs WHERE company_id=? AND webshop_id=? ORDER BY started_at DESC,id DESC LIMIT 1000').bind(company,shop).all<any>()).results;
- if(path==='/admin/sync-status'&&get){const row=(await runs())[0];return reply({automatic:productionWrites(env),intervalMinutes:5,serverNow:Date.now(),status:row?.status==='success'?'succeeded':row?.status||'unknown',startedAt:row?.started_at||null,finishedAt:row?.finished_at||null,blockedUntil:null});}
+ if(path==='/admin/sync-status'&&get){const row=(await runs())[0],saved=await db.prepare('SELECT preferences_json FROM tier1_preferences WHERE company_id=? AND webshop_id=?').bind(company,shop).first<{preferences_json:string}>();return reply({automatic:productionWrites(env),intervalMinutes:saved?JSON.parse(saved.preferences_json).syncIntervalMinutes:5,serverNow:Date.now(),status:row?.status==='success'?'succeeded':row?.status||'unknown',startedAt:row?.started_at||null,finishedAt:row?.finished_at||null,blockedUntil:null});}
  if(path==='/admin/insights'&&get){
   const list=(await runs()).map(r=>({...r,job_key:r.module,job_name:r.module,status:r.status==='success'?'succeeded':r.status,duration_ms:r.finished_at?Date.parse(r.finished_at)-Date.parse(r.started_at):null}));
   const status=url.searchParams.get('status'),filtered=status?list.filter(r=>r.status===status):list,p=Math.max(1,pageNumber(url.searchParams.get('page'),1));
@@ -104,7 +104,7 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   if(b.action==='prepare'&&response.ok){const d=await response.json() as any;return reply({...d,operationId:d.id});}return response;
  }
  if(path==='/sales/preview'){
-  const response=await handleOperations(request,env,actor,company,shop,'sales-preview');if(!response.ok)return response;const data=await response.json() as any;return reply({...data,notes:['Dev: kontrollen opretter ingen bogføring.'],checkedAt:new Date().toISOString()});
+  const response=await handleOperations(request,env,actor,company,shop,'sales-preview');if(!response.ok)return response;const data=await response.json() as any;return reply({...data,notes:['Kontrollen opretter ingen bogføring.'],checkedAt:new Date().toISOString()});
  }
  if(path==='/shopify/orders'){
   if(!get){const response=await handleOperations(request,env,actor,company,shop,'orders');if(!response.ok)return response;const data=await response.json() as any;return reply({...data,synced:data.count,invoicesCreated:0,orders:[]});}

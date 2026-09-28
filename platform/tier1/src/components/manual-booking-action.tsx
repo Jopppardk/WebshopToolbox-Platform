@@ -15,7 +15,7 @@ export function ManualBookingAction({kind,externalId,onDone}:{kind:'sale'|'payou
    const response=await fetch('/api/bookkeeping/manual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,externalId,action,confirmed,version:result?.version})});
    const data=await response.json() as Result&{error?:string};
    if(!response.ok)throw Error(data.error||'Handlingen kunne ikke gennemføres.');
-   setResult(data);if(action==='retry'){setDone(true);onDone();}
+   setResult(data);if(action==='retry'||data.phase==='booked'){setDone(true);onDone();}
   }catch(e){setError(e instanceof Error?e.message:'Handlingen kunne ikke gennemføres.');if(action==='retry'){setResult(null);setConfirmed(false);onDone();}}
   finally{setBusy(false);}
  }

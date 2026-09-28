@@ -306,3 +306,7 @@ NO-GO til almindelig kundedrift; betinget læse-/demopilot efter afgrænset acce
 ## 28. september 2026 – Selvbetjent tilmelding
 Se PUBLIC-SIGNUP.md. Implementeret og lokalt testet i isoleret platform/public-signup. Produktionens runtime-opgave koordinerer integration/udgivelse. Endnu ikke sat i drift.
 
+
+
+## Produktionskørsel – 28. september 2026
+Implementeret på platform/production-runtime; endnu ikke udgivet. Se PRODUCTION-RUNTIME-2026-09-28.md for adapters, sikkerhedsgrænser, tests og driftsstatus. Samlet udgivelse koordineres med tilmeldingsopgaven.

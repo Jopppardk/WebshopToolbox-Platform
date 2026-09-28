@@ -16,8 +16,8 @@
   "vars": {
     "PLATFORM_ENV": "production",
     "PLATFORM_AUTH": "cloudflare-access",
-    "PLATFORM_EXTERNAL_WRITES": "blocked",
-    "PLATFORM_CUSTOMER_EMAIL": "blocked",
+    "PLATFORM_EXTERNAL_WRITES": "enabled",
+    "PLATFORM_CUSTOMER_EMAIL": "enabled",
     "PLATFORM_ACCESS_ISSUER": "https://flat-sun-0738.cloudflareaccess.com",
     "PLATFORM_ACCESS_AUD": "8029826e98be59c035aba9af67ee49560bea48baae6567048d989d16d465b72f",
     "PLATFORM_INVITATION_MODE": "registered",
@@ -42,7 +42,9 @@
     }
   ],
   "triggers": {
-    "crons": []
+    "crons": [
+      "*/5 * * * *"
+    ]
   },
   "send_email": [
     {

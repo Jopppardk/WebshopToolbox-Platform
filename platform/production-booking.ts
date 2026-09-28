@@ -14,7 +14,7 @@ export async function handleProductionBooking(request:Request,env:PlatformEnv,ac
  if(!productionWrites(env))throw new HttpError(403,'Bogføring er ikke aktiveret i dette miljø.');
  if(request.method!=='POST')throw new HttpError(405,'Brug POST.');
  const input=await jsonBody(request),id=String(input.externalId||'');
- if(input.kind!==kind||!pattern.test(id)||!['inspect','retry'].includes(String(input.action)))throw new HttpError(400,'Vælg et salg og en gyldig handling.');
+ if(input.kind!==kind||!pattern.test(id)||!['inspect','retry'].includes(String(input.action)))throw new HttpError(400,'Vælg en post og en gyldig handling.');
  const db=env.PLATFORM_DB;
  const connection=await db.prepare('SELECT * FROM accounting_connections WHERE company_id=?').bind(company).first<any>();
  if(!connection)throw new HttpError(409,'Forbind Dinero først.');
@@ -22,9 +22,9 @@ export async function handleProductionBooking(request:Request,env:PlatformEnv,ac
  if(credentials.organizationId!==connection.organization_id)throw new HttpError(409,'Regnskabsforbindelsen stemmer ikke.');
  const key:ReceiptKey={company,shop,provider,module,externalId:id,destination:connection.organization_id};
  const reconciled=await db.prepare('SELECT voucher_guid FROM accounting_reconciliations WHERE company_id=? AND webshop_id=? AND provider=? AND module=? AND external_id=? AND organization_id=?').bind(company,shop,provider,module,id,connection.organization_id).first();
- if(reconciled)throw new HttpError(409,'Salget er allerede afstemt med et eksisterende Dinero-bilag.');
+ if(reconciled)throw new HttpError(409,'Posten er allerede afstemt med et eksisterende Dinero-bilag.');
  let current=await readReceipt(env,key);
- if(current?.phase==='booked')return reply({phase:'booked',guid:current.payload.guid,message:'Salget er allerede bogført. Kvitteringen er bevaret.'});
+ if(current?.phase==='booked')return reply({phase:'booked',guid:current.payload.guid,message:'Posten er allerede bogført. Kvitteringen er bevaret.'});
  if(current&&['creating','booking','uncertain'].includes(current.phase)){
   // Read-only recovery of a known GUID is allowed, never another create.
   if(!current.payload.guid)throw new HttpError(409,'Tidligere forsøg er uafklaret. Intet nyt bilag oprettes. Afklar bilaget i Dinero.');
@@ -41,7 +41,8 @@ export async function handleProductionBooking(request:Request,env:PlatformEnv,ac
  const prefs=await db.prepare('SELECT preferences_json,revision FROM tier1_preferences WHERE company_id=? AND webshop_id=?').bind(company,shop).first<any>();
  if(!mapping||!prefs)throw new HttpError(409,'Gem kontoplan og indstillinger først.');
  const {snapshot:proposal,file}=await prepare({env,company,shop,id,connection,credentials,prefs,mapping,sourceRow});
- const snapshot:Record<string,any>={...proposal,connectionRevision:connection.revision,preferencesRevision:prefs.revision,sourceJson:sourceRow.payload_json,mappingJson:mapping.accounts_json},book=snapshot.book===true;
+ const dates=(await db.prepare('SELECT provider,start_date FROM booking_start_dates WHERE company_id=? AND webshop_id=? ORDER BY provider').bind(company,shop).all<{provider:string;start_date:string}>()).results;
+ const snapshot:Record<string,any>={...proposal,bookingDates:dates,connectionRevision:connection.revision,preferencesRevision:prefs.revision,sourceJson:sourceRow.payload_json,mappingJson:mapping.accounts_json},book=snapshot.book===true;
  if(input.action==='inspect'){
   if(!current||current.phase==='prepared')current=await saveReceipt(env,key,current,'prepared',snapshot);
   return reply({version:current.version,phase:current.phase,guid:current.payload.guid,reference:current.payload.voucher.ExternalReference,organizationId:connection.organization_id,message:book?'Opret og bogfør det kontrollerede bilag.':'Opret kun kladde i Dinero.'});

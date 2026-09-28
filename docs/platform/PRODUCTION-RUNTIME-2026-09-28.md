@@ -1,66 +1,60 @@
 # Produktionsaktivering, 28. september 2026
 
-## Status: under implementering, ikke udgivet
+## Status: implementeret og lokalt testet; udgivelse afventer CI
 
-Brugeren har godkendt produktionsaktivering og oplyst, at den tidligere
-integration.sablen.dk-løsning er stoppet. Der skal ikke indhentes en ny generel
-godkendelse af produktionsdrift. Sablen-installationen må fortsat ikke ændres.
-DEV skal bevare blokeringerne. Der er ikke udført økonomiske testposteringer.
+Brugeren har godkendt produktionsaktivering og oplyst, at den gamle Sablen-
+integration er stoppet. Ingen Sablen-installation ændres. Ingen økonomiske
+prøveposteringer udføres i produktion. DEV beholder blokeret bogføring/kundemail.
 
-PROD er endnu ikke aktiveret. Konfiguration, cron, remote database og deployment
-er uændrede. Dette er et delarbejde på platform/production-runtime.
+## Implementeret
 
-## Kontrolleret remote, kun læsning
+- Tenantafgrænsede Dinero-adapters for salg, refunderinger, Shopify Payments-
+  udbetalinger og simple afstemte Flatpay-afregninger i DKK. Kontoplan, datoer,
+  aktuelle kildedata og returnerede bilagsbeløb verificeres før videre behandling.
+- Varige kvitteringer (0026) forhindrer gentagen oprettelse og genafsendelse.
+  Kvitteringer, credentials, PDF'er og fejllog er afgrænset til virksomhed/webshop.
+  Usikre writes genforsøges ikke. Kendt bogført Dinero-GUID kan verificeres ved GET.
+- Shopify-lageroptælling med frisk antal-/kostpriskontrol, compare-and-set og
+  idempotency key; efterfølgende Dinero-kladde/bogføring. Delvis/usikker gennemførelse
+  bevares til manuel afklaring. Lagerkost kan indgå i salgsbilag ved valgt modul.
+- Kundevalgt emballageindberetning med kontrolvisning, komplet historik, friske
+  formularfelter/organisationskontrol, kundegodkendelse og holdbar kvittering.
+  Scheduler opdaterer emballagehistorik dagligt; indberetning kræver kundens klik.
+- Fakturamail til serverhentet kundeadresse og gemt PDF. Leverandøraccept er ikke
+  det samme som verificeret indbakkelevering. Demo-mail forbliver separat.
+- Scheduler hvert femte minut, gemte intervaller/modulvalg, holdbare importcursors,
+  webshoplåse, begrænset antal poster pr. kørsel og cooldown ved fejl (0027).
+  Ændrede opsætninger og udløbne prøveperioder stopper nye baggrundshandlinger.
+- Tilmelding fra den koordinerede hjemmesideopgave (0028). Trial håndhæves både
+  for kundesessioner, virksomhedsadgang og scheduler. Nye kunder får ikke automatisk
+  aktiveret bogføringsmoduler ved tilmelding.
+- PROD-konfiguration tillader eksplicit enabled + præcis femminutters-cron.
+  DEV-konfiguration accepterer fortsat kun blocked. Ressourcebindinger er fastholdt.
 
-- Den gemte bogføringsstart er 2026-09-28 for Shopify, Dinero, Flatpay og ViaBill.
-- En webshop har gemte modulvalg; alle automatiske moduler er false.
-- 48 ordre-snapshots, 4 Shopify-udbetalinger, 15 Flatpay-betalingsposter,
-  1 platformfaktura og 0 afstemningskvitteringer.
-- Cloudflare gav først 7403. Efter verificering af OAuth-konto og D1-scope
-  lykkedes samme læsekontrol. Ingen tokens eller credentials er udskrevet.
+## Afgrænsninger
 
-## Implementeret lokalt
-
-- Migration 0026 tilføjer varige kvitteringer pr. virksomhed, webshop, provider,
-  modul, eksternt ID og destination. Optimistisk låsning beskytter samtidige forsøg.
-- Databasetriggers forhindrer, at en afstemning og en ny oprettelse vinder
-  samtidig for samme post.
-- Ny separat Dinero-klient uden gamle globale bindings. Writes genforsøges ikke.
-- Salgsadapter validerer aktive rettigheder, gemte startdatoer, friske Shopify-data,
-  kontoplan, fakturaens fingerprint, revisionsnumre og det returnerede Dinero-bilag.
-  Den gemmer GUID før yderligere behandling og genopretter aldrig et usikkert bilag.
-- En kendt GUID kan læses og verificeres som bogført efter et tabt svar.
-  Usikker kladde uden bekræftet bogføring kræver fortsat en afklaringsfunktion.
-- Almindelig fakturamail har et separat spor fra demo-mail, anvender den
-  serverhentede kundeadresse og den gemte PDF, og gemmer afsendelsesclaim før send.
-  Accepterede eller usikre mails bliver ikke automatisk genafsendt.
+ViaBill er import/oversigt, ikke en automatisk Dinero-bogføringsadapter. Komplekse
+Flatpay-reguleringer og ukendte bilagsformer stoppes til kontrol. Manglende data,
+startdatoer eller kontotilknytning omgås ikke. Et tidligere eksternt bilag kan kun
+markeres afstemt via den eksisterende eksplicitte afstemningsfunktion; der gættes
+ikke på historiske matches. Brug de gemte cutover-datoer. Et uafklaret eksternt
+write kræver afklaring; generel genoprettelse/automatisk retry er ikke implementeret.
+Fejl vises i portalen; særskilte alarmmails er ikke aktiveret af denne udgivelse.
 
 ## Verifikation
 
-364/364 isolerede repository-tests bestået. De nye tests dækker samtidighed,
-webshop- og virksomhedsadskillelse, startdato, ændret ordre, mistet create/book-svar,
-kvitteringsgenbrug, mail-timeout og afstemningsrace. Tests benytter syntetisk API,
-in-memory SQLite og syntetisk dokumentlager. Ingen rigtig mail eller postering.
-TypeScript-kontroller er kørt; obligatoriske builds og CI skal fortsat følges
-før udgivelse. Migrationen er endnu ikke afprøvet på en frisk PROD-backup eller
-anvendt remote.
+374/374 tests bestået før de sidste status-/prøveperiodejusteringer. Syntetiske
+API'er og SQLite dækker overlappende eksterne ID'er, samtidige jobs, tabte svar,
+kvitteringsgenbrug, ændrede ordrer, datoer, lagerantal og emballagemængder.
+Typechecks og hovedbuild bestået. Endelig CI/dry-runs og migrationsprøve følger.
+Ingen rigtig mail eller bogføring er udført som test.
 
-## Krævet før aktivering
+## Drift og tilbageførsel
 
-1. Tilslut serverruter, miljøspecifikke capabilities og klienthandlinger til de nye
-   adapters; DEV skal fortsat afvise writes. Vis reelle kvitteringer i status/logs.
-2. Implementer scheduler med holdbare cursors, låse, fair behandling af fejlede
-   poster og kontrollerede modulvalg. Fakturamail skal respektere cutover-datoen.
-3. Flyt de relevante refund-, payout-, Flatpay-/ViaBill-, lager- og
-   emballageproduktionsforløb med samme tenantafgrænsning og dubletbeskyttelse.
-   De gamle globale Sablen-adapters må ikke importeres direkte.
-4. Kontroller om eksisterende indstillinger fortsat skal være fravalgt pr. kunde;
-   global aktivering må ikke stiltiende tilsidesætte kundernes gemte modulvalg.
-5. Udvid tests for de tilsluttede ruter/jobs, kør obligatorisk CI, afprøv migration
-   på backup, og udgiv derefter via det separate platformrepositorys workflow.
-6. Fjern kun testblokeringer for færdige funktioner. Adgangskontrol, datogrænser,
-   afstemning og beskyttelse mod usikre gentagne writes skal bevares.
-
-Dette dokument erstatter ikke den tidligere releasevurdering med en go-beslutning.
-Brugerens accept af egne tests er registreret; det resterende arbejde er reel
-manglende implementering og teknisk udgivelseskontrol, ikke yderligere tilladelse.
+Kun WebshopToolbox-Platform og de to platformressourcer anvendes. Udgivelse sker
+via GitHub-workflow efter grøn CI og separat migrering. Cloudflare Time Travel-
+bookmark skal registreres før migrering; kundedata eksporteres ikke til en lokal
+fil. Migrationerne er additive og afprøves på en syntetisk kopi af tidligere skema.
+Ved driftsproblem blokeres writes/kundemail og cron først. Kvitteringer må aldrig
+rulles tilbage eller slettes efter eksterne writes, da det kan medføre dubletter.
+Produktionsmoduler følger kundens gemte valg, også når den globale runtime åbnes.

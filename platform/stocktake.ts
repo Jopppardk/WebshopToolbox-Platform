@@ -1,3 +1,5 @@
+import {commitStocktake} from './production-stocktake';
+import {productionWrites} from './production-policy';
 import { requireCompany,requireWebshop } from './auth';
 import { jsonBody } from './invitations';
 import { readInventory } from './inventory-source';
@@ -37,12 +39,13 @@ export async function handleStocktake(request:Request,env:PlatformEnv,actor:Acto
   const voucher=adjustmentMinor===0?null:{VoucherDate:date,ExternalReference:`toolbox:${company}:${shop}:stocktake:${id}`,Lines:[{Description:`Lagerregulering · ${changes.length} lagerlinjer`,AccountNumber:account.adjustment,BalancingAccountNumber:account.inventory,Amount:-adjustmentMinor/100,AccountVatCode:'none',BalancingAccountVatCode:'none'}]};
   const payload={changes:costed,account,adjustmentMinor,voucher,expiresAt:Date.now()+600000};
   await db.prepare("INSERT INTO stocktakes(company_id,webshop_id,id,version,phase,payload_json,created_by) VALUES(?,?,?,?,'prepared',?,?)").bind(company,shop,id,version,JSON.stringify(payload),actor.id).run();
-  return reply({id,version,...payload,mode:'simulation',externalWrites:'blocked'});
+  return reply({id,version,...payload,mode:productionWrites(env)?'production':'simulation',externalWrites:productionWrites(env)?'enabled':'blocked'});
  }
- if(b.action==='commit')throw new HttpError(403,'Eksterne lagerændringer og bogføring er blokeret i dev. Brug simulering.');
+ if(b.action==='commit')return commitStocktake(env,actor,company,shop,b);
  if(!['simulate','cancel'].includes(String(b.action))||typeof b.id!=='string'||typeof b.version!=='string')throw new HttpError(400,'Ugyldig handling.');
  const state=await db.prepare('SELECT * FROM stocktakes WHERE company_id=? AND webshop_id=? AND id=?').bind(company,shop,b.id).first<Saved>();
  if(!state||state.version!==b.version||state.phase!=='prepared')throw new HttpError(409,'Forslaget er ændret eller allerede behandlet.');
+ const receipt=await db.prepare("SELECT 1 FROM production_receipts WHERE company_id=? AND webshop_id=? AND provider='shopify' AND module='stocktake' AND external_id=?").bind(company,shop,b.id).first();if(receipt)throw new HttpError(409,'Lagerreguleringen er allerede behandlet eller afventer afklaring.');
  const value=JSON.parse(state.payload_json);
  if(b.action==='simulate'){
   if(b.confirmation!==true||value.expiresAt<Date.now())throw new HttpError(409,'Godkend et aktuelt forslag.');
