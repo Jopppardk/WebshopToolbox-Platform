@@ -1,6 +1,7 @@
 # Udviklingsplan
 
-> 28. september 2026 – Deployment fra Codex Cloud: implementeret bestillingsscript og samlet GitHub-kæde (CI → dev → HTTP-gate → prod → HTTP-gate). Resterende accept: PR/CI, Cloud-runtime-adgang og en faktisk Cloud-bestilt udgivelse. Se [CODEX-CLOUD-DEPLOY.md](CODEX-CLOUD-DEPLOY.md). Eksisterende produktionsdrift er ikke ændret af klargøringen.
+> Cloud-deployprocedure 28. september: implementering, PR #14, obligatorisk CI, gemt GH_TOKEN samt Cloud-læse-/Actions-write-kontrol er afsluttet. Run `36471598436` bekræfter Cloud-bestilling og tilsigtet versionsafvisning før deployment; rigtige dev→prod-udgivelser med HTTP-gates er bestået i runs `36468362953` og `36471085328` fra andet arbejde. Brug det opdaterede miljø til nye Cloud-opgaver. Se CODEX-CLOUD-DEPLOY.md for præcis testafgrænsning og fremgangsmåde.
+
 
 ## Drift 28. september 2026 – aktiveret på PROD
 

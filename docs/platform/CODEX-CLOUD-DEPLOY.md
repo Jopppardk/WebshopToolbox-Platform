@@ -81,6 +81,12 @@ node scripts/platform-release.mjs status <run-id>
 en faktisk dispatch. Scriptet kræver Node og curl og følger Cloud-miljøets HTTPS-proxy.
 Det bruger kun GitHubs API og sender tokenet til curl via stdin, ikke kommandolinjen.
 
+Ved `Ugyldigt GitHub-tokenformat`: kopiér selve tokenværdien fra GitHubs kopiknap,
+ikke instruktionstekst eller tokenets navn. Et fine-grained token begynder med
+`github_pat_`. Vis aldrig værdien i chat eller terminal. Hvis Cloud-editoren viser
+`Hemmelig værdi er påkrævet`, fjern en eventuel tom Secrets-række; `GH_TOKEN` skal
+fortsat ligge under Environment variables. Gem, og start en frisk terminal/opgave.
+
 `status` giver exitkode 2, mens kørslen venter/kører, 0 ved afsluttet success og 1 ved
 afsluttet fejl/annullering eller læsefejl. Vent og kontrollér samme run-ID; start ikke
 en ekstra deployment for at hente status. Se jobs/logs i workflowet ved fejl eller
@@ -102,5 +108,40 @@ Workflow-YAML er parset, og jobafhængigheder/pinnede checkouts er kontrolleret.
 Den nye HTTP-kontrol er også kørt succesfuldt mod begge eksisterende miljøer med
 kun læsekald. Det beviser ikke deployment af den nye procedure.
 
-PR/CI, Cloud-miljøopsætning og første Cloud-bestilte udgivelse afventer særskilt
-verifikation. Adgang bliver ikke etableret af dette dokument.
+PR #14 er merged på main som `1a26ae64e1d9a66093842496da31fbaec744a982`.
+Den opdaterede PR bestod obligatorisk Linux-CI i run `36466767972` og push-CI i
+`36466763426`. Scriptets faktiske GitHub-læsekald er også afprøvet med den eksisterende
+lokale Git-session uden at udskrive eller gemme tokenet.
+
+Cloud-miljøet `WebshopToolbox-Platform` (ID `6ab982a263088191b9af7719815e8331`)
+er inspiceret: `github.com, api.github.com` og alle HTTP-metoder er allerede tilladt.
+Et separat fine-grained `GH_TOKEN` er nu oprettet og gemt med brugerens godkendelse:
+kun dette repository, Actions read/write, Contents read-only og Metadata read-only,
+udløb 28. september 2027. Tokenet er ikke lagret i repository eller dokumentation.
+En frisk interaktiv terminal i Cloud-miljøet har bestået `platform-release.mjs check`
+mod main `55b3a415346bd435cbbd00f078bd2d4d670e0ee9`. Dette verificerer gemt token,
+GitHub-læseadgang og aktivt workflow i Cloud-miljøets terminal; det er ikke en ny
+agentopgave. Nye agentopgaver skal bruge samme opdaterede miljø.
+
+Den nye GitHub-kæde er allerede bestået i udgivelse
+[`36468362953`](https://github.com/Jopppardk/WebshopToolbox-Platform/actions/runs/36468362953)
+af `3a455385b11c4c732dc88c676daba04fe0ed1ffb`: 386 tests, alle builds/typechecks/dry-runs,
+dev, dev-HTTP-gate, prod og prod-HTTP-gate. En senere rigtig udgivelse
+[`36471085328`](https://github.com/Jopppardk/WebshopToolbox-Platform/actions/runs/36471085328)
+af `4528bcf006b271d1f0dcf7ab51be1d360860fc14` har også bestået alle tre jobs og begge
+HTTP-gates. Begge blev bestilt fra andet arbejde.
+
+Cloud-tokenets **Actions-write er verificeret** i
+[`36471598436`](https://github.com/Jopppardk/WebshopToolbox-Platform/actions/runs/36471598436),
+bestilt direkte fra en frisk terminal i det gemte Cloud-miljø. Kontrollen brugte
+bevidst 40 nuller som `expected_sha` og sporings-ID `cloud-auth-check-20260928`.
+GitHub accepterede bestillingen og returnerede run-ID; versionsgaten afviste den
+før checkout. `dev` og `prod` er begge `skipped`. Kørslen står derfor forventeligt
+som `failure`: den beviser Cloud-adgang og versionsbeskyttelse, ikke deployment.
+Kontrollen brugte release-scriptets API-/tokenfunktioner uden at ændre workflowet
+eller vise tokenet. Der blev ikke startet en ekstra rigtig deployment herfra.
+
+Opsætningen er dermed verificeret i to dele: Cloud kan læse og starte workflowet,
+og samme workflow kan udgive og efterkontrollere dev→prod. En ny Cloud-agentopgave
+er ikke startet som del af kontrollen. Gamle opgaver skal ikke antages at have den
+nye miljøkonfiguration; start en frisk opgave i `WebshopToolbox-Platform`.
