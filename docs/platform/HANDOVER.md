@@ -1,5 +1,7 @@
 # Overlevering
 
+> Indsigt i Tier 0: lokalt implementeret 28. september. Joboversigt med virksomheds-/webshopvalg, statusfilter og sider flyttes til Tier 0; begge joblog-API’er afviser kunder. Kundens nedtælling og dashboardlink til joblogs er fjernet. Minimum 15 minutter håndhæves i indstillinger og runtime, også for tidligere gemte 1/5/10 minutter. Cloudflare-cron kan fortsat vække workeren hvert femte minut; den enkelte webshop venter mindst 15 minutter efter afsluttet kørsel. Ingen migration eller ændring af bogføringsvalg. 377 tests bestået; efter lukning af den separate jobfejlsvisning er tre målrettede regressionstests og Tier 1-typecheck bestået. Obligatorisk CI og udgivelse afventer.
+
 > Statusvisning 28. september: Rettelse merged i PR #12 med bestået CI. Miljøspecifikke udgivelseskørsler er linket i STATUS-DISPLAY.md. Ikke-afsendte salg uden kvittering vises som Afventer; registrerede bogføringsfejl skelner mellem automatisk genforsøg og manuel handling. Udbetalinger bruger fælles danske betegnelser. Se STATUS-DISPLAY.md for afgrænsning og udgivelsesstatus.
 
 > 28. september 2026: Brugeren har udtrykkeligt godkendt fuld deaktivering af integration.sablen.dk. Alle seks automatiske moduler er slået fra i legacy-indstillingerne; cron og custom domain er fjernet. Worker, D1, R2 og credentials bevares. Se LEGACY-DEACTIVATION.md. Genaktivér ikke legacy som del af en platformudgivelse.

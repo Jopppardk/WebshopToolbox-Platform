@@ -12,7 +12,7 @@ async function state(db:D1Database,company:string,shop:string) {
   const mapping=await db.prepare('SELECT accounts_json FROM accounting_mapping WHERE company_id=?').bind(company).first<{accounts_json:string}>();
   const invoice=await db.prepare('SELECT subject,body FROM invoice_settings WHERE company_id=?').bind(company).first<{subject:string;body:string}>();
   const revision=await fingerprint([preference?.revision||'',mapping?.accounts_json||'',invoice?.subject||'',invoice?.body||'']);
-  const preferences=preference?JSON.parse(preference.preferences_json):{automation:defaultAutomation,syncIntervalMinutes:5};
+  const preferences=preference?JSON.parse(preference.preferences_json):{automation:defaultAutomation,syncIntervalMinutes:15};
   return {preference,mapping,invoice,revision,settings:validateSettings({...preferences,accounts:{...emptyAccounts,...JSON.parse(mapping?.accounts_json||'{}')},invoiceEmail:invoice||defaults})};
 }
 

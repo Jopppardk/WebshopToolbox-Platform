@@ -1,8 +1,8 @@
-export const syncIntervals = [1, 5, 10, 15, 30, 60] as const;
+export const syncIntervals = [15, 30, 60] as const;
 export type SyncInterval = typeof syncIntervals[number];
 
 export function normalizeSyncInterval(value: unknown): SyncInterval {
-  return syncIntervals.includes(value as SyncInterval) ? value as SyncInterval : 5;
+  return syncIntervals.includes(value as SyncInterval) ? value as SyncInterval : 15;
 }
 
 export function scheduledRunIsDue(scheduledTime: number, intervalMinutes: unknown) {

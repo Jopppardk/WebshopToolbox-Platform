@@ -22,6 +22,7 @@ function money(value:any){if(!value||typeof value.amount!=='string'||!/^[-]?\d+(
 export async function handleOperations(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string,module:string){
  await requireWebshop(env.PLATFORM_DB,actor,company,shop);
  const db=env.PLATFORM_DB,url=new URL(request.url);
+ if(module==='insights'&&(!actor.platformAdmin||actor.support))throw new HttpError(403,'Joboversigten findes kun i Tier 0.');
  if(module==='insights'&&request.method==='GET')return reply({runs:(await db.prepare('SELECT id,module,status,count,message,started_at,finished_at FROM operation_runs WHERE company_id=? AND webshop_id=? ORDER BY started_at DESC,id DESC LIMIT 100').bind(company,shop).all()).results});
  if(module==='connection-test'&&request.method==='POST'){
   await requireCompany(db,actor,company,true);if(actor.support)throw new HttpError(403,'Afslut impersonering før forbindelsestest.');await jsonBody(request);

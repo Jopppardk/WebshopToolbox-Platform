@@ -28,7 +28,7 @@ export async function runProductionJobs(env:PlatformEnv){
   if(Date.now()>deadline)break;
   const company=shop.company_id,id=shop.id,actor:Actor={id:shop.actor_id,email:shop.email,platformAdmin:false};
   const owner=crypto.randomUUID(),now=Date.now(),prefs=JSON.parse(shop.preferences_json),automation=prefs.automation||{};
-  const interval=Math.max(1,Math.min(1440,Number(prefs.syncIntervalMinutes)||5))*60000;
+  const interval=Math.max(15,Math.min(1440,Number(prefs.syncIntervalMinutes)||15))*60000;
   const claim=await db.prepare(`INSERT INTO production_jobs(company_id,webshop_id,job,lease_owner,lease_until) VALUES(?,?,'runtime',?,?)
  ON CONFLICT(company_id,webshop_id,job) DO UPDATE SET lease_owner=excluded.lease_owner,lease_until=excluded.lease_until
  WHERE production_jobs.lease_until<? AND production_jobs.next_run_at<=?`).bind(company,id,owner,now+300000,now,now).run();
