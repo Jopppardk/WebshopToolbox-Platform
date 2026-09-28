@@ -19,7 +19,7 @@ export function ManualBookingAction({kind,externalId,onDone}:{kind:'sale'|'payou
   }catch(e){setError(e instanceof Error?e.message:'Handlingen kunne ikke gennemføres.');if(action==='retry'){setResult(null);setConfirmed(false);onDone();}}
   finally{setBusy(false);}
  }
- return <><Button disabled={!capabilities.bookkeeping} title={capabilities.bookkeeping?undefined:"Bogfoering er blokeret i testmiljoeet"} size="sm" variant="outline" onClick={()=>{setOpen(true);setResult(null);setConfirmed(false);setDone(false);void request('inspect');}}>Bogfør manuelt</Button>
+ return <><Button disabled={!capabilities.bookkeeping} title={capabilities.bookkeeping?undefined:"Bogføring er blokeret i testmiljøet"} size="sm" variant="outline" onClick={()=>{setOpen(true);setResult(null);setConfirmed(false);setDone(false);void request('inspect');}}>Bogfør manuelt</Button>
  <Dialog open={open} onOpenChange={v=>{if(!busy)setOpen(v);}}><DialogContent showCloseButton={!busy} className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
  <DialogHeader><DialogTitle>Manuel bogføring</DialogTitle><DialogDescription>Kontrollér posten i Dinero før et nyt forsøg. Et eksisterende bilag kontrolleres og genbruges. Behandlingen følger valget om kladde eller bogføring under Indstillinger.</DialogDescription></DialogHeader>
  <p className="break-all text-xs text-muted-foreground">{externalId}</p>

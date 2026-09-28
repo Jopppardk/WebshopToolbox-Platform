@@ -18,7 +18,7 @@ async function accounts(db:D1Database,company:string){
 export async function handleStocktake(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string){
  const db=env.PLATFORM_DB;await requireWebshop(db,actor,company,shop);
  if(request.method==='GET'){
-  if(new URL(request.url).searchParams.has('history'))return reply({rows:(await db.prepare('SELECT id,phase,payload_json,created_at FROM stocktakes WHERE company_id=? AND webshop_id=? ORDER BY created_at DESC,id DESC LIMIT 100').bind(company,shop).all()).results});
+  if(new URL(request.url).searchParams.has('history'))return reply({rows:(await db.prepare(`SELECT s.id,COALESCE(r.phase,s.phase) phase,COALESCE(r.payload_json,s.payload_json) payload_json,s.created_at FROM stocktakes s LEFT JOIN production_receipts r ON r.company_id=s.company_id AND r.webshop_id=s.webshop_id AND r.provider='shopify' AND r.module='stocktake' AND r.external_id=s.id AND r.destination=json_extract(s.payload_json,'$.account.organizationId') WHERE s.company_id=? AND s.webshop_id=? ORDER BY s.created_at DESC,s.id DESC LIMIT 100`).bind(company,shop).all()).results});
   return reply(await readInventory(env,company,shop));
  }
  if(request.method!=='POST')throw new HttpError(405,'Ugyldig handling.');

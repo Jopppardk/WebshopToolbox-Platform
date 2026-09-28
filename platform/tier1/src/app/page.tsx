@@ -720,7 +720,7 @@ function Invoices({ orders, onGenerated, onSync, syncing, pagination }: { pagina
                   </TableCell>
                   <TableCell className="pr-5 text-right">
                     {status === 'Genereret' ? (
-                      <div className="flex flex-wrap justify-end gap-1"><a className={buttonVariants({ variant: 'outline', size: 'sm' })} href={tier1Url(`/api/invoices/pdf?externalId=${encodeURIComponent(order.externalId || '')}&v=${encodeURIComponent(pdfVersions[order.externalId || ''] || 'legacy')}`)} target="_blank" rel="noreferrer"><FileText />PDF</a><Button variant="outline" size="sm" disabled={!capabilities.customerEmail || emailing[order.externalId || ""]} title={capabilities.customerEmail?undefined:"Kundemail er blokeret i testmiljoeet"} onClick={() => sendInvoice(order)}><Mail />{emailing[order.externalId || ''] ? 'Sender…' : 'Send til kunde'}</Button><Button variant="outline" size="sm" disabled title="Eksisterende bilag bevares uændret i dev" onClick={() => generate(order, true)}><RefreshCw />Regenerér</Button></div>
+                      <div className="flex flex-wrap justify-end gap-1"><a className={buttonVariants({ variant: 'outline', size: 'sm' })} href={tier1Url(`/api/invoices/pdf?externalId=${encodeURIComponent(order.externalId || '')}&v=${encodeURIComponent(pdfVersions[order.externalId || ''] || 'legacy')}`)} target="_blank" rel="noreferrer"><FileText />PDF</a><Button variant="outline" size="sm" disabled={!capabilities.customerEmail || emailing[order.externalId || ""]} title={capabilities.customerEmail?undefined:"Kundemail er blokeret i testmiljøet"} onClick={() => sendInvoice(order)}><Mail />{emailing[order.externalId || ''] ? 'Sender…' : 'Send til kunde'}</Button><Button variant="outline" size="sm" disabled title="Eksisterende bilag bevares uændret i dev" onClick={() => generate(order, true)}><RefreshCw />Regenerér</Button></div>
                     ) : order.shipped === 'Annulleret' ? null : (
                       <div className="flex justify-end gap-1"><Button
                         variant="outline"
@@ -962,7 +962,7 @@ function Settings({
         {message && <p role="status" className="mb-4 rounded-xl border p-4 text-sm">{message}</p>}
         <section className="mb-8 overflow-hidden rounded-2xl border bg-white">
           <div className="flex items-center justify-between gap-4 border-b p-5">
-            <div><h2 className="text-lg font-semibold">2. Mailtekst</h2><p className="mt-1 text-sm text-muted-foreground">Tilpas emne og besked til kunden. Automatisk kundemail er fortsat deaktiveret.</p></div>
+            <div><h2 className="text-lg font-semibold">2. Mailtekst</h2><p className="mt-1 text-sm text-muted-foreground">Tilpas emne og besked til kunden. {capabilities.customerEmail?'Automatisk afsendelse følger dit tilvalg her.':'Automatisk kundemail er deaktiveret i testmiljøet.'}</p></div>
             <Switch disabled={!capabilities.customerEmail} checked={automation.invoiceEmails} onCheckedChange={(value) => toggleAutomation('invoiceEmails', value)} aria-label="Send faktura automatisk til kunden" />
           </div>
           <div className="grid gap-4 p-5">
