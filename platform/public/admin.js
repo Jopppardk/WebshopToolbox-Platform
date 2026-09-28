@@ -549,15 +549,21 @@ async function integrationCatalog() {
   heading('Integrationer','Fælles katalog for WebshopToolbox. Virksomhederne vælger selv deres integrationer.');
   const data=await api('/catalog/status');
   const box=panel('Integrationskatalog',button('Kontrollér status igen',integrationCatalog));
-  box.append(el('p','API-status kommer fra udbyderens offentlige statuskilde. Den bekræfter ikke kundens adgang eller forbindelse. Integrationerne vedligeholdes i projektet.','empty'));
-  table(box,['Integration','Kategori','API-status','Kontrolleret','Statuskilde'],data.integrations.map(i=>{
+  box.append(el('p','Hver integration testes ved at kalde udbyderens API fra platformen. Testen bruger ingen kundedata og bekræfter ikke den enkelte kundes adgang.','hint'));
+  table(box,['Integration','Kategori','Forbindelse fra platformen','Udbyderens API-status','Statuskilde'],data.integrations.map(i=>{
+    const c=i.connectivity||{state:'unknown'};
+    const link=el('span',c.state==='reachable'?'● Svarer':c.state==='provider_error'?'● Fejl hos udbyderen':c.state==='unreachable'?'● Kan ikke nås':'● Ikke testet','api-status '+({reachable:'available',provider_error:'disrupted',unreachable:'disrupted'}[c.state]||'unknown'));
+    link.title=c.url?`Testet ${c.url} uden adgangsoplysninger`:'';
+    const detail=el('small',c.state==='unreachable'?`Intet svar inden for 5 sek. · ${c.ms} ms`:c.httpStatus?`HTTP ${c.httpStatus} · ${c.ms} ms`:'');
+    const connection=el('div');connection.append(link,detail);
     const state=el('span',i.api.state==='available'?'● Tilgængelig':i.api.state==='disrupted'?'● Driftsforstyrrelse':'● Ukendt','api-status '+i.api.state);
     state.title=i.api.detail;
     const source=i.api.source?el('a','Udbyderens status'):'Ingen offentlig kontrol';
     if(i.api.source){source.href=i.api.source;source.target='_blank';source.rel='noopener noreferrer';}
-    return [i.name,i.category,state,i.api.checkedAt?new Date(i.api.checkedAt).toLocaleString('da-DK'):'Ikke kontrolleret',source];
+    return [i.name,i.category,connection,state,source];
   }));
-  const hint=el('p','Grøn: udbyderen melder API i drift. Rød: udbyderen melder forstyrrelse. Grå: status kan ikke bekræftes. Kontrollen gælder i fem minutter.','intro');
+  const checked=data.integrations[0]?.connectivity?.checkedAt;
+  const hint=el('p',`Forbindelse fra platformen: platformen kalder udbyderens API-adresse uden adgangsoplysninger. "Svarer" betyder, at API'et kan nås – også når det svarer med "ikke logget ind". Det bekræfter ikke den enkelte kundes forbindelse. Udbyderens API-status kommer fra udbyderens offentlige statusside. ${checked?'Kontrolleret '+new Date(checked).toLocaleString('da-DK')+'. ':''}Kontrollen gælder i fem minutter.`,'intro');
   content.replaceChildren(box,hint);
   catalogExpiry=setTimeout(()=>{if(!$('#catalog-tab').classList.contains('active'))return;document.querySelectorAll('.api-status').forEach(n=>{n.className='api-status unknown';n.textContent='● Forældet · kontrollér igen';});},300000);
 }
