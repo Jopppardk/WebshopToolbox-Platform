@@ -1,5 +1,19 @@
 # Udviklingsplan
 
+## Drift 28. september 2026 – aktiveret på PROD
+
+PR #3 og #5 er udgivet fra `739b1860af09c0b082af0acc7e4127572802f9b1` via
+GitHub. DEV run `36456558314`, PROD run `36456562615`; begge 375 tests samt
+build/typechecks bestået. PROD tillader bogføring og kundemail med femminutters-cron;
+DEV beholder blokeringerne. Kundens gemte modulvalg og startdatoer gælder fortsat.
+Shopify-konto 55100 er tilknyttet efter udtrykkelig godkendelse og auditført.
+
+Dette aktiverer den eksisterende drift. Kommerciel Dinero-onboarding til eksterne
+kunder kræver fortsat OAuth2 i stedet for den nuværende personlige API-nøgle.
+ViaBill er import/oversigt; emballageindberetning kræver kundens godkendelse.
+Se PRODUCTION-RUNTIME-2026-09-28.md for funktioner, verifikation og begrænsninger.
+
+
 > 28. september 2026 – Produktionsaktivering er godkendt; brugeren har stoppet den gamle Sablen-integration. Ny kode til varige produktionskvitteringer, salgsbogføring og fakturamail er lokalt implementeret og testet (364 tests), men ikke tilkoblet eller udgivet. PROD/DEV er fortsat uændrede. Se [arbejdsstatus og rester](PRODUCTION-RUNTIME-2026-09-28.md).
 
 > 27. september 2026 – Separat privat repository klargjort: Jopppardk/WebshopToolbox-Platform. Fremtidig arbejdsmappe work/WebshopToolbox-Platform. Se [REPOSITORY-SPLIT.md](REPOSITORY-SPLIT.md).
