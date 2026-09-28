@@ -1,5 +1,7 @@
 # Overlevering
 
+> Cloud-deployprocedure 28. september: PR #14 er merged som `1a26ae6`; lokal validering og obligatorisk Linux-CI (`36466767972`) bestået. Cloud-netværket er allerede korrekt indstillet til GitHub API. Brugerens oprettelse/lagring af et afgrænset `GH_TOKEN` samt første kontrol fra Cloud afventer. Ingen deployment er startet. Se den afsluttende status i CODEX-CLOUD-DEPLOY.md.
+
 > 28. september 2026 – Ny fast procedure til Codex Cloud er klargjort på `platform/cloud-deploy`; se [CODEX-CLOUD-DEPLOY.md](CODEX-CLOUD-DEPLOY.md). Brug `scripts/platform-release.mjs` til GitHub-dispatch af en godkendt main-SHA. `prod` går altid gennem dev og HTTP-gate. Manglende Cloud-runtime-token/netværksadgang kan ikke løses af repositorykode; setup-secrets må ikke persisteres. Ingen deployment følger automatisk af denne ændring.
 
 > Statusvisning 28. september: Rettelse merged i PR #12 med bestået CI. Miljøspecifikke udgivelseskørsler er linket i STATUS-DISPLAY.md. Ikke-afsendte salg uden kvittering vises som Afventer; registrerede bogføringsfejl skelner mellem automatisk genforsøg og manuel handling. Udbetalinger bruger fælles danske betegnelser. Se STATUS-DISPLAY.md for afgrænsning og udgivelsesstatus.

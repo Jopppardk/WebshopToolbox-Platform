@@ -102,5 +102,14 @@ Workflow-YAML er parset, og jobafhængigheder/pinnede checkouts er kontrolleret.
 Den nye HTTP-kontrol er også kørt succesfuldt mod begge eksisterende miljøer med
 kun læsekald. Det beviser ikke deployment af den nye procedure.
 
-PR/CI, Cloud-miljøopsætning og første Cloud-bestilte udgivelse afventer særskilt
-verifikation. Adgang bliver ikke etableret af dette dokument.
+PR #14 er merged på main som `1a26ae64e1d9a66093842496da31fbaec744a982`.
+Den opdaterede PR bestod obligatorisk Linux-CI i run `36466767972` og push-CI i
+`36466763426`. Scriptets faktiske GitHub-læsekald er også afprøvet med den eksisterende
+lokale Git-session uden at udskrive eller gemme tokenet.
+
+Cloud-miljøet `WebshopToolbox-Platform` (ID `6ab982a263088191b9af7719815e8331`)
+er inspiceret: `github.com, api.github.com` og alle HTTP-metoder er allerede tilladt.
+Der var ingen miljøvariabler/secrets. GitHub-tokenformular og et tomt `GH_TOKEN`-felt
+er klargjort til brugerens afsluttende oprettelse/lagring. Cloud-adgang og første
+Cloud-bestilte udgivelse er derfor endnu ikke verificeret; ingen deployment er
+startet af dette opsætningsarbejde.

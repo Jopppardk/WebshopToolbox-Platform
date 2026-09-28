@@ -1,5 +1,7 @@
 # Udviklingsplan
 
+> Cloud-deployprocedure 28. september: PR #14 og obligatorisk CI er afsluttet. Resterende accept er gemt Cloud-runtime-token og verificeret bestilling fra Cloud. Ingen deployment er foretaget som del af opsætningen. Se CODEX-CLOUD-DEPLOY.md.
+
 > 28. september 2026 – Deployment fra Codex Cloud: implementeret bestillingsscript og samlet GitHub-kæde (CI → dev → HTTP-gate → prod → HTTP-gate). Resterende accept: PR/CI, Cloud-runtime-adgang og en faktisk Cloud-bestilt udgivelse. Se [CODEX-CLOUD-DEPLOY.md](CODEX-CLOUD-DEPLOY.md). Eksisterende produktionsdrift er ikke ændret af klargøringen.
 
 ## Drift 28. september 2026 – aktiveret på PROD
