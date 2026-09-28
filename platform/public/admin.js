@@ -543,27 +543,25 @@ async function customerStore(c,manage) {
 }
 let catalogExpiry;
 async function integrationCatalog() {
-  clearTimeout(catalogExpiry); clear(); content.replaceChildren(el('p','Kontrollerer udbydernes API-status…','empty'));
+  clearTimeout(catalogExpiry); clear(); content.replaceChildren(el('p','Tester forbindelsen til udbydernes API…','empty'));
   $('#new-company').hidden=true;
   $('#companies-tab').classList.remove('active');$('#settings-tab').classList.remove('active');$('#catalog-tab').classList.add('active');
   heading('Integrationer','Fælles katalog for WebshopToolbox. Virksomhederne vælger selv deres integrationer.');
   const data=await api('/catalog/status');
-  const box=panel('Integrationskatalog',button('Kontrollér status igen',integrationCatalog));
+  const box=panel('Integrationskatalog',button('Test forbindelser igen',integrationCatalog));
   box.append(el('p','Hver integration testes ved at kalde udbyderens API fra platformen. Testen bruger ingen kundedata og bekræfter ikke den enkelte kundes adgang.','hint'));
-  table(box,['Integration','Kategori','Forbindelse fra platformen','Udbyderens API-status','Statuskilde'],data.integrations.map(i=>{
+  table(box,['Integration','Kategori','Virksomheder','Forbindelse fra platformen'],data.integrations.map(i=>{
     const c=i.connectivity||{state:'unknown'};
     const link=el('span',c.state==='reachable'?'● Svarer':c.state==='provider_error'?'● Fejl hos udbyderen':c.state==='unreachable'?'● Kan ikke nås':'● Ikke testet','api-status '+({reachable:'available',provider_error:'disrupted',unreachable:'disrupted'}[c.state]||'unknown'));
     link.title=c.url?`Testet ${c.url} uden adgangsoplysninger`:'';
     const detail=el('small',c.state==='unreachable'?`Intet svar inden for 5 sek. · ${c.ms} ms`:c.httpStatus?`HTTP ${c.httpStatus} · ${c.ms} ms`:'');
     const connection=el('div');connection.append(link,detail);
-    const state=el('span',i.api.state==='available'?'● Tilgængelig':i.api.state==='disrupted'?'● Driftsforstyrrelse':'● Ukendt','api-status '+i.api.state);
-    state.title=i.api.detail;
-    const source=i.api.source?el('a','Udbyderens status'):'Ingen offentlig kontrol';
-    if(i.api.source){source.href=i.api.source;source.target='_blank';source.rel='noopener noreferrer';}
-    return [i.name,i.category,connection,state,source];
+    const u=i.usage||{connected:0,selected:0},usage=el('div');usage.append(el('strong',u.connected+' forbundet'));usage.title='Aktive virksomheder med en gemt forbindelse';
+    if(u.selected>u.connected)usage.append(el('small',(u.selected-u.connected)+' valgt uden forbindelse'));
+    return [i.name,i.category,usage,connection];
   }));
   const checked=data.integrations[0]?.connectivity?.checkedAt;
-  const hint=el('p',`Forbindelse fra platformen: platformen kalder udbyderens API-adresse uden adgangsoplysninger. "Svarer" betyder, at API'et kan nås – også når det svarer med "ikke logget ind". Det bekræfter ikke den enkelte kundes forbindelse. Udbyderens API-status kommer fra udbyderens offentlige statusside. ${checked?'Kontrolleret '+new Date(checked).toLocaleString('da-DK')+'. ':''}Kontrollen gælder i fem minutter.`,'intro');
+  const hint=el('p',`Forbindelse fra platformen: platformen kalder udbyderens API-adresse uden adgangsoplysninger. "Svarer" betyder, at API'et kan nås – også når det svarer med "ikke logget ind". Det bekræfter ikke den enkelte kundes forbindelse. Virksomheder tæller aktive virksomheder med en gemt forbindelse til integrationen.${checked?'Kontrolleret '+new Date(checked).toLocaleString('da-DK')+'. ':''}Kontrollen gælder i fem minutter.`,'intro');
   content.replaceChildren(box,hint);
   catalogExpiry=setTimeout(()=>{if(!$('#catalog-tab').classList.contains('active'))return;document.querySelectorAll('.api-status').forEach(n=>{n.className='api-status unknown';n.textContent='● Forældet · kontrollér igen';});},300000);
 }

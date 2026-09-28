@@ -13,7 +13,7 @@ import { handleInvoices } from './invoices';
 import { handleMail } from './mail';
 import { connectionStatement, website } from './connections';
 import { invite, renewInvitation } from './invitations';
-import { catalog, apiStatus } from './catalog';
+import { catalog, apiStatus, integrationUsage } from './catalog';
 import { requireCompany, requireWebshop } from './auth';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 
@@ -133,7 +133,8 @@ export async function handleAdmin(
   }
   if(path==='/api/platform/catalog/status' && method==='GET') {
     admin(actor);
-    return reply({integrations:await apiStatus()});
+    const [status,usage]=await Promise.all([apiStatus(),integrationUsage(db)]);
+    return reply({integrations:status.map(i=>({...i,usage:usage[i.id]}))});
   }
   const selectionMatch=path.match(/^\/api\/platform\/companies\/([\w-]+)\/integrations$/);
   if(selectionMatch) {
