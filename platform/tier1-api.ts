@@ -1,6 +1,7 @@
 import { paymentProviderPattern } from './catalog';
 import { handleReconciliation } from './booking-onboarding';
 import { handleTier1Emballage } from './tier1-emballage';
+import { handleShopifyFields } from './shopify-metafields';
 import { handleFeeds } from './feeds';
 import { handleTier1Data } from './tier1-data';
 import { handleHistory } from './tier1-history';
@@ -23,6 +24,7 @@ export async function handleTier1(request:Request, env:PlatformEnv, actor:Actor)
   const [,shop,path]=match;
   if(shop!=='none') await requireWebshop(db,actor,company.company_id,shop);
   if(path==='/feeds'||path.startsWith('/feeds/'))return handleFeeds(request,env,actor,company.company_id,shop,path);
+  if(path==='/emballage/shopify-fields')return handleShopifyFields(request,env,actor,company.company_id,shop);
   if(path==='/emballage/connection'||path==='/emballage/reporting')return handleTier1Emballage(request,env,actor,company.company_id,shop,path);
   if(path==='/admin/history'||path==='/integrations/start-date')return handleHistory(request,env,actor,company.company_id,shop,path);
   if(path==='/integrations/reconciliation')return handleReconciliation(request,env,actor,company.company_id,shop);

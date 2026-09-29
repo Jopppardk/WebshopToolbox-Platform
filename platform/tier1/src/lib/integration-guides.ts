@@ -17,7 +17,7 @@ export const integrationGuides: Record<string, IntegrationGuide> = {
       'Log ind i Shopify Dev Dashboard med en bruger, som må udvikle og installere apps. Vælg den organisation, der ejer din butik.',
       'Åbn Apps → Create app → Start from Dev Dashboard. Giv appen et genkendeligt navn, fx WebshopToolbox, og vælg Create.',
       'Opret en version under Versions. Appen bruges uden indlejret brugerflade; Shopifys officielle standard-App URL er https://shopify.dev/apps/default-app-home. Vælg rettighederne nedenfor til de moduler, du bruger, og vælg Release.',
-      'Til salg og tilbagebetalinger: read_orders. Til produktfeeds: read_products. Til lager: read_inventory og read_products samt adgang til kostpriser. Til Shopify Payments: read_shopify_payments_accounts og read_shopify_payments_payouts. Lageroptælling, der skal ændre antal i Shopify, kræver desuden write_inventory. Giv kun de relevante rettigheder.',
+      'Til salg og tilbagebetalinger: read_orders. Til produktfeeds: read_products. Til lager: read_inventory og read_products samt adgang til kostpriser. Til Shopify Payments: read_shopify_payments_accounts og read_shopify_payments_payouts. Lageroptælling, der skal ændre antal i Shopify, kræver desuden write_inventory. Til emballage: read_products samt write_products, så WebshopToolbox kan oprette de fem emballagefelter på produkterne (kun feltdefinitionerne; produkter og værdier ændres ikke). Giv kun de relevante rettigheder.',
       'Ordrehistorik ældre end 60 dage kræver også read_all_orders og Shopifys godkendelse. Adgang til beskyttede kundeoplysninger, fx fakturanavn og adresse, kan kræve særskilt godkendelse; read_orders alene giver ikke nødvendigvis alle oplysninger.',
       'Vælg Install app, vælg den rigtige butik, og godkend installationen. Ved senere ændringer af rettigheder skal den nye version udgives, og rettighederne godkendes i butikken.',
       'Åbn appens Settings i Dev Dashboard, og kopiér Client ID og Client secret. Find butikkens permanente adresse, som ender på .myshopify.com, i Shopify-administrationen.',
@@ -108,11 +108,13 @@ export const integrationGuides: Record<string, IntegrationGuide> = {
       'Opret en særskilt nøgle til WebshopToolbox. Vælg test til afprøvning eller live til rigtig indberetning. Valget kan ikke ændres på en eksisterende nøgle. Vælg eventuel udløbsdato, og planlæg udskiftning inden udløb.',
       'Kopiér hele nøglen, inklusive esk_-præfiks, punktum og secret. Den vises kun én gang og kan ikke hentes igen. Gem den i en adgangskodeadministrator.',
       'Åbn Integrationer → Emballage Indberetning i WebshopToolbox. Indsæt hele værdien i API-nøgle uden mellemrum omkring punktummet og uden teksten Bearer. Vælg Validér og gem forbindelse.',
+      'Under Felter i Shopify: vælg Opret felter i Shopify. WebshopToolbox opretter fem produktfelter (custom.emballage_indberetning, custom.emballage_vaegt_gram, custom.emballage_leverandor, custom.emballage_leverandorland og custom.emballage_leverandor_cvr). Det kræver, at Shopify-appen har write_products; se vejledningen til Shopify. Felterne oprettes kun fra produktionsportalen.',
+      'Udfyld felterne pr. produkt i Shopify under produktets Metafelter, eller for mange produkter ad gangen med masseredigering. Indberetningspligtig er ja/nej, vægten angives i hele gram pr. solgt enhed, og leverandørland som landekode, fx DK.',
       'Kontrollér virksomhedsnavn og test/live-status. Vælg første kvartals startdato, producentansvar og felterne til husholdning/erhverv. Ved første opsætning henter portalen Shopify-historik fra den valgte start; kontrollér perioden før du gemmer.',
       'Forbindelsen er ikke i sig selv en indberetning. Kontrollér data og modtagerfelter i indberetningsforløbet før endelig afsendelse. Testnøgler må ikke forveksles med en rigtig indberetning.',
       'Ved nøgleskift: opret en ny nøgle, gem og kontrollér den nye forbindelse i WebshopToolbox, og tilbagekald derefter den gamle nøgle hos leverandøren. En bortkommet nøgle skal erstattes.'
     ],
     troubleshoot: '401: kontrollér hele nøglen, udløb og tilbagekaldelse. 403: få API-adgangen afklaret hos leverandøren. 429: vent før nyt forsøg. Oplys eventuelt fejlens request-reference til support, aldrig selve nøglen.',
-    sources: [{label:'Emballage Indberetning: officiel Public API-guide',url:'https://app.emballageindberetning.dk/docs/public-api'}]
+    sources: [{label:'Emballage Indberetning: officiel Public API-guide',url:'https://app.emballageindberetning.dk/docs/public-api'},{label:'Shopify: metafelter på produkter',url:'https://help.shopify.com/da/manual/custom-data/metafields'}]
   }
 };

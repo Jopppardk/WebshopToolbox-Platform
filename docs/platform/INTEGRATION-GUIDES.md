@@ -13,7 +13,7 @@ Butikkens myshopify.com-adresse, Client ID og Client Secret fra en app i din ege
 1. Log ind i Shopify Dev Dashboard med en bruger, som må udvikle og installere apps. Vælg den organisation, der ejer din butik.
 2. Åbn Apps → Create app → Start from Dev Dashboard. Giv appen et genkendeligt navn, fx WebshopToolbox, og vælg Create.
 3. Opret en version under Versions. Appen bruges uden indlejret brugerflade; Shopifys officielle standard-App URL er https://shopify.dev/apps/default-app-home. Vælg rettighederne nedenfor til de moduler, du bruger, og vælg Release.
-4. Til salg og tilbagebetalinger: read_orders. Til produktfeeds: read_products. Til lager: read_inventory og read_products samt adgang til kostpriser. Til Shopify Payments: read_shopify_payments_accounts og read_shopify_payments_payouts. Lageroptælling, der skal ændre antal i Shopify, kræver desuden write_inventory. Giv kun de relevante rettigheder.
+4. Til salg og tilbagebetalinger: read_orders. Til produktfeeds: read_products. Til lager: read_inventory og read_products samt adgang til kostpriser. Til Shopify Payments: read_shopify_payments_accounts og read_shopify_payments_payouts. Lageroptælling, der skal ændre antal i Shopify, kræver desuden write_inventory. Til emballage: read_products samt write_products, så WebshopToolbox kan oprette de fem emballagefelter på produkterne (kun feltdefinitionerne; produkter og værdier ændres ikke). Giv kun de relevante rettigheder.
 5. Ordrehistorik ældre end 60 dage kræver også read_all_orders og Shopifys godkendelse. Adgang til beskyttede kundeoplysninger, fx fakturanavn og adresse, kan kræve særskilt godkendelse; read_orders alene giver ikke nødvendigvis alle oplysninger.
 6. Vælg Install app, vælg den rigtige butik, og godkend installationen. Ved senere ændringer af rettigheder skal den nye version udgives, og rettighederne godkendes i butikken.
 7. Åbn appens Settings i Dev Dashboard, og kopiér Client ID og Client secret. Find butikkens permanente adresse, som ender på .myshopify.com, i Shopify-administrationen.
@@ -88,9 +88,11 @@ En samlet API-nøgle i formatet esk_….secret fra virksomhedens ejerkonto.
 3. Opret en særskilt nøgle til WebshopToolbox. Vælg test til afprøvning eller live til rigtig indberetning. Valget kan ikke ændres på en eksisterende nøgle. Vælg eventuel udløbsdato, og planlæg udskiftning inden udløb.
 4. Kopiér hele nøglen, inklusive esk_-præfiks, punktum og secret. Den vises kun én gang og kan ikke hentes igen. Gem den i en adgangskodeadministrator.
 5. Åbn Integrationer → Emballage Indberetning i WebshopToolbox. Indsæt hele værdien i API-nøgle uden mellemrum omkring punktummet og uden teksten Bearer. Vælg Validér og gem forbindelse.
-6. Kontrollér virksomhedsnavn og test/live-status. Vælg første kvartals startdato, producentansvar og felterne til husholdning/erhverv. Ved første opsætning henter portalen Shopify-historik fra den valgte start; kontrollér perioden før du gemmer.
-7. Forbindelsen er ikke i sig selv en indberetning. Kontrollér data og modtagerfelter i indberetningsforløbet før endelig afsendelse. Testnøgler må ikke forveksles med en rigtig indberetning.
-8. Ved nøgleskift: opret en ny nøgle, gem og kontrollér den nye forbindelse i WebshopToolbox, og tilbagekald derefter den gamle nøgle hos leverandøren. En bortkommet nøgle skal erstattes.
+6. Under Felter i Shopify: vælg Opret felter i Shopify. WebshopToolbox opretter fem produktfelter: `custom.emballage_indberetning` (ja/nej), `custom.emballage_vaegt_gram` (heltal, gram), `custom.emballage_leverandor`, `custom.emballage_leverandorland` og `custom.emballage_leverandor_cvr` (tekst). Kræver write_products på Shopify-appen og oprettes kun fra produktionsportalen. Eksisterende felter ændres ikke.
+7. Udfyld felterne pr. produkt i Shopify under produktets metafelter eller med masseredigering. Vægten angives i hele gram pr. solgt enhed, leverandørland som landekode, fx DK.
+8. Kontrollér virksomhedsnavn og test/live-status. Vælg første kvartals startdato, producentansvar og felterne til husholdning/erhverv. Ved første opsætning henter portalen Shopify-historik fra den valgte start; kontrollér perioden før du gemmer.
+9. Forbindelsen er ikke i sig selv en indberetning. Kontrollér data og modtagerfelter i indberetningsforløbet før endelig afsendelse. Testnøgler må ikke forveksles med en rigtig indberetning.
+10. Ved nøgleskift: opret en ny nøgle, gem og kontrollér den nye forbindelse i WebshopToolbox, og tilbagekald derefter den gamle nøgle hos leverandøren. En bortkommet nøgle skal erstattes.
 
 **Fejlfinding:** 401: kontrollér hele nøglen, udløb og tilbagekaldelse. 403: få API-adgangen afklaret hos leverandøren. 429: vent før nyt forsøg. Oplys eventuelt fejlens request-reference til support, aldrig selve nøglen.
 
