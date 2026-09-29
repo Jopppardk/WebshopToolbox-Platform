@@ -8,9 +8,8 @@ import {buildPayoutReport} from './payout-pdf';
 import {minorUnits} from './money';
 import {refundVoucher,type RefundPart} from '../lib/refund-voucher';
 import {flatpayDraft} from '../lib/flatpay-draft';
-import {flatpayRead} from './flatpay-read';
-import {buildFlatpayReport,checkFlatpayReport} from './flatpay-report';
-import {unseal} from './connections';
+import {readFlatpayPayout} from './flatpay-payout';
+import {buildFlatpayReport} from './flatpay-report';
 import {HttpError,type Actor,type PlatformEnv} from './types';
 const fail=(message:string):never=>{throw new HttpError(409,message);};
 const num=(value:unknown)=>{const n=Number(String(value||'').match(/^\d+/)?.[0]);if(!Number.isSafeInteger(n)||n<=0)fail('Vaelg gyldige konti i kontoplanen.');return n;};
@@ -69,21 +68,11 @@ async function refund(ctx:BookingContext):Promise<PreparedBooking>{
 }
 async function flatpay(ctx:BookingContext):Promise<PreparedBooking>{
  const {env,company,shop,id}=ctx,saved=JSON.parse(ctx.sourceRow.payload_json);
- const connection=await env.PLATFORM_DB.prepare("SELECT * FROM payment_connections WHERE company_id=? AND webshop_id=? AND provider='flatpay'").bind(company,shop).first<any>();if(!connection)fail('Forbind Flatpay foerst.');
- const metadata=JSON.parse(connection.metadata_json),access=await unseal(env,[company,shop,'flatpay',connection.identity],connection.credentials_encrypted);
- if(!/^\d{1,30}$/.test(saved.settlements||''))fail('Udbetalingen skal indeholde praecis en afregning.');
- const payments=await flatpayRead({username:access.username,password:access.password},'payments',{SettlementNumber:saved.settlements});
- const matches=payments.filter(p=>p.paymentID===id&&p.merchantID===metadata.merchantID&&p.agreementNumber===metadata.agreementNumber);
- if(matches.length!==1)fail('Udbetalingen tilhoerer ikke den gemte Flatpay-aftale.');const p=matches[0];
+ const {connection,payment:p,settlement,source}=await readFlatpayPayout(env,company,shop,id,saved.settlements);
  const date=await bookingDate(env,company,shop,'flatpay',String(p.paidDate));
- if(date<connection.start_date||p.settlements!==saved.settlements)fail('Udbetalingen er aendret. Hent den igen.');
- const settlements=(await flatpayRead({username:access.username,password:access.password},'settlements',{SettlementNumber:saved.settlements,AgreementNumber:metadata.agreementNumber})).filter(s=>s.settlementNumber===saved.settlements&&s.merchantID===metadata.merchantID&&(s.agreementNumber===metadata.agreementNumber||s.agreementID===metadata.agreementId)&&(s.agreementNumber==null||s.agreementNumber===metadata.agreementNumber)&&(s.agreementID==null||s.agreementID===metadata.agreementId));
- if(settlements.length!==1)fail('Afregningen kan ikke afstemmes entydigt.');
- const raw=settlements[0],settlement={...Object.fromEntries(Object.entries(raw).filter(([k,v])=>typeof v==='number'&&!['transactions','batches'].includes(k))),settlementNumber:saved.settlements,currency:raw.currency,transactions:String(raw.transactions),preArbitration:raw.preArbitration};
- const tx=(await flatpayRead({username:access.username,password:access.password},'transactions',{SettlementNumber:saved.settlements})).filter(t=>t.settlementNumber===saved.settlements&&t.merchantID===metadata.merchantID&&t.agreementID===metadata.agreementId).map(t=>Object.fromEntries(['transactionID','settlementNumber','purchaseDate','transactionCode','currency','grossAmount','fees','netAmount'].map(k=>[k,t[k]]))).sort((a,b)=>String(a.transactionID).localeCompare(String(b.transactionID)));
+ if(date<connection.start_date)fail('Udbetalingen er aendret. Hent den igen.');
  const a=JSON.parse(ctx.mapping.accounts_json),accounts={bank:num(a.bank),fees:num(a.fees),clearing:num(a.clearing),flatpay:num(a.flatpayClearing)};await chartFor(ctx,Object.values(accounts));
  const proposal=flatpayDraft(p,settlement,accounts);proposal.voucher.VoucherDate=date;proposal.voucher.ExternalReference=`wtb:${shop}:flatpay:${id}`;
- const source={payment:{paymentID:String(p.paymentID),paidDate:String(p.paidDate),currency:String(p.currency),payoutAmount:Number(p.payoutAmount),settlements:String(p.settlements)},settlements:[settlement],transactions:tx};checkFlatpayReport(source);
  const companyRow=await env.PLATFORM_DB.prepare('SELECT name FROM companies WHERE id=?').bind(company).first<{name:string}>();
  const report=await reportFile(ctx,source,()=>buildFlatpayReport(source,undefined,companyRow!.name));
  const attach=JSON.parse(ctx.prefs.preferences_json).automation.attachments===true;
