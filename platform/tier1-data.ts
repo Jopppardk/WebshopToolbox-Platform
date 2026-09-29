@@ -116,7 +116,7 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
  if(path==='/invoices/logo')return handleInvoices(request,env,actor,company,'logo');
  if(path==='/invoices/preview'){if(shop==='none')throw new HttpError(409,'Opret en webshop for at se fakturaeksemplet.');const next=new URL(request.url);next.searchParams.set('webshopId',shop);return handleInvoices(new Request(next,request),env,actor,company,'preview');}
  if(path==='/invoices/settings')return handleInvoices(request,env,actor,company,'settings');
- const dataPaths=['/shopify/orders','/shopify/refunds','/shopify/payouts','/shopify/payments','/refunds/overview','/payouts/overview','/sales/log','/payouts/log','/refunds/log','/sales/preview','/shopify/inventory','/documents','/invoices','/invoices/pdf','/invoices/email-test','/flatpay/records','/flatpay/sync','/flatpay/refunds','/viabill/records'];
+ const dataPaths=['/shopify/orders','/shopify/refunds','/shopify/payouts','/shopify/payments','/refunds/overview','/payouts/overview','/sales/log','/payouts/log','/refunds/log','/sales/preview','/shopify/inventory','/documents','/invoices','/invoices/pdf','/invoices/email-test','/flatpay/records','/flatpay/sync','/flatpay/refunds','/viabill/records','/pensopay/records'];
  if(!dataPaths.includes(path))return null;
  if(shop==='none')throw new HttpError(409,'Forbind en webshop først.');
  if(path==='/shopify/inventory'){
@@ -141,7 +141,7 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   if(!get)throw new HttpError(405,'Brug Hent log.');
   const provider=url.searchParams.get('provider')||'shopify',normalized=provider==='shopify_payments'?'shopify':provider;
   if(!['shopify',...paymentProviders].includes(normalized)||path==='/sales/log'&&normalized!=='shopify')throw new HttpError(400,'Vælg en gyldig udbyder.');
-  const module=path==='/sales/log'?'orders':path==='/refunds/log'?(normalized==='flatpay'?'transactions':'refunds'):normalized==='flatpay'?'payments':normalized==='viabill'?'payout':'payouts';
+  const module=path==='/sales/log'?'orders':path==='/refunds/log'?(normalized==='flatpay'?'transactions':'refunds'):normalized==='flatpay'?'payments':normalized==='viabill'?'payout':normalized==='pensopay'?'settlements':'payouts';
   return recordHistory(env,company,shop,normalized,module,url.searchParams.get('externalId')||'',pageNumber(url.searchParams.get('offset'),0));
  }
  if(path==='/documents'){
@@ -172,8 +172,8 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   }
   const rows=(await db.prepare('SELECT external_id,id,status,created_at FROM platform_invoices WHERE company_id=? AND webshop_id=? ORDER BY created_at DESC').bind(company,shop).all()).results;return reply({statuses:Object.fromEntries(rows.map((r:any)=>[r.external_id,r.status==='generated'?'Genereret':'Kræver kontrol'])),versions:Object.fromEntries(rows.map((r:any)=>[r.external_id,r.id])),generated,hasMore,nextOffset,warnings});
  }
- if(path==='/flatpay/records'||path==='/flatpay/sync'||path==='/flatpay/refunds'||path==='/viabill/records'){
-  const provider=path.includes('flatpay')?'flatpay':'viabill';
+ if(path==='/flatpay/records'||path==='/flatpay/sync'||path==='/flatpay/refunds'||path==='/viabill/records'||path==='/pensopay/records'){
+  const provider=path.includes('flatpay')?'flatpay':path.includes('pensopay')?'pensopay':'viabill';
   const paymentRows=async()=>{const next=new URL(request.url);next.searchParams.set('from',[next.searchParams.get('from')||'',await dataStartDate(env,company,shop,provider)].sort().at(-1)!);const response=await handlePayments(new Request(next,{headers:request.headers}),env,actor,company,shop,provider,'records');if(!response.ok)return response;const d=await response.json() as any;const totals:Record<string,any>={};for(const r of d.rows){const t=totals[r.currency]??={currency:r.currency,count:0,amountMinor:0};t.count++;t.amountMinor+=r.amountMinor||0;}return reply({records:d.rows,totals:Object.values(totals),hasMore:d.hasMore});};
   if(get){if(provider==='viabill'&&url.searchParams.has('id')){const row=await db.prepare("SELECT payload_json FROM payment_records WHERE company_id=? AND webshop_id=? AND provider='viabill' AND kind=? AND json_extract(payload_json,'$.id')=?").bind(company,shop,url.searchParams.get('kind')||'payout',url.searchParams.get('id')).first<{payload_json:string}>();if(!row)throw new HttpError(404,'Posten findes ikke.');return reply({record:JSON.parse(row.payload_json)});}return paymentRows();}
   const b=await jsonBody(request),cutoff=await dataStartDate(env,company,shop,provider);
@@ -181,7 +181,7 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   const end=String(b.to||b.end||new Date().toISOString().slice(0,10));
   if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||!Number.isFinite(Date.parse(start))||!/^\d{4}-\d{2}-\d{2}$/.test(end)||!Number.isFinite(Date.parse(end)))throw new HttpError(400,'Vælg en gyldig periode.');
   const boundedEnd=provider==='flatpay'&&path==='/flatpay/sync'?[end,new Date(Date.parse(start)+30*86400000).toISOString().slice(0,10)].sort()[0]:end;
-  const response=await handlePayments(forwarded(request,{...b,start,end:boundedEnd,kind:b.kind||(path==='/flatpay/refunds'?'transactions':provider==='flatpay'?'payments':'payout'),cursor:b.next||b.cursor}),env,actor,company,shop,provider,'records');if(!response.ok)return response;const data=await response.json() as any;
+  const response=await handlePayments(forwarded(request,{...b,start,end:boundedEnd,kind:b.kind||(path==='/flatpay/refunds'?'transactions':provider==='flatpay'?'payments':provider==='pensopay'?'settlements':'payout'),cursor:b.next||b.cursor}),env,actor,company,shop,provider,'records');if(!response.ok)return response;const data=await response.json() as any;
   if(path==='/flatpay/records'){const next=new URL(request.url);next.searchParams.set('kind',String(b.kind||'transactions'));next.searchParams.set('from',start);next.searchParams.set('to',end);const records:unknown[]=[];for(let offset=0;offset<=1000;offset+=50){next.searchParams.set('offset',String(offset));const response=await handlePayments(new Request(next,{headers:request.headers}),env,actor,company,shop,provider,'records');if(!response.ok)return response;const value=await response.json() as any;records.push(...value.rows);if(!value.hasMore)return reply({records});}throw new HttpError(409,'Vælg en kortere periode med højst 1000 poster.');}
   return reply({...data,...(path==='/flatpay/sync'?{next:boundedEnd<end?new Date(Date.parse(boundedEnd)+86400000).toISOString().slice(0,10):null}:{}),synced:data.count,skipped:0,mismatches:0,message:'Poster hentet. Ingen bogføring udført.'});
  }
@@ -192,9 +192,10 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
  const rows=(await db.prepare('SELECT payload_json FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module=? AND occurred_at>=? ORDER BY occurred_at DESC,external_id LIMIT 10001').bind(company,shop,module,from).all<{payload_json:string}>()).results.map(r=>JSON.parse(r.payload_json));
  if(rows.length>10000)throw new HttpError(409,'Vælg en kortere historik.');
  if(module==='payouts'){
-  const payments=(await db.prepare("SELECT provider,kind,payload_json,occurred_at,external_id FROM payment_records WHERE company_id=? AND webshop_id=? AND kind IN ('payments','payout') AND occurred_at>=? ORDER BY occurred_at DESC LIMIT 10001").bind(company,shop,from).all<any>()).results;
+  // Each provider stores its payouts under its own kind; Pensopay 'payments' are card payments, not payouts.
+  const payments=(await db.prepare("SELECT provider,kind,payload_json,occurred_at,external_id FROM payment_records WHERE company_id=? AND webshop_id=? AND ((provider='flatpay' AND kind='payments') OR (provider='viabill' AND kind='payout') OR (provider='pensopay' AND kind='settlements')) AND occurred_at>=? ORDER BY occurred_at DESC LIMIT 10001").bind(company,shop,from).all<any>()).results;
   const list=rows.map(p=>({id:p.id,provider:'shopify_payments',label:'Shopify Payments',date:p.issuedAt,amount:Number(p.net.amount),currency:p.net.currencyCode,status:payoutStatusLabel(p.status),booking:bookingStatus('shopify','payouts',p.id,p.issuedAt,JSON.stringify(p),p.status!=='PAID'&&!['FAILED','CANCELED','CANCELLED'].includes(p.status)),canBook:false,detail:{}}));
-  for(const row of payments){const p=JSON.parse(row.payload_json);list.push({id:row.external_id,provider:row.provider,label:row.provider==='flatpay'?'Flatpay':'ViaBill',date:row.occurred_at,amount:row.provider==='flatpay'?p.payoutAmount:p.amountMinor/10**new Intl.NumberFormat('en',{style:'currency',currency:p.currency}).resolvedOptions().maximumFractionDigits!,currency:p.currency,status:row.provider==='flatpay'?(p.paidDate?'Udbetalt':'Kommende'):'Udbetalt',booking:bookingStatus(row.provider,row.kind,row.external_id,row.occurred_at,row.payload_json,row.provider==='flatpay'&&!p.paidDate),canBook:false,detail:p});}
+  for(const row of payments){const p=JSON.parse(row.payload_json);if(row.provider==='pensopay'){list.push({id:row.external_id,provider:'pensopay',label:'Pensopay',date:p.payoutDate||p.date,amount:p.amountMinor/100,currency:p.currency,status:p.cancelled?'Annulleret':p.paidDate?'Udbetalt':'Kommende',booking:'not_enabled',canBook:false,detail:p});continue;}list.push({id:row.external_id,provider:row.provider,label:row.provider==='flatpay'?'Flatpay':'ViaBill',date:row.occurred_at,amount:row.provider==='flatpay'?p.payoutAmount:p.amountMinor/10**new Intl.NumberFormat('en',{style:'currency',currency:p.currency}).resolvedOptions().maximumFractionDigits!,currency:p.currency,status:row.provider==='flatpay'?(p.paidDate?'Udbetalt':'Kommende'):'Udbetalt',booking:bookingStatus(row.provider,row.kind,row.external_id,row.occurred_at,row.payload_json,row.provider==='flatpay'&&!p.paidDate),canBook:false,detail:p});}
   list.sort((a,b)=>b.date.localeCompare(a.date));return reply({total:list.length,payouts:list.slice(offset,offset+limit)});
  }
  const refundSources=new Map<string,{externalId:string;json:string}>();

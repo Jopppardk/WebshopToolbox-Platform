@@ -2,7 +2,7 @@ export const integrationRequirements = {
   orders:{title:'Salg',providers:['shopify']},
   invoices:{title:'Fakturaer',providers:['shopify']},
   refunds:{title:'Tilbagebetalinger',providers:['shopify','flatpay']},
-  payouts:{title:'Udbetalinger',providers:['shopify','flatpay','viabill']},
+  payouts:{title:'Udbetalinger',providers:['shopify','flatpay','viabill','pensopay']},
   inventory:{title:'Lager',providers:['shopify']},
   packaging:{title:'Emballage',providers:['shopify']},
   documents:{title:'Udbetalingsrapporter',providers:['shopify','flatpay']},

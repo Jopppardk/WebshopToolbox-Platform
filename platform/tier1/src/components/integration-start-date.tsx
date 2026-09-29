@@ -4,7 +4,7 @@ import {useEffect,useState} from 'react';
 import { Reconciliation } from './reconciliation';
 import {Input} from '@/components/ui/input';
 import {Button} from '@/components/ui/button';
-export function IntegrationStartDate({provider,onSaved}:{provider:'shopify'|'viabill'|'dinero'|'flatpay';onSaved?:()=>Promise<void>}){
+export function IntegrationStartDate({provider,onSaved}:{provider:'shopify'|'viabill'|'dinero'|'flatpay'|'pensopay';onSaved?:()=>Promise<void>}){
  const[bookingDate,setBookingDate]=useState(''),[date,setDate]=useState(''),[ready,setReady]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[source,setSource]=useState('');
  useEffect(()=>{let active=true;void fetch('/api/integrations/start-date?provider='+provider,{cache:'no-store'}).then(async r=>{const d=await r.json() as {startDate:string;bookingStartDate:string;source:string;error?:string};if(!r.ok)throw Error(d.error);if(active){setDate(d.startDate);setBookingDate(d.bookingStartDate);setSource(d.source);setReady(true);}}).catch(()=>{if(active)setMessage('Startdatoen kunne ikke hentes. Genindlæs siden.');});return()=>{active=false;};},[provider]);
  async function save(){setBusy(true);setMessage('');try{const r=await fetch('/api/integrations/start-date',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider,startDate:date,bookingStartDate:bookingDate})});const d=await r.json() as {startDate:string;bookingStartDate:string;source:string;error?:string};if(!r.ok)throw Error(d.error);await onSaved?.();setSource('Individuel startdato.');setMessage('Startdatoer gemt. Gælder fra næste hentning.');}catch(e){setMessage(e instanceof Error?e.message:'Kunne ikke gemmes.');}finally{setBusy(false);}}
