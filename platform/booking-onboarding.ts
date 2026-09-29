@@ -1,3 +1,4 @@
+import { bookingSources } from './catalog';
 import { readExistingVoucher } from './dinero-read';
 import { requireCompany, requireWebshop } from './auth';
 import { seal, unseal } from './connections';
@@ -55,7 +56,7 @@ export async function handleReconciliation(request:Request,env:PlatformEnv,actor
  if(request.method!=='POST')throw new HttpError(405,'Brug Kontrollér bilag.');
  const b=await jsonBody(request);
  const provider=String(b.provider||''),module=String(b.module||''),externalId=String(b.externalId||''),guid=String(b.guid||'').trim().toLowerCase();
- if(!['shopify','flatpay','viabill'].includes(provider)||!guidPattern.test(guid)||!externalId||externalId.length>300)throw new HttpError(400,'Vælg datakilde, eksternt ID og et gyldigt Dinero-bilags-GUID.');
+ if(!bookingSources.includes(provider)||!guidPattern.test(guid)||!externalId||externalId.length>300)throw new HttpError(400,'Vælg datakilde, eksternt ID og et gyldigt Dinero-bilags-GUID.');
  const operation=provider==='shopify';
  if(!(operation?['orders','refunds','payouts']:provider==='flatpay'?['payments','transactions']:['payout']).includes(module))throw new HttpError(400,'Vælg en gyldig posttype.');
  const sourceQuery=operation?'SELECT payload_json,occurred_at FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module=? AND external_id=?':'SELECT payload_json,occurred_at FROM payment_records WHERE company_id=? AND webshop_id=? AND kind=? AND external_id=? AND provider=?';

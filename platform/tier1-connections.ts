@@ -1,3 +1,4 @@
+import { optionalIntegrations, paymentProviderPattern } from './catalog';
 import { dataStartDate } from './tier1-history';
 import { requireCompany } from './auth';
 import { handleAccounting } from './accounting';
@@ -25,7 +26,7 @@ export async function handleTier1Connections(request:Request,env:PlatformEnv,act
   if(path==='/integrations/selection'){
     if(request.method==='POST'){
       const b=await jsonBody(request);
-      if(!['flatpay','viabill','emballage'].includes(String(b.provider)) || !['add','remove'].includes(String(b.action)))throw new HttpError(400,'Vælg en tilgængelig integration. Shopify og Dinero er altid tilgængelige.');
+      if(!optionalIntegrations.includes(String(b.provider)) || !['add','remove'].includes(String(b.action)))throw new HttpError(400,'Vælg en tilgængelig integration. Shopify og Dinero er altid tilgængelige.');
       if(b.action==='remove' && await db.prepare('SELECT 1 AS found FROM payment_connections WHERE company_id=? AND provider=? LIMIT 1').bind(company,b.provider).first())throw new HttpError(409,'Integrationen har en gemt forbindelse og kan ikke fjernes.');
       if(b.action==='remove' && b.provider==='emballage' && await db.prepare('SELECT 1 FROM emballage_connections WHERE company_id=? LIMIT 1').bind(company).first())throw new HttpError(409,'Integrationen har en gemt forbindelse.');
       await db.batch([db.prepare(b.action==='add'?'INSERT OR IGNORE INTO company_integrations(company_id,integration_id) VALUES(?,?)':'DELETE FROM company_integrations WHERE company_id=? AND integration_id=?').bind(company,b.provider),audit('integration.'+b.action,String(b.provider))]);
@@ -33,7 +34,7 @@ export async function handleTier1Connections(request:Request,env:PlatformEnv,act
     const rows=await db.prepare('SELECT integration_id FROM company_integrations WHERE company_id=?').bind(company).all<{integration_id:string}>();
     return reply({selected:['shopify','dinero',...rows.results.map(r=>r.integration_id)],connected:(await connected()).map(r=>r.provider)});
   }
-  const payment=path.match(/^\/(flatpay|viabill)\/connection$/);
+  const payment=path.match(new RegExp(`^/(${paymentProviderPattern})/connection$`));
   if(payment){
     if(shop==='none')throw new HttpError(409,'Forbind din webshop først.');
     const provider=payment[1];

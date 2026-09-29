@@ -13,7 +13,7 @@ import { handleInvoices } from './invoices';
 import { handleMail } from './mail';
 import { connectionStatement, website } from './connections';
 import { invite, renewInvitation } from './invitations';
-import { catalog, apiStatus, integrationUsage } from './catalog';
+import { catalog, apiStatus, integrationUsage, optionalIntegrations, paymentProviderPattern } from './catalog';
 import { requireCompany, requireWebshop } from './auth';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 
@@ -103,7 +103,7 @@ export async function handleAdmin(
   if(finance){await requireCompany(db,actor,finance[1],true);const service=financeService(env,finance[1]);if(method==='GET')return reply(await service.dashboardFinance());if(method==='POST'&&!actor.support){await jsonBody(request);try{return reply(await service.syncDashboardFinance());}catch{throw new HttpError(409,'Regnskabstal kunne ikke hentes komplet. Se status på dashboardet.');}}throw new HttpError(403,'Regnskabstal kan kun opdateres af virksomhedsadministratoren.');}
   const stocktake=path.match(/^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/stocktake$/);
   if(stocktake)return handleStocktake(request,env,actor,stocktake[1],stocktake[2]);
-  const payment=path.match(/^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/payments\/(flatpay|viabill)\/(connection|records)$/);
+  const payment=path.match(new RegExp(String.raw`^/api/platform/companies/([\w-]+)/webshops/([\w-]+)/payments/(${paymentProviderPattern})/(connection|records)$`));
   if(payment)return handlePayments(request,env,actor,payment[1],payment[2],payment[3],payment[4]);
   const dashboard=path.match(/^\/api\/platform\/companies\/([\w-]+)\/dashboard$/);
   if(dashboard&&method==='GET')return dashboardData(env,actor,dashboard[1]);
@@ -143,7 +143,7 @@ export async function handleAdmin(
     if(method==='GET') return reply({selected:(await db.prepare('SELECT integration_id FROM company_integrations WHERE company_id=? ORDER BY integration_id').bind(company).all()).results});
     if(method==='POST' || method==='DELETE') {
       const input=await body(request),id=text(input,'integrationId');
-      if(!['flatpay','viabill','emballage'].includes(id)) throw new HttpError(400,'Regnskab og webshops administreres særskilt.');
+      if(!optionalIntegrations.includes(id)) throw new HttpError(400,'Regnskab og webshops administreres særskilt.');
       await db.batch([
         db.prepare(method==='POST'?'INSERT OR IGNORE INTO company_integrations(company_id,integration_id) VALUES(?,?)':'DELETE FROM company_integrations WHERE company_id=? AND integration_id=?').bind(company,id),
         audit(db,actor,company,method==='POST'?'integration.selected':'integration.removed',company,{integrationId:id}),

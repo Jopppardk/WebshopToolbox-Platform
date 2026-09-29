@@ -1,11 +1,26 @@
-// Code-maintained catalog. No customer credentials or production adapters.
+// Code-maintained integration registry: the single source of truth for which integrations
+// exist and what they support. The database no longer lists providers (migration 0030), so
+// adding an integration here needs no migration. No customer credentials or adapters here.
+//  kind       payment integrations are routed to handlePayments and stored in payment_connections
+//  optional   companies add it themselves; Shopify and Dinero are always available
+//  history    has its own history start date
+//  booking    has a booking start date and can be reconciled against Dinero
 export const catalog = [
-  {id:'shopify',name:'Shopify',category:'Webshop',description:'Salg, tilbagebetalinger, udbetalinger og lager.'},
-  {id:'dinero',name:'Dinero',category:'Regnskab',description:'Bilag, kontoplan og økonomisk overblik.'},
-  {id:'flatpay',name:'Flatpay',category:'Betaling',description:'Transaktioner, afregninger og udbetalinger.'},
-  {id:'viabill',name:'ViaBill',category:'Betaling',description:'Betalinger og afregningsdata.'},
-  {id:'emballage',name:'Emballage Indberetning',category:'Producentansvar',description:'Kvartalsvis indberetning af emballage.'},
+  {id:'shopify',name:'Shopify',category:'Webshop',description:'Salg, tilbagebetalinger, udbetalinger og lager.',kind:'webshop',optional:false,history:true,booking:true},
+  {id:'dinero',name:'Dinero',category:'Regnskab',description:'Bilag, kontoplan og økonomisk overblik.',kind:'accounting',optional:false,history:true,booking:true},
+  {id:'flatpay',name:'Flatpay',category:'Betaling',description:'Transaktioner, afregninger og udbetalinger.',kind:'payment',optional:true,history:true,booking:true},
+  {id:'viabill',name:'ViaBill',category:'Betaling',description:'Betalinger og afregningsdata.',kind:'payment',optional:true,history:true,booking:true},
+  {id:'emballage',name:'Emballage Indberetning',category:'Producentansvar',description:'Kvartalsvis indberetning af emballage.',kind:'packaging',optional:true,history:false,booking:false},
 ] as const;
+type Entry = (typeof catalog)[number];
+const ids = (keep: (item: Entry) => boolean): string[] => catalog.filter(keep).map(item => item.id);
+export const optionalIntegrations = ids(i => i.optional);
+export const paymentProviders = ids(i => i.kind === 'payment');
+export const historyProviders = ids(i => i.history);
+/** Sources whose records can be booked or reconciled in Dinero (Dinero itself is the destination). */
+export const bookingSources = ids(i => i.booking && i.kind !== 'accounting');
+// Registry ids are lowercase letters only, so they are safe inside a route pattern.
+export const paymentProviderPattern = paymentProviders.join('|');
 
 // API base addresses the adapters call. The probe sends no credentials and reads no body.
 const endpoints: Record<(typeof catalog)[number]['id'], string> = {
