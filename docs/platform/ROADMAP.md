@@ -1,5 +1,7 @@
 # Udviklingsplan
 
+> 29. september 2026 – Performance-dashboard og Tools-menu: implementeret og lokalt testet, ikke sat i drift. Fire månedsgrafer med sammenligningsår samt leverandørfilter er afsluttet. Efterfølgende trin er gennemgang/CI, udgivelse og kontrol af rigtige rapporter samt Shopify-adgang. Se [PERFORMANCE.md](PERFORMANCE.md).
+
 > Cloud-deployprocedure 28. september: implementering, PR #14, obligatorisk CI, gemt GH_TOKEN samt Cloud-læse-/Actions-write-kontrol er afsluttet. Run `36471598436` bekræfter Cloud-bestilling og tilsigtet versionsafvisning før deployment; rigtige dev→prod-udgivelser med HTTP-gates er bestået i runs `36468362953` og `36471085328` fra andet arbejde. Brug det opdaterede miljø til nye Cloud-opgaver. Se CODEX-CLOUD-DEPLOY.md for præcis testafgrænsning og fremgangsmåde.
 
 

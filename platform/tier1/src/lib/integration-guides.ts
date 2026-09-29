@@ -19,6 +19,7 @@ export const integrationGuides: Record<string, IntegrationGuide> = {
       'Opret en version under Versions. Appen bruges uden indlejret brugerflade; Shopifys officielle standard-App URL er https://shopify.dev/apps/default-app-home. Vælg rettighederne nedenfor til de moduler, du bruger, og vælg Release.',
       'Til salg og tilbagebetalinger: read_orders. Til produktfeeds: read_products. Til lager: read_inventory og read_products samt adgang til kostpriser. Til Shopify Payments: read_shopify_payments_accounts og read_shopify_payments_payouts. Lageroptælling, der skal ændre antal i Shopify, kræver desuden write_inventory. Til emballage: read_products samt write_products, så WebshopToolbox kan oprette de fem emballagefelter på produkterne (kun feltdefinitionerne; produkter og værdier ændres ikke). Giv kun de relevante rettigheder.',
       'Ordrehistorik ældre end 60 dage kræver også read_all_orders og Shopifys godkendelse. Adgang til beskyttede kundeoplysninger, fx fakturanavn og adresse, kan kræve særskilt godkendelse; read_orders alene giver ikke nødvendigvis alle oplysninger.',
+      'Til Tools → Performance: besøg og ordrer hentes fra Shopify Analytics. Det kræver read_reports samt Level 2-adgang til beskyttede kundedata (navn, adresse, telefon og e-mail), som Shopify kræver til ShopifyQL. Manglende adgang vises på rapporten og ændrer ikke de øvrige integrationer.',
       'Vælg Install app, vælg den rigtige butik, og godkend installationen. Ved senere ændringer af rettigheder skal den nye version udgives, og rettighederne godkendes i butikken.',
       'Åbn appens Settings i Dev Dashboard, og kopiér Client ID og Client secret. Find butikkens permanente adresse, som ender på .myshopify.com, i Shopify-administrationen.',
       'Åbn Integrationer → Shopify i WebshopToolbox. Indsæt butiksadresse, Client ID og Client Secret i de tilsvarende felter, og vælg Test og forbind. WebshopToolbox henter selv de kortlivede adgangstokens.',
@@ -28,7 +29,8 @@ export const integrationGuides: Record<string, IntegrationGuide> = {
     sources: [
       {label:'Shopify: opret og installér en app',url:'https://shopify.dev/docs/apps/build/dev-dashboard/create-apps-using-dev-dashboard'},
       {label:'Shopify: Client ID, secret og tokens',url:'https://shopify.dev/docs/apps/build/authentication-authorization/client-credentials-grant'},
-      {label:'Shopify: rettigheder og ordrehistorik',url:'https://shopify.dev/docs/api/usage/access-scopes'}
+      {label:'Shopify: rettigheder og ordrehistorik',url:'https://shopify.dev/docs/api/usage/access-scopes'},
+      {label:'Shopify: rapportadgang til Performance',url:'https://shopify.dev/docs/api/admin-graphql/2026-07/queries/shopifyqlQuery'}
     ]
   },
   Dinero: {
