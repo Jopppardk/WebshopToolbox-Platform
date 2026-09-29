@@ -82,6 +82,23 @@ export const integrationGuides: Record<string, IntegrationGuide> = {
       {label:'ViaBill: integrationer og API',url:'https://www.viabill.com/dk/integrationer/'}
     ]
   },
+  Pensopay: {
+    title: 'Pensopay',
+    needs: 'En API-nøgle fra virksomhedens Pensopay-konto.',
+    note: 'Forbindelsen læser kun betalinger og afregninger. Den kan ikke capture, refundere eller annullere betalinger. Bogføring i Dinero er endnu ikke aktiveret for Pensopay.',
+    steps: [
+      'Log ind på app.pensopay.com med en bruger, der må administrere API-nøgler.',
+      'Gå til Indstillinger → Keys, og vælg Create New token under API keys. Kopiér nøglen med det samme; Pensopay viser den ikke igen.',
+      'Åbn Integrationer → Pensopay i WebshopToolbox. Angiv forbindelsens startdato, og indsæt API-nøglen.',
+      'Vælg Test nøglen. Kontrollér, at den viste konto er virksomhedens egen Pensopay-konto.',
+      'Vælg Forbind. Hent derefter afregninger under Udbetalinger (vælg Pensopay).'
+    ],
+    troubleshoot: 'HTTP 401 betyder, at nøglen er forkert eller tilbagekaldt; opret en ny under Indstillinger → Keys. HTTP 403 betyder, at nøglen mangler adgang; kontrollér dens rettigheder hos Pensopay.',
+    sources: [
+      {label:'Pensopay: kom i gang med API\'et',url:'https://docs.pensopay.com/reference/getting-started'},
+      {label:'Pensopay: afregninger (settlements)',url:'https://docs.pensopay.com/reference/getsettlements-1'}
+    ]
+  },
   'Emballage Indberetning': {
     title: 'Emballage Indberetning',
     needs: 'En samlet API-nøgle i formatet esk_….secret fra virksomhedens ejerkonto.',

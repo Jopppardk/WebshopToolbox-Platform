@@ -31,7 +31,7 @@ export function useIntegrationLibrary() {
   return {selection,error,busy,refresh,change};
 }
 type State=ReturnType<typeof useIntegrationLibrary>;
-const icons={flatpay:CreditCard,shopify:ShoppingBag,dinero:Landmark,viabill:CreditCard,emballage:PackageCheck};
+const icons={flatpay:CreditCard,shopify:ShoppingBag,dinero:Landmark,viabill:CreditCard,pensopay:CreditCard,emballage:PackageCheck};
 export function IntegrationLibrary({state,onAdded}:{state:State;onAdded:(id:IntegrationId)=>void}) {
   const [open,setOpen]=useState(false);
   return <>

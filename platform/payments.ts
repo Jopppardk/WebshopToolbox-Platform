@@ -3,6 +3,7 @@ import { seal, unseal } from './connections';
 import { jsonBody } from './invitations';
 import { flatpayRead, safeAgreement, flatpayDateRange } from './flatpay-read';
 import * as vb from './viabill-read';
+import * as pp from './pensopay-read';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 
 type Saved={identity:string;metadata_json:string;credentials_encrypted:string;start_date:string;revision:number;verified_at:string};
@@ -17,7 +18,11 @@ function flatKeys(b:Record<string,unknown>){
 async function digest(value:string){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))),v=>v.toString(16).padStart(2,'0')).join('');}
 // Payment providers with an adapter in this file. Routes follow the registry in catalog.ts,
 // so a registered provider without an adapter must be refused rather than treated as another.
-const adapters=new Set(['flatpay','viabill']);
+// Pensopay failures during connection are shown as a clear message, not a generic error.
+async function pensopayErrors(work:()=>Promise<Response>){try{return await work();}catch(error){if(error instanceof pp.PensopayError)throw new HttpError(422,error.message);throw error;}}
+const adapters=new Set(['flatpay','viabill','pensopay']);
+// Data kinds each provider stores in payment_records; the first is the default view.
+const kinds:Record<string,string[]>={flatpay:['payments','transactions','settlements'],viabill:['payout','payment'],pensopay:['settlements','payments']};
 export async function handlePayments(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string,provider:string,action:string){
  if(!adapters.has(provider))throw new HttpError(501,'Integrationen er endnu ikke tilsluttet.');
  const db=env.PLATFORM_DB;await requireWebshop(db,actor,company,shop);
@@ -25,8 +30,8 @@ export async function handlePayments(request:Request,env:PlatformEnv,actor:Actor
  const url=new URL(request.url);
  if(request.method==='GET'){
   if(action==='connection')return reply({connection:saved?{...JSON.parse(saved.metadata_json),startDate:saved.start_date,revision:saved.revision,verifiedAt:saved.verified_at}:null});
-  const kind=url.searchParams.get('kind')||(provider==='flatpay'?'payments':'payout'),offset=Number(url.searchParams.get('offset')||0),search=url.searchParams.get('search')||'';
-  if(!(provider==='flatpay'?['payments','transactions','settlements']:['payment','payout']).includes(kind)||!Number.isSafeInteger(offset)||offset<0||search.length>100)throw new HttpError(400,'Ugyldigt filter.');
+  const kind=url.searchParams.get('kind')||kinds[provider][0],offset=Number(url.searchParams.get('offset')||0),search=url.searchParams.get('search')||'';
+  if(!kinds[provider].includes(kind)||!Number.isSafeInteger(offset)||offset<0||search.length>100)throw new HttpError(400,'Ugyldigt filter.');
   const from=date(url.searchParams.get('from')||'1970-01-01'),to=date(url.searchParams.get('to')||'9999-12-31');if(to<from)throw new HttpError(400,'Ugyldig periode.');
   const rows=await db.prepare("SELECT payload_json,imported_at FROM payment_records WHERE company_id=? AND webshop_id=? AND provider=? AND kind=? AND substr(occurred_at,1,10) BETWEEN ? AND ? AND (?='' OR instr(lower(payload_json),lower(?))>0) ORDER BY occurred_at DESC,external_id LIMIT 51 OFFSET ?").bind(company,shop,provider,kind,from,to,search,search,offset).all<{payload_json:string;imported_at:string}>();
   return reply({rows:rows.results.slice(0,50).map(r=>({...JSON.parse(r.payload_json),importedAt:r.imported_at})),hasMore:rows.results.length>50,offset});
@@ -34,15 +39,18 @@ export async function handlePayments(request:Request,env:PlatformEnv,actor:Actor
  if(!['POST','PUT'].includes(request.method))throw new HttpError(405,'Ugyldig handling.');
  await requireCompany(db,actor,company,true);if(actor.support)throw new HttpError(403,'Afslut impersonering før ændring eller import.');
  const b=await jsonBody(request,8192);
- if(action==='connection'){
-  const credentials=provider==='flatpay'?flatKeys(b):vb.keys(b);
-  if(b.action==='discover')return reply({accounts:provider==='flatpay'?(await flatpayRead(credentials as ReturnType<typeof flatKeys>,'agreements')).map(safeAgreement):await vb.accounts(credentials as vb.ViaBillKeys)});
+ if(action==='connection')return pensopayErrors(async()=>{
+  const credentials=provider==='flatpay'?flatKeys(b):provider==='pensopay'?pp.keys(b):vb.keys(b);
+  if(b.action==='discover')return reply({accounts:provider==='flatpay'?(await flatpayRead(credentials as ReturnType<typeof flatKeys>,'agreements')).map(safeAgreement):provider==='pensopay'?[await pp.account(credentials as pp.PensopayKeys)]:await vb.accounts(credentials as vb.ViaBillKeys)});
   const start=date(b.startDate);if(start>new Date().toISOString().slice(0,10))throw new HttpError(400,'Startdato må ikke ligge i fremtiden.');
   let metadata:Record<string,unknown>,identity:string;
   if(provider==='flatpay'){
    const agreements=(await flatpayRead(credentials as ReturnType<typeof flatKeys>,'agreements')).map(safeAgreement).filter(a=>a.agreementNumber===b.agreementNumber);
    if(agreements.length!==1)throw new HttpError(409,'Vælg præcis én aftale fra Flatpay-kontolisten.');
    metadata={...agreements[0],agreementId:agreements[0].id};identity=JSON.stringify([agreements[0].merchantID,agreements[0].id]);
+  }else if(provider==='pensopay'){
+   // The key belongs to exactly one Pensopay account; its ID is the connection identity.
+   const found=await pp.account(credentials as pp.PensopayKeys);metadata={accountId:found.id,name:found.name};identity=found.id;
   }else{const accountId=await vb.verifyAccount(credentials as vb.ViaBillKeys,b.accountId);metadata={accountId,name:typeof b.name==='string'?b.name.slice(0,100):'ViaBill'};identity=accountId;}
   if(saved&&saved.identity!==identity)throw new HttpError(409,'En eksisterende forbindelse kan ikke skiftes til en anden aftale. Det beskytter historik og bogføringskvitteringer.');
   if(saved&&b.revision!==saved.revision)throw new HttpError(409,'Forbindelsen er ændret. Genindlæs før lagring.');
@@ -53,7 +61,7 @@ export async function handlePayments(request:Request,env:PlatformEnv,actor:Actor
   ]);
   if(result[0].meta.changes!==1)throw new HttpError(409,'Forbindelsen er ændret. Genindlæs.');
   return reply({ok:true});
- }
+ });
  if(!saved)throw new HttpError(409,'Forbind betalingsudbyderen under Integrationer først.');
  const start=date(b.start),end=date(b.end);if(start<saved.start_date||end<start||end>new Date().toISOString().slice(0,10))throw new HttpError(400,'Vælg en periode fra integrationens startdato til i dag.');
  const credentials=await unseal(env,[company,shop,provider,saved.identity],saved.credentials_encrypted),metadata=JSON.parse(saved.metadata_json);
@@ -86,6 +94,21 @@ export async function handlePayments(request:Request,env:PlatformEnv,actor:Actor
     if(!previous||row.paid)unique.set(external,row);
    }
    rows=[...unique.values()];
+  }else if(provider==='pensopay'){
+   if(!['payments','settlements'].includes(kind))throw new HttpError(400,'Vælg betalinger eller afregninger.');
+   const today=new Date().toISOString().slice(0,10),cursor=b.cursor as Record<string,unknown>|undefined,pageNumber=cursor?.page??1;
+   // Settlements are selected by payout date; look ahead so upcoming payouts are shown as such.
+   const until=kind==='settlements'?new Date(Date.parse(end)+60*86400000).toISOString().slice(0,10):end;
+   const scope=await digest(JSON.stringify([company,shop,saved.identity,saved.revision,kind,start,end]));
+   if(!Number.isSafeInteger(pageNumber)||Number(pageNumber)<1||Number(pageNumber)>1000||cursor&&cursor.scope!==scope)throw new HttpError(400,'Fortsættelsen passer ikke til denne konto og periode.');
+   const credentialsPp=credentials as pp.PensopayKeys;
+   const result=kind==='payments'?await pp.payments(credentialsPp,start,end,Number(pageNumber)):await pp.settlements(credentialsPp,start,until,Number(pageNumber),today);
+   if(result.page!==Number(pageNumber))throw new HttpError(409,'Pensopay returnerede en anden side end forespurgt. Import er stoppet.');
+   const ids=result.rows.map(r=>r.id);if(new Set(ids).size!==ids.length)throw new HttpError(409,'Pensopay returnerede gentagne poster.');
+   for(const record of result.rows){
+    rows.push('paymentId' in record?{id:record.paymentId,date:record.date,paid:true,data:record}:{id:record.settlementId,date:record.date,paid:record.paidDate!==null,data:record});
+   }
+   if(result.page<result.lastPage)next={scope,page:result.page+1};
   }else{
    if(!['payment','payout'].includes(kind))throw new HttpError(400,'Vælg betaling eller udbetaling.');
    const pageLength=kind==='payment'?50:5,cursor=b.cursor as Record<string,unknown>|undefined,first=cursor?.first??1;
@@ -114,7 +137,7 @@ export async function handlePayments(request:Request,env:PlatformEnv,actor:Actor
   return reply({count:rows.length,next,externalWrites:'blocked'});
  }catch(error){
   await db.prepare("UPDATE operation_runs SET status='failed',message=?,finished_at=CURRENT_TIMESTAMP WHERE id=?").bind('Betalingsimporten mislykkedes. Kontrollér forbindelsen og perioden.',run).run();
-  if(error instanceof HttpError)throw error;if(error instanceof vb.ViaBillError)throw new HttpError(422,error.message);
+  if(error instanceof HttpError)throw error;if(error instanceof vb.ViaBillError||error instanceof pp.PensopayError)throw new HttpError(422,error.message);
   throw new HttpError(422,'Betalingsdata kunne ikke hentes eller valideres. Ingen poster fra denne portion er gemt.');
  }
 }

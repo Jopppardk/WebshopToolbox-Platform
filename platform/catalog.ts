@@ -10,6 +10,7 @@ export const catalog = [
   {id:'dinero',name:'Dinero',category:'Regnskab',description:'Bilag, kontoplan og økonomisk overblik.',kind:'accounting',optional:false,history:true,booking:true},
   {id:'flatpay',name:'Flatpay',category:'Betaling',description:'Transaktioner, afregninger og udbetalinger.',kind:'payment',optional:true,history:true,booking:true},
   {id:'viabill',name:'ViaBill',category:'Betaling',description:'Betalinger og afregningsdata.',kind:'payment',optional:true,history:true,booking:true},
+  {id:'pensopay',name:'Pensopay',category:'Betaling',description:'Betalinger og afregninger.',kind:'payment',optional:true,history:true,booking:false},
   {id:'emballage',name:'Emballage Indberetning',category:'Producentansvar',description:'Kvartalsvis indberetning af emballage.',kind:'packaging',optional:true,history:false,booking:false},
 ] as const;
 type Entry = (typeof catalog)[number];
@@ -28,6 +29,7 @@ const endpoints: Record<(typeof catalog)[number]['id'], string> = {
   dinero: 'https://api.dinero.dk/v1',
   flatpay: 'https://api.saga.valitor.com/panthro',
   viabill: 'https://secure.viabill.com/api',
+  pensopay: 'https://api.pensopay.com/v2/ping',
   emballage: 'https://app.emballageindberetning.dk/api/public/v1',
 };
 

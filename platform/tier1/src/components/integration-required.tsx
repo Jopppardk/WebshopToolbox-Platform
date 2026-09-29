@@ -8,6 +8,7 @@ const providerNames: Record<string,string> = {
   dinero: 'Dinero',
   flatpay: 'Flatpay',
   viabill: 'ViaBill',
+  pensopay: 'Pensopay',
 };
 
 export function IntegrationRequired({title,providers,onIntegrations}:{title:string;providers:readonly string[];onIntegrations:()=>void}) {

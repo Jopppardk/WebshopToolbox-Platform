@@ -51,7 +51,7 @@ export async function runProductionJobs(env:PlatformEnv){
    const connections=(await db.prepare('SELECT provider,start_date,revision FROM payment_connections WHERE company_id=? AND webshop_id=?').bind(company,id).all<any>()).results;
    for(const connection of connections)if(automation.payments||automation.payouts){
     const provider=connection.provider;
-    for(const kind of provider==='flatpay'?['payments','settlements','transactions']:['payment','payout']){
+    for(const kind of provider==='flatpay'?['payments','settlements','transactions']:provider==='pensopay'?['payments','settlements']:['payment','payout']){
      await run('auto.import.'+provider+'.'+kind,async()=>{
       const job=provider+'.'+kind,stored=await cursor(job),today=new Date().toISOString().slice(0,10),boundary=[connection.start_date,await dataStartDate(env,company,id,provider)].sort().at(-1)!;
       const signature=JSON.stringify([connection.revision,boundary]),state=stored.scope===signature?stored:{};
