@@ -3,6 +3,8 @@ import {HttpError,type Actor,type PlatformEnv} from './types';
 const encoder=new TextEncoder(),seconds=()=>Math.floor(Date.now()/1000);
 const random=()=>Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');
 const sessionName='__Host-toolbox_session',challengeName='__Host-toolbox_challenge';
+// A normal session lasts 6 hours and ends after 30 idle minutes; a trusted device lasts 30 days and ends after 7 idle days.
+const sessionLife={normal:{total:21600,idle:1800},trusted:{total:2592000,idle:604800}};
 const cookie=(name:string,value:string,age:number)=>`${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${age}`;
 function getCookie(request:Request,name:string){return request.headers.get('cookie')?.split(';').map(v=>v.trim()).find(v=>v.startsWith(name+'='))?.slice(name.length+1)||'';}
 function address(value:unknown){if(typeof value!=='string'||value.length>254||!/^\S+@[^\s@]+\.[^\s@]+$/.test(value)||/[<>\x00-\x1f]/.test(value))throw new HttpError(400,'Angiv en gyldig mailadresse.');return value.trim().toLowerCase();}
@@ -27,9 +29,9 @@ export async function customerActor(request:Request,env:PlatformEnv):Promise<Act
  const token=getCookie(request,sessionName);if(!/^[a-f0-9]{64}$/.test(token))throw new HttpError(401,'Log ind for at fortsætte.');
  const now=seconds(),hash=await loginHash(token);
  const user=await env.PLATFORM_DB.prepare(`SELECT u.id,u.email,u.full_name,u.phone FROM customer_sessions s JOIN users u ON u.id=s.user_id JOIN companies c ON c.id=u.company_id
- WHERE s.token_hash=? AND s.expires_at>? AND s.last_seen>? AND u.status='active' AND c.status='active'
+ WHERE s.token_hash=? AND s.expires_at>? AND s.last_seen+s.idle_seconds>? AND u.status='active' AND c.status='active'
  AND EXISTS(SELECT 1 FROM company_memberships m WHERE m.company_id=u.company_id AND m.user_id=u.id)
- AND NOT EXISTS(SELECT 1 FROM platform_admins a WHERE a.user_id=u.id)`).bind(hash,now,now-1800).first<{id:string;email:string;full_name:string|null;phone:string|null}>();
+ AND NOT EXISTS(SELECT 1 FROM platform_admins a WHERE a.user_id=u.id)`).bind(hash,now,now).first<{id:string;email:string;full_name:string|null;phone:string|null}>();
  if(!user)throw new HttpError(401,'Din session er udløbet. Log ind igen.');
  const trial=await env.PLATFORM_DB.prepare('SELECT trial_ends_at FROM public_signups WHERE company_id=(SELECT company_id FROM users WHERE id=?)').bind(user.id).first<{trial_ends_at:number|null}>();
  if(trial?.trial_ends_at&&trial.trial_ends_at<=now)throw new HttpError(403,'Din gratis prøveperiode er udløbet. Kontakt info@webshoptoolbox.dk for at aftale fortsættelse. Der er ikke opkrævet betaling.');
@@ -48,7 +50,7 @@ export async function customerLogin(request:Request,env:PlatformEnv,action:strin
  if(action==='start'){
   const email=address(body.email),invitation=typeof body.invitation==='string'&&/^[a-f0-9]{64}$/.test(body.invitation)?body.invitation:null;
   await limit(env,'email:'+email,3,600);await limit(env,'global-mail',50,600);
-  await db.batch([db.prepare('DELETE FROM customer_login_limits WHERE expires_at<?').bind(now),db.prepare('DELETE FROM customer_login_challenges WHERE expires_at<?').bind(now),db.prepare('DELETE FROM customer_sessions WHERE expires_at<? OR last_seen<?').bind(now,now-1800)]);
+  await db.batch([db.prepare('DELETE FROM customer_login_limits WHERE expires_at<?').bind(now),db.prepare('DELETE FROM customer_login_challenges WHERE expires_at<?').bind(now),db.prepare('DELETE FROM customer_sessions WHERE expires_at<? OR last_seen+idle_seconds<?').bind(now,now)]);
   const invitationHash=invitation?await loginHash(invitation):null;
   const user=await db.prepare(`SELECT u.id,i.id invitation_id,i.token_hash FROM users u JOIN companies c ON c.id=u.company_id LEFT JOIN invitations i ON i.user_id=u.id
    WHERE lower(u.email)=? AND c.status='active' AND NOT EXISTS(SELECT 1 FROM platform_admins a WHERE a.user_id=u.id)
@@ -75,17 +77,17 @@ export async function customerLogin(request:Request,env:PlatformEnv,action:strin
  if(!row||!row.user_id||row.code_hash!==codeHash)throw new HttpError(401,'Koden er ugyldig eller udløbet.');
  const name=typeof body.name==='string'?body.name.trim():'',phone=typeof body.phone==='string'?body.phone.trim():'';
  if(row.invitation_id&&(name.length<2||name.length>120||phone.length>40||/[\x00-\x1f]/.test(name+phone)))throw new HttpError(400,'Udfyld dit fulde navn og eventuelt telefonnummer.');
- const claim=random(),token=random(),hash=await loginHash(token);
+ const claim=random(),token=random(),hash=await loginHash(token),life=body.trustDevice===true?sessionLife.trusted:sessionLife.normal;
  const statements=[db.prepare('UPDATE customer_login_challenges SET consumed=1,claim_id=? WHERE id=? AND consumed=0 AND expires_at>? AND code_hash=? AND browser_hash=?').bind(claim,id,now,codeHash,browserHash)];
  if(row.invitation_id){
   statements.push(db.prepare(`UPDATE invitations SET state='accepted',claim_id=? WHERE id=? AND state='pending' AND expires_at>? AND token_hash=? AND EXISTS(SELECT 1 FROM customer_login_challenges WHERE id=? AND claim_id=?)`).bind(claim,row.invitation_id,now,row.invitation_hash,id,claim));
   statements.push(db.prepare(`UPDATE users SET identity_issuer='urn:webshop-toolbox:customer',identity_subject=id,full_name=?,phone=?,status='active' WHERE id=? AND company_id IS NOT NULL AND identity_issuer='urn:webshop-toolbox:pending' AND EXISTS(SELECT 1 FROM invitations WHERE id=? AND claim_id=?)`).bind(name,phone,row.user_id,row.invitation_id,claim));
  }
  // Session insertion is last and still validates role/status; an Access identity never promotes a customer.
- statements.push(db.prepare(`INSERT INTO customer_sessions(token_hash,user_id,expires_at,last_seen,created_at) SELECT ?,u.id,?,?,? FROM users u JOIN companies c ON c.id=u.company_id WHERE u.id=? AND u.status='active' AND c.status='active' AND NOT EXISTS(SELECT 1 FROM platform_admins a WHERE a.user_id=u.id) AND EXISTS(SELECT 1 FROM company_memberships m WHERE m.company_id=u.company_id AND m.user_id=u.id) AND EXISTS(SELECT 1 FROM customer_login_challenges WHERE id=? AND claim_id=?) AND (? IS NULL OR EXISTS(SELECT 1 FROM invitations WHERE id=? AND claim_id=?))`).bind(hash,now+21600,now,now,row.user_id,id,claim,row.invitation_id,row.invitation_id,claim));
+ statements.push(db.prepare(`INSERT INTO customer_sessions(token_hash,user_id,expires_at,last_seen,created_at,idle_seconds) SELECT ?,u.id,?,?,?,? FROM users u JOIN companies c ON c.id=u.company_id WHERE u.id=? AND u.status='active' AND c.status='active' AND NOT EXISTS(SELECT 1 FROM platform_admins a WHERE a.user_id=u.id) AND EXISTS(SELECT 1 FROM company_memberships m WHERE m.company_id=u.company_id AND m.user_id=u.id) AND EXISTS(SELECT 1 FROM customer_login_challenges WHERE id=? AND claim_id=?) AND (? IS NULL OR EXISTS(SELECT 1 FROM invitations WHERE id=? AND claim_id=?))`).bind(hash,now+life.total,now,now,life.idle,row.user_id,id,claim,row.invitation_id,row.invitation_id,claim));
  const result=await db.batch(statements);
  if(result[result.length-1].meta.changes!==1)throw new HttpError(401,'Koden er brugt, eller adgangen er ændret.');
  await db.prepare("INSERT INTO audit_events(id,company_id,actor_id,action,resource_id,details_json) SELECT ?,company_id,id,'customer.login',id,'{}' FROM users WHERE id=?").bind(crypto.randomUUID(),row.user_id).run();
  const old=getCookie(request,sessionName);if(old)await db.prepare('DELETE FROM customer_sessions WHERE token_hash=?').bind(await loginHash(old)).run();
- const headers=new Headers({'Content-Type':'application/json'});headers.append('Set-Cookie',cookie(sessionName,token,21600));headers.append('Set-Cookie',cookie(challengeName,'',0));return new Response(JSON.stringify({ok:true}),{headers});
+ const headers=new Headers({'Content-Type':'application/json'});headers.append('Set-Cookie',cookie(sessionName,token,life.total));headers.append('Set-Cookie',cookie(challengeName,'',0));return new Response(JSON.stringify({ok:true}),{headers});
 }
