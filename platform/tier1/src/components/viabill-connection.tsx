@@ -1,4 +1,5 @@
 'use client';
+import { supportedModules } from '@/lib/integration-visibility';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
 import {IntegrationStartDate} from '@/components/integration-start-date';
 import { useEffect, useState } from 'react';
@@ -30,7 +31,7 @@ export function ViaBillConnection({ accountField, initialExpanded = false, onCon
     } catch (error) { setError(error instanceof Error ? error.message : 'ViaBill kunne ikke forbindes.'); }
     finally { setBusy(false); }
   }
-  return <IntegrationCard name="ViaBill" description="Betalinger og udbetalinger" icon={CreditCard} connected={status?.connected??null} expanded={expanded} onToggle={()=>setExpanded(v=>!v)} panelId="viabill-connection-panel" footer={footer}>
+  return <IntegrationCard name="ViaBill" description={supportedModules('viabill')} icon={CreditCard} connected={status?.connected??null} expanded={expanded} onToggle={()=>setExpanded(v=>!v)} panelId="viabill-connection-panel" footer={footer}>
       <p className="text-sm text-muted-foreground">Kun læsning af afregningsdata. Shopify-appen fortsætter uændret. Nøglerne gemmes krypteret og vises ikke igen.</p>
       <IntegrationStartDate provider="viabill"/><label className="block text-sm">Forbindelsens startdato<Input type="date" value={startDate} onChange={event=>setStartDate(event.target.value)}/></label>{accountField && <div className="rounded-xl border bg-white p-4"><p className="mb-3 text-sm font-semibold">Bogføring</p>{accountField}</div>}
       {status?.connected && <p className="text-sm">Forbundet til {status.name}. Indtast nøgler igen for at ændre forbindelsen.</p>}
