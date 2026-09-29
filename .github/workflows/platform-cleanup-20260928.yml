@@ -1,0 +1,46 @@
+name: 'Vedligehold: ryd op efter D1-fejl 28/9'
+run-name: Oprydning ${{ inputs.target }} · ${{ inputs.mode }} ${{ inputs.expected }}
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Miljø'
+        required: true
+        type: choice
+        options: [dev, prod]
+      mode:
+        description: 'list = vis rækker uden ændringer; cleanup = fjern præcis de viste rækker'
+        required: true
+        type: choice
+        options: [list, cleanup]
+      expected:
+        description: 'Kun ved cleanup: antal fra list som kvitteringer,fakturaer,rapporter (fx 2,1,0)'
+        required: false
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: webshoptoolbox-release
+  cancel-in-progress: false
+jobs:
+  cleanup:
+    if: github.repository == 'Jopppardk/WebshopToolbox-Platform' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.target }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.23.2
+          cache: npm
+      - run: npm ci
+      - name: Oprydning
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TARGET: ${{ inputs.target }}
+          MODE: ${{ inputs.mode }}
+          EXPECTED: ${{ inputs.expected }}
+        run: node scripts/platform-cleanup-20260928.mjs "$TARGET" "$MODE" "$EXPECTED"
