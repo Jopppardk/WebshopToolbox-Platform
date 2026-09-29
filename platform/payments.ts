@@ -15,7 +15,11 @@ function flatKeys(b:Record<string,unknown>){
  return {username,password};
 }
 async function digest(value:string){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))),v=>v.toString(16).padStart(2,'0')).join('');}
+// Payment providers with an adapter in this file. Routes follow the registry in catalog.ts,
+// so a registered provider without an adapter must be refused rather than treated as another.
+const adapters=new Set(['flatpay','viabill']);
 export async function handlePayments(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string,provider:string,action:string){
+ if(!adapters.has(provider))throw new HttpError(501,'Integrationen er endnu ikke tilsluttet.');
  const db=env.PLATFORM_DB;await requireWebshop(db,actor,company,shop);
  const saved=await db.prepare('SELECT * FROM payment_connections WHERE company_id=? AND webshop_id=? AND provider=?').bind(company,shop,provider).first<Saved>();
  const url=new URL(request.url);

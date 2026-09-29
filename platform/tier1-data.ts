@@ -1,3 +1,4 @@
+import { paymentProviders } from './catalog';
 import {recordHistory} from './record-history';
 import { payoutStatusLabel } from './tier1/src/lib/payout-status';
 import {handleProductionSale} from './production-sales';
@@ -139,7 +140,7 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
  if(['/sales/log','/payouts/log','/refunds/log'].includes(path)){
   if(!get)throw new HttpError(405,'Brug Hent log.');
   const provider=url.searchParams.get('provider')||'shopify',normalized=provider==='shopify_payments'?'shopify':provider;
-  if(!['shopify','flatpay','viabill'].includes(normalized)||path==='/sales/log'&&normalized!=='shopify')throw new HttpError(400,'Vælg en gyldig udbyder.');
+  if(!['shopify',...paymentProviders].includes(normalized)||path==='/sales/log'&&normalized!=='shopify')throw new HttpError(400,'Vælg en gyldig udbyder.');
   const module=path==='/sales/log'?'orders':path==='/refunds/log'?(normalized==='flatpay'?'transactions':'refunds'):normalized==='flatpay'?'payments':normalized==='viabill'?'payout':'payouts';
   return recordHistory(env,company,shop,normalized,module,url.searchParams.get('externalId')||'',pageNumber(url.searchParams.get('offset'),0));
  }

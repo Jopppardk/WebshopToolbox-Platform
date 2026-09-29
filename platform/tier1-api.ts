@@ -1,3 +1,4 @@
+import { paymentProviderPattern } from './catalog';
 import { handleReconciliation } from './booking-onboarding';
 import { handleTier1Emballage } from './tier1-emballage';
 import { handleFeeds } from './feeds';
@@ -26,7 +27,7 @@ export async function handleTier1(request:Request, env:PlatformEnv, actor:Actor)
   if(path==='/admin/history'||path==='/integrations/start-date')return handleHistory(request,env,actor,company.company_id,shop,path);
   if(path==='/integrations/reconciliation')return handleReconciliation(request,env,actor,company.company_id,shop);
   const data=await handleTier1Data(request,env,actor,company.company_id,shop,path);if(data)return data;
-  if(path==='/integrations' || path==='/integrations/selection' || /^\/(flatpay|viabill)\/connection$/.test(path))return handleTier1Connections(request,env,actor,company.company_id,shop,path);
+  if(path==='/integrations' || path==='/integrations/selection' || new RegExp(`^/(${paymentProviderPattern})/connection$`).test(path))return handleTier1Connections(request,env,actor,company.company_id,shop,path);
   if(path==='/admin/settings') {
     if(shop==='none')throw new HttpError(409,'Opret din webshop under Integrationer først.');
     return handleTier1Settings(request,env,actor,company.company_id,shop);
