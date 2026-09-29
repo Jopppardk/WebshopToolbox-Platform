@@ -1,7 +1,18 @@
 # Performance
 
-Status 29. september 2026: implementeret og lokalt testet på
-`platform/performance-dashboard`. Ikke sat i drift på dev eller prod.
+Status 29. september 2026: implementeret, testet og sat i drift på både dev og prod.
+PR [#53](https://github.com/Jopppardk/WebshopToolbox-Platform/pull/53) er flettet som
+`120581fbfe81ad7cc2bde539a6e003ae8104e41a`. Efter brugerens bestilling er samme SHA
+udgivet i [run 36628986416](https://github.com/Jopppardk/WebshopToolbox-Platform/actions/runs/36628986416).
+Alle 413 tests, obligatoriske typechecks/builds/dry-runs og begge HTTP-gates bestået.
+Dev blev udgivet og efterkontrolleret før prod.
+
+- Dev-version: `c221d231-028c-438b-a7b2-187eaa4a932c`.
+- Prod-version: `9676e197-3e68-4a08-a775-cc4139f56f5b`.
+
+HTTP-gates bekræfter healthz/sikkerhedsflag, kundelogin, afvist anonymt ordre-API og
+administrationens Access-beskyttelse. Ingen migration, testmail eller økonomisk
+testpostering udført. Live-rapporttal og Shopify-rapportadgang er ikke afprøvet.
 
 ## Funktion
 
@@ -91,6 +102,6 @@ leverandørfilter, årsskift, webshopskift, isoleret rapportfejl, månedstabel o
 Tools-menu på desktop/mobil uden vandret overflow. Ingen browserfejl observeret.
 
 Rigtige Dinero-/Shopify-forbindelser er ikke afprøvet med denne funktion.
-Ved udgivelse skal butikkens rapportadgang og den ønskede historikstart kontrolleres.
+Ved ibrugtagning skal butikkens rapportadgang og den ønskede historikstart kontrolleres.
 Live-tal skal sammenholdes med kildernes tilsvarende rapporter; dette er ikke
-erstattet af de syntetiske tests. Merge og deployment er separate efterfølgende trin.
+erstattet af de syntetiske tests eller udgivelsens HTTP-gates.
