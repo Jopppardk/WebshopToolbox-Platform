@@ -14,7 +14,9 @@ import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 // The customer portal is shared by local, dev and production deployments.
 // Incomplete contracts fail explicitly, never masquerading as empty live data.
 export async function handleTier1(request:Request, env:PlatformEnv, actor:Actor) {
-  if(actor.platformAdmin || actor.support) throw new HttpError(403,'Åbn Tier 1 med en virksomhedsbruger.');
+  if(actor.platformAdmin) throw new HttpError(403,'Åbn Tier 1 med en virksomhedsbruger.');
+  // Support sees the customer's portal as the customer does, but never changes data or books on their behalf.
+  if(actor.support && !['GET','HEAD'].includes(request.method)) throw new HttpError(403,'Supportadgang kan kun se kundeportalen. Ændringer foretages af kunden selv.');
   const db=env.PLATFORM_DB, url=new URL(request.url);
   const match=url.pathname.match(/^\/api\/platform\/tier1\/shops\/([\w-]+)(\/.*)$/);
   if(!match) throw new HttpError(404,'Funktionen findes ikke.');

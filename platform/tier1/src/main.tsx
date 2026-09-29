@@ -3,8 +3,9 @@ import { createRoot } from 'react-dom/client';
 import Home from './app/page';
 import './app/globals.css';
 import './fonts/fonts.css';
-import { platformApi, selectWebshop } from './platform/transport';
+import { platformApi, portalRoot, selectWebshop, setActor } from './platform/transport';
 import { WorkspaceProvider, type Workspace } from './platform/workspace';
+import { SupportBanner } from './platform/support-banner';
 function App() {
   const [workspace,setWorkspace] = useState<Workspace|null>(null);
   const [error,setError] = useState('');
@@ -15,7 +16,8 @@ function App() {
     void (async()=>{
       const {user}=await platformApi<{user:Workspace['user']}>('/api/platform/me');
       if(user.platformAdmin) throw new Error('Tier 1 kræver en virksomhedsbruger.');
-      if(!user.fullName) {if(active)setNeedsProfile(true);return;}
+      setActor(user);
+      if(!user.fullName && !user.support) {if(active)setNeedsProfile(true);return;}
       const {company}=await platformApi<{company:Workspace['company']}>('/api/platform/workspace');
       const {webshops}=await platformApi<{webshops:Workspace['webshops']}>(`/api/platform/companies/${company.id}/webshops`);
       const shops=webshops.filter(shop=>shop.status==='active');
@@ -32,7 +34,7 @@ function App() {
     catch(error){setError((error as Error).message);setSaving(false);}
   }
   if(needsProfile)return <main className="mx-auto max-w-xl p-8"><h1 className="text-xl font-semibold">Velkommen til WebshopToolbox</h1><p className="my-4">Udfyld din profil for at fortsætte.</p>{error&&<p role="alert">{error}</p>}<form className="space-y-4" onSubmit={saveProfile}><label className="block">Navn<input className="block w-full rounded border bg-white p-2" name="name" required maxLength={120}/></label><label className="block">Telefon<input className="block w-full rounded border bg-white p-2" name="phone" type="tel" maxLength={40}/></label><button className="rounded bg-primary px-4 py-2 text-white" disabled={saving}>{saving?'Gemmer…':'Gem og fortsæt'}</button></form></main>;
-  if(error)return <main className="mx-auto max-w-xl p-8"><h1 className="text-xl font-semibold">WebshopToolbox</h1><p role="alert" className="my-4">{error}</p><a className="underline" href="/">Til kundeportalen</a></main>;
+  if(error)return <main className="mx-auto max-w-xl p-8"><h1 className="text-xl font-semibold">WebshopToolbox</h1><p role="alert" className="my-4">{error}</p><a className="underline" href={portalRoot + '/'}>{portalRoot ? 'Til administrationen' : 'Til kundeportalen'}</a></main>;
   if(!workspace)return <p className="p-8" role="status">Henter din virksomhed…</p>;
   const choose=(id:string)=>{
     if(id!=='' && !workspace.webshops.some(shop=>shop.id===id))return;
@@ -40,6 +42,6 @@ function App() {
     sessionStorage.setItem('toolbox-selected-shop',id);
     selectWebshop(id||null);setWorkspace({...workspace,webshopId:id||null});
   };
-  return <WorkspaceProvider value={{...workspace,choose}}><Home key={workspace.webshopId || 'none'}/></WorkspaceProvider>;
+  return <WorkspaceProvider value={{...workspace,choose}}><SupportBanner user={workspace.user}/><Home key={workspace.webshopId || 'none'}/></WorkspaceProvider>;
 }
 createRoot(document.getElementById('root')!).render(<App/>);

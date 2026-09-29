@@ -13,11 +13,12 @@ import { handleAdmin } from './admin';
 import { assertTestRuntime, scheduled } from './safety';
 import { HttpError, reply, type PlatformEnv } from './types';
 
-async function asset(request:Request,env:PlatformEnv,admin=false){
+async function asset(request:Request,env:PlatformEnv,admin=false,tier1Admin=false){
  const response=await env.ASSETS.fetch(request);
  if(!response.headers.get('content-type')?.includes('text/html'))return response;
  let body=await response.text();
  if(env.PLATFORM_ENV==='production')body=body.replaceAll('Testmiljø','Produktionsportal').replaceAll('Bogføring og kundemail er blokeret.','Bogføring og kundemail er aktive.');
+ if(tier1Admin)body=body.replaceAll('"/tier1-next/','"/admin/tier1-next/');
  if(admin)body=body.replaceAll('src="/admin.js"','src="/admin/admin.js"').replaceAll('src="/onboarding.js"','src="/admin/onboarding.js"').replaceAll('action="/logout"','action="/admin/logout"').replaceAll('href="/"','href="/admin/"');
  const headers=new Headers(response.headers);for(const key of ['Content-Length','Content-Encoding','ETag'])headers.delete(key);
  return new Response(body,{status:response.status,headers});
@@ -158,6 +159,12 @@ export default {
       if(path.startsWith('/api/platform/') && path!=='/api/platform/me' && !actor.fullName)
         throw new HttpError(428,'Udfyld din profil for at fortsætte.');
       if(path.startsWith('/api/platform/tier1/')) return secure(await handleTier1(request,env,actor));
+      // Support opens the real customer portal inside the admin origin, as the customer user it acts for.
+      if(admin&&request.method==='GET'&&/^\/tier1-next\/assets\/[\w.-]+\.(js|css|woff2|txt)$/.test(path))return secure(await asset(request,env),true);
+      if(admin&&request.method==='GET'&&(path==='/kundeportal'||path==='/kundeportal/')){
+        if(!(await supportActor(request,env,realActor)).support)return secure(new Response(null,{status:303,headers:{Location:'/admin/'}}));
+        return secure(await asset(new Request(new URL('/tier1-next/index.html',url)),env,false,true),true);
+      }
       if(customerEnabled&&!admin&&request.method==='GET'&&['/','/index.html'].includes(path)) {
         if(actor.platformAdmin||actor.support)throw new HttpError(403,'Åbn Tier 1 med en virksomhedsbruger.');
         return secure(await asset(new Request(new URL('/tier1-next/index.html',url)),env),true);
