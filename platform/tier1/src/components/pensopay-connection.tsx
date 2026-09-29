@@ -1,4 +1,5 @@
 'use client';
+import { supportedModules } from '@/lib/integration-visibility';
 import { tier1Fetch as fetch } from '@/platform/transport';
 import { IntegrationStartDate } from '@/components/integration-start-date';
 import { useEffect, useState } from 'react';
@@ -38,7 +39,7 @@ export function PensopayConnection({ initialExpanded = false, onConnected, foote
     } catch (error) { setError(error instanceof Error ? error.message : 'Pensopay kunne ikke forbindes.'); }
     finally { setBusy(false); }
   }
-  return <IntegrationCard name="Pensopay" description="Betalinger og afregninger" icon={CreditCard} connected={status?.connected ?? null} expanded={expanded} onToggle={() => setExpanded(value => !value)} panelId="pensopay-connection-panel" footer={footer}>
+  return <IntegrationCard name="Pensopay" description={supportedModules('pensopay')} icon={CreditCard} connected={status?.connected ?? null} expanded={expanded} onToggle={() => setExpanded(value => !value)} panelId="pensopay-connection-panel" footer={footer}>
     <p className="text-sm text-muted-foreground">Kun læsning af betalinger og afregninger. Der kan ikke capture, refunderes eller annulleres noget hos Pensopay. API-nøglen gemmes krypteret og vises ikke igen. Bogføring i Dinero er endnu ikke aktiveret for Pensopay.</p>
     <IntegrationStartDate provider="pensopay" />
     <label className="block text-sm">Forbindelsens startdato<Input type="date" value={startDate} onChange={event => setStartDate(event.target.value)} /></label>

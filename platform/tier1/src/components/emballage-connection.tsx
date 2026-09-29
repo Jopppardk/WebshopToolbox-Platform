@@ -1,4 +1,5 @@
 'use client';
+import { supportedModules } from '@/lib/integration-visibility';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
 import { useState, useEffect } from 'react';
 import { PackageCheck, Save } from 'lucide-react';
@@ -105,7 +106,7 @@ export function EmballageConnection({
     }
   }
   return (
-    <IntegrationCard name="Emballage Indberetning" description="Kvartalsvis indberetning under 8.000 kg" icon={PackageCheck} connected={status?.connected??null} testMode={status?.testMode} expanded={open} onToggle={()=>setOpen(!open)} panelId="emballage-connection-panel" footer={footer}>
+    <IntegrationCard name="Emballage Indberetning" description={supportedModules('emballage')} icon={PackageCheck} connected={status?.connected??null} testMode={status?.testMode} expanded={open} onToggle={()=>setOpen(!open)} panelId="emballage-connection-panel" footer={footer}>
           {status?.connected&&<p className="text-sm">Forbundet til {status.organisation}.</p>}
           <label htmlFor="emballage-api-key" className="block text-sm">
             API-nøgle

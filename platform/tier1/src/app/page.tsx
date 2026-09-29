@@ -28,7 +28,7 @@ import { CustomerIdentity, WebshopSelector } from '@/platform/workspace';
 import { vatCodeOptions } from '@/lib/vat-code-options';
 import { emptyAccounts, defaultAutomation, defaultInvoiceEmail, validateSettings, type Accounts, type Automation, type AdminSettings, type InvoiceEmailSettings } from '@/lib/admin-settings';
 import { orderPeriods, type OrderPeriod } from '@/lib/order-period';
-import {hasRequiredIntegration,integrationRequirements,type IntegrationGatedView} from '@/lib/integration-visibility';
+import {hasRequiredIntegration,integrationRequirements,supportedModules,type IntegrationGatedView} from '@/lib/integration-visibility';
 import { useSyncStatus } from '@/components/sync-status';
 import { syncIntervals } from '@/lib/sync-schedule';
 import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -788,14 +788,14 @@ function Settings({
     {
       name: 'Shopify',
       provider: 'shopify' as const,
-      detail: 'Understøtter: Salg, Tilbagebetalinger, Udbetalinger og Lager',
+      detail: supportedModules('shopify'),
       icon: ShoppingBag,
       connected: Boolean(connected.shopify),
     },
     {
       name: 'Dinero',
       provider: 'dinero' as const,
-      detail: 'Understøtter: Salg, Tilbagebetalinger, Udbetalinger og Lager',
+      detail: supportedModules('dinero'),
       icon: Landmark,
       connected: Boolean(connected.dinero),
     },

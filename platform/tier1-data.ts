@@ -1,4 +1,4 @@
-import { paymentProviders } from './catalog';
+import { orderPaymentIntegration, paymentProviders } from './catalog';
 import {recordHistory} from './record-history';
 import { payoutStatusLabel } from './tier1/src/lib/payout-status';
 import {handleProductionSale} from './production-sales';
@@ -135,7 +135,7 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   const rows=(await db.prepare("SELECT payload_json FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module='orders' AND occurred_at>=? AND occurred_at<? ORDER BY occurred_at DESC,external_id LIMIT ? OFFSET ?").bind(company,shop,period.from,period.until,limit,offset).all<{payload_json:string}>()).results;
   const bookingStatus=await bookingStatuses(env,company,shop);
   const money=(amount:string,currency:string)=>new Intl.NumberFormat('da-DK',{style:'currency',currency}).format(Number(amount));
-  return reply({total:total?.n||0,orders:rows.map(row=>{const o=JSON.parse(row.payload_json),m=o.currentTotalPriceSet.shopMoney;return {id:o.name+(o.test?' (test)':''),externalId:o.id,date:new Date(o.createdAt).toLocaleDateString('da-DK'),createdAt:o.createdAt,shipped:o.cancelledAt?'Annulleret':o.displayFulfillmentStatus==='FULFILLED'?'Afsendt':'Ikke afsendt',amount:money(m.amount,m.currencyCode),realized:money(String(Number(m.amount)-Number(o.totalRefundedSet?.shopMoney.amount||0)),m.currencyCode),status:bookingStatusLabel(bookingStatus('shopify','orders',o.id,o.createdAt,row.payload_json)),currency:m.currencyCode,total:m.amount,paymentStatus:o.displayFinancialStatus,paymentProvider:(o.paymentGatewayNames||[]).join(', ')};})});
+  return reply({total:total?.n||0,orders:rows.map(row=>{const o=JSON.parse(row.payload_json),m=o.currentTotalPriceSet.shopMoney;return {id:o.name+(o.test?' (test)':''),externalId:o.id,date:new Date(o.createdAt).toLocaleDateString('da-DK'),createdAt:o.createdAt,shipped:o.cancelledAt?'Annulleret':o.displayFulfillmentStatus==='FULFILLED'?'Afsendt':'Ikke afsendt',amount:money(m.amount,m.currencyCode),realized:money(String(Number(m.amount)-Number(o.totalRefundedSet?.shopMoney.amount||0)),m.currencyCode),status:bookingStatusLabel(bookingStatus('shopify','orders',o.id,o.createdAt,row.payload_json)),currency:m.currencyCode,total:m.amount,paymentStatus:o.displayFinancialStatus,paymentProvider:orderPaymentIntegration(o.paymentGatewayNames)};})});
  }
  if(['/sales/log','/payouts/log','/refunds/log'].includes(path)){
   if(!get)throw new HttpError(405,'Brug Hent log.');

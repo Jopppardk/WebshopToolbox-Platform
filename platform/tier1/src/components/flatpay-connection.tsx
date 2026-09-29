@@ -1,4 +1,5 @@
 'use client';
+import { supportedModules } from '@/lib/integration-visibility';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
 import {IntegrationStartDate} from '@/components/integration-start-date';
 import {useEffect,useState,type ReactNode} from 'react';
@@ -12,7 +13,7 @@ export function FlatpayConnection({initialExpanded=false,onConnected,footer,acco
  const[open,setOpen]=useState(initialExpanded),[connected,setConnected]=useState<boolean|null>(null),[username,setUsername]=useState(''),[password,setPassword]=useState(''),[agreementNumber,setAgreement]=useState(''),[agreements,setAgreements]=useState<FlatpayAgreement[]>([]),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
  useEffect(()=>{void fetch('/api/flatpay/connection',{cache:'no-store'}).then(async r=>{const d=await r.json() as {connected:boolean;agreementNumber?:string;startDate?:string;revision?:number;error?:string};if(!r.ok)throw Error(d.error);setRevision(d.revision);setConnected(d.connected);setAgreement(d.agreementNumber||'');}).catch(()=>setMessage('Forbindelsesstatus kunne ikke hentes.'));},[]);
  async function act(action:string){setBusy(true);setMessage('');try{const r=await fetch('/api/flatpay/connection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,username,password,agreementNumber,revision})});const d=await r.json() as {agreements?:FlatpayAgreement[];error?:string};if(!r.ok)throw Error(d.error);if(action==='validate'){setAgreements(d.agreements||[]);if(d.agreements?.length===1)setAgreement(d.agreements[0].agreementNumber);setMessage('API-adgangen virker. Vælg aftale, og gem forbindelsen. Den gemte historikdato ovenfor bruges.');}else{setConnected(true);setPassword('');setUsername('');setAgreements([]);setMessage('Flatpay er verificeret og forbundet med læseadgang.');const fresh=await fetch('/api/flatpay/connection');if(fresh.ok)setRevision(((await fresh.json()) as {revision:number}).revision);onConnected();}}catch(e){setMessage(e instanceof Error?e.message:'Forbindelsen fejlede.');}finally{setBusy(false);}}
- return <IntegrationCard name="Flatpay" description="Saga/Valitor · udbetalinger og refunderinger" icon={CreditCard} connected={connected} expanded={open} onToggle={()=>setOpen(!open)} panelId="flatpay-connection-panel" footer={footer}>
+ return <IntegrationCard name="Flatpay" description={supportedModules('flatpay')} icon={CreditCard} connected={connected} expanded={open} onToggle={()=>setOpen(!open)} panelId="flatpay-connection-panel" footer={footer}>
  <p className="text-sm">Testmiljø · bogføring og automatiske kørsler er blokeret.</p>
  <p className="text-sm">Brug API-adgangen til jeres testkonto. Forbindelsen kontrolleres med læseadgang; ingen bogføring aktiveres.</p>
  {connected&&<p className="my-3 text-sm">Gemt aftale: {agreementNumber}</p>}

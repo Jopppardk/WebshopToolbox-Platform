@@ -63,3 +63,19 @@ export async function apiStatus(requestStatus: typeof fetch = fetch) {
   const connectivity = await Promise.all(catalog.map(item => reachability(endpoints[item.id], requestStatus)));
   return catalog.map((item,index)=>({...item,connectivity:{...connectivity[index],checkedAt}}));
 }
+
+// Shopify order gateways named after the integration that took the payment. Shopify Payments
+// belongs to the Shopify integration; other gateways match a registered payment integration
+// by name (e.g. "Flatpay", "ViaBill - betal senere", "pensopay"). Anything else took the
+// payment outside WebshopToolbox's integrations.
+export function paymentIntegrationName(gateway: string) {
+  const key = gateway.toLowerCase().replace(/[^a-z]/g, '');
+  if (key === 'shopifypayments') return 'Shopify Payments';
+  return catalog.find(item => item.kind === 'payment' && key.includes(item.id))?.name ?? null;
+}
+/** The integration(s) behind an order's payment gateways, for display on Salg. */
+export function orderPaymentIntegration(gateways: unknown) {
+  const names = Array.isArray(gateways) ? gateways.filter((g): g is string => typeof g === 'string') : [];
+  const labels = [...new Set(names.map(g => paymentIntegrationName(g) ?? 'Uden integration'))];
+  return labels.length ? labels.join(', ') : 'Uden integration';
+}
