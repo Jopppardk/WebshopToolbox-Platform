@@ -11,7 +11,7 @@ function fileName(v:unknown){
  if(typeof v!=='string'||!fileNamePattern.test(v))throw new HttpError(400,'Filnavnet må kun indeholde små bogstaver, tal og bindestreger (højst 60 tegn).');
  return v;
 }
-// The webshop's folder comes from its public domain, e.g. sablen.dk becomes sablendk.
+// Each webshop has one feed folder, reserved the first time it is needed and kept after that.
 async function folderFor(env:PlatformEnv,company:string,shop:string,create:boolean){
  const db=env.PLATFORM_DB,read=()=>db.prepare('SELECT slug FROM feed_folders WHERE company_id=? AND webshop_id=?').bind(company,shop).first<{slug:string}>();
  const existing=await read();if(existing||!create)return existing?.slug??null;
@@ -22,10 +22,10 @@ async function folderFor(env:PlatformEnv,company:string,shop:string,create:boole
  }
  throw new HttpError(409,'Webshoppens feedmappe kunne ikke oprettes. Prøv igen.');
 }
+// The folder is the webshop's name in WebshopToolbox, as entered under Integrationer, e.g. "Sablen.dk" becomes sablendk.
 async function proposedFolder(env:PlatformEnv,company:string,shop:string){
- const w=await env.PLATFORM_DB.prepare('SELECT name,domain FROM webshops WHERE company_id=? AND id=?').bind(company,shop).first<{name:string;domain:string}>();
- let host='';try{host=new URL(/^https?:\/\//.test(w?.domain||'')?w!.domain:'https://'+w?.domain).hostname.replace(/^www\./,'');}catch{/* fall back to the name */}
- return slugify(host.replaceAll('.',''),36)||slugify(w?.name||'',36)||'webshop';
+ const w=await env.PLATFORM_DB.prepare('SELECT name FROM webshops WHERE company_id=? AND id=?').bind(company,shop).first<{name:string}>();
+ return slugify((w?.name||'').replaceAll('.',''),36)||'webshop';
 }
 async function fileNameTaken(env:PlatformEnv,company:string,shop:string,name:string,except:string|null){
  return !!await env.PLATFORM_DB.prepare('SELECT 1 FROM product_feeds WHERE company_id=? AND webshop_id=? AND file_name=? AND id IS NOT ?').bind(company,shop,name,except).first();
@@ -95,7 +95,9 @@ export async function handleFeeds(request:Request,env:PlatformEnv,actor:Actor,co
  const db=env.PLATFORM_DB,url=new URL(request.url);
  if(path==='/feeds/catalog'&&request.method==='GET')return reply(await feedCatalog(env,company,shop,url));
  if(path==='/feeds'){
-  const folder=await folderFor(env,company,shop,request.method==='POST');
+  // Named feeds always need their folder, also when it has not been reserved yet.
+  const named=!!await db.prepare('SELECT 1 FROM product_feeds WHERE company_id=? AND webshop_id=? AND file_name IS NOT NULL').bind(company,shop).first();
+  const folder=await folderFor(env,company,shop,request.method==='POST'||named);
   if(request.method==='GET')return reply({folderUrl:url.origin+'/feeds/'+(folder??await proposedFolder(env,company,shop))+'/',feeds:(await db.prepare('SELECT * FROM product_feeds WHERE company_id=? AND webshop_id=? ORDER BY created_at,id').bind(company,shop).all<Feed>()).results.map(f=>view(f,url.origin,folder))});
   if(request.method!=='POST')throw new HttpError(405,'Brug Opret feed.');
   const input=feedInput(await jsonBody(request,50000)),id=crypto.randomUUID();
