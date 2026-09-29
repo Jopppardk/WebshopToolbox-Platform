@@ -74,8 +74,8 @@ export async function handlePayments(request:Request,env:PlatformEnv,actor:Actor
    if(!['transactions','settlements','payments'].includes(kind))throw new HttpError(400,'Vælg en Flatpay-datatype.');
    const resource=kind as 'transactions'|'settlements'|'payments',field=kind==='transactions'?'PurchaseDate':kind==='settlements'?'CreatedDate':'PaidDate';
    const data=await flatpayRead(credentials,resource,{[field+'From']:start+'T00:00:00Z',[field+'To']:end+'T23:59:59.999Z',...(kind==='settlements'?{AgreementNumber:metadata.agreementNumber}:{})});
-   const today=new Date().toISOString().slice(0,10),until=new Date(Date.now()+30*86400000).toISOString().slice(0,10);
-   if(kind==='payments'&&b.includeUpcoming!==false)data.push(...(await flatpayRead(credentials,'payments',{ScheduledDateFrom:today+'T00:00:00Z',ScheduledDateTo:until+'T23:59:59.999Z'})).filter(r=>r.paidDate==null));
+   const today=new Date().toISOString().slice(0,10),until=new Date(Date.now()+30*86400000).toISOString().slice(0,10),recent=new Date(Date.now()-14*86400000).toISOString().slice(0,10);
+   if(kind==='payments'&&b.includeUpcoming!==false)data.push(...(await flatpayRead(credentials,'payments',{ScheduledDateFrom:recent+'T00:00:00Z',ScheduledDateTo:until+'T23:59:59.999Z'})).filter(r=>r.paidDate==null));
    const unique=new Map<string,Row>();
    for(const r of data){
     if(r.merchantID!==metadata.merchantID)continue;
@@ -84,7 +84,7 @@ export async function handlePayments(request:Request,env:PlatformEnv,actor:Actor
     const rawDate=kind==='transactions'?r.purchaseDate:kind==='settlements'?r.createdDate:r.paidDate??r.scheduledDate;
     if(typeof rawDate!=='string'||!Number.isFinite(Date.parse(rawDate)))throw new HttpError(409,'Flatpay-posten mangler en gyldig dato.');
     const day=date(rawDate.slice(0,10)),upcoming=kind==='payments'&&r.paidDate==null;
-    if(day<(upcoming?today:start)||day>(upcoming?until:end))continue;
+    if(day<(upcoming?recent:start)||day>(upcoming?until:end))continue;
     const external=id(kind==='transactions'?r.transactionID:kind==='payments'?r.paymentID:r.settlementNumber??r.settlementID??r.id);
     if(typeof r.currency!=='string'||!/^[A-Z]{3}$/.test(r.currency))throw new HttpError(409,'Flatpay-posten mangler valuta.');
     const amount=kind==='transactions'?r.grossAmount:kind==='payments'?r.payoutAmount:r.payout;
@@ -94,6 +94,21 @@ export async function handlePayments(request:Request,env:PlatformEnv,actor:Actor
     if(!previous||row.paid)unique.set(external,row);
    }
    rows=[...unique.values()];
+   // Flatpay creates the bank payment only when it is paid. Until then an upcoming payout exists
+   // only as a settlement with a scheduled date and an expected net amount (an estimate, never
+   // booked or reported). Settlements already covered by a paid payment are skipped.
+   if(kind==='payments'&&b.includeUpcoming!==false){
+    const paidRows=(await db.prepare("SELECT json_extract(payload_json,'$.settlements') settlements FROM payment_records WHERE company_id=? AND webshop_id=? AND provider='flatpay' AND kind='payments' AND paid=1 AND occurred_at>=?").bind(company,shop,recent).all<{settlements:string|null}>()).results;
+    const covered=new Set([...paidRows.map(r=>r.settlements),...rows.filter(r=>r.paid).map(r=>String((r.data as any).settlements??''))].flatMap(v=>String(v||'').split(/[,;\s]+/)).filter(Boolean));
+    const scheduled=await flatpayRead(credentials,'settlements',{AgreementNumber:metadata.agreementNumber,ScheduledDateFrom:recent+'T00:00:00Z',ScheduledDateTo:until+'T23:59:59.999Z'});
+    for(const s of scheduled){
+     const owns=s.merchantID===metadata.merchantID&&(s.agreementNumber===metadata.agreementNumber||s.agreementID===metadata.agreementId)&&(s.agreementNumber==null||s.agreementNumber===metadata.agreementNumber)&&(s.agreementID==null||s.agreementID===metadata.agreementId);
+     if(!owns||s.paidDate!=null||covered.has(String(s.settlementNumber)))continue;
+     if(typeof s.settlementNumber!=='string'||!/^\d{1,30}$/.test(s.settlementNumber)||typeof s.scheduledDate!=='string'||!Number.isFinite(Date.parse(s.scheduledDate))||typeof s.netSettlement!=='number'||!Number.isFinite(s.netSettlement)||typeof s.currency!=='string'||!/^[A-Z]{3}$/.test(s.currency))throw new HttpError(409,'Flatpay returnerede en ufuldstændig kommende afregning.');
+     const day=date(s.scheduledDate.slice(0,10));if(day<recent||day>until)continue;
+     rows.push({id:'upcoming:'+s.settlementNumber,date:s.scheduledDate,paid:false,data:{paymentID:null,source:'settlement',estimate:true,settlementNumber:s.settlementNumber,settlements:s.settlementNumber,scheduledDate:s.scheduledDate,paidDate:null,currency:s.currency,payoutAmount:s.netSettlement,merchantID:s.merchantID,agreementNumber:metadata.agreementNumber}});
+    }
+   }
   }else if(provider==='pensopay'){
    if(!['payments','settlements'].includes(kind))throw new HttpError(400,'Vælg betalinger eller afregninger.');
    const today=new Date().toISOString().slice(0,10),cursor=b.cursor as Record<string,unknown>|undefined,pageNumber=cursor?.page??1;
@@ -131,6 +146,7 @@ export async function handlePayments(request:Request,env:PlatformEnv,actor:Actor
   if(rows.length>1000)throw new HttpError(409,'Vælg en kortere periode med højst 1000 poster.');
   await db.batch([
    db.prepare('UPDATE payment_connections SET metadata_json=CASE WHEN revision=? THEN metadata_json ELSE NULL END WHERE company_id=? AND webshop_id=? AND provider=?').bind(saved.revision,company,shop,provider),
+   ...rows.filter(r=>provider==='flatpay'&&kind==='payments'&&r.paid).flatMap(r=>String((r.data as any).settlements??'').split(/[,;\s]+/).filter(v=>/^\d{1,30}$/.test(v))).map(sn=>db.prepare("DELETE FROM payment_records WHERE company_id=? AND webshop_id=? AND provider='flatpay' AND kind='payments' AND paid=0 AND external_id=?").bind(company,shop,'upcoming:'+sn)),
    ...rows.map(r=>db.prepare(`INSERT INTO payment_records(company_id,webshop_id,provider,kind,external_id,occurred_at,payload_json,paid) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(company_id,webshop_id,provider,kind,external_id) DO UPDATE SET occurred_at=excluded.occurred_at,payload_json=excluded.payload_json,paid=excluded.paid,imported_at=CURRENT_TIMESTAMP WHERE excluded.paid=1 OR payment_records.paid=0`).bind(company,shop,provider,kind,r.id,r.date,JSON.stringify(r.data),r.paid?1:0)),
    db.prepare("UPDATE operation_runs SET status='success',count=?,finished_at=CURRENT_TIMESTAMP WHERE id=?").bind(rows.length,run),
   ]);
