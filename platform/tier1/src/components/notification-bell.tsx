@@ -1,4 +1,5 @@
 'use client';
+import { formatDateTime } from '@/lib/format';
 import { tier1Fetch as fetch } from '@/platform/transport';
 import { useEffect, useState } from 'react';
 import { Bell } from 'lucide-react';
@@ -13,7 +14,7 @@ function sourceLabel(source:string){
   const name=parts.map(p=>sources[p]||({flatpay:'Flatpay',viabill:'ViaBill',history:'historik',payment:'betalinger',payout:'udbetalinger',settlements:'afregninger',transactions:'transaktioner'} as Record<string,string>)[p]||p).join(' · ');
   return (source.startsWith('auto.')?'Automatisk: ':'')+name;
 }
-function when(value:string){const date=new Date(value.includes('T')?value:value.replace(' ','T')+'Z');return Number.isNaN(date.getTime())?value:new Intl.DateTimeFormat('da-DK',{dateStyle:'short',timeStyle:'short',timeZone:'Europe/Copenhagen'}).format(date);}
+function when(value:string){return formatDateTime(value,value);}
 export function NotificationBell({onReporting}:{onReporting:()=>void}) {
   const [open,setOpen]=useState(false),[notices,setNotices]=useState<Notice[]>([]),[failures,setFailures]=useState<Failure[]>([]),[error,setError]=useState(''),[unseen,setUnseen]=useState(0),[loaded,setLoaded]=useState(false);
   const apply=(d:Payload)=>{setNotices(d.notifications);setUnseen((d.incidents?.warnings||0)+(d.incidents?.alarms||0));if(d.errors)setFailures(d.errors);setError('');setLoaded(true);};

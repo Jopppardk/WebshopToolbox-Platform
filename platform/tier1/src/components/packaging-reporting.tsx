@@ -1,4 +1,5 @@
 'use client';
+import { formatDate } from '@/lib/format';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
 import { useEffect, useState } from 'react';
 import { CheckCircle2, Download, RefreshCw, Send, Plug } from 'lucide-react';
@@ -204,7 +205,7 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
                       Indberettet
                       {q.submittedAt
                         ? ' ' +
-                          new Date(q.submittedAt).toLocaleDateString('da-DK')
+                          formatDate(q.submittedAt)
                         : ''}
                     </span>
                   ) : (

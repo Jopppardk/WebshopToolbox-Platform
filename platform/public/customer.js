@@ -1,4 +1,9 @@
 // Customer presentation only; data access stays in the scoped platform API.
+// Same date style as the customer portal: "29. sep. 2026" and "29. sep. 2026 kl. 10.56", Danish time.
+const dayFormat=new Intl.DateTimeFormat('da-DK',{day:'numeric',month:'short',year:'numeric',timeZone:'Europe/Copenhagen'}),clockFormat=new Intl.DateTimeFormat('da-DK',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Copenhagen'});
+function parseWhen(v){if(v===null||v===undefined||v==='')return null;const d=typeof v==='number'||v instanceof Date?new Date(v):new Date(/^\d{4}-\d{2}-\d{2}$/.test(v)?v+'T12:00:00Z':/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(v)?v.replace(' ','T')+'Z':v);return Number.isNaN(d.getTime())?null:d;}
+export const fmtDate=v=>{const d=parseWhen(v);return d?dayFormat.format(d):'—';};
+export const fmtDateTime=v=>{const d=parseWhen(v);return d?dayFormat.format(d)+' kl. '+clockFormat.format(d):'—';};
 export const customerPages = [
  ['dashboard','Dashboard','grid',''],
  ['orders','Salg','box','Bogføring'],
@@ -55,10 +60,10 @@ export function customerDashboard(content,open,{accounting,shops,manage,connecti
  for(const title of ['Salg','Udbetalinger']){
   const row=node('div',undefined,'activity-row');const titleBox=node('div',undefined,'activity-title');titleBox.append(icon(title==='Salg'?'box':'wallet'),node('strong',title),node('small','Importerede data'));row.append(titleBox);
   const data=summary.modules.find(m=>m.module===(title==='Salg'?'orders':'payouts'));
-  row.append(metric('Importeret',String(data?.count||0),'Gemte registreringer'),metric('Bogføring','Blokeret','Testmiljø'),metric('Senest hentet',data?.importedAt?new Date(data.importedAt).toLocaleDateString('da-DK'):'—',''));activity.append(row);
+  row.append(metric('Importeret',String(data?.count||0),'Gemte registreringer'),metric('Bogføring','Blokeret','Testmiljø'),metric('Senest hentet',data?.importedAt?fmtDate(data.importedAt):'—',''));activity.append(row);
  }
  const updates=node('div',undefined,'update-grid');
- for(const [label,key] of [['Salg','orders'],['Tilbagebetalinger','refunds'],['Lager','inventory']]){const data=summary.modules.find(m=>m.module===key);updates.append(metric(label,data?.importedAt?new Date(data.importedAt).toLocaleString('da-DK'):'Ikke hentet','Senest opdateret'));}
+ for(const [label,key] of [['Salg','orders'],['Tilbagebetalinger','refunds'],['Lager','inventory']]){const data=summary.modules.find(m=>m.module===key);updates.append(metric(label,data?.importedAt?fmtDateTime(data.importedAt):'Ikke hentet','Senest opdateret'));}
  for(const [label,key,value] of [['Fejlede kørsler','insights',String(summary.failedRuns)],['Integrationer','integrations','Se dine forbindelser']]){
   const b=node('button',undefined,'update-link');b.type='button';b.append(metric(label,value,'Åbn oversigt'));b.onclick=()=>open(key);updates.append(b);
  }

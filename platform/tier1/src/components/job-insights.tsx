@@ -1,4 +1,5 @@
 'use client';
+import { formatDateTime } from '@/lib/format';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -12,7 +13,7 @@ type JobRun = { id: string; job_key: string; job_name: string; status: JobStatus
 type Insights = { summary: { total: number; succeeded: number; failed: number; skipped: number; running: number }; latest: JobRun[]; runs: JobRun[]; pagination: { page: number; pageSize: number; total: number; until: string; since: string } };
 const statusLabel: Record<JobStatus, string> = { running: 'Kører', succeeded: 'Gennemført', failed: 'Fejlet', skipped: 'Sprunget over' };
 const statusClass: Record<JobStatus, string> = { running: 'border-blue-200 bg-blue-50 text-blue-800', succeeded: 'border-emerald-200 bg-emerald-50 text-emerald-800', failed: 'border-red-200 bg-red-50 text-red-800', skipped: 'border-stone-200 bg-stone-100 text-stone-700' };
-const date = (value: string) => new Intl.DateTimeFormat('da-DK', { dateStyle: 'short', timeStyle: 'medium', timeZone: 'Europe/Copenhagen' }).format(new Date(value));
+const date = (value: string) => formatDateTime(value);
 const duration = (value: number | null) => value === null ? '—' : value < 1000 ? `${value} ms` : value < 60000 ? `${(value / 1000).toLocaleString('da-DK', { maximumFractionDigits: 1 })} sek.` : `${(value / 60000).toLocaleString('da-DK', { maximumFractionDigits: 1 })} min.`;
 
 export function JobInsights({ initialStatus = '' }: { initialStatus?: string }) {

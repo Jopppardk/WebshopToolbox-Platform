@@ -1,4 +1,5 @@
 'use client';
+import { formatDate, formatDateTime, formatTime } from '@/lib/format';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
 import { useEffect,useState,type ReactNode } from 'react';
 import { ArrowDownRight,ArrowUpRight,ArrowRight,BarChart3,Boxes,RefreshCw,Wallet,Package,Activity,Clock3,Link2,TriangleAlert,Landmark,ShoppingBag,CheckCircle2 } from 'lucide-react';
@@ -10,8 +11,8 @@ type Finance={ready:boolean;data:ReturnType<typeof calculateFinance>|null;messag
 type ActivityCount={total:number;synced:number;failed:number;pending:number};
 type Platform={inactive:number;activity:{today:string;orders:ActivityCount;payouts:ActivityCount;updated:{sales:string|null;refunds:string|null;packaging:string|null}};connected:number;failed:number;succeeded:number;skipped:number;running:number;successRate:number|null;checkedAt:string;providers:Array<{key:string;name:string;connected:boolean;health:string;checkedAt:string|null}>};
 const money=(value:number|null|undefined)=>value==null?'—':new Intl.NumberFormat('da-DK',{style:'currency',currency:'DKK',maximumFractionDigits:0}).format(value/100);
-const date=(value:string)=>new Intl.DateTimeFormat('da-DK',{dateStyle:'short',timeZone:'Europe/Copenhagen'}).format(new Date(value));
-const timestamp=(value:string)=>new Intl.DateTimeFormat('da-DK',{dateStyle:'short',timeStyle:'short',timeZone:'Europe/Copenhagen'}).format(new Date(value));
+const date=(value:string)=>formatDate(value);
+const timestamp=(value:string)=>formatDateTime(value);
 type DashboardProps={onIntegrations:(provider?:'dinero'|'shopify')=>void};
 export function Dashboard(props:DashboardProps) {
   const [connections,setConnections]=useState<Set<string>|null>(null);
@@ -132,6 +133,6 @@ function ActivityRow({label,counts,icon}:{label:string;counts?:ActivityCount;ico
 }
 function Update({label,value}:{label:string;value?:string|null}) {
   const today=Boolean(value && danishDate(new Date(value)) === danishDate());
-  const time=value?new Intl.DateTimeFormat('da-DK',{timeStyle:'short',timeZone:'Europe/Copenhagen'}).format(new Date(value)):null;
+  const time=value?formatTime(value):null;
   return <div className="rounded-xl border border-[#e9e2d7] bg-white p-3.5"><div className="mb-3 flex items-center justify-between"><Clock3 className="size-4 text-[#9b7742]"/>{today && <span className="rounded-full bg-[#f4eadc] px-2 py-0.5 text-[10px] font-semibold text-[#765523]">I dag</span>}</div><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-sm font-semibold tabular-nums">{value?(today?'kl. '+time:date(value)+' · '+time):'Ikke registreret'}</p><p className="mt-1 text-[10px] text-muted-foreground">Senest opdateret</p></div>;
 }

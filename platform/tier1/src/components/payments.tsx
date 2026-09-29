@@ -1,4 +1,5 @@
 'use client';
+import { formatDateTime } from '@/lib/format';
 import {PayoutLog} from './payout-log';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
 
@@ -41,12 +42,7 @@ const minorMoney = (amount: number, currency: string) =>
     ),
     currency,
   );
-const date = (value: string) =>
-  new Intl.DateTimeFormat('da-DK', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-    timeZone: 'Europe/Copenhagen',
-  }).format(new Date(value));
+const date = (value: string) => formatDateTime(value);
 const shortId = (value?: string | null) => value?.split('/').pop() || '—';
 const payoutStatuses: Record<string, string> = {
   PAID: 'Udbetalt',

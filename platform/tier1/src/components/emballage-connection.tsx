@@ -1,4 +1,5 @@
 'use client';
+import { TestModeNote } from '@/components/test-mode-note';
 import { supportedModules } from '@/lib/integration-visibility';
 import { ShopifyPackagingFields } from '@/components/shopify-packaging-fields';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
@@ -131,11 +132,9 @@ export function EmballageConnection({
           {status?.connected && (
             <>
               <p className="text-xs text-muted-foreground">
-                Nøglen opbevares krypteret.{' '}
-                {status.testMode
-                  ? 'Testnøgle tilsluttet. Dev henter data, men sender ingen indberetninger.'
-                  : 'Dev henter og viser data. Ekstern indberetning er blokeret.'}
+                Nøglen opbevares krypteret.{status.testMode ? ' Testnøgle tilsluttet: der hentes data, men der sendes ingen rigtige indberetninger.' : ''}
               </p>
+              <TestModeNote className="text-xs text-muted-foreground">Testmiljøet henter og viser data. Ekstern indberetning er blokeret.</TestModeNote>
               <label htmlFor="emballage-start" className="block text-sm">
                 Startdato
                 <Input

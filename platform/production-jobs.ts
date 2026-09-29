@@ -11,7 +11,7 @@ import {dataStartDate,historyPolicy,providerStart} from './tier1-history';
 import {HttpError,type Actor,type PlatformEnv} from './types';
 const request=(body:unknown)=>new Request('https://portal.webshoptoolbox.dk/internal-job',{method:'POST',headers:{origin:'https://portal.webshoptoolbox.dk','content-type':'application/json'},body:JSON.stringify(body)});
 const plusDay=(value:string,days:number)=>new Date(Date.parse(value+'T12:00:00Z')+days*86400000).toISOString().slice(0,10);
-async function responseValue(response:Response){const value=await response.json() as any;if(!response.ok)throw new HttpError(response.status,value.error||'Jobbet kunne ikke gennemfoeres.');return value;}
+async function responseValue(response:Response){const value=await response.json() as any;if(!response.ok)throw new HttpError(response.status,value.error||'Jobbet kunne ikke gennemføres.');return value;}
 export async function runProductionJobs(env:PlatformEnv){
  if(!productionWrites(env))return {status:'disabled',processed:0};
  const db=env.PLATFORM_DB,deadline=Date.now()+240000;
@@ -35,7 +35,7 @@ export async function runProductionJobs(env:PlatformEnv){
  ON CONFLICT(company_id,webshop_id,job) DO UPDATE SET lease_owner=excluded.lease_owner,lease_until=excluded.lease_until
  WHERE production_jobs.lease_until<? AND production_jobs.next_run_at<=?`).bind(company,id,owner,now+300000,now,now).run();
   if(claim.meta.changes!==1)continue;
-  const owns=async()=>{if(Date.now()>deadline)throw new HttpError(409,'Jobbet fortsaetter ved naeste koersel.');const active=await db.prepare("SELECT 1 FROM production_jobs WHERE company_id=? AND webshop_id=? AND job='runtime' AND lease_owner=? AND lease_until>? AND (CASE WHEN ? IS NULL THEN NOT EXISTS(SELECT 1 FROM tier1_preferences p WHERE p.company_id=production_jobs.company_id AND p.webshop_id=production_jobs.webshop_id) ELSE EXISTS(SELECT 1 FROM tier1_preferences p WHERE p.company_id=production_jobs.company_id AND p.webshop_id=production_jobs.webshop_id AND p.revision=?) END) AND NOT EXISTS(SELECT 1 FROM public_signups ps WHERE ps.company_id=production_jobs.company_id AND ps.trial_ends_at<=unixepoch())").bind(company,id,owner,Date.now(),shop.revision,shop.revision).first();if(!active)throw new HttpError(409,'Joblaasen er udloebet.');};
+  const owns=async()=>{if(Date.now()>deadline)throw new HttpError(409,'Jobbet fortsætter ved næste kørsel.');const active=await db.prepare("SELECT 1 FROM production_jobs WHERE company_id=? AND webshop_id=? AND job='runtime' AND lease_owner=? AND lease_until>? AND (CASE WHEN ? IS NULL THEN NOT EXISTS(SELECT 1 FROM tier1_preferences p WHERE p.company_id=production_jobs.company_id AND p.webshop_id=production_jobs.webshop_id) ELSE EXISTS(SELECT 1 FROM tier1_preferences p WHERE p.company_id=production_jobs.company_id AND p.webshop_id=production_jobs.webshop_id AND p.revision=?) END) AND NOT EXISTS(SELECT 1 FROM public_signups ps WHERE ps.company_id=production_jobs.company_id AND ps.trial_ends_at<=unixepoch())").bind(company,id,owner,Date.now(),shop.revision,shop.revision).first();if(!active)throw new HttpError(409,'Joblåsen er udløbet.');};
   const run=async(name:string,work:()=>Promise<void>)=>{
    const runId=crypto.randomUUID();await db.prepare("INSERT INTO operation_runs(id,company_id,webshop_id,module,status) VALUES(?,?,?,?,'running')").bind(runId,company,id,name).run();
    try{await owns();await work();await db.prepare("UPDATE operation_runs SET status='success',finished_at=CURRENT_TIMESTAMP WHERE id=?").bind(runId).run();}
@@ -111,7 +111,7 @@ export async function runProductionJobs(env:PlatformEnv){
    const processRows=async(job:string,provider:string,module:string,kind:string,book:boolean,email=false)=>{
     const dates=(await db.prepare('SELECT provider,start_date FROM booking_start_dates WHERE company_id=? AND webshop_id=?').bind(company,id).all<{provider:string;start_date:string}>()).results;
     const sourceDate=dates.find(d=>d.provider===provider)?.start_date,dineroDate=dates.find(d=>d.provider==='dinero')?.start_date;
-    if(!sourceDate||!dineroDate)throw new HttpError(409,'Gem bogfoeringsstart for integrationen og Dinero.');
+    if(!sourceDate||!dineroDate)throw new HttpError(409,'Gem bogføringsstart for integrationen og Dinero.');
     const boundary=[sourceDate,dineroDate].sort()[1];
     const table=provider==='shopify'?'operation_snapshots':'payment_records',filter=provider==='shopify'?'s.module=?':'s.kind=? AND s.provider=?';
     const eligible=module==='orders'?" AND COALESCE(json_extract(s.payload_json,'$.test'),0)=0 AND json_extract(s.payload_json,'$.cancelledAt') IS NULL AND json_extract(s.payload_json,'$.displayFulfillmentStatus')='FULFILLED' AND substr((SELECT max(json_extract(f.value,'$.createdAt')) FROM json_each(s.payload_json,'$.fulfillments') f WHERE json_extract(f.value,'$.status')='SUCCESS'),1,10)>=?"

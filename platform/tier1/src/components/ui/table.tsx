@@ -3,16 +3,19 @@
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
+import { useStackTable } from '@/lib/stack-table';
 
 function Table({ className, ...props }: React.ComponentProps<'table'>) {
+  const ref = useStackTable<HTMLTableElement>();
   return (
     <div
       data-slot="table-container"
       className="relative w-full overflow-x-auto"
     >
       <table
+        ref={ref}
         data-slot="table"
-        className={cn('w-full caption-bottom text-sm', className)}
+        className={cn('stack-table w-full caption-bottom text-sm', className)}
         {...props}
       />
     </div>
