@@ -1,0 +1,42 @@
+name: 'Vedligehold: D1-migrering'
+run-name: Migrering ${{ inputs.target }} · ${{ inputs.mode }}
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Miljø'
+        required: true
+        type: choice
+        options: [dev, prod]
+      mode:
+        description: 'status = vis ventende migreringer, gendannelsespunkt og rækketal uden ændringer; apply = anvend dem'
+        required: true
+        type: choice
+        options: [status, apply]
+permissions:
+  contents: read
+concurrency:
+  group: webshoptoolbox-release
+  cancel-in-progress: false
+jobs:
+  migrate:
+    if: github.repository == 'Jopppardk/WebshopToolbox-Platform' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ inputs.target }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.23.2
+          cache: npm
+      - run: npm ci
+      - name: Migrering
+        env:
+          # Separate D1 token; the deploy tokens are limited to one Worker each.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_TOKEN }}
+          TARGET: ${{ inputs.target }}
+          MODE: ${{ inputs.mode }}
+        run: node scripts/platform-migrate.mjs "$TARGET" "$MODE"
