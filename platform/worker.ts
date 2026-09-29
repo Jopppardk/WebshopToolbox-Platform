@@ -30,6 +30,9 @@ function secure(response: Response, tier1 = false) {
   headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Referrer-Policy', 'no-referrer');
+  // Product feeds are plain data. The page policy below would block the browser's own XML viewer,
+  // which then shows the feed as one run of text instead of the element tree.
+  if (headers.get('content-type')?.startsWith('application/xml')) return new Response(response.body, { status: response.status, headers });
   headers.set(
     'Content-Security-Policy',
     tier1
