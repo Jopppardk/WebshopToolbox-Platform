@@ -5,6 +5,7 @@ import {handleInvoices} from './invoices';
 import {handlePayments} from './payments';
 import {handleProductionSale} from './production-sales';
 import {handleProductionOther} from './production-proposals';
+import {generatePayoutReport} from './documents';
 import {productionWrites,bookingDate} from './production-policy';
 import {dataStartDate,historyPolicy,providerStart} from './tier1-history';
 import {HttpError,type Actor,type PlatformEnv} from './types';
@@ -63,6 +64,22 @@ export async function runProductionJobs(env:PlatformEnv){
    }
    const packaging=await db.prepare('SELECT config_json FROM emballage_connections WHERE company_id=? AND webshop_id=?').bind(company,id).first<{config_json:string}>();
    if(packaging){const config=JSON.parse(packaging.config_json),today=new Date().toISOString().slice(0,10),state=await cursor('packaging.history');if(config.startDate&&state.day!==today)await run('auto.packaging.history',async()=>{await syncPackaging(env,company,id,[config.startDate,await dataStartDate(env,company,id)].sort()[1],today);await saveCursor('packaging.history',{day:today});});}
+   // Payout reports for every paid payout, whether or not bookkeeping is on. Newest first, a few per
+   // run; a failed report waits six hours before the next attempt instead of blocking the others.
+   await run('auto.reports',async()=>{
+    const pending=(await db.prepare(`SELECT external_id FROM (
+ SELECT s.external_id,s.occurred_at FROM operation_snapshots s WHERE s.company_id=? AND s.webshop_id=? AND s.module='payouts' AND json_extract(s.payload_json,'$.status')='PAID' AND json_extract(s.payload_json,'$.transactionType')='DEPOSIT'
+ UNION ALL SELECT 'flatpay:'||p.external_id,p.occurred_at FROM payment_records p WHERE p.company_id=? AND p.webshop_id=? AND p.provider='flatpay' AND p.kind='payments' AND p.paid=1) c
+ WHERE NOT EXISTS(SELECT 1 FROM platform_payout_documents d WHERE d.company_id=? AND d.webshop_id=? AND d.external_id=c.external_id)
+ AND NOT EXISTS(SELECT 1 FROM production_attempts a WHERE a.company_id=? AND a.webshop_id=? AND a.job='reports' AND a.external_id=c.external_id AND a.next_attempt_at>?)
+ ORDER BY c.occurred_at DESC LIMIT 5`).bind(company,id,company,id,company,id,company,id,Date.now()).all<{external_id:string}>()).results;
+    const failed:string[]=[];
+    for(const row of pending){await owns();
+     try{await generatePayoutReport(env,company,id,row.external_id);}
+     catch{failed.push(row.external_id);await db.prepare("INSERT INTO production_attempts(company_id,webshop_id,job,external_id,attempted_at,next_attempt_at,failures) VALUES(?,?,'reports',?,?,?,1) ON CONFLICT(company_id,webshop_id,job,external_id) DO UPDATE SET attempted_at=excluded.attempted_at,next_attempt_at=excluded.next_attempt_at,failures=production_attempts.failures+1").bind(company,id,row.external_id,Date.now(),Date.now()+6*3600000).run();}
+    }
+    if(failed.length)throw new HttpError(409,`${failed.length} udbetalingsrapport${failed.length===1?'':'er'} kunne ikke dannes automatisk. Prøv Generér rapport under Udbetalingsrapporter.`);
+   });
    const processRows=async(job:string,provider:string,module:string,kind:string,book:boolean,email=false)=>{
     const dates=(await db.prepare('SELECT provider,start_date FROM booking_start_dates WHERE company_id=? AND webshop_id=?').bind(company,id).all<{provider:string;start_date:string}>()).results;
     const sourceDate=dates.find(d=>d.provider===provider)?.start_date,dineroDate=dates.find(d=>d.provider==='dinero')?.start_date;

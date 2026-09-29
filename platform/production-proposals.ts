@@ -9,6 +9,7 @@ import {minorUnits} from './money';
 import {refundVoucher,type RefundPart} from '../lib/refund-voucher';
 import {flatpayDraft} from '../lib/flatpay-draft';
 import {readFlatpayPayout} from './flatpay-payout';
+import {existingPayoutReport,registerPayoutReport} from './documents';
 import {buildFlatpayReport} from './flatpay-report';
 import {HttpError,type Actor,type PlatformEnv} from './types';
 const fail=(message:string):never=>{throw new HttpError(409,message);};
@@ -18,12 +19,17 @@ async function chartFor(ctx:BookingContext,accounts:number[]){
  if(new Set(accounts).size!==accounts.length||accounts.some(n=>!chart.some(a=>Number(a.number)===n&&!a.hidden&&!a.vatCode)))fail('Kontiene skal vaere forskellige, aktive og uden moms i Dinero.');
  return chart;
 }
-async function reportFile(ctx:BookingContext,source:unknown,bytes:()=>Promise<Uint8Array>){
+// One report per payout: reuse the one on Udbetalingsrapporter, or store this one and register it there.
+async function reportFile(ctx:BookingContext,externalId:string,source:unknown,bytes:()=>Promise<Uint8Array>){
+ const shown=await existingPayoutReport(ctx.env,ctx.company,ctx.shop,externalId);
+ const reused=shown?await ctx.env.PLATFORM_DOCUMENTS.get(shown.r2_key):null;
+ if(shown&&reused&&reused.size<=6000000)return {file:reused,pdfKey:shown.r2_key,pdfEtag:reused.etag};
  const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(source)))),x=>x.toString(16).padStart(2,'0')).join('');
  const key=`companies/${ctx.company}/webshops/${ctx.shop}/production-reports/${digest}.pdf`;
  let file=await ctx.env.PLATFORM_DOCUMENTS.get(key);
  if(!file){await ctx.env.PLATFORM_DOCUMENTS.put(key,await bytes(),{httpMetadata:{contentType:'application/pdf'}});file=await ctx.env.PLATFORM_DOCUMENTS.get(key);}
  if(!file||file.size>6000000)fail('Bilagsrapporten kunne ikke gemmes og kontrolleres.');
+ await registerPayoutReport(ctx.env,ctx.company,ctx.shop,externalId,key,source);
  return {file:file!,pdfKey:key,pdfEtag:file!.etag};
 }
 async function payout(ctx:BookingContext):Promise<PreparedBooking>{
@@ -38,7 +44,7 @@ async function payout(ctx:BookingContext):Promise<PreparedBooking>{
  const voucher={VoucherDate:date,ExternalReference:`wtb:${shop}:payout:${id.split('/').pop()}`,Lines:movements.map(x=>({Description:`Shopify ${id.split('/').pop()} - ${x.label}`,AccountNumber:x.account,BalancingAccountNumber:x.balancing,Amount:x.amount/100,AccountVatCode:'none',BalancingAccountVatCode:'none'}))};
  const source={...p,provider:'shopify_payments',transactions:await fetchPayoutTransactions(id,'DKK',b.net,access)};
  const companyRow=await env.PLATFORM_DB.prepare('SELECT name FROM companies WHERE id=?').bind(company).first<{name:string}>();
- const report=await reportFile(ctx,source,()=>buildPayoutReport(source,companyRow!.name));
+ const report=await reportFile(ctx,id,source,()=>buildPayoutReport(source,companyRow!.name));
  return {file:prefs.attachments?report.file:undefined,snapshot:{voucher,expected:movements.map(x=>({net:x.amount,tax:0,gross:x.amount})),source,pdfKey:report.pdfKey,pdfEtag:report.pdfEtag,book:prefs.payoutsBookDinero===true,attach:prefs.attachments===true}};
 }
 async function refund(ctx:BookingContext):Promise<PreparedBooking>{
@@ -74,7 +80,7 @@ async function flatpay(ctx:BookingContext):Promise<PreparedBooking>{
  const a=JSON.parse(ctx.mapping.accounts_json),accounts={bank:num(a.bank),fees:num(a.fees),clearing:num(a.clearing),flatpay:num(a.flatpayClearing)};await chartFor(ctx,Object.values(accounts));
  const proposal=flatpayDraft(p,settlement,accounts);proposal.voucher.VoucherDate=date;proposal.voucher.ExternalReference=`wtb:${shop}:flatpay:${id}`;
  const companyRow=await env.PLATFORM_DB.prepare('SELECT name FROM companies WHERE id=?').bind(company).first<{name:string}>();
- const report=await reportFile(ctx,source,()=>buildFlatpayReport(source,undefined,companyRow!.name));
+ const report=await reportFile(ctx,'flatpay:'+id,source,()=>buildFlatpayReport(source,undefined,companyRow!.name));
  const attach=JSON.parse(ctx.prefs.preferences_json).automation.attachments===true;
  return {file:attach?report.file:undefined,snapshot:{attach,voucher:proposal.voucher,expected:proposal.expected,source,pdfKey:report.pdfKey,pdfEtag:report.pdfEtag,paymentRevision:connection.revision,book:JSON.parse(ctx.prefs.preferences_json).automation.payoutsBookDinero===true}};
 }
