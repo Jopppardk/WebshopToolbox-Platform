@@ -152,7 +152,11 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   const id=url.searchParams.get('externalId');
   if(id){const doc=await db.prepare('SELECT id FROM platform_payout_documents WHERE company_id=? AND webshop_id=? AND external_id=?').bind(company,shop,id).first<{id:string}>();if(!doc)throw new HttpError(404,'Generér rapporten først.');const next=new URL(request.url);next.searchParams.set('id',doc.id);return handleDocuments(new Request(next,request),env,actor,company,shop);}
   const rows=(await db.prepare("SELECT s.external_id,s.payload_json,d.status FROM operation_snapshots s LEFT JOIN platform_payout_documents d ON d.company_id=s.company_id AND d.webshop_id=s.webshop_id AND d.external_id=s.external_id WHERE s.company_id=? AND s.webshop_id=? AND s.module='payouts' ORDER BY occurred_at DESC LIMIT 1000").bind(company,shop).all<any>()).results;
-  return reply({documents:rows.map(r=>{const p=JSON.parse(r.payload_json);return {externalId:r.external_id,date:p.issuedAt,provider:'shopify',amount:p.net,filename:r.external_id.split('/').pop()+'.pdf',ready:r.status==='generated'};})});
+  const flatpay=(await db.prepare("SELECT p.external_id,p.payload_json,d.status FROM payment_records p LEFT JOIN platform_payout_documents d ON d.company_id=p.company_id AND d.webshop_id=p.webshop_id AND d.external_id='flatpay:'||p.external_id WHERE p.company_id=? AND p.webshop_id=? AND p.provider='flatpay' AND p.kind='payments' AND p.paid=1 ORDER BY p.occurred_at DESC LIMIT 1000").bind(company,shop).all<any>()).results;
+  const documents=[...rows.map(r=>{const p=JSON.parse(r.payload_json);return {externalId:r.external_id,date:p.issuedAt,provider:'shopify',amount:p.net,filename:r.external_id.split('/').pop()+'.pdf',ready:r.status==='generated'};}),
+   ...flatpay.map(r=>{const p=JSON.parse(r.payload_json);return {externalId:'flatpay:'+r.external_id,date:p.paidDate,provider:'flatpay',amount:{amount:String(p.payoutAmount),currencyCode:p.currency},filename:'flatpay-'+r.external_id+'.pdf',ready:r.status==='generated'};})];
+  documents.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  return reply({documents});
  }
  if(path.startsWith('/invoices')){
   const b:any=get?Object.fromEntries(url.searchParams):await jsonBody(request);
