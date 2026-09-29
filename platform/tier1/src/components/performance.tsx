@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ArrowUpRight, Banknote, Eye, ShoppingBag, RefreshCw, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -20,16 +20,26 @@ export function Performance({ onIntegrations }: { onIntegrations: () => void }) 
   const { company, webshopId, webshops } = useWorkspace();
   const currentYear = Number(danishDate().slice(0, 4));
   const [year, setYear] = useState(currentYear), [supplier, setSupplier] = useState('all');
-  const [revision, setRevision] = useState(0), [loading, setLoading] = useState(true);
+  const [revision, setRevision] = useState(0), [loading, setLoading] = useState(true), refresh = useRef(false);
+  // Revenue and costs cover the whole company's bookkeeping and are only for company administrators.
+  const admin = company.role === 'admin';
   const [finance, setFinance] = useState<PerformanceFinance | null>(null), [shop, setShop] = useState<PerformanceShop | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   useEffect(() => {
     const controller = new AbortController();
     setFinance(null); setShop(null); setErrors({}); setLoading(true); setSupplier('all');
+    const forced = refresh.current; refresh.current = false;
     const load = async (source: 'finance' | 'shop') => {
       try {
-        const response = await tier1Fetch(`/api/performance/${source}?year=${year}`, { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(90000)]) });
-        const value = await response.json() as PerformanceFinance & PerformanceShop & { error?: string };
+        let response: Response, value: PerformanceFinance & PerformanceShop & { error?: string };
+        // Another tab or user may be fetching the same numbers; wait for them instead of failing.
+        for (let attempt = 0; ; attempt++) {
+          response = await tier1Fetch(`/api/performance/${source}?year=${year}${forced ? '&refresh=1' : ''}`, { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(90000)]) });
+          value = await response.json();
+          if (response.status !== 409 || !/hentes allerede/.test(value.error || '') || attempt >= 30) break;
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          if (controller.signal.aborted) return;
+        }
         if (!response.ok) throw Error(value.error || 'Tallene kunne ikke hentes.');
         if (controller.signal.aborted) return;
         if (source === 'finance') setFinance(value); else setShop(value);
@@ -37,9 +47,9 @@ export function Performance({ onIntegrations }: { onIntegrations: () => void }) 
         if (!controller.signal.aborted) setErrors(previous => ({ ...previous, [source]: error instanceof Error ? error.message : 'Tallene kunne ikke hentes.' }));
       }
     };
-    void Promise.all([load('finance'), load('shop')]).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    void Promise.all([...(admin ? [load('finance')] : []), load('shop')]).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [year, revision, webshopId, company.id]);
+  }, [year, revision, webshopId, company.id, admin]);
   const shopName = webshops.find(s => s.id === webshopId)?.name || 'Valgt webshop';
   const expenseMonths = supplier === 'all' ? finance?.expenses.months : supplier === 'unassigned' ? finance?.unassigned : finance?.suppliers.find(s => s.id === supplier)?.months;
   const sourceNote = (start?: string, checked?: string) => checked ? `Hentet ${formatDateTime(checked)} · Historik fra ${formatDate(start!)}` : '';
@@ -48,7 +58,7 @@ export function Performance({ onIntegrations }: { onIntegrations: () => void }) 
       <div><p className="eyebrow">Tools · Årsoversigt</p><h1 className="page-title">Performance</h1><p className="mt-2 text-sm text-muted-foreground">Følg udviklingen måned for måned og sammenlign med året før.</p></div>
       <div className="flex flex-wrap items-end gap-3">
         <label className="grid gap-1 text-xs font-medium">År<select className="h-10 rounded-xl border border-border bg-white px-3 text-sm" aria-label="År for Performance" value={year} onChange={event => setYear(Number(event.target.value))}>{Array.from({ length: 10 }, (_, i) => currentYear - i).map(y => <option key={y} value={y}>{y}</option>)}</select></label>
-        <Button variant="outline" disabled={loading} onClick={() => setRevision(v => v + 1)}><RefreshCw className={loading ? 'animate-spin' : ''}/>{loading ? 'Henter…' : 'Opdatér'}</Button>
+        <Button variant="outline" disabled={loading} onClick={() => { refresh.current = true; setRevision(v => v + 1); }}><RefreshCw className={loading ? 'animate-spin' : ''}/>{loading ? 'Henter…' : 'Opdatér'}</Button>
       </div>
     </header>
     <div className="mb-7 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e9e2d7] bg-[#faf8f5] px-4 py-3 text-xs text-muted-foreground">
@@ -56,10 +66,12 @@ export function Performance({ onIntegrations }: { onIntegrations: () => void }) 
       <Button variant="link" className="h-auto p-0 text-xs" onClick={onIntegrations}>Se integrationer<ArrowUpRight className="size-3"/></Button>
     </div>
     <div className="grid gap-6 xl:grid-cols-2">
+      {admin ? <>
       <PerformanceChart title="Omsætning" icon={<Banknote className="size-5"/>} source="Dinero · Hele virksomheden" description="Bogført omsætning ekskl. moms." color="#9a7440" year={year} monetary metric={finance?.revenue} error={errors.finance} loading={loading && !finance && !errors.finance} note={sourceNote(finance?.startDate, finance?.checkedAt)}/>
       <PerformanceChart title="Omkostninger" icon={<ArrowUpRight className="size-5"/>} source="Dinero · Hele virksomheden" description="Bogførte omkostninger før skat, uden fradragsberettiget moms." color="#ba7046" year={year} monetary metric={expenseMonths ? { months: expenseMonths } : undefined} error={errors.finance} loading={loading && !finance && !errors.finance} note={sourceNote(finance?.startDate, finance?.checkedAt)} controls={
         <label className="grid min-w-0 gap-1 text-xs text-muted-foreground">Leverandør<select className="h-9 w-full max-w-full rounded-lg border border-border bg-white px-2 text-sm text-foreground sm:max-w-64" aria-label="Filtrér omkostninger efter leverandør" disabled={!finance} value={supplier} onChange={event => setSupplier(event.target.value)}><option value="all">Alle leverandører</option><option value="unassigned">Uden leverandør</option>{finance?.suppliers.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       }/>
+      </> : <p className="flex items-center gap-2 rounded-2xl border border-dashed border-[#e0d6c6] bg-white p-5 text-sm text-muted-foreground xl:col-span-2"><Info className="size-4 shrink-0"/>Omsætning og omkostninger kommer fra virksomhedens regnskab og kan kun ses af virksomhedens administratorer.</p>}
       <PerformanceChart title="Besøg" icon={<Eye className="size-5"/>} source={`Shopify · ${shopName}`} description="Besøg (sessioner) i webshoppens analyser." color="#37867b" year={year} metric={shop?.visits} error={errors.shop} loading={loading && !shop && !errors.shop} note={sourceNote(shop?.startDate, shop?.checkedAt)}/>
       <PerformanceChart title="Antal ordrer" icon={<ShoppingBag className="size-5"/>} source={`Shopify · ${shopName}`} description="Antal ordrer ifølge webshoppens salgsrapport." color="#567da3" year={year} metric={shop?.orders} error={errors.shop} loading={loading && !shop && !errors.shop} note={sourceNote(shop?.startDate, shop?.checkedAt)}/>
     </div>
