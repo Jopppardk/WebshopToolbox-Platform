@@ -18,6 +18,7 @@ export function ShopifyPackagingFields() {
     return () => controller.abort();
   }, []);
   async function create() {
+    if (!window.confirm(`Der oprettes ${missing} nye felter på alle varekort (produkter) i Shopify. Felterne kan ses og udfyldes af alle med adgang til produkter i Shopify. Eksisterende felter og produktdata ændres ikke. Vil du fortsætte?`)) return;
     setBusy(true); setError(''); setNotice('');
     try {
       const response = await fetch('/api/emballage/shopify-fields', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
@@ -35,8 +36,27 @@ export function ShopifyPackagingFields() {
     {conflicts > 0 && <p className="mt-3 text-xs text-red-700">Et felt findes allerede med en anden type. WebshopToolbox ændrer det ikke; ret eller slet feltet i Shopify under Indstillinger → Brugerdefinerede data → Produkter.</p>}
     {status && missing > 0 && !status.writes && <p className="mt-3 text-xs text-muted-foreground">Felterne kan kun oprettes fra produktionsportalen. Testmiljøet ændrer intet i Shopify.</p>}
     {status && missing > 0 && status.writes && !status.canWrite && <p className="mt-3 text-xs text-amber-800">Shopify-appen mangler rettigheden write_products. Tilføj den under appens adgang i Shopify (se vejledningen til Shopify), og kontrollér igen.</p>}
+    {status && missing > 0 && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"><span className="font-semibold">Bemærk:</span> Knappen opretter {missing} nye felter på alle varekort (produkter) i Shopify. Felterne vises på produktsiden i Shopify for alle med adgang til produkter. Eksisterende felter og produktdata ændres ikke, og felterne kan slettes igen i Shopify under Indstillinger → Brugerdefinerede data → Produkter.</p>}
     {status && missing > 0 && <Button className="mt-3" onClick={create} disabled={busy || !status.writes || !status.canWrite}>{busy ? 'Opretter…' : `Opret ${missing} felter i Shopify`}</Button>}
     {status && missing === 0 && conflicts === 0 && <p className="mt-3 text-xs text-emerald-700">Alle felter er oprettet. Udfyld dem pr. produkt i Shopify.</p>}
     {error && <p role="alert" className="mt-3 text-sm text-red-800">{error}</p>}{notice && <p role="status" className="mt-3 text-sm">{notice}</p>}
+  </div>;
+}
+
+/** Warning on the Emballage page when the Shopify fields are missing, linking to the integration that creates them. */
+export function PackagingFieldsWarning({ onFix }: { onFix: () => void }) {
+  const [problems, setProblems] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    // Without a Shopify connection the check fails; the page then shows its own guidance instead.
+    fetch('/api/emballage/shopify-fields', { cache: 'no-store', signal: controller.signal })
+      .then(async response => { if (!response.ok) return; const data = await response.json() as Status; setProblems(data.fields.filter(field => field.status !== 'present').length); })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+  if (!problems) return null;
+  return <div role="alert" className="mb-6 flex flex-col justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 sm:flex-row sm:items-center">
+    <p><span className="font-semibold">{problems} af de fem emballagefelter mangler i Shopify.</span> Uden felterne kan vægt og indberetningspligt ikke læses fra dine varer, og indberetningen bliver ufuldstændig.</p>
+    <Button variant="outline" className="shrink-0" onClick={onFix}>Løs under Integrationer</Button>
   </div>;
 }

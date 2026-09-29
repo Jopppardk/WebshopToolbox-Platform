@@ -38,6 +38,8 @@ export function EmballageConnection({
     [reportId, setReportId] = useState(''),
     [schema, setSchema] = useState<EISchema | null>(null),
     [mapping, setMapping] = useState({ household: '', commercial: '' });
+  // Opened from a link (e.g. the Emballage page warning): bring the card into view once it renders.
+  useEffect(() => { if (initialExpanded) document.getElementById('emballage-connection-panel')?.scrollIntoView({ block: 'center' }); }, [initialExpanded]);
   async function load() {
     const r = await fetch('/api/emballage/connection', { cache: 'no-store' }),
       d = (await r.json()) as Status;

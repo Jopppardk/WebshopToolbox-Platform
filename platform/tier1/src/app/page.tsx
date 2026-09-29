@@ -122,7 +122,7 @@ export default function Home() {
       setView('orders');
     }
   }, []);
-  const [integrationTarget,setIntegrationTarget]=useState<'shopify'|'dinero'|null>(null);
+  const [integrationTarget,setIntegrationTarget]=useState<'shopify'|'dinero'|'emballage'|null>(null);
   const [settingsTab, setSettingsTab] = useState<'dashboard' | 'integrations' | 'invoice-email' | 'inventory'>('dashboard');
   const [notice, setNotice] = useState('');
   const [accounts, setAccounts] = useState<Accounts>(emptyAccounts);
@@ -433,7 +433,7 @@ export default function Home() {
           <ProviderLedger kind="payout" syncRevision={syncState.revision} />
         )}
         {view === 'inventory' && integrationAvailable('inventory') && <Inventory />}
-        {view === 'packaging' && integrationAvailable('packaging') && <Packaging key={packagingEntry.key} initialTab={packagingEntry.tab}/>}
+        {view === 'packaging' && integrationAvailable('packaging') && <Packaging key={packagingEntry.key} initialTab={packagingEntry.tab} onIntegrations={()=>{setIntegrationTarget('emballage');setSettingsTab('integrations');setView('settings');}}/>}
         {view === 'feeds' && integrationAvailable('feeds') && <ProductFeeds />}
         {view === 'support' && <Support />}
         {view === 'settings' && (
@@ -740,7 +740,7 @@ function Settings({
   automation, setAutomation, invoiceEmail, setInvoiceEmail, syncIntervalMinutes, setSyncIntervalMinutes, savedIntervalMinutes, ready, saving, message,
 }: {
   mode: 'dashboard' | 'integrations' | 'invoice-email' | 'inventory';
-  initialIntegration: 'shopify'|'dinero'|null;
+  initialIntegration: 'shopify'|'dinero'|'emballage'|null;
   accounts: Accounts;
   setAccounts: React.Dispatch<React.SetStateAction<Accounts>>;
   onSave: () => Promise<void>;
@@ -760,14 +760,14 @@ function Settings({
   const [connectionMessage, setConnectionMessage] = useState('');
   const [connecting, setConnecting] = useState<'shopify' | 'dinero' | null>(null);
   const library = useIntegrationLibrary();
-  const [expandedEmballage, setExpandedEmballage] = useState(false);
+  const [expandedEmballage, setExpandedEmballage] = useState(initialIntegration==='emballage');
   const [expandedFlatpay,setExpandedFlatpay]=useState(false);
   const [expandedViaBill, setExpandedViaBill] = useState(false);
   const [expandedPensopay, setExpandedPensopay] = useState(false);
-  const [expandedIntegration, setExpandedIntegration] = useState<'shopify' | 'dinero' | null>(initialIntegration);
+  const [expandedIntegration, setExpandedIntegration] = useState<'shopify' | 'dinero' | null>(initialIntegration==='emballage'?null:initialIntegration);
   useEffect(()=>{
     if(mode!=='integrations' || !initialIntegration)return;
-    setExpandedIntegration(initialIntegration);
+    if(initialIntegration==='emballage')setExpandedEmballage(true);else setExpandedIntegration(initialIntegration);
     const frame=requestAnimationFrame(()=>document.getElementById(initialIntegration+'-connection-panel')?.scrollIntoView({block:'center'}));
     return ()=>cancelAnimationFrame(frame);
   },[mode,initialIntegration]);
