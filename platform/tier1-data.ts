@@ -13,6 +13,7 @@ import { jsonBody } from './invitations';
 import { unseal } from './connections';
 import { readDineroAccounts,readDineroSuppliers } from './dinero-read';
 import { handleOperations } from './operations';
+import { runSalesNow } from './production-jobs';
 import { handleStocktake } from './stocktake';
 import { handleInvoices } from './invoices';
 import { handleDocuments } from './documents';
@@ -118,7 +119,7 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
  if(path==='/invoices/logo')return handleInvoices(request,env,actor,company,'logo');
  if(path==='/invoices/preview'){if(shop==='none')throw new HttpError(409,'Opret en webshop for at se fakturaeksemplet.');const next=new URL(request.url);next.searchParams.set('webshopId',shop);return handleInvoices(new Request(next,request),env,actor,company,'preview');}
  if(path==='/invoices/settings')return handleInvoices(request,env,actor,company,'settings');
- const dataPaths=['/shopify/orders','/shopify/refunds','/shopify/payouts','/shopify/payments','/refunds/overview','/payouts/overview','/sales/log','/payouts/log','/refunds/log','/sales/preview','/shopify/inventory','/documents','/invoices','/invoices/pdf','/invoices/email-test','/flatpay/records','/flatpay/sync','/flatpay/refunds','/viabill/records','/pensopay/records'];
+ const dataPaths=['/shopify/orders','/shopify/orders/process','/shopify/refunds','/shopify/payouts','/shopify/payments','/refunds/overview','/payouts/overview','/sales/log','/payouts/log','/refunds/log','/sales/preview','/shopify/inventory','/documents','/invoices','/invoices/pdf','/invoices/email-test','/flatpay/records','/flatpay/sync','/flatpay/refunds','/viabill/records','/pensopay/records'];
  if(!dataPaths.includes(path))return null;
  if(shop==='none')throw new HttpError(409,'Forbind en webshop først.');
  if(path==='/shopify/inventory'){
@@ -129,6 +130,8 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
  if(path==='/sales/preview'){
   const response=await handleOperations(request,env,actor,company,shop,'sales-preview');if(!response.ok)return response;const data=await response.json() as any;return reply({...data,notes:['Kontrollen opretter ingen bogføring.'],checkedAt:new Date().toISOString()});
  }
+ // After Synkronisér nu: invoice, send and book fulfilled orders right away, as far as the automation switches allow.
+ if(path==='/shopify/orders/process'){if(get)throw new HttpError(405,'Brug Synkronisér nu.');await requireCompany(env.PLATFORM_DB,actor,company,true);return reply(await runSalesNow(env,company,shop));}
  if(path==='/shopify/orders'){
   if(!get){const response=await handleOperations(request,env,actor,company,shop,'orders');if(!response.ok)return response;const data=await response.json() as any;return reply({...data,synced:data.count,invoicesCreated:0,orders:[]});}
   const offset=pageNumber(url.searchParams.get('offset'),0),limit=pageNumber(url.searchParams.get('limit'),50,100)||50;

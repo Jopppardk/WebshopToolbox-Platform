@@ -32,6 +32,7 @@ import { orderPeriods, type OrderPeriod } from '@/lib/order-period';
 import {hasRequiredIntegration,integrationRequirements,supportedModules,type IntegrationGatedView} from '@/lib/integration-visibility';
 import { useSyncStatus } from '@/components/sync-status';
 import { syncIntervals } from '@/lib/sync-schedule';
+import { processedSummary } from '@/lib/order-processing';
 import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -180,6 +181,17 @@ export default function Home() {
         if (after) seen.add(after);
         notify(`${synced} Shopify-ordrer hentet · ${invoices} PDF-fakturaer${warnings ? ` · ${warnings} fakturaer kræver kontrol under Indstillinger` : ''}${after ? ' · henter flere…' : ''}${historyWarning ? ` · ${historyWarning}` : ''}`);
       } while (after);
+      // Afsendte ordrer faktureres, sendes og bogføres med det samme, hvis automatikken er slået til.
+      notify(`${synced} Shopify-ordrer hentet · behandler afsendte ordrer…`);
+      const fetched = `${synced} Shopify-ordrer hentet${historyWarning ? ` · ${historyWarning}` : ''}`;
+      try {
+        const response = await fetch('/api/shopify/orders/process', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const result: { status: string; invoices?: number; sent?: number; booked?: number; drafts?: number; failed?: number; error?: string } = await response.json();
+        if (!response.ok) throw new Error(result.error);
+        notify(`${fetched} · ${processedSummary(result)}`);
+      } catch (error) {
+        notify(`${fetched} · ${error instanceof Error && error.message ? error.message : 'Afsendte ordrer kunne ikke behandles nu. De behandles ved næste automatiske kørsel.'}`);
+      }
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Shopify-ordrer kunne ikke synkroniseres');
     } finally {
