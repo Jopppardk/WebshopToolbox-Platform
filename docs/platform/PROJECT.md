@@ -1,5 +1,7 @@
 # WebshopToolbox – fælles platform
 
+> 29. september 2026 – Performance er implementeret under den nye Tools-menu sammen med Emballage og Produktfeeds. Månedlig omsætning/omkostninger fra Dinero samt besøg/ordrer fra Shopify, stiplet sammenligning med året før og leverandørfilter. 413 tests, obligatoriske lokale checks og browserkontrol med testdata bestået. Ikke udgivet; rigtige rapporttal og Shopify-rapportadgang afventer kontrol. Se [PERFORMANCE.md](PERFORMANCE.md).
+
 > Cloud-deployprocedure 28. september: PR #14 (`1a26ae6`) er merged med bestået CI. Et afgrænset GH_TOKEN er gemt. En frisk Cloud-terminal har verificeret læseadgang og Actions-write i run `36471598436`, som bevidst blev afvist af versionsgaten før deployment. Den rigtige dev→prod-kæde og HTTP-gates er bestået i runs `36468362953` og `36471085328` fra andet arbejde. Nye Cloud-opgaver skal bruge det opdaterede miljø; se CODEX-CLOUD-DEPLOY.md.
 
 

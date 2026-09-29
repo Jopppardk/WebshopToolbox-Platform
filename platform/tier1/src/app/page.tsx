@@ -22,6 +22,7 @@ import { NotificationBell } from '@/components/notification-bell';
 import { Packaging } from '@/components/packaging';
 import { Dashboard } from '@/components/dashboard';
 import {ProductFeeds} from '@/components/product-feeds';
+import { Performance } from '@/components/performance';
 import {IntegrationRequired} from '@/components/integration-required';
 import {Rss} from 'lucide-react';
 import { Support } from '@/platform/support';
@@ -117,7 +118,7 @@ export default function Home() {
   const [syncingOrders, setSyncingOrders] = useState(false);
   const [packagingEntry,setPackagingEntry]=useState({tab:'consumption' as 'consumption'|'reporting',key:0});
   const [view, setView] = useState<
-    'dashboard' | 'orders' | 'invoices' | 'documents' | 'refunds' | 'payouts' | 'inventory' | 'packaging' | 'support' | 'feeds' | 'settings'
+    'dashboard' | 'orders' | 'invoices' | 'documents' | 'refunds' | 'payouts' | 'inventory' | 'packaging' | 'support' | 'feeds' | 'performance' | 'settings'
   >('dashboard');
   useEffect(() => {
     if (sessionStorage.getItem('toolbox-refresh-sales') === '1') {
@@ -254,7 +255,6 @@ export default function Home() {
             Udbetalinger
           </button>
           <button className={`nav-item w-full ${view === 'inventory' ? 'active' : ''}`} onClick={() => setView('inventory')}><Warehouse />Lager</button>
-          <button className={`nav-item w-full ${view === 'packaging' ? 'active' : ''}`} onClick={() => setView('packaging')}><Boxes />Emballage</button>
           <p className="nav-label mt-7">Dokumenter</p>
           <button
             className={`nav-item w-full ${view === 'invoices' ? 'active' : ''}`}
@@ -264,8 +264,11 @@ export default function Home() {
             Fakturaer
           </button>
           <button className={`nav-item w-full ${view === 'documents' ? 'active' : ''}`} onClick={() => setView('documents')}><BookOpenCheck />Udbetalingsrapporter</button>
-          <p className="nav-label mt-7">System</p>
+          <p className="nav-label mt-7">Tools</p>
+          <button className={`nav-item w-full ${view === 'performance' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('performance'); }}><Activity />Performance</button>
+          <button className={`nav-item w-full ${view === 'packaging' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('packaging'); }}><Boxes />Emballage</button>
           <button className={`nav-item w-full ${view === 'feeds' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('feeds'); }}><Rss />Produktfeeds</button>
+          <p className="nav-label mt-7">System</p>
           <button className={`nav-item w-full ${view === 'support' ? 'active' : ''}`} onClick={() => setView('support')}><Lightbulb />Support</button>
           <button
             className={`nav-item w-full ${view === 'settings' ? 'active' : ''}`}
@@ -312,7 +315,6 @@ export default function Home() {
             Udbetalinger
           </button>
           <button className={`nav-item w-full ${view === 'inventory' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('inventory'); }}><Warehouse />Lager</button>
-          <button className={`nav-item w-full ${view === 'packaging' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('packaging'); }}><Boxes />Emballage</button>
           <p className="nav-label mt-7">Dokumenter</p>
           <button
             className={`nav-item w-full ${view === 'invoices' ? 'active' : ''}`}
@@ -322,8 +324,11 @@ export default function Home() {
             Fakturaer
           </button>
           <button className={`nav-item w-full ${view === 'documents' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('documents'); }}><BookOpenCheck />Udbetalingsrapporter</button>
-          <p className="nav-label mt-7">System</p>
+          <p className="nav-label mt-7">Tools</p>
+          <button className={`nav-item w-full ${view === 'performance' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('performance'); }}><Activity />Performance</button>
+          <button className={`nav-item w-full ${view === 'packaging' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('packaging'); }}><Boxes />Emballage</button>
           <button className={`nav-item w-full ${view === 'feeds' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('feeds'); }}><Rss />Produktfeeds</button>
+          <p className="nav-label mt-7">System</p>
           <button className={`nav-item w-full ${view === 'support' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('support'); }}><Lightbulb />Support</button>
           <button
             className={`nav-item w-full ${view === 'settings' ? 'active' : ''}`}
@@ -346,6 +351,7 @@ export default function Home() {
             <CustomerIdentity />
           </div>
         </header>
+        {view === 'performance' && <Performance onIntegrations={() => { setIntegrationTarget(null); setSettingsTab('integrations'); setView('settings'); }}/>}
         {view === 'dashboard' && <Dashboard onIntegrations={provider => { setIntegrationTarget(provider ?? null); setSettingsTab('integrations'); setView('settings'); }}/>}
         {currentRequirement && connections===null && !connectionsError && <div className="mx-auto max-w-[1440px] px-5 py-16 text-center text-sm text-muted-foreground">Kontrollerer integrationer…</div>}
         {currentRequirement && connectionsError && <div className="mx-auto max-w-[1440px] px-5 py-16 text-center"><p role="alert" className="text-sm text-red-700">{connectionsError}</p><Button className="mt-4" variant="outline" onClick={()=>void refreshConnections()}>Prøv igen</Button></div>}
