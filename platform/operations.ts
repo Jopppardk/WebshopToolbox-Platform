@@ -9,12 +9,14 @@ import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 
 const page='pageInfo { hasNextPage endCursor }';
 const queries:Record<string,string>={
- orders:`query ToolboxSales($after:String,$query:String!){orders(first:50,after:$after,sortKey:CREATED_AT,reverse:true,query:$query){nodes{id name createdAt processedAt cancelledAt test displayFinancialStatus displayFulfillmentStatus fulfillments{createdAt status} paymentGatewayNames currentTotalPriceSet{shopMoney{amount currencyCode}} totalRefundedSet{shopMoney{amount currencyCode}}} ${page}}}`,
+ orders:`query ToolboxSales($after:String,$query:String!){orders(first:50,after:$after,sortKey:CREATED_AT,reverse:true,query:$query){nodes{id name createdAt updatedAt processedAt cancelledAt test displayFinancialStatus displayFulfillmentStatus fulfillments{createdAt status} paymentGatewayNames currentTotalPriceSet{shopMoney{amount currencyCode}} totalRefundedSet{shopMoney{amount currencyCode}}} ${page}}}`,
  refunds:`query ToolboxRefunds($after:String,$query:String!){shopifyPaymentsAccount{balanceTransactions(first:50,after:$after,query:$query,sortKey:PROCESSED_AT,reverse:true){nodes{id type test transactionDate amount{amount currencyCode} fee{amount currencyCode} net{amount currencyCode} associatedOrder{id name} associatedPayout{id status} sourceOrderTransactionId} ${page}}}}`,
  payouts:`query ToolboxPayouts($after:String,$query:String!){shopifyPaymentsAccount{payouts(first:50,after:$after,query:$query,sortKey:ISSUED_AT,reverse:true){nodes{id issuedAt status transactionType net{amount currencyCode} summary{${payoutSummaryFields.map(f=>f+' { amount currencyCode }').join(' ')}}} ${page}}}}`,
  inventory:`query ToolboxInventory($after:String){inventoryItems(first:25,after:$after){nodes{id tracked unitCost{amount currencyCode} variant{title sku product{title status}} inventoryLevels(first:100){nodes{location{id name isActive} quantities(names:["on_hand"]){name quantity}} ${page}}} ${page}}}`,
 };
 queries.payments=queries.refunds.replace('ToolboxRefunds','ToolboxPayments');
+// Incremental order sync: oldest change first, so a stored watermark never skips an order.
+const ordersSince=queries.orders.replace('ToolboxSales','ToolboxSalesSince').replace('sortKey:CREATED_AT,reverse:true','sortKey:UPDATED_AT,reverse:false');
 
 type Node=Record<string,any>;
 type Page={nodes:Node[];pageInfo:{hasNextPage:boolean;endCursor:string|null}};
@@ -49,8 +51,9 @@ export async function handleOperations(request:Request,env:PlatformEnv,actor:Act
  if(request.method!=='POST')throw new HttpError(405,'Brug Hent data.');
  await requireCompany(db,actor,company,true);
  if(actor.support)throw new HttpError(403,'Afslut impersonering før import.');
- const b=await jsonBody(request),after=b.after??null;
+ const b=await jsonBody(request),after=b.after??null,since=b.since??null;
  if(after!==null&&(typeof after!=='string'||!after||after.length>2048))throw new HttpError(400,'Ugyldig fortsættelse.');
+ if(since!==null&&(module!=='orders'||typeof since!=='string'||!/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(since)||!Number.isFinite(Date.parse(since))))throw new HttpError(400,'Ugyldigt ændringstidspunkt.');
  const from=await dataCutoff(env,company,shop);
  const run=crypto.randomUUID();await db.prepare("INSERT INTO operation_runs(id,company_id,webshop_id,module,status) VALUES(?,?,?,?,'running')").bind(run,company,shop,module).run();
  try{
@@ -61,7 +64,7 @@ export async function handleOperations(request:Request,env:PlatformEnv,actor:Act
    const scopes=await orderQuery<{currentAppInstallation:{accessScopes:Array<{handle:string}>}}>(access,'query OrderHistoryAccess{currentAppInstallation{accessScopes{handle}}}',{},'Shopify-appens adgang kunne ikke kontrolleres.');
    if(!scopes.currentAppInstallation?.accessScopes?.some(s=>s.handle==='read_all_orders'))warning='Shopify-appen mangler read_all_orders. Shopify returnerer derfor kun ordrer fra de seneste 60 dage, selvom historikken går længere tilbage. Anmod om read_all_orders i Shopify-appen for at hente ældre ordrer.';
   }
-  const data=await orderQuery<Record<string,any>>(access,queries[module],{after,...(module==='inventory'?{}:{query:module==='orders'?'created_at:>='+from:module==='payments'?`processed_at:>='${from}'`:module==='refunds'?`transaction_type:refund processed_at:>='${from}'`:`issued_at:>='${from}'`})},'Data kunne ikke hentes. Kontrollér Shopify-appens læseadgang til ordrer, Payments eller lager.');
+  const data=await orderQuery<Record<string,any>>(access,since?ordersSince:queries[module],{after,...(module==='inventory'?{}:{query:module==='orders'?(since?`updated_at:>='${since}' `:'')+'created_at:>='+from:module==='payments'?`processed_at:>='${from}'`:module==='refunds'?`transaction_type:refund processed_at:>='${from}'`:`issued_at:>='${from}'`})},'Data kunne ikke hentes. Kontrollér Shopify-appens læseadgang til ordrer, Payments eller lager.');
   const connection:Page=module==='orders'?data.orders:module==='inventory'?data.inventoryItems:['refunds','payments'].includes(module)?data.shopifyPaymentsAccount?.balanceTransactions:data.shopifyPaymentsAccount?.payouts;
   if(!Array.isArray(connection?.nodes)||typeof connection.pageInfo?.hasNextPage!=='boolean'||connection.pageInfo.hasNextPage&&(!connection.pageInfo.endCursor||connection.pageInfo.endCursor===after))throw new HttpError(409,'Udbyderen returnerede en ufuldstændig side.');
   const nodes=connection.nodes.filter(n=>(module==='orders'?true:module==='refunds'?!n.test&&n.type==='REFUND':module==='payments'?!n.test:true) && (module==='inventory'||String(module==='orders'?n.createdAt:['refunds','payments'].includes(module)?n.transactionDate:n.issuedAt)>=from));
@@ -83,7 +86,8 @@ export async function handleOperations(request:Request,env:PlatformEnv,actor:Act
   });
   if(module==='orders')for(const n of nodes)statements.push(db.prepare('INSERT INTO invoice_orders(company_id,webshop_id,external_id,name,created_at,payload_json) VALUES(?,?,?,?,?,?) ON CONFLICT(company_id,webshop_id,external_id) DO UPDATE SET name=excluded.name').bind(company,shop,n.id,n.name,n.createdAt,JSON.stringify(n)));
   await db.batch([...statements,db.prepare("UPDATE operation_runs SET status='success',count=?,message=?,finished_at=CURRENT_TIMESTAMP WHERE id=?").bind(nodes.length,warning||'',run)]);
-  return reply({count:nodes.length,...connection.pageInfo,...(warning?{warning}:{})});
+  const maxUpdatedAt=module==='orders'?nodes.map(n=>String(n.updatedAt||'')).filter(v=>Number.isFinite(Date.parse(v))).sort().at(-1)??null:undefined;
+  return reply({count:nodes.length,...connection.pageInfo,...(warning?{warning}:{}),...(maxUpdatedAt!==undefined?{maxUpdatedAt}:{})});
  }catch(error){
   const message=error instanceof HttpError?error.message:'Importen kunne ikke gennemføres. Ingen eksterne ændringer er foretaget.';
   await db.prepare("UPDATE operation_runs SET status='failed',message=?,finished_at=CURRENT_TIMESTAMP WHERE id=?").bind(message,run).run();

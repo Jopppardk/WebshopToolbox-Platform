@@ -17,9 +17,9 @@ export async function runProductionJobs(env:PlatformEnv){
  const db=env.PLATFORM_DB,deadline=Date.now()+240000;
  // A live company administrator is selected server-side. No client supplied tenant
  // or identity is used, and all adapters recheck company and webshop permissions.
- const shops=(await db.prepare(`SELECT w.company_id,w.id,p.preferences_json,p.revision,u.id actor_id,u.email
+ const shops=(await db.prepare(`SELECT w.company_id,w.id,COALESCE(p.preferences_json,'{}') preferences_json,p.revision,u.id actor_id,u.email,EXISTS(SELECT 1 FROM webshop_connections k WHERE k.company_id=w.company_id AND k.webshop_id=w.id AND k.provider='shopify' AND k.verified_at IS NOT NULL) shopify
  FROM webshops w JOIN companies c ON c.id=w.company_id AND c.status='active'
- JOIN tier1_preferences p ON p.company_id=w.company_id AND p.webshop_id=w.id
+ LEFT JOIN tier1_preferences p ON p.company_id=w.company_id AND p.webshop_id=w.id
  JOIN users u ON u.id=(SELECT m.user_id FROM company_memberships m JOIN users a ON a.id=m.user_id
  WHERE m.company_id=w.company_id AND m.role='admin' AND a.status='active'
  AND NOT EXISTS(SELECT 1 FROM platform_admins pa WHERE pa.user_id=a.id) ORDER BY m.user_id LIMIT 1)
@@ -35,7 +35,7 @@ export async function runProductionJobs(env:PlatformEnv){
  ON CONFLICT(company_id,webshop_id,job) DO UPDATE SET lease_owner=excluded.lease_owner,lease_until=excluded.lease_until
  WHERE production_jobs.lease_until<? AND production_jobs.next_run_at<=?`).bind(company,id,owner,now+300000,now,now).run();
   if(claim.meta.changes!==1)continue;
-  const owns=async()=>{if(Date.now()>deadline)throw new HttpError(409,'Jobbet fortsaetter ved naeste koersel.');const active=await db.prepare("SELECT 1 FROM production_jobs WHERE company_id=? AND webshop_id=? AND job='runtime' AND lease_owner=? AND lease_until>? AND EXISTS(SELECT 1 FROM tier1_preferences p WHERE p.company_id=production_jobs.company_id AND p.webshop_id=production_jobs.webshop_id AND p.revision=?) AND NOT EXISTS(SELECT 1 FROM public_signups ps WHERE ps.company_id=production_jobs.company_id AND ps.trial_ends_at<=unixepoch())").bind(company,id,owner,Date.now(),shop.revision).first();if(!active)throw new HttpError(409,'Joblaasen er udloebet.');};
+  const owns=async()=>{if(Date.now()>deadline)throw new HttpError(409,'Jobbet fortsaetter ved naeste koersel.');const active=await db.prepare("SELECT 1 FROM production_jobs WHERE company_id=? AND webshop_id=? AND job='runtime' AND lease_owner=? AND lease_until>? AND (CASE WHEN ? IS NULL THEN NOT EXISTS(SELECT 1 FROM tier1_preferences p WHERE p.company_id=production_jobs.company_id AND p.webshop_id=production_jobs.webshop_id) ELSE EXISTS(SELECT 1 FROM tier1_preferences p WHERE p.company_id=production_jobs.company_id AND p.webshop_id=production_jobs.webshop_id AND p.revision=?) END) AND NOT EXISTS(SELECT 1 FROM public_signups ps WHERE ps.company_id=production_jobs.company_id AND ps.trial_ends_at<=unixepoch())").bind(company,id,owner,Date.now(),shop.revision,shop.revision).first();if(!active)throw new HttpError(409,'Joblaasen er udloebet.');};
   const run=async(name:string,work:()=>Promise<void>)=>{
    const runId=crypto.randomUUID();await db.prepare("INSERT INTO operation_runs(id,company_id,webshop_id,module,status) VALUES(?,?,?,?,'running')").bind(runId,company,id,name).run();
    try{await owns();await work();await db.prepare("UPDATE operation_runs SET status='success',finished_at=CURRENT_TIMESTAMP WHERE id=?").bind(runId).run();}
@@ -45,9 +45,36 @@ export async function runProductionJobs(env:PlatformEnv){
   const saveCursor=async(job:string,value:unknown)=>{await owns();await db.prepare('INSERT INTO production_jobs(company_id,webshop_id,job,cursor_json) VALUES(?,?,?,?) ON CONFLICT(company_id,webshop_id,job) DO UPDATE SET cursor_json=excluded.cursor_json').bind(company,id,job,JSON.stringify(value)).run();};
   try{
    const policy=await historyPolicy(env,company),start=await providerStart(env,company,id,'shopify'),scope=JSON.stringify([policy,start]);
-   for(const module of ['orders','payments','refunds','payouts','inventory']){
-    const enabled=module==='orders'?automation.sales||automation.invoiceEmails:automation[module];if(!enabled)continue;
-    await run('auto.import.'+module,async()=>{const state=await cursor('import.'+module);const after=state.scope===scope?state.after:null;const result=await responseValue(await handleOperations(request({after:after||null}),env,actor,company,id,module));await saveCursor('import.'+module,{scope,after:result.hasNextPage?result.endCursor:null});});
+   // Imports are read-only and run whenever Shopify is connected; automation switches only
+   // control bookkeeping. Inventory is a full item list and stays behind its own switch.
+   const imports=shop.shopify?['orders','payments','refunds','payouts',...(automation.inventory?['inventory']:[])]:[];
+   const importModule=(module:string,body:Record<string,unknown>)=>handleOperations(request(body),env,actor,company,id,module).then(responseValue);
+   for(const module of imports){
+    await run('auto.import.'+module,async()=>{
+     const state=await cursor('import.'+module),current=state.scope===scope?state:{};
+     if(module==='orders'){
+      // Orders sync by change time from a watermark, oldest change first, so new orders and later
+      // changes (fulfilment, cancellation) arrive every run however long the history is. The first
+      // sync walks the whole history in bounded portions; a 10-minute overlap covers late writes.
+      // Shops already synced by the earlier backwards walk resume 30 days back instead of from scratch.
+      const migrated=!current.since&&state.scope===scope&&'after' in state?new Date(Date.now()-30*86400000).toISOString():null;
+      let since:string=current.since||migrated||'2000-01-01T00:00:00Z',after:string|null=current.since?current.after||null:null,newest:string|null=current.since?current.newest||null:null;
+      for(let page=0;page<20;page++){
+       const result=await importModule('orders',{after,since});
+       if(result.maxUpdatedAt&&(!newest||result.maxUpdatedAt>newest))newest=result.maxUpdatedAt;
+       if(result.hasNextPage){after=result.endCursor;await saveCursor('import.orders',{scope,since,after,newest});continue;}
+       if(newest)since=new Date(Date.parse(newest)-600000).toISOString();
+       await saveCursor('import.orders',{scope,since,after:null,newest:null});return;
+      }
+      return;
+     }
+     // Newest page every run (new items and recent status changes), then one page of history
+     // until the history has been walked once.
+     const head=await importModule(module,{after:null});
+     if(current.done||!head.hasNextPage){await saveCursor('import.'+module,{scope,done:current.done||!head.hasNextPage});return;}
+     const next=await importModule(module,{after:current.after||head.endCursor});
+     await saveCursor('import.'+module,next.hasNextPage?{scope,after:next.endCursor}:{scope,done:true});
+    });
    }
    const connections=(await db.prepare('SELECT provider,start_date,revision FROM payment_connections WHERE company_id=? AND webshop_id=?').bind(company,id).all<any>()).results;
    for(const connection of connections)if(automation.payments||automation.payouts){
