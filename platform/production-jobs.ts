@@ -77,7 +77,8 @@ export async function runProductionJobs(env:PlatformEnv){
     });
    }
    const connections=(await db.prepare('SELECT provider,start_date,revision FROM payment_connections WHERE company_id=? AND webshop_id=?').bind(company,id).all<any>()).results;
-   for(const connection of connections)if(automation.payments||automation.payouts){
+   // Payment provider imports are read-only and run for every connection; switches only control bookkeeping.
+   for(const connection of connections){
     const provider=connection.provider;
     for(const kind of provider==='flatpay'?['payments','settlements','transactions']:provider==='pensopay'?['payments','settlements']:['payment','payout']){
      await run('auto.import.'+provider+'.'+kind,async()=>{
