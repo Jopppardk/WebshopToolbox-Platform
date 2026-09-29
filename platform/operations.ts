@@ -19,6 +19,8 @@ queries.payments=queries.refunds.replace('ToolboxRefunds','ToolboxPayments');
 const ordersSince=queries.orders.replace('ToolboxSales','ToolboxSalesSince').replace('sortKey:CREATED_AT,reverse:true','sortKey:UPDATED_AT,reverse:false');
 
 type Node=Record<string,any>;
+// updatedAt only moves the sync watermark; storing it would mark every edited order as changed content.
+const stored=({updatedAt:_updatedAt,...n}:Node)=>JSON.stringify(n);
 type Page={nodes:Node[];pageInfo:{hasNextPage:boolean;endCursor:string|null}};
 function money(value:any){if(!value||typeof value.amount!=='string'||!/^[-]?\d+(\.\d+)?$/.test(value.amount)||!Number.isFinite(Number(value.amount))||!(/^[A-Z]{3}$/).test(value.currencyCode))throw new HttpError(409,'Udbyderen returnerede et ugyldigt beløb.');}
 export async function handleOperations(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string,module:string){
@@ -82,9 +84,9 @@ export async function handleOperations(request:Request,env:PlatformEnv,actor:Act
     // A missing on_hand quantity is not an error: such items are listed on Lager instead.
     for(const level of n.inventoryLevels.nodes)if(!level.location?.id||typeof level.location.isActive!=='boolean')throw new HttpError(409,'Ufuldstændig lagerlokation.');
    }
-   return db.prepare('INSERT INTO operation_snapshots(company_id,webshop_id,module,external_id,occurred_at,payload_json) VALUES(?,?,?,?,?,?) ON CONFLICT(company_id,webshop_id,module,external_id) DO UPDATE SET occurred_at=excluded.occurred_at,payload_json=excluded.payload_json,imported_at=CURRENT_TIMESTAMP').bind(company,shop,module,n.id,new Date(date).toISOString(),JSON.stringify(n));
+   return db.prepare('INSERT INTO operation_snapshots(company_id,webshop_id,module,external_id,occurred_at,payload_json) VALUES(?,?,?,?,?,?) ON CONFLICT(company_id,webshop_id,module,external_id) DO UPDATE SET occurred_at=excluded.occurred_at,payload_json=excluded.payload_json,imported_at=CURRENT_TIMESTAMP').bind(company,shop,module,n.id,new Date(date).toISOString(),stored(n));
   });
-  if(module==='orders')for(const n of nodes)statements.push(db.prepare('INSERT INTO invoice_orders(company_id,webshop_id,external_id,name,created_at,payload_json) VALUES(?,?,?,?,?,?) ON CONFLICT(company_id,webshop_id,external_id) DO UPDATE SET name=excluded.name').bind(company,shop,n.id,n.name,n.createdAt,JSON.stringify(n)));
+  if(module==='orders')for(const n of nodes)statements.push(db.prepare('INSERT INTO invoice_orders(company_id,webshop_id,external_id,name,created_at,payload_json) VALUES(?,?,?,?,?,?) ON CONFLICT(company_id,webshop_id,external_id) DO UPDATE SET name=excluded.name').bind(company,shop,n.id,n.name,n.createdAt,stored(n)));
   await db.batch([...statements,db.prepare("UPDATE operation_runs SET status='success',count=?,message=?,finished_at=CURRENT_TIMESTAMP WHERE id=?").bind(nodes.length,warning||'',run)]);
   const maxUpdatedAt=module==='orders'?nodes.map(n=>String(n.updatedAt||'')).filter(v=>Number.isFinite(Date.parse(v))).sort().at(-1)??null:undefined;
   return reply({count:nodes.length,...connection.pageInfo,...(warning?{warning}:{}),...(maxUpdatedAt!==undefined?{maxUpdatedAt}:{})});
