@@ -8,11 +8,12 @@ const configs = {dev: 'wrangler.platform-test.json', prod: 'wrangler.platform-pr
 const [target, mode = 'status'] = process.argv.slice(2);
 if (!(target in configs) || !['status', 'apply'].includes(mode)) throw Error('Brug: <dev|prod> <status|apply>');
 const config = configs[target];
-const database = JSON.parse(readFileSync(config, 'utf8')).d1_databases.find(d => d.binding === 'PLATFORM_DB').database_name;
+const settings = JSON.parse(readFileSync(config, 'utf8'));
+const database = settings.d1_databases.find(d => d.binding === 'PLATFORM_DB').database_name;
 
 function wrangler(args, json = true) {
   const result = spawnSync(process.execPath, ['node_modules/wrangler/bin/wrangler.js', ...args, ...(json ? ['--json'] : []), '--config', config],
-    {encoding: 'utf8', env: {...process.env, WRANGLER_SEND_METRICS: 'false', CI: 'true'}, maxBuffer: 16 * 1024 * 1024});
+    {encoding: 'utf8', env: {...process.env, CLOUDFLARE_ACCOUNT_ID: settings.account_id, WRANGLER_SEND_METRICS: 'false', CI: 'true'}, maxBuffer: 16 * 1024 * 1024});
   if (result.status !== 0) throw Error(`wrangler ${args.slice(0, 3).join(' ')} fejlede:\n${result.stderr || result.stdout}`);
   return json ? JSON.parse(result.stdout) : result.stdout;
 }
