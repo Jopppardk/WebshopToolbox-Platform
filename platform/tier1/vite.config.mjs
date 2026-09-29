@@ -10,4 +10,6 @@ export default defineConfig({
   resolve: {alias: {'@': fileURLToPath(new URL('./src', import.meta.url))}},
   css: {postcss: {plugins: [tailwind()]}},
   build: {outDir: '../public/tier1-next', emptyOutDir: true, sourcemap: false},
+  // Scripts and styles find their siblings relative to themselves, so the bundle also works under /admin/ for support.
+  experimental: {renderBuiltUrl: (_file, {hostType}) => hostType === 'html' ? undefined : {relative: true}},
 });

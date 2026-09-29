@@ -20,9 +20,10 @@ export async function handleTier1Settings(request:Request,env:PlatformEnv,actor:
   const db=env.PLATFORM_DB;
   await requireWebshop(db,actor,company,shop);
   await requireCompany(db,actor,company,true);
-  if(actor.platformAdmin||actor.support) throw new HttpError(403,'Indstillinger ændres af virksomhedsadministratoren.');
+  if(actor.platformAdmin) throw new HttpError(403,'Indstillinger ændres af virksomhedsadministratoren.');
   const old=await state(db,company,shop);
   if(request.method==='GET')return reply({settings:old.settings,revision:old.revision});
+  if(actor.support) throw new HttpError(403,'Indstillinger ændres af virksomhedsadministratoren.');
   if(request.method!=='POST')throw new HttpError(405,'Brug Gem indstillinger.');
   const input=await jsonBody(request,16000);
   if(input.revision!==old.revision)throw new HttpError(409,'Indstillingerne er ændret i en anden fane. Genindlæs før du gemmer.');

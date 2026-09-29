@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactNode } from 'react';
 export type Workspace = {
-  user: {id:string;email:string;fullName?:string;platformAdmin:boolean};
+  user: {id:string;email:string;fullName?:string;platformAdmin:boolean;support?:{sessionId:string;adminEmail:string;expiresAt:number}|null};
   company: {id:string;name:string;role:string};
   webshops: Array<{id:string;name:string;status:string}>;
   webshopId: string|null;
@@ -21,5 +21,5 @@ export function WebshopSelector() {
 }
 export function CustomerIdentity() {
   const {user,company} = useWorkspace();
-  return <div className="text-right"><p className="text-sm font-medium">{user.fullName || user.email}</p><p className="text-xs text-muted-foreground">{company.role==='admin'?'Administrator':'Bruger'}</p><form action="/logout" method="post"><button className="text-xs underline" type="submit">Log ud</button></form></div>;
+  return <div className="text-right"><p className="text-sm font-medium">{user.fullName || user.email}</p><p className="text-xs text-muted-foreground">{company.role==='admin'?'Administrator':'Bruger'}</p>{!user.support&&<form action="/logout" method="post"><button className="text-xs underline" type="submit">Log ud</button></form>}</div>;
 }
