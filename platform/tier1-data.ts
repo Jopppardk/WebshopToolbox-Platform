@@ -52,7 +52,9 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   if(!get){
    const b=await jsonBody(request,8000);
    if(b.action!=='seen'||!Array.isArray(b.ids)||b.ids.length>100||b.ids.some(id=>typeof id!=='string'||!/^[a-f0-9-]{36}$/.test(id)))throw new HttpError(400,'Ugyldig markering af fejl.');
-   if(b.ids.length)await db.batch(b.ids.map(id=>db.prepare("INSERT OR IGNORE INTO operation_acknowledgements(company_id,run_id) SELECT company_id,id FROM operation_runs WHERE company_id=? AND webshop_id=? AND id=? AND status='failed'").bind(company,shop,id)));
+   // Seeing the list covers everything up to the newest failure shown, also older ones beyond
+   // the 50 listed; failures that arrive later stay unseen.
+   if(b.ids.length)await db.prepare("INSERT OR IGNORE INTO operation_acknowledgements(company_id,run_id) SELECT r.company_id,r.id FROM operation_runs r WHERE r.company_id=? AND r.webshop_id=? AND r.status='failed' AND r.started_at<=(SELECT max(started_at) FROM operation_runs WHERE company_id=? AND webshop_id=? AND status='failed' AND id IN (SELECT value FROM json_each(?)))").bind(company,shop,company,shop,JSON.stringify(b.ids)).run();
   }
   const errors=(await db.prepare("SELECT r.id,r.module AS source,r.message,COALESCE(r.finished_at,r.started_at) AS created_at,EXISTS(SELECT 1 FROM operation_acknowledgements a WHERE a.company_id=r.company_id AND a.run_id=r.id) AS seen FROM operation_runs r WHERE r.company_id=? AND r.webshop_id=? AND r.status='failed' ORDER BY r.started_at DESC,r.id DESC LIMIT 50").bind(company,shop).all<{id:string;source:string;message:string;created_at:string;seen:number}>()).results;
   const unseen=await db.prepare("SELECT count(*) AS n FROM operation_runs r WHERE r.company_id=? AND r.webshop_id=? AND r.status='failed' AND NOT EXISTS(SELECT 1 FROM operation_acknowledgements a WHERE a.company_id=r.company_id AND a.run_id=r.id)").bind(company,shop).first<{n:number}>();
