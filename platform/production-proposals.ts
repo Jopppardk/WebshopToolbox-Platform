@@ -16,7 +16,7 @@ const fail=(message:string):never=>{throw new HttpError(409,message);};
 const num=(value:unknown)=>{const n=Number(String(value||'').match(/^\d+/)?.[0]);if(!Number.isSafeInteger(n)||n<=0)fail('Vaelg gyldige konti i kontoplanen.');return n;};
 async function chartFor(ctx:BookingContext,accounts:number[]){
  const chart=await readDineroAccounts(ctx.credentials);
- if(new Set(accounts).size!==accounts.length||accounts.some(n=>!chart.some(a=>Number(a.number)===n&&!a.hidden&&!a.vatCode)))fail('Kontiene skal vaere forskellige, aktive og uden moms i Dinero.');
+ if(new Set(accounts).size!==accounts.length||accounts.some(n=>!chart.some(a=>Number(a.number)===n&&!a.hidden&&!a.vatCode)))fail('Kontiene skal være forskellige, aktive og uden moms i Dinero.');
  return chart;
 }
 // One report per payout: reuse the one on Udbetalingsrapporter, or store this one and register it there.
@@ -35,9 +35,9 @@ async function reportFile(ctx:BookingContext,externalId:string,source:unknown,by
 async function payout(ctx:BookingContext):Promise<PreparedBooking>{
  const {env,company,shop,id}=ctx,access=await shopAccess(env,company,shop);
  const result=await orderQuery<{node:any}>(access,`query ToolboxProductionPayout($id:ID!){node(id:$id){... on ShopifyPaymentsPayout{id issuedAt status transactionType net{amount currencyCode} summary{${payoutSummaryFields.map(f=>f+'{amount currencyCode}').join(' ')}}}}}`,{id});
- const p=result.node;if(p?.id!==id||p.status!=='PAID'||p.transactionType!=='DEPOSIT'||p.net?.currencyCode!=='DKK')fail('Kun gennemfoerte Shopify Payments-udbetalinger i DKK kan bogfoeres.');
+ const p=result.node;if(p?.id!==id||p.status!=='PAID'||p.transactionType!=='DEPOSIT'||p.net?.currencyCode!=='DKK')fail('Kun gennemførte Shopify Payments-udbetalinger i DKK kan bogføres.');
  const date=await bookingDate(env,company,shop,'shopify',p.issuedAt),b=payoutBreakdown(p.summary,p.net);
- if(b.net<=0)fail('Udbetalingen skal vaere positiv.');
+ if(b.net<=0)fail('Udbetalingen skal være positiv.');
  const a=JSON.parse(ctx.mapping.accounts_json),prefs=JSON.parse(ctx.prefs.preferences_json).automation;
  const bank=num(a.bank),clearing=num(a.clearing),gateway=num(a.shopifyPaymentsClearing),fees=num(a.fees);await chartFor(ctx,[bank,clearing,gateway,fees]);
  const movements=[{label:'Betalinger',amount:b.charges,account:gateway,balancing:clearing},{label:'Refunderinger',amount:b.refunds,account:gateway,balancing:clearing},{label:'Gebyrer',amount:b.fees,account:fees,balancing:gateway},{label:'Udbetaling',amount:b.net,account:bank,balancing:gateway}].filter(x=>x.amount);
@@ -52,12 +52,12 @@ async function refund(ctx:BookingContext):Promise<PreparedBooking>{
  const result=await orderQuery<{node:any}>(access,'query ToolboxProductionRefund($id:ID!){node(id:$id){... on ShopifyPaymentsBalanceTransaction{id type test transactionDate amount{amount currencyCode} associatedOrder{id name} sourceOrderTransactionId}}}',{id});
  const item=result.node;if(item?.id!==id||item.type!=='REFUND'||item.test||item.amount?.currencyCode!=='DKK'||!item.associatedOrder?.id||!item.sourceOrderTransactionId)fail('Refunderingen mangler sikre Shopify-kontroldata.');
  const gross=-minorUnits(item.amount.amount,'DKK');if(gross<=0)fail('Ugyldigt refunderingsbeloeb.');
- const sourceId=String(item.sourceOrderTransactionId);if(!/^\d{1,30}$/.test(sourceId)||(typeof item.sourceOrderTransactionId==='number'&&!Number.isSafeInteger(item.sourceOrderTransactionId)))fail('Ugyldigt kilde-ID paa refunderingen.');
+ const sourceId=String(item.sourceOrderTransactionId);if(!/^\d{1,30}$/.test(sourceId)||(typeof item.sourceOrderTransactionId==='number'&&!Number.isSafeInteger(item.sourceOrderTransactionId)))fail('Ugyldigt kilde-ID på refunderingen.');
  const transactionId='gid://shopify/OrderTransaction/'+sourceId;
  const details=await orderQuery<{order:any}>(access,`query ToolboxRefundDetails($id:ID!){order(id:$id){refunds{id processedAt refundLineItems(first:100){nodes{subtotalSet{shopMoney{amount currencyCode}} totalTaxSet{shopMoney{amount currencyCode}}} pageInfo{hasNextPage}} refundShippingLines(first:100){nodes{subtotalAmountSet{shopMoney{amount currencyCode}} taxAmountSet{shopMoney{amount currencyCode}}} pageInfo{hasNextPage}} orderAdjustments(first:100){nodes{amountSet{shopMoney{amount currencyCode}} taxAmountSet{shopMoney{amount currencyCode}}} pageInfo{hasNextPage}} transactions(first:100){nodes{id kind status test amountSet{shopMoney{amount currencyCode}}} pageInfo{hasNextPage}}}}}`,{id:item.associatedOrder.id});
  const matches=(details.order?.refunds||[]).filter((r:any)=>r.transactions?.nodes?.some((t:any)=>t.id===transactionId&&t.kind==='REFUND'&&t.status==='SUCCESS'&&!t.test));
  if(matches.length!==1)fail('Refunderingen kan ikke knyttes entydigt til ordren.');const r=matches[0];
- for(const field of ['refundLineItems','refundShippingLines','orderAdjustments','transactions'])if(!Array.isArray(r[field]?.nodes)||r[field].pageInfo?.hasNextPage!==false)fail('Refunderingen er ufuldstaendig.');
+ for(const field of ['refundLineItems','refundShippingLines','orderAdjustments','transactions'])if(!Array.isArray(r[field]?.nodes)||r[field].pageInfo?.hasNextPage!==false)fail('Refunderingen er ufuldstændig.');
  const transaction=r.transactions.nodes.find((t:any)=>t.id===transactionId);
  if(transaction.amountSet?.shopMoney?.currencyCode!=='DKK'||Math.abs(minorUnits(transaction.amountSet.shopMoney.amount,'DKK'))!==gross)fail('Transaktionen stemmer ikke med refunderingen.');
  const parts:RefundPart[]=[];
@@ -76,7 +76,7 @@ async function flatpay(ctx:BookingContext):Promise<PreparedBooking>{
  const {env,company,shop,id}=ctx,saved=JSON.parse(ctx.sourceRow.payload_json);
  const {connection,payment:p,settlement,source}=await readFlatpayPayout(env,company,shop,id,saved.settlements);
  const date=await bookingDate(env,company,shop,'flatpay',String(p.paidDate));
- if(date<connection.start_date)fail('Udbetalingen er aendret. Hent den igen.');
+ if(date<connection.start_date)fail('Udbetalingen er ændret. Hent den igen.');
  const a=JSON.parse(ctx.mapping.accounts_json),accounts={bank:num(a.bank),fees:num(a.fees),clearing:num(a.clearing),flatpay:num(a.flatpayClearing)};await chartFor(ctx,Object.values(accounts));
  const proposal=flatpayDraft(p,settlement,accounts);proposal.voucher.VoucherDate=date;proposal.voucher.ExternalReference=`wtb:${shop}:flatpay:${id}`;
  const companyRow=await env.PLATFORM_DB.prepare('SELECT name FROM companies WHERE id=?').bind(company).first<{name:string}>();
@@ -88,5 +88,5 @@ export function handleProductionOther(request:Request,env:PlatformEnv,actor:Acto
  if(kind==='payout')return handleProductionBooking(request,env,actor,company,shop,kind,'payouts','shopify',/^gid:\/\/shopify\/ShopifyPaymentsPayout\/\d{1,30}$/,payout);
  if(kind==='refund')return handleProductionBooking(request,env,actor,company,shop,kind,'refunds','shopify',/^gid:\/\/shopify\/ShopifyPaymentsBalanceTransaction\/\d{1,30}$/,refund);
  if(kind==='flatpay')return handleProductionBooking(request,env,actor,company,shop,kind,'payments','flatpay',/^\d{1,30}$/,flatpay);
- throw new HttpError(400,'Ukendt bogfoeringstype.');
+ throw new HttpError(400,'Ukendt bogføringstype.');
 }

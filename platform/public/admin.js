@@ -1,5 +1,5 @@
 const platformRoot=location.pathname==='/admin'||location.pathname.startsWith('/admin/')?'/admin':'';
-import {customerPages,customerShell,customerDashboard,customerModule,icon} from './customer.js';
+import {customerPages,customerShell,customerDashboard,customerModule,icon,fmtDate,fmtDateTime} from './customer.js';
 document.querySelector('.logout-form').onsubmit=async event=>{
  event.preventDefault();const button=document.querySelector('#logout');button.disabled=true;
  try{
@@ -407,7 +407,7 @@ async function company(c) {
       history,
       ['Tidspunkt', 'Handling', 'Ressource', 'Udført af'],
       events.map((e) => [
-        new Date(e.created_at.replace(' ', 'T') + 'Z').toLocaleString('da-DK'),
+        fmtDateTime(e.created_at),
         ({
           'invitation.created':'Bruger inviteret',
           'invitation.accepted':'Invitation accepteret',
@@ -499,7 +499,7 @@ async function customerView(section,target) {
     box.append(el('p',accounting ? `${accounting.provider==='dinero'?'Dinero':'e-conomic'} · ${accounting.account_name} — se forbindelsesstatus nedenfor` : 'Intet regnskabsprogram valgt endnu.','empty'));
     content.prepend(box,el('p','Dine webshops og dit regnskab tilhører kun denne virksomhed. Forbind Dinero og test webshopforbindelsen nedenfor.','intro'));
     await accountingConnection(c,manage);
-    if(manage&&!actor.support){const shops=(await api(`/companies/${c.id}/webshops`)).webshops;const tests=panel('Kontrollér webshopforbindelser');for(const shop of shops.filter(s=>s.credentials_saved)){tests.append(el('p',shop.name+(shop.verified_at?' · senest kontrolleret '+new Date(shop.verified_at).toLocaleString('da-DK'):'')),button('Test forbindelse',async()=>{const result=await api(`/companies/${c.id}/webshops/${shop.id}/data/connection-test`,'POST',{});await customerView('integrations');message.textContent='Forbindelse til '+result.name+' kontrolleret.';}));}content.append(tests);}
+    if(manage&&!actor.support){const shops=(await api(`/companies/${c.id}/webshops`)).webshops;const tests=panel('Kontrollér webshopforbindelser');for(const shop of shops.filter(s=>s.credentials_saved)){tests.append(el('p',shop.name+(shop.verified_at?' · senest kontrolleret '+fmtDateTime(shop.verified_at):'')),button('Test forbindelse',async()=>{const result=await api(`/companies/${c.id}/webshops/${shop.id}/data/connection-test`,'POST',{});await customerView('integrations');message.textContent='Forbindelse til '+result.name+' kontrolleret.';}));}content.append(tests);}
     await customerStore(c,manage);
     if(target){const destination=document.getElementById('integration-'+target);destination?.focus({preventScroll:true});destination?.scrollIntoView({block:'start'});}
     return;
@@ -561,7 +561,7 @@ async function integrationCatalog() {
     return [i.name,i.category,usage,connection];
   }));
   const checked=data.integrations[0]?.connectivity?.checkedAt;
-  const hint=el('p',`Forbindelse fra platformen: platformen kalder udbyderens API-adresse uden adgangsoplysninger. "Svarer" betyder, at API'et kan nås – også når det svarer med "ikke logget ind". Det bekræfter ikke den enkelte kundes forbindelse. Virksomheder tæller aktive virksomheder med en gemt forbindelse til integrationen.${checked?'Kontrolleret '+new Date(checked).toLocaleString('da-DK')+'. ':''}Kontrollen gælder i fem minutter.`,'intro');
+  const hint=el('p',`Forbindelse fra platformen: platformen kalder udbyderens API-adresse uden adgangsoplysninger. "Svarer" betyder, at API'et kan nås – også når det svarer med "ikke logget ind". Det bekræfter ikke den enkelte kundes forbindelse. Virksomheder tæller aktive virksomheder med en gemt forbindelse til integrationen.${checked?'Kontrolleret '+fmtDateTime(checked)+'. ':''}Kontrollen gælder i fem minutter.`,'intro');
   content.replaceChildren(box,hint);
   catalogExpiry=setTimeout(()=>{if(!$('#catalog-tab').classList.contains('active'))return;document.querySelectorAll('.api-status').forEach(n=>{n.className='api-status unknown';n.textContent='● Forældet · kontrollér igen';});},300000);
 }
@@ -569,7 +569,7 @@ $('#catalog-tab').onclick=()=>integrationCatalog().catch(showError);
 async function signupPanel() {
  const {signups}=await api('/settings/signups'),box=panel('Tilmeldinger og gratis prøveperioder');
  box.append(el('p','Kontakt virksomhederne senest 14 dage før udløb. Kontakt sker manuelt; markér den først, når I har kontaktet virksomheden. Ingen automatisk betaling.'));
- const date=value=>value?new Date(value*1000).toLocaleDateString('da-DK'):'Afventer aktivering';
+ const date=value=>value?fmtDate(value*1000):'Afventer aktivering';
  table(box,['Virksomhed / CVR','Kontakt','Velkomstmail','Prøveperiode udløber','Opfølgning'],signups.map(s=>[
  s.name+' · '+s.cvr,s.email,({sent:'Accepteret af mailtjenesten',uncertain:'Levering skal undersøges',pending:'Afventer afsendelse',preview:'Lokal test'})[s.delivery]||s.delivery,date(s.trial_ends_at),
  s.contacted_at?'Kontaktet '+date(s.contacted_at):s.contact_due_at?actions(el('span',(s.contact_due_at*1000<=Date.now()?'Kontakt nu · ':'Kontakt senest ')+date(s.contact_due_at)),button('Markér kontaktet',async()=>{await api('/settings/signups','POST',{companyId:s.company_id});await portalSettings();})):el('span','Afventer aktivering')
@@ -736,7 +736,7 @@ async function customerInvoices(c,manage,offset=0){
  const view=async row=>{const {invoice:i}=await run('check',row);edit('Kontrol af faktura '+i.number,[],async()=>{},'Kontrolleret mod friske ordredata fra webshoppen.');const p=$('#editor-fields');p.append(el('p',i.customer.name+' · '+i.customer.address1+' · '+i.customer.zip+' '+i.customer.city));table(p,['Beskrivelse','Antal','Ekskl. moms','Moms','I alt'],i.lines.map(l=>[l.title,l.quantity,format(l.net,i.currency),format(l.tax,i.currency),format(l.gross,i.currency)]));p.append(el('p','I alt: '+format(i.gross,i.currency)));};
  const testMail=async row=>{const m=await api(`/companies/${c.id}/mail`),requestId=crypto.randomUUID();if(!m.testEnabled)throw Error('Din loginadresse er ikke godkendt til testmail.');edit('Send testmail med faktura',[],async()=>{const result=await api(base+'/test','POST',{webshopId:row.webshop_id,externalId:row.external_id,mode:m.status==='verified'?'custom':'standard',requestId});progress.textContent=result.status==='accepted'?`Testmail med PDF accepteret til ${result.recipient}. Kontrollér indbakken.`:result.status==='preview'?'Lokal forhåndsvisning – ingen mail sendt.':'Afsendelsen kunne ikke bekræftes. Kontrollér indbakke og mailudbyder før en ny test.';},`Faktura ${row.name} vedhæftes. Mailen sendes til ${m.testRecipient}.`);};
  function visible(){return orders.filter(r=>(!filter.value||(r.status||'pending')===filter.value)&&(r.name+' '+r.webshop_name).toLowerCase().includes(search.value.toLowerCase()));}
- function draw(){rows.replaceChildren();table(rows,['Ordre','Webshop','Ordredato','Status','Handlinger'],visible().map(row=>{const controls=[];if(editable){const check=button('Kontrollér',()=>view(row));check.disabled=busy;controls.push(check);if(!row.status){const gen=button('Generér PDF',async()=>{busy=true;draw();try{await run('generate',row);await reloadRows();}finally{busy=false;draw();}});gen.disabled=busy||!data.ready;controls.push(gen);}}if(row.status==='generated'){const link=el('a','Hent PDF','secondary small');link.href=platformRoot+'/api/platform'+base+'/pdf?'+new URLSearchParams({webshopId:row.webshop_id,externalId:row.external_id});controls.push(link);if(editable){const test=button('Send testmail',()=>testMail(row));test.disabled=busy;controls.push(test);}}return [row.name,row.webshop_name,new Date(row.created_at).toLocaleDateString('da-DK'),row.status==='generated'?'PDF klar':row.status==='generating'?'I gang / kræver kontrol':'Mangler PDF',actions(...controls)];}));}
+ function draw(){rows.replaceChildren();table(rows,['Ordre','Webshop','Ordredato','Status','Handlinger'],visible().map(row=>{const controls=[];if(editable){const check=button('Kontrollér',()=>view(row));check.disabled=busy;controls.push(check);if(!row.status){const gen=button('Generér PDF',async()=>{busy=true;draw();try{await run('generate',row);await reloadRows();}finally{busy=false;draw();}});gen.disabled=busy||!data.ready;controls.push(gen);}}if(row.status==='generated'){const link=el('a','Hent PDF','secondary small');link.href=platformRoot+'/api/platform'+base+'/pdf?'+new URLSearchParams({webshopId:row.webshop_id,externalId:row.external_id});controls.push(link);if(editable){const test=button('Send testmail',()=>testMail(row));test.disabled=busy;controls.push(test);}}return [row.name,row.webshop_name,fmtDate(row.created_at),row.status==='generated'?'PDF klar':row.status==='generating'?'I gang / kræver kontrol':'Mangler PDF',actions(...controls)];}));}
  async function reloadRows(){orders=(await api(base+'?offset='+offset)).orders;draw();}
  if(editable){const batch=button('Generér op til 5 manglende PDF’er',async()=>{busy=true;batch.disabled=true;draw();let ok=0;const errors=[];try{for(const row of visible().filter(r=>!r.status).slice(0,5)){try{await run('generate',row);ok++;}catch(e){errors.push(row.name+': '+e.message);}}await reloadRows();progress.textContent=`${ok} PDF’er genereret.`+(errors.length?' '+errors.join(' '):'');}finally{busy=false;batch.disabled=!data.ready;draw();}});batch.disabled=!data.ready;box.append(batch);}
  search.oninput=draw;filter.onchange=draw;box.append(actions(search,filter),progress,rows);draw();const paging=actions();if(offset)paging.append(button('Forrige side',()=>customerInvoices(c,manage,Math.max(0,offset-100))));if(data.hasMore)paging.append(button('Næste side',()=>customerInvoices(c,manage,offset+100)));box.append(paging,el('p',`Viser op til 100 ordrer pr. side fra de seneste ${data.months} måneder.`,'hint'));content.append(box);
@@ -753,14 +753,14 @@ async function ticketList(c=null,status='',offset=0){
  ],async input=>{const result=await api(base,'POST',input);await ticketDetail(c,result.id);},'Sagen deles med virksomhedens brugere og Toolbox-support. Svar vises her i portalen.')):null;
  const box=panel(c?'Virksomhedens supportsager':'Supportindbakke',create),filter=el('select');filter.setAttribute('aria-label','Filtrér supportsager');
  for(const [key,label] of [['','Alle sager'],...Object.entries(ticketStates)]){const option=el('option',!c&&key==='waiting_customer'?'Afventer kunde':label);option.value=key;filter.append(option);}filter.value=status;filter.onchange=()=>ticketList(c,filter.value).catch(showError);box.append(actions(filter,button('Opdatér',()=>ticketList(c,status,offset))));
- table(box,['Emne',...(!c?['Virksomhed']:[]),'Status','Prioritet','Opdateret'],data.tickets.map(t=>[button(t.subject,()=>ticketDetail(c,t.id),'link'),...(!c?[t.company_name]:[]),!c&&t.status==='waiting_customer'?'Afventer kunde':ticketStates[t.status],t.priority==='high'?'Høj':'Normal',new Date(t.updated_at).toLocaleString('da-DK')]));
+ table(box,['Emne',...(!c?['Virksomhed']:[]),'Status','Prioritet','Opdateret'],data.tickets.map(t=>[button(t.subject,()=>ticketDetail(c,t.id),'link'),...(!c?[t.company_name]:[]),!c&&t.status==='waiting_customer'?'Afventer kunde':ticketStates[t.status],t.priority==='high'?'Høj':'Normal',fmtDateTime(t.updated_at)]));
  const paging=actions();if(offset)paging.append(button('Forrige',()=>ticketList(c,status,Math.max(0,offset-50))));if(data.hasMore)paging.append(button('Næste',()=>ticketList(c,status,offset+50)));box.append(paging);content.replaceChildren(box);
 }
 async function ticketDetail(c,id){
  clear();const base=(c?`/companies/${c.id}/tickets`:'/tickets')+'/'+id,{ticket:t,messages}=await api(base);
  heading(t.subject,'Supportsag · '+id.slice(0,8),c?c.name+' / Support':'Tier 0 / Support');
  const box=panel('Samtale',button('← Alle sager',()=>ticketList(c)));box.append(el('p',(ticketStates[t.status]||t.status)+' · '+(t.priority==='high'?'Høj prioritet':'Normal prioritet')));
- for(const m of messages){const item=el('article',undefined,'ticket-message '+m.author_kind);item.append(el('strong',(m.author_kind==='support'?'Toolbox-support':'Kunde')+' · '+(m.author_name||'Bruger')),el('small',new Date(m.created_at).toLocaleString('da-DK')),el('p',m.body));box.append(item);}
+ for(const m of messages){const item=el('article',undefined,'ticket-message '+m.author_kind);item.append(el('strong',(m.author_kind==='support'?'Toolbox-support':'Kunde')+' · '+(m.author_name||'Bruger')),el('small',fmtDateTime(m.created_at)),el('p',m.body));box.append(item);}
  if(!actor.support){
   const form=el('form'),label=el('label','Dit svar'),input=el('textarea');input.name='message';input.required=true;input.maxLength=6000;input.rows=6;label.append(input);const send=el('button','Send svar');send.type='submit';form.append(label,send);
   form.onsubmit=async e=>{e.preventDefault();send.disabled=true;try{await api(base,'PATCH',{message:input.value,version:t.version});await ticketDetail(c,id);}catch(error){showError(error);send.disabled=false;}};box.append(form);
@@ -783,7 +783,7 @@ async function operationView(c,module,manage,shopId='',offset=0){
  if(!shops.length){rows.append(el('p','Tilføj en webshop under Integrationer.','empty'));return;}
  const base=()=>`/companies/${c.id}/webshops/${select.value}/data/${module}`;
  const format=m=>m?new Intl.NumberFormat('da-DK',{style:'currency',currency:m.currencyCode}).format(Number(m.amount)):'Ikke oplyst';
- const date=v=>new Date(v).toLocaleString('da-DK');
+ const date=v=>fmtDateTime(v);
  const payment=names=>Array.isArray(names)?names.map(n=>({shopify_payments:'Shopify Payments',flatpay:'Flatpay',viabill:'ViaBill',paypal:'PayPal',manual:'Manuel betaling'}[n]||n)).join(', '):'Ikke oplyst';
  const detail=n=>{edit('Detaljer',[],async()=>{});const details=el('pre',JSON.stringify(n,null,2),'mail-preview');$('#editor-fields').append(details);};
  const search=el('input');search.type='search';search.placeholder='Søg i data';search.setAttribute('aria-label','Søg i data');
@@ -813,7 +813,7 @@ async function accountingConnection(c,manage){
   {name:'clientId',label:'Client ID',max:2048},{name:'clientSecret',label:'Client secret',type:'password',max:2048},
   {name:'apiKey',label:'API-nøgle',type:'password',max:2048}
  ],async data=>{await api(base+'/connection','PUT',data);await customerView('integrations');},'Forbindelsen kontrolleres ved at læse kontoplanen. Adgangsoplysninger gemmes krypteret. Der bogføres ikke i dev.')):null);
- box.append(el('p',info.verifiedAt?'Kontoplan hentet '+new Date(info.verifiedAt).toLocaleString('da-DK')+' · Organisation '+info.organizationId:'Ingen kontrolleret Dinero-forbindelse endnu.'));
+ box.append(el('p',info.verifiedAt?'Kontoplan hentet '+fmtDateTime(info.verifiedAt)+' · Organisation '+info.organizationId:'Ingen kontrolleret Dinero-forbindelse endnu.'));
  if(info.verifiedAt){
  const labels={vatCode:'Momskode for salg',noVatCode:'Momskode uden moms',goodsVat:'Varer med moms',goodsNoVat:'Varer uden moms',shippingVat:'Fragt med moms',shippingNoVat:'Fragt uden moms',servicesVat:'Ydelser med moms',servicesNoVat:'Ydelser uden moms',refundGoodsVat:'Returvarer med moms',refundGoodsNoVat:'Returvarer uden moms',refundShippingVat:'Returfragt med moms',refundShippingNoVat:'Returfragt uden moms',refundServicesVat:'Returydelser med moms',refundServicesNoVat:'Returydelser uden moms',fees:'Gebyrer',clearing:'Mellemregning',bank:'Bank',shopifyPaymentsClearing:'Shopify Payments mellemregning',viaBillClearing:'ViaBill mellemregning',flatpayClearing:'Flatpay mellemregning',inventory:'Varebeholdning',inventoryAdjustment:'Lagerregulering'};
  if(editable)box.append(button('Redigér kontotilknytninger',()=>edit('Kontotilknytninger',Object.entries(labels).map(([key,label])=>({name:key,label,value:info.mapping[key]||'',required:false,options:[['','Ikke valgt'],...(key==='vatCode'?[['U25','U25 – 25 % salgsmoms']]:key==='noVatCode'?[['NONE','Ingen moms']]:info.accounts.filter(a=>!a.hidden).map(a=>[a.number+' - '+a.name,a.number+' - '+a.name+(a.vatCode?' ('+a.vatCode+')':'')]))]})),async mapping=>{await api(base+'/mapping','PUT',{revision:info.revision,mapping});await customerView('integrations');})));
@@ -831,7 +831,7 @@ async function packagingView(c,manage,shopId='',from='',to=''){
  box.append(actions(select,start,end,button('Vis periode',()=>packagingView(c,manage,select.value,start.value,end.value))),el('p','Emballage fra leverede Shopify-ordrer og manuelle registreringer. Kendte historiske vægte bevares ved genimport.','module-notice'));
  const refresh=()=>packagingView(c,manage,select.value,start.value,end.value);
  if(manage&&!actor.support)box.append(button('Hent leveringshistorik',async()=>{await api(base,'POST',{action:'sync',start:start.value,end:end.value});await refresh();}));
- if(data.sync)box.append(el('p','Seneste komplette hentning: '+data.sync.coverage_start+' – '+data.sync.coverage_end+' · '+new Date(data.sync.synced_at).toLocaleString('da-DK'),'hint'));
+ if(data.sync)box.append(el('p','Seneste komplette hentning: '+data.sync.coverage_start+' – '+data.sync.coverage_end+' · '+fmtDateTime(data.sync.synced_at),'hint'));
  table(box,['Produkt','Leveret antal','Samlet emballage','Indberetningspligtigt'],p.products.map(r=>[r.product,r.quantity,r.grams/1000+' kg',r.reportableGrams/1000+' kg']));
 
  const editor=item=>edit(item?'Redigér registrering':'Tilføj emballage',[
@@ -857,7 +857,7 @@ async function documentView(c,manage,shopId=''){
  const shops=(await api(`/companies/${c.id}/webshops`)).webshops,select=el('select');select.setAttribute('aria-label','Webshop');for(const shop of shops){const o=el('option',shop.name);o.value=shop.id;select.append(o);}if(shopId)select.value=shopId;
  const box=panel('Gemte rapporter',button('Åbn udbetalinger',()=>customerView('payouts')));content.replaceChildren(box);if(!shops.length){box.append(el('p','Tilføj en webshop under Integrationer.'));return;}box.append(select);select.onchange=()=>documentView(c,manage,select.value).catch(showError);
  const base=`/companies/${c.id}/webshops/${select.value}/documents`,data=await api(base);
- table(box,['Udbetaling','Oprettet','Status',''],data.documents.map(d=>{const link=el('a','Hent PDF','secondary small');link.href=platformRoot+'/api/platform'+base+'?id='+encodeURIComponent(d.id);return[d.external_id.split('/').pop(),new Date(d.created_at).toLocaleString('da-DK'),d.status==='generated'?'PDF klar':'Kræver kontrol',d.status==='generated'?link:''];}));box.append(el('p','Rapporter genereres fra Udbetalinger. Eksisterende PDF’er bevares. Viser seneste 100 rapporter.','hint'));
+ table(box,['Udbetaling','Oprettet','Status',''],data.documents.map(d=>{const link=el('a','Hent PDF','secondary small');link.href=platformRoot+'/api/platform'+base+'?id='+encodeURIComponent(d.id);return[d.external_id.split('/').pop(),fmtDateTime(d.created_at),d.status==='generated'?'PDF klar':'Kræver kontrol',d.status==='generated'?link:''];}));box.append(el('p','Rapporter genereres fra Udbetalinger. Eksisterende PDF’er bevares. Viser seneste 100 rapporter.','hint'));
 }
 
 async function paymentConnections(c,manage,selected){
@@ -903,11 +903,11 @@ async function stocktakeView(c,manage,shopId=''){
  const base=`/companies/${c.id}/webshops/${select.value}/stocktake`,rows=el('div'),result=el('div');box.append(rows,result);let data=null;const changes=new Map();
  const load=async()=>{data=await api(base);rows.replaceChildren();changes.clear();table(rows,['Vare','Variant','SKU','Lokation','Antal','Kostpris','Optalt'],data.rows.map(r=>{
  const count=el('input');count.type='number';count.min='0';count.max='10000000';count.value=r.quantity;count.disabled=!manage||Boolean(actor.support);count.setAttribute('aria-label','Optalt antal for '+r.product+' '+r.variant);count.onchange=()=>{const key=r.inventoryItemId+':'+r.locationId;if(Number(count.value)===r.quantity)changes.delete(key);else changes.set(key,{inventoryItemId:r.inventoryItemId,locationId:r.locationId,compareQuantity:r.quantity,quantity:Number(count.value)});};
- return[r.product,r.variant,r.sku,data.locations.find(l=>l.id===r.locationId)?.name||r.locationId,r.quantity,r.unitCostMinor/100+' '+r.currency,count];}));rows.append(el('p','Samlet positiv lagerværdi: '+data.totalValueMinor/100+' · Hentet '+new Date(data.fetchedAt).toLocaleString('da-DK'),'hint'));};
+ return[r.product,r.variant,r.sku,data.locations.find(l=>l.id===r.locationId)?.name||r.locationId,r.quantity,r.unitCostMinor/100+' '+r.currency,count];}));rows.append(el('p','Samlet positiv lagerværdi: '+data.totalValueMinor/100+' · Hentet '+fmtDateTime(data.fetchedAt),'hint'));};
  box.prepend(actions(button('Hent aktuel lagerstatus',load),...(manage&&!actor.support?[button('Forbered optælling',async()=>{
  const prepared=await api(base,'POST',{action:'prepare',changes:[...changes.values()]});result.replaceChildren(el('h3','Kontrollér lagerreguleringen'),el('p','Værdiændring: '+prepared.adjustmentMinor/100+' DKK'),el('pre',JSON.stringify(prepared.voucher,null,2)),el('p','Dev-simulering: Shopify og Dinero ændres ikke.','module-notice'),actions(button('Godkend simulering',async()=>{await api(base,'POST',{action:'simulate',id:prepared.id,version:prepared.version,confirmation:true});result.replaceChildren(el('p','Simulering gennemført. Aktuelle antal og kostpriser blev kontrolleret igen. Ingen eksterne ændringer.'));}),button('Annullér forslag',async()=>{await api(base,'POST',{action:'cancel',id:prepared.id,version:prepared.version});result.replaceChildren();})));
  })]:[])));
- const history=await api(base+'?history=1');if(history.rows.length){const details=el('details');details.append(el('summary','Tidligere optællinger'));table(details,['Oprettet','Status','Værdiændring'],history.rows.map(r=>[new Date(r.created_at).toLocaleString('da-DK'),{prepared:'Afventer godkendelse',simulated:'Simuleret · ingen eksterne ændringer',cancelled:'Annulleret'}[r.phase],JSON.parse(r.payload_json).adjustmentMinor/100+' DKK']));box.append(details);}
+ const history=await api(base+'?history=1');if(history.rows.length){const details=el('details');details.append(el('summary','Tidligere optællinger'));table(details,['Oprettet','Status','Værdiændring'],history.rows.map(r=>[fmtDateTime(r.created_at),{prepared:'Afventer godkendelse',simulated:'Simuleret · ingen eksterne ændringer',cancelled:'Annulleret'}[r.phase],JSON.parse(r.payload_json).adjustmentMinor/100+' DKK']));box.append(details);}
 }
 
 let insightsRevision=0;

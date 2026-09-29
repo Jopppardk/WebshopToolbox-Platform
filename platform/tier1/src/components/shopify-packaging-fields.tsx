@@ -2,6 +2,7 @@
 import { tier1Fetch as fetch } from '@/platform/transport';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/confirm-dialog';
 
 type Field = { key: string; name: string; type: string; status: 'present' | 'missing' | 'conflict'; existingType: string | null };
 type Status = { fields: Field[]; canWrite: boolean; writes: boolean; created?: string[]; error?: string };
@@ -9,6 +10,7 @@ const labels = { present: 'Oprettet', missing: 'Mangler', conflict: 'Findes med 
 
 // Product fields in Shopify that the packaging report reads. Values are entered per product in Shopify.
 export function ShopifyPackagingFields() {
+  const { confirm, dialog } = useConfirm();
   const [status, setStatus] = useState<Status | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   useEffect(() => {
     const controller = new AbortController();
@@ -18,7 +20,7 @@ export function ShopifyPackagingFields() {
     return () => controller.abort();
   }, []);
   async function create() {
-    if (!window.confirm(`Der oprettes ${missing} nye felter på alle varekort (produkter) i Shopify. Felterne kan ses og udfyldes af alle med adgang til produkter i Shopify. Eksisterende felter og produktdata ændres ikke. Vil du fortsætte?`)) return;
+    if (!(await confirm({ title: 'Opret felter i Shopify', message: `Der oprettes ${missing} nye felter på alle varekort (produkter) i Shopify. Felterne kan ses og udfyldes af alle med adgang til produkter i Shopify. Eksisterende felter og produktdata ændres ikke.`, confirmLabel: 'Opret felter' }))) return;
     setBusy(true); setError(''); setNotice('');
     try {
       const response = await fetch('/api/emballage/shopify-fields', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
@@ -28,7 +30,7 @@ export function ShopifyPackagingFields() {
     finally { setBusy(false); }
   }
   const missing = status?.fields.filter(field => field.status === 'missing').length ?? 0, conflicts = status?.fields.filter(field => field.status === 'conflict').length ?? 0;
-  return <div className="rounded-xl border bg-white p-4">
+  return <div className="rounded-xl border bg-white p-4">{dialog}
     <p className="text-sm font-semibold">Felter i Shopify</p>
     <p className="mt-1 text-xs text-muted-foreground">Indberetningen læser fem produktfelter i Shopify. Opret dem her, og udfyld dem derefter pr. produkt i Shopify, fx med masseredigering.</p>
     {!status && !error && <p role="status" className="mt-3 text-sm">Kontrollerer felterne i Shopify…</p>}

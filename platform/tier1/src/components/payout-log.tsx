@@ -1,4 +1,5 @@
 'use client';
+import { formatDateTime } from '@/lib/format';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
 import {useEffect,useState} from 'react';
 import {Button} from '@/components/ui/button';
@@ -24,7 +25,7 @@ export function PayoutLog({externalId,provider,kind='payout'}:{externalId:string
  {loading&&!data&&<p role="status" className="text-sm text-muted-foreground">Henter udbetalingslog…</p>}
  {data&&<>
  {data.legacy&&<p className="rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">Ældre hændelser er kun med, hvor oplysningerne er bevaret. Nye statusændringer registreres, når Toolbox modtager dem; udbyderens præcise ændringstidspunkt kan være tidligere.</p>}
- <ol className="ml-2 space-y-5 border-l py-2">{data.events.map(event=><li key={event.id} className="relative pl-5"><span className={'absolute -left-1.5 top-1.5 size-3 rounded-full border-2 border-white '+(event.tone==='success'?'bg-emerald-500':event.tone==='warning'?'bg-amber-500':'bg-slate-400')}/><p className="text-sm font-medium">{event.title}</p><p className="text-xs text-muted-foreground">{event.at?<time dateTime={event.at}>{new Intl.DateTimeFormat('da-DK',{dateStyle:'medium',timeStyle:'medium',timeZone:'Europe/Copenhagen'}).format(new Date(event.at))}</time>:'Intet registreret tidspunkt'}</p>{event.detail&&<p className="mt-1 text-sm text-muted-foreground">{event.detail}</p>}</li>)}</ol>
+ <ol className="ml-2 space-y-5 border-l py-2">{data.events.map(event=><li key={event.id} className="relative pl-5"><span className={'absolute -left-1.5 top-1.5 size-3 rounded-full border-2 border-white '+(event.tone==='success'?'bg-emerald-500':event.tone==='warning'?'bg-amber-500':'bg-slate-400')}/><p className="text-sm font-medium">{event.title}</p><p className="text-xs text-muted-foreground">{event.at?<time dateTime={event.at}>{formatDateTime(event.at)}</time>:'Intet registreret tidspunkt'}</p>{event.detail&&<p className="mt-1 text-sm text-muted-foreground">{event.detail}</p>}</li>)}</ol>
  {data.nextOffset!==null&&<Button variant="outline" disabled={loading} onClick={()=>setOffset(data.nextOffset!)}>{loading?'Henter…':'Vis ældre hændelser'}</Button>}
  <div className="border-t pt-4"><h3 className="mb-3 text-sm font-semibold">Integrationsreferencer</h3><dl className="space-y-3 text-sm">{data.details.map((item,i)=><div key={i} className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-4"><dt className="text-muted-foreground">{item.label}</dt><dd className="break-words text-right">{item.value}</dd></div>)}</dl></div>
  </>}

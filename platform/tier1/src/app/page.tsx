@@ -1,4 +1,5 @@
 'use client';
+import { formatDateTime } from '@/lib/format';
 import {useCapabilities} from '@/platform/capabilities';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
 import { ProviderLedger } from '@/components/provider-ledger';
@@ -106,6 +107,7 @@ export default function Home() {
   useEffect(()=>{void refreshConnections();},[]);
   const [query, setQuery] = useState('');
   const [salesOrders, setSalesOrders] = useState<OrderView[]>([]);
+  const [ordersToday, setOrdersToday] = useState<number | null>(null);
   const [orderPeriod, setOrderPeriod] = useState<OrderPeriod>('all');
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [orderOffset, setOrderOffset] = useState(0);
@@ -155,9 +157,9 @@ export default function Home() {
     const controller = new AbortController();
     setOrdersLoading(true);
     fetch(`/api/shopify/orders?offset=${orderOffset}&limit=${orderPageSize}&period=${activePeriod}`, { signal: controller.signal, cache: 'no-store' })
-      .then(async response => { const data = await response.json() as { orders: OrderView[]; total: number; error?: string }; if (!response.ok) throw new Error(data.error || 'Ordrer kunne ikke indlæses'); return data; })
+      .then(async response => { const data = await response.json() as { orders: OrderView[]; total: number; today?: number; error?: string }; if (!response.ok) throw new Error(data.error || 'Ordrer kunne ikke indlæses'); return data; })
       .then((data) => {
-        if (!controller.signal.aborted && Array.isArray(data.orders)) { if (orderOffset > 0 && orderOffset >= data.total) { setOrderOffset(Math.max(0, Math.ceil(data.total / orderPageSize) - 1) * orderPageSize); return; } setSalesOrders(data.orders); setOrderTotal(data.total || 0); setOrderError(''); }
+        if (!controller.signal.aborted && Array.isArray(data.orders)) { if (orderOffset > 0 && orderOffset >= data.total) { setOrderOffset(Math.max(0, Math.ceil(data.total / orderPageSize) - 1) * orderPageSize); return; } setSalesOrders(data.orders); setOrderTotal(data.total || 0); setOrdersToday(data.today ?? null); setOrderError(''); }
       })
       .catch(error => { if (!controller.signal.aborted) setOrderError(error.message || 'Ordrer kunne ikke indlæses'); })
       .finally(() => { if (!controller.signal.aborted) setOrdersLoading(false); });
@@ -363,9 +365,9 @@ export default function Home() {
             </div>
             <div className="mb-6 grid gap-3 sm:grid-cols-3">
               <Stat
-                label="Hentede Shopify-ordrer"
-                value={`${salesOrders.length} ordrer`}
-                note="På den valgte side"
+                label="Ordrer i dag"
+                value={ordersToday === null ? '—' : `${ordersToday} ordrer`}
+                note="Oprettet i Shopify i dag"
                 tone="lime"
               />
               <Stat
@@ -604,8 +606,6 @@ function Invoices({ orders, onGenerated, onSync, syncing, pagination }: { pagina
     finally { setEmailing(current => ({ ...current, [order.externalId!]: false })); }
   };
   const visibleOrders = orders.filter((order) => order.id.toLowerCase().includes(query.toLowerCase()));
-  const generatedCount = orders.filter((order) => order.externalId && statuses[order.externalId] === 'Genereret').length;
-  const pendingCount = orders.filter(order => order.shipped !== 'Annulleret' && (!order.externalId || statuses[order.externalId] !== 'Genereret')).length;
 
   return (
     <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
@@ -627,25 +627,6 @@ function Invoices({ orders, onGenerated, onSync, syncing, pagination }: { pagina
       {invoiceError && <p role="alert" className="mb-4 rounded-xl border border-red-200 p-4 text-sm text-red-700">{invoiceError}</p>}
       {invoiceMessage && <p role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{invoiceMessage}</p>}
       <p className="mb-4 text-sm text-muted-foreground">En genereret faktura kan sendes manuelt til kundens mailadresse fra Shopify. Eksisterende PDF’er bevares, og ændrede fakturaer kræver særskilt gennemgang.</p>
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
-        <Stat
-          label="Fakturaer på denne side"
-          value={`${orders.length} ordrer`}
-          note={`${generatedCount} er genereret`}
-          tone="lime"
-        />
-        <Stat
-          label="Afventer generering"
-          value={`${pendingCount} ${pendingCount === 1 ? 'faktura' : 'fakturaer'}`}
-          note="Baseret på live Shopify-data"
-        />
-        <Stat
-          label="Kræver handling"
-          value={`${Object.values(statuses).filter((status) => status === 'Fejlet').length} fakturaer`}
-          note="Fejl vises under Indstillinger"
-          tone="warn"
-        />
-      </div>
       <section className="overflow-hidden rounded-2xl border bg-white">
         <div className="border-b p-4">
           <div className="relative max-w-[320px]">
@@ -705,7 +686,7 @@ function Invoices({ orders, onGenerated, onSync, syncing, pagination }: { pagina
                   </TableCell>
                   <TableCell className="pr-5 text-right">
                     {status === 'Genereret' ? (
-                      <div className="flex flex-wrap justify-end gap-1"><a className={buttonVariants({ variant: 'outline', size: 'sm' })} href={tier1Url(`/api/invoices/pdf?externalId=${encodeURIComponent(order.externalId || '')}&v=${encodeURIComponent(pdfVersions[order.externalId || ''] || 'legacy')}`)} target="_blank" rel="noreferrer"><FileText />PDF</a><Button variant="outline" size="sm" disabled={!capabilities.customerEmail || emailing[order.externalId || ""]} title={capabilities.customerEmail?undefined:"Kundemail er blokeret i testmiljøet"} onClick={() => sendInvoice(order)}><Mail />{emailing[order.externalId || ''] ? 'Sender…' : 'Send til kunde'}</Button><Button variant="outline" size="sm" disabled title="Eksisterende bilag bevares uændret i dev" onClick={() => generate(order, true)}><RefreshCw />Regenerér</Button></div>
+                      <div className="flex flex-wrap justify-end gap-1"><a className={buttonVariants({ variant: 'outline', size: 'sm' })} href={tier1Url(`/api/invoices/pdf?externalId=${encodeURIComponent(order.externalId || '')}&v=${encodeURIComponent(pdfVersions[order.externalId || ''] || 'legacy')}`)} target="_blank" rel="noreferrer"><FileText />PDF</a><Button variant="outline" size="sm" disabled={!capabilities.customerEmail || emailing[order.externalId || ""]} title={capabilities.customerEmail?undefined:"Kundemail er blokeret i testmiljøet"} onClick={() => sendInvoice(order)}><Mail />{emailing[order.externalId || ''] ? 'Sender…' : 'Send til kunde'}</Button><Button variant="outline" size="sm" disabled title="Eksisterende bilag bevares uændret" onClick={() => generate(order, true)}><RefreshCw />Regenerér</Button></div>
                     ) : order.shipped === 'Annulleret' ? null : (
                       <div className="flex justify-end gap-1"><Button
                         variant="outline"
@@ -833,7 +814,7 @@ function Settings({
       const data = await response.json() as { accounts: Array<{ number: string; name: string; vatCode?: string; hidden?: boolean }>; fetchedAt: string | null; error?: string };
       if (!response.ok) throw new Error(data.error);
       setChart(data.accounts.filter(account => !account.hidden));
-      setChartMessage(data.fetchedAt ? `${data.accounts.length} konti gemt · Senest synkroniseret ${new Date(data.fetchedAt).toLocaleString('da-DK')}` : 'Ingen kontoplan gemt endnu. Vælg Synkronisér kontoplan.');
+      setChartMessage(data.fetchedAt ? `${data.accounts.length} konti gemt · Senest synkroniseret ${formatDateTime(data.fetchedAt)}` : 'Ingen kontoplan gemt endnu. Vælg Synkronisér kontoplan.');
     } catch (error) {
       setChartMessage(
         error instanceof Error

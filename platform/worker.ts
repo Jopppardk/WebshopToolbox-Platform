@@ -17,7 +17,7 @@ async function asset(request:Request,env:PlatformEnv,admin=false){
  const response=await env.ASSETS.fetch(request);
  if(!response.headers.get('content-type')?.includes('text/html'))return response;
  let body=await response.text();
- if(env.PLATFORM_ENV==='production')body=body.replaceAll('Testmiljø','Produktionsportal');
+ if(env.PLATFORM_ENV==='production')body=body.replaceAll('Testmiljø','Produktionsportal').replaceAll('Bogføring og kundemail er blokeret.','Bogføring og kundemail er aktive.');
  if(admin)body=body.replaceAll('src="/admin.js"','src="/admin/admin.js"').replaceAll('src="/onboarding.js"','src="/admin/onboarding.js"').replaceAll('action="/logout"','action="/admin/logout"').replaceAll('href="/"','href="/admin/"');
  const headers=new Headers(response.headers);for(const key of ['Content-Length','Content-Encoding','ETag'])headers.delete(key);
  return new Response(body,{status:response.status,headers});

@@ -46,5 +46,5 @@ export async function handleTier1Settings(request:Request,env:PlatformEnv,actor:
   ]);
   if(result[0].meta.changes!==1)throw new HttpError(409,'Indstillingerne er ændret. Genindlæs før du gemmer.');
   const savedRevision=await fingerprint([revision,JSON.stringify(settings.accounts),settings.invoiceEmail.subject,settings.invoiceEmail.body]);
-  return reply({settings,revision:savedRevision,message:env.PLATFORM_ENV==='production'?'Indstillingerne er gemt. De valgte produktionsmoduler behandles automatisk.':'Indstillingerne er gemt. Automatik, bogfoering og kundemail er blokeret i testmiljoeet.'});
+  return reply({settings,revision:savedRevision,message:env.PLATFORM_ENV==='production'?'Indstillingerne er gemt. De valgte produktionsmoduler behandles automatisk.':'Indstillingerne er gemt. Automatik, bogføring og kundemail er blokeret i testmiljøet.'});
 }
