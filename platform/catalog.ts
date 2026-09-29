@@ -80,9 +80,19 @@ function paymentMethodName(gateway: string) {
   const key = gateway.toLowerCase().replace(/[^a-z]/g, '');
   return paymentMethods.find(([pattern]) => pattern.test(key))?.[1] ?? null;
 }
+// Gateways an integration delivers through, e.g. Flatpay's webshop payments run on Frisbii
+// (formerly Reepay). Frisbii is also sold directly, so it only counts as the integration when
+// the webshop has that integration connected; otherwise the gateway's own name is shown.
+const gatewayOperators: Array<[RegExp, string, string]> = [[/frisbii|reepay/, 'flatpay', 'Frisbii']];
+function operatorName(gateway: string, connected: ReadonlySet<string>) {
+  const key = gateway.toLowerCase().replace(/[^a-z]/g, '');
+  const match = gatewayOperators.find(([pattern]) => pattern.test(key));
+  if (!match) return null;
+  return connected.has(match[1]) ? catalog.find(item => item.id === match[1])!.name : match[2];
+}
 /** The integration(s) or known payment method behind an order's payment gateways, for display on Salg. */
-export function orderPaymentIntegration(gateways: unknown) {
+export function orderPaymentIntegration(gateways: unknown, connected: ReadonlySet<string> = new Set()) {
   const names = Array.isArray(gateways) ? gateways.filter((g): g is string => typeof g === 'string') : [];
-  const labels = [...new Set(names.map(g => paymentIntegrationName(g) ?? paymentMethodName(g) ?? 'Uden integration'))];
+  const labels = [...new Set(names.map(g => paymentIntegrationName(g) ?? operatorName(g, connected) ?? paymentMethodName(g) ?? 'Uden integration'))];
   return labels.length ? labels.join(', ') : 'Uden integration';
 }

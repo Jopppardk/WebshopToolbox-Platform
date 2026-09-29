@@ -143,7 +143,7 @@ export default function Home() {
       setSettingsRevision(data.revision); setSettingsReady(true);
     }).catch(error => setSettingsMessage(error.message || 'Indstillinger kunne ikke indlæses. Genindlæs siden.'));
   }, []);
-  const orderPageSize = view === 'invoices' ? 100 : 25;
+  const orderPageSize = 25;
   const activePeriod = view === 'invoices' ? 'all' : orderPeriod;
   const filtered = salesOrders.filter(
     (order) =>
