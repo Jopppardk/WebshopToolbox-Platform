@@ -5,6 +5,8 @@ type Page = { inventoryItems: { nodes: Array<{ id: string; tracked: boolean; uni
 export async function readInventory(env:PlatformEnv,company:string,shop:string) {
   const access = await shopAccess(env,company,shop);
   const rows: InventoryRow[] = [], locations = new Map<string, string>();
+  // Tracked items Shopify gives no quantity or cost for; shown on Lager instead of failing the read.
+  const incomplete: Array<{ inventoryItemId: string; product: string; variant: string; sku: string; location: string; reason: string }> = [];
   let after: string | null = null;const seen=new Set<string>();
   for (let page = 0; page < 25; page++) {
     const data: Page = await orderQuery<Page>(access, `query InventoryStatus($after:String) { inventoryItems(first:100,after:$after) { nodes { id tracked unitCost { amount currencyCode } variant { title sku product { title status } } inventoryLevels(first:100) { nodes { location { id name isActive } quantities(names:["on_hand"]) { name quantity } } pageInfo { hasNextPage endCursor } } } pageInfo { hasNextPage endCursor } } }`, { after }, 'Shopify kunne ikke hente lagerdata. Kontrollér read_inventory, read_products og adgang til kostpriser.');
@@ -15,8 +17,9 @@ export async function readInventory(env:PlatformEnv,company:string,shop:string) 
         if (!level.location.isActive) continue;
         locations.set(level.location.id, level.location.name);
         const quantity = level.quantities.find(q => q.name === 'on_hand')?.quantity, amount = Number(item.unitCost?.amount);
-        if (!Number.isSafeInteger(quantity) || !Number.isFinite(amount) || amount < 0 || !item.unitCost) continue;
-        rows.push({ inventoryItemId: item.id, locationId: level.location.id, product: item.variant.product.title, variant: item.variant.title, sku: item.variant.sku || '', quantity: quantity!, unitCostMinor: Math.round(amount * 100), currency: item.unitCost.currencyCode });
+        const noQuantity = !Number.isSafeInteger(quantity), noCost = !item.unitCost || !Number.isFinite(amount) || amount < 0;
+        if (noQuantity || noCost) { incomplete.push({ inventoryItemId: item.id, product: item.variant.product.title, variant: item.variant.title, sku: item.variant.sku || '', location: level.location.name, reason: noQuantity && noCost ? 'Mangler lagerantal og kostpris' : noQuantity ? 'Mangler lagerantal' : 'Mangler kostpris' }); continue; }
+        rows.push({ inventoryItemId: item.id, locationId: level.location.id, product: item.variant.product.title, variant: item.variant.title, sku: item.variant.sku || '', quantity: quantity!, unitCostMinor: Math.round(amount * 100), currency: item.unitCost!.currencyCode });
       }
     }
     if (!data.inventoryItems.pageInfo.hasNextPage) break;
@@ -25,5 +28,6 @@ export async function readInventory(env:PlatformEnv,company:string,shop:string) 
   }
   const keys=rows.map(r=>JSON.stringify([r.inventoryItemId,r.locationId]));if(new Set(keys).size!==keys.length||!Number.isSafeInteger(inventoryValueMinor(rows)))throw new HttpError(409,'Ugyldige eller gentagne lagerlinjer.');
   rows.sort((a, b) => a.product.localeCompare(b.product, 'da') || a.variant.localeCompare(b.variant, 'da'));
-  return { rows, locations: [...locations].map(([id, name]) => ({ id, name })), totalValueMinor: inventoryValueMinor(rows), fetchedAt: new Date().toISOString() };
+  incomplete.sort((a, b) => a.product.localeCompare(b.product, 'da') || a.variant.localeCompare(b.variant, 'da') || a.location.localeCompare(b.location, 'da'));
+  return { rows, locations: [...locations].map(([id, name]) => ({ id, name })), totalValueMinor: inventoryValueMinor(rows), incomplete, fetchedAt: new Date().toISOString() };
 }
