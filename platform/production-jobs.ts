@@ -12,31 +12,47 @@ import {HttpError,type Actor,type PlatformEnv} from './types';
 const request=(body:unknown)=>new Request('https://portal.webshoptoolbox.dk/internal-job',{method:'POST',headers:{origin:'https://portal.webshoptoolbox.dk','content-type':'application/json'},body:JSON.stringify(body)});
 const plusDay=(value:string,days:number)=>new Date(Date.parse(value+'T12:00:00Z')+days*86400000).toISOString().slice(0,10);
 async function responseValue(response:Response){const value=await response.json() as any;if(!response.ok)throw new HttpError(response.status,value.error||'Jobbet kunne ikke gennemføres.');return value;}
+type Mode='scheduled'|'sales';
+type QueueResult={rows:number;failed:number};
 export async function runProductionJobs(env:PlatformEnv){
  if(!productionWrites(env))return {status:'disabled',processed:0};
  const db=env.PLATFORM_DB,deadline=Date.now()+240000;
  // A live company administrator is selected server-side. No client supplied tenant
  // or identity is used, and all adapters recheck company and webshop permissions.
- const shops=(await db.prepare(`SELECT w.company_id,w.id,COALESCE(p.preferences_json,'{}') preferences_json,p.revision,u.id actor_id,u.email,EXISTS(SELECT 1 FROM webshop_connections k WHERE k.company_id=w.company_id AND k.webshop_id=w.id AND k.provider='shopify' AND k.verified_at IS NOT NULL) shopify
+ const shops=await shopRows(env);
+ let processed=0;
+ for(const shop of shops){
+  if(Date.now()>deadline)break;
+  if(await runShop(env,shop,deadline,'scheduled'))processed++;
+ }
+ return {status:'completed',processed};
+}
+
+// A live company administrator is selected server-side. No client supplied tenant
+// or identity is used, and all adapters recheck company and webshop permissions.
+async function shopRows(env:PlatformEnv,only?:{company:string;shop:string}){
+ return (await env.PLATFORM_DB.prepare(`SELECT w.company_id,w.id,COALESCE(p.preferences_json,'{}') preferences_json,p.revision,u.id actor_id,u.email,EXISTS(SELECT 1 FROM webshop_connections k WHERE k.company_id=w.company_id AND k.webshop_id=w.id AND k.provider='shopify' AND k.verified_at IS NOT NULL) shopify
  FROM webshops w JOIN companies c ON c.id=w.company_id AND c.status='active'
  LEFT JOIN tier1_preferences p ON p.company_id=w.company_id AND p.webshop_id=w.id
  JOIN users u ON u.id=(SELECT m.user_id FROM company_memberships m JOIN users a ON a.id=m.user_id
  WHERE m.company_id=w.company_id AND m.role='admin' AND a.status='active'
  AND NOT EXISTS(SELECT 1 FROM platform_admins pa WHERE pa.user_id=a.id) ORDER BY m.user_id LIMIT 1)
  LEFT JOIN production_jobs j ON j.company_id=w.company_id AND j.webshop_id=w.id AND j.job='runtime'
- WHERE w.status='active' AND NOT EXISTS(SELECT 1 FROM public_signups ps WHERE ps.company_id=w.company_id AND ps.trial_ends_at<=unixepoch()) ORDER BY COALESCE(j.next_run_at,0),w.id LIMIT 10`).all<any>()).results;
- let processed=0;
- for(const shop of shops){
-  if(Date.now()>deadline)break;
+ WHERE w.status='active' AND (? IS NULL OR (w.company_id=? AND w.id=?)) AND NOT EXISTS(SELECT 1 FROM public_signups ps WHERE ps.company_id=w.company_id AND ps.trial_ends_at<=unixepoch()) ORDER BY COALESCE(j.next_run_at,0),w.id LIMIT 10`).bind(only?.company??null,only?.company??null,only?.shop??null).all<any>()).results;
+}
+
+async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promise<false|{sales?:QueueResult;invoices?:QueueResult}>{
+  const db=env.PLATFORM_DB;
   const company=shop.company_id,id=shop.id,actor:Actor={id:shop.actor_id,email:shop.email,platformAdmin:false};
   const owner=crypto.randomUUID(),now=Date.now(),prefs=JSON.parse(shop.preferences_json),automation=prefs.automation||{};
-  const interval=Math.max(15,Math.min(1440,Number(prefs.syncIntervalMinutes)||15))*60000;
+  const interval=Math.max(5,Math.min(1440,Number(prefs.syncIntervalMinutes)||15))*60000;
   const claim=await db.prepare(`INSERT INTO production_jobs(company_id,webshop_id,job,lease_owner,lease_until) VALUES(?,?,'runtime',?,?)
  ON CONFLICT(company_id,webshop_id,job) DO UPDATE SET lease_owner=excluded.lease_owner,lease_until=excluded.lease_until
- WHERE production_jobs.lease_until<? AND production_jobs.next_run_at<=?`).bind(company,id,owner,now+300000,now,now).run();
-  if(claim.meta.changes!==1)continue;
+ WHERE production_jobs.lease_until<? AND (?='sales' OR production_jobs.next_run_at<=?)`).bind(company,id,owner,now+300000,now,mode,now).run();
+  if(claim.meta.changes!==1)return false;
+  const summary:{sales?:QueueResult;invoices?:QueueResult}={};
   const owns=async()=>{if(Date.now()>deadline)throw new HttpError(409,'Jobbet fortsætter ved næste kørsel.');const active=await db.prepare("SELECT 1 FROM production_jobs WHERE company_id=? AND webshop_id=? AND job='runtime' AND lease_owner=? AND lease_until>? AND (CASE WHEN ? IS NULL THEN NOT EXISTS(SELECT 1 FROM tier1_preferences p WHERE p.company_id=production_jobs.company_id AND p.webshop_id=production_jobs.webshop_id) ELSE EXISTS(SELECT 1 FROM tier1_preferences p WHERE p.company_id=production_jobs.company_id AND p.webshop_id=production_jobs.webshop_id AND p.revision=?) END) AND NOT EXISTS(SELECT 1 FROM public_signups ps WHERE ps.company_id=production_jobs.company_id AND ps.trial_ends_at<=unixepoch())").bind(company,id,owner,Date.now(),shop.revision,shop.revision).first();if(!active)throw new HttpError(409,'Joblåsen er udløbet.');};
-  const run=async(name:string,work:()=>Promise<void>)=>{
+  const run=async(name:string,work:()=>Promise<unknown>)=>{
    const runId=crypto.randomUUID();await db.prepare("INSERT INTO operation_runs(id,company_id,webshop_id,module,status) VALUES(?,?,?,?,'running')").bind(runId,company,id,name).run();
    try{await owns();await work();await db.prepare("UPDATE operation_runs SET status='success',finished_at=CURRENT_TIMESTAMP WHERE id=?").bind(runId).run();}
    catch(error){const message=error instanceof HttpError?error.message:'Integrationen kunne ikke behandles. Kontrollér forbindelse og postens detaljer.';await db.prepare("UPDATE operation_runs SET status='failed',message=?,finished_at=CURRENT_TIMESTAMP WHERE id=?").bind(message.slice(0,600),runId).run();}
@@ -47,7 +63,7 @@ export async function runProductionJobs(env:PlatformEnv){
    const policy=await historyPolicy(env,company),start=await providerStart(env,company,id,'shopify'),scope=JSON.stringify([policy,start]);
    // Imports are read-only and run whenever Shopify is connected; automation switches only
    // control bookkeeping. Inventory is a full item list and stays behind its own switch.
-   const imports=shop.shopify?['orders','payments','refunds','payouts',...(automation.inventory?['inventory']:[])]:[];
+   const imports=mode==='scheduled'&&shop.shopify?['orders','payments','refunds','payouts',...(automation.inventory?['inventory']:[])]:[];
    const importModule=(module:string,body:Record<string,unknown>)=>handleOperations(request(body),env,actor,company,id,module).then(responseValue);
    for(const module of imports){
     await run('auto.import.'+module,async()=>{
@@ -76,7 +92,7 @@ export async function runProductionJobs(env:PlatformEnv){
      await saveCursor('import.'+module,next.hasNextPage?{scope,after:next.endCursor}:{scope,done:true});
     });
    }
-   const connections=(await db.prepare('SELECT provider,start_date,revision FROM payment_connections WHERE company_id=? AND webshop_id=?').bind(company,id).all<any>()).results;
+   const connections=mode!=='scheduled'?[]:(await db.prepare('SELECT provider,start_date,revision FROM payment_connections WHERE company_id=? AND webshop_id=?').bind(company,id).all<any>()).results;
    // Payment provider imports are read-only and run for every connection; switches only control bookkeeping.
    for(const connection of connections){
     const provider=connection.provider;
@@ -91,10 +107,10 @@ export async function runProductionJobs(env:PlatformEnv){
     }
    }
    const packaging=await db.prepare('SELECT config_json FROM emballage_connections WHERE company_id=? AND webshop_id=?').bind(company,id).first<{config_json:string}>();
-   if(packaging){const config=JSON.parse(packaging.config_json),today=new Date().toISOString().slice(0,10),state=await cursor('packaging.history');if(config.startDate&&state.day!==today)await run('auto.packaging.history',async()=>{await syncPackaging(env,company,id,[config.startDate,await dataStartDate(env,company,id)].sort()[1],today);await saveCursor('packaging.history',{day:today});});}
+   if(packaging&&mode==='scheduled'){const config=JSON.parse(packaging.config_json),today=new Date().toISOString().slice(0,10),state=await cursor('packaging.history');if(config.startDate&&state.day!==today)await run('auto.packaging.history',async()=>{await syncPackaging(env,company,id,[config.startDate,await dataStartDate(env,company,id)].sort()[1],today);await saveCursor('packaging.history',{day:today});});}
    // Payout reports for every paid payout, whether or not bookkeeping is on. Newest first, a few per
    // run; a failed report waits six hours before the next attempt instead of blocking the others.
-   await run('auto.reports',async()=>{
+   if(mode==='scheduled')await run('auto.reports',async()=>{
     const pending=(await db.prepare(`SELECT external_id FROM (
  SELECT s.external_id,s.occurred_at FROM operation_snapshots s WHERE s.company_id=? AND s.webshop_id=? AND s.module='payouts' AND json_extract(s.payload_json,'$.status')='PAID' AND json_extract(s.payload_json,'$.transactionType')='DEPOSIT'
  UNION ALL SELECT 'flatpay:'||p.external_id,p.occurred_at FROM payment_records p WHERE p.company_id=? AND p.webshop_id=? AND p.provider='flatpay' AND p.kind='payments' AND p.paid=1) c
@@ -108,7 +124,8 @@ export async function runProductionJobs(env:PlatformEnv){
     }
     if(failed.length)throw new HttpError(409,`${failed.length} udbetalingsrapport${failed.length===1?'':'er'} kunne ikke dannes automatisk. Prøv Generér rapport under Udbetalingsrapporter.`);
    });
-   const processRows=async(job:string,provider:string,module:string,kind:string,book:boolean,email=false)=>{
+   const processRows=async(job:string,provider:string,module:string,kind:string,book:boolean,email=false):Promise<QueueResult>=>{
+    const result:QueueResult={rows:0,failed:0};
     const dates=(await db.prepare('SELECT provider,start_date FROM booking_start_dates WHERE company_id=? AND webshop_id=?').bind(company,id).all<{provider:string;start_date:string}>()).results;
     const sourceDate=dates.find(d=>d.provider===provider)?.start_date,dineroDate=dates.find(d=>d.provider==='dinero')?.start_date;
     if(!sourceDate||!dineroDate)throw new HttpError(409,'Gem bogføringsstart for integrationen og Dinero.');
@@ -121,7 +138,7 @@ export async function runProductionJobs(env:PlatformEnv){
  LEFT JOIN production_attempts a ON a.company_id=s.company_id AND a.webshop_id=s.webshop_id AND a.job=? AND a.external_id=s.external_id
  WHERE s.company_id=? AND s.webshop_id=? AND ${filter}${eligible} AND substr(s.occurred_at,1,10)>=? AND COALESCE(a.next_attempt_at,0)<=?
  ORDER BY COALESCE(a.attempted_at,0),s.occurred_at,s.external_id LIMIT 10`).bind(job,company,id,...(provider==='shopify'?[module]:[module,provider]),...(module==='orders'?[plusDay(boundary,-1)]:[]),module==='orders'?'1970-01-01':plusDay(boundary,-1),Date.now()).all<any>()).results;
-    for(const row of rows){await owns();const externalId=row.external_id;
+    for(const row of rows){await owns();const externalId=row.external_id;result.rows++;
      await run('auto.'+job,async()=>{
       let succeeded=false;
       try{
@@ -136,6 +153,7 @@ export async function runProductionJobs(env:PlatformEnv){
        }
        succeeded=true;
       }catch(error){
+       result.failed++;
        try{await recordFailure(env,company,id,provider,module,externalId,'Automatisk behandling: '+job,error);}catch{/* Keep original error and durable claims. */}
        throw error;
       }finally{
@@ -144,13 +162,36 @@ export async function runProductionJobs(env:PlatformEnv){
       }
      });
     }
+    return result;
    };
-   if(automation.sales)await run('auto.sales.queue',()=>processRows('sales','shopify','orders','sale',automation.salesBookDinero));
-   if(automation.refunds)await run('auto.refunds.queue',()=>processRows('refunds','shopify','refunds','refund',automation.refundsBookDinero));
-   if(automation.payouts){await run('auto.payouts.queue',()=>processRows('payouts','shopify','payouts','payout',automation.payoutsBookDinero));if(connections.some(c=>c.provider==='flatpay'))await run('auto.flatpay.queue',()=>processRows('flatpay','flatpay','payments','flatpay',automation.payoutsBookDinero));}
-   if(automation.invoiceEmails&&env.PLATFORM_CUSTOMER_EMAIL==='enabled')await run('auto.invoice.queue',()=>processRows('invoice','shopify','orders','sale',false,true));
-   processed++;
-  }finally{await db.prepare("UPDATE production_jobs SET lease_owner=NULL,lease_until=0,next_run_at=? WHERE company_id=? AND webshop_id=? AND job='runtime' AND lease_owner=?").bind(Date.now()+interval,company,id,owner).run();}
- }
- return {status:'completed',processed};
+   if(automation.sales)await run('auto.sales.queue',async()=>{summary.sales=await processRows('sales','shopify','orders','sale',automation.salesBookDinero);});
+   if(automation.refunds&&mode==='scheduled')await run('auto.refunds.queue',()=>processRows('refunds','shopify','refunds','refund',automation.refundsBookDinero));
+   if(automation.payouts&&mode==='scheduled'){await run('auto.payouts.queue',()=>processRows('payouts','shopify','payouts','payout',automation.payoutsBookDinero));if(connections.some(c=>c.provider==='flatpay'))await run('auto.flatpay.queue',()=>processRows('flatpay','flatpay','payments','flatpay',automation.payoutsBookDinero));}
+   if(automation.invoiceEmails&&env.PLATFORM_CUSTOMER_EMAIL==='enabled')await run('auto.invoice.queue',async()=>{summary.invoices=await processRows('invoice','shopify','orders','sale',false,true);});
+   return summary;
+  }finally{
+   // "Synkronisér nu" leaves the schedule as it was.
+   if(mode==='scheduled')await db.prepare("UPDATE production_jobs SET lease_owner=NULL,lease_until=0,next_run_at=? WHERE company_id=? AND webshop_id=? AND job='runtime' AND lease_owner=?").bind(now+interval-60000,company,id,owner).run();
+   else await db.prepare("UPDATE production_jobs SET lease_owner=NULL,lease_until=0 WHERE company_id=? AND webshop_id=? AND job='runtime' AND lease_owner=?").bind(company,id,owner).run();
+  }
+}
+
+/** "Synkronisér nu" on Salg: after the orders are fetched, run the same sales and invoice steps the
+ * schedule would, for this shop only and only as far as its automation switches allow. */
+export async function runSalesNow(env:PlatformEnv,company:string,shop:string){
+ if(!productionWrites(env))return {status:'disabled' as const};
+ const [row]=await shopRows(env,{company,shop});
+ if(!row)return {status:'unavailable' as const};
+ const automation=JSON.parse(row.preferences_json||'{}').automation||{};
+ if(!automation.sales&&!(automation.invoiceEmails&&env.PLATFORM_CUSTOMER_EMAIL==='enabled'))return {status:'off' as const};
+ // Report what actually changed, not how many orders were looked at.
+ const counts=async()=>env.PLATFORM_DB.prepare(`SELECT
+ (SELECT count(*) FROM platform_invoices WHERE company_id=?1 AND webshop_id=?2 AND status='generated') invoices,
+ (SELECT count(*) FROM production_receipts WHERE company_id=?1 AND webshop_id=?2 AND provider='shopify' AND module='orders' AND phase='booked') booked,
+ (SELECT count(*) FROM production_receipts WHERE company_id=?1 AND webshop_id=?2 AND provider='shopify' AND module='orders' AND phase='draft') drafts,
+ (SELECT count(*) FROM production_receipts WHERE company_id=?1 AND webshop_id=?2 AND provider='invoice' AND module='email' AND phase='accepted') sent`).bind(company,shop).first<{invoices:number;booked:number;drafts:number;sent:number}>();
+ const before=await counts(),result=await runShop(env,row,Date.now()+45000,'sales');
+ if(!result)return {status:'busy' as const};
+ const after=await counts();
+ return {status:'completed' as const,invoices:after!.invoices-before!.invoices,booked:after!.booked-before!.booked,drafts:Math.max(0,after!.drafts-before!.drafts),sent:after!.sent-before!.sent,failed:(result.sales?.failed||0)+(result.invoices?.failed||0)};
 }

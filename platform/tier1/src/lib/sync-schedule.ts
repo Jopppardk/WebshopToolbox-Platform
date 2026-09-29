@@ -1,4 +1,4 @@
-export const syncIntervals = [15, 30, 60] as const;
+export const syncIntervals = [5, 15, 30, 60] as const;
 export type SyncInterval = typeof syncIntervals[number];
 
 export function normalizeSyncInterval(value: unknown): SyncInterval {
