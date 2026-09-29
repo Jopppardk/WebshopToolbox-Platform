@@ -5,8 +5,15 @@ import { seal, unseal } from './connections';
 import { jsonBody } from './invitations';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 
+// Shopify's updatedAt only drives the incremental sync; it changes on any edit and says nothing about the booked content.
+export function sameSource(a?:string|null,b?:string|null){
+ if(a===b)return true;
+ if(!a||!b)return false;
+ try{const strip=(v:string)=>{const o=JSON.parse(v);if(o&&typeof o==='object')delete o.updatedAt;return JSON.stringify(o);};return strip(a)===strip(b);}catch{return false;}
+}
+
 export function onboardingStatus(date:string, sourceDate:string, dineroDate:string, receipt?:{voucher_status:string;source_json:string}, sourceJson?:string) {
- if(receipt) return receipt.source_json!==sourceJson?'booked_changed':receipt.voucher_status==='Booked'?'booked':'draft';
+ if(receipt) return !sameSource(receipt.source_json,sourceJson)?'booked_changed':receipt.voucher_status==='Booked'?'booked':'draft';
  if(!sourceDate||!dineroDate)return 'setup_required';
  const event=new Date(date.length===10?date+'T12:00:00Z':date);
  if(!Number.isFinite(event.getTime()))return 'uncertain';
@@ -27,7 +34,7 @@ export async function bookingStatuses(env:PlatformEnv,company:string,shop:string
   const job=provider==='shopify'?({orders:'sales',refunds:'refunds',payouts:'payouts'} as Record<string,string>)[module]:provider==='flatpay'&&module==='payments'?'flatpay':undefined;
   const failed=job&&attempts.some(a=>a.job===job&&a.external_id===id&&a.failures>0);
   if(found){
-   if(found.phase==='booked')return JSON.parse(found.payload_json).sourceJson!==sourceJson?'booked_changed':'booked';
+   if(found.phase==='booked')return !sameSource(JSON.parse(found.payload_json).sourceJson,sourceJson)?'booked_changed':'booked';
    if(['uncertain','held'].includes(found.phase))return 'failed_manual';
    if(failed)return found.phase==='prepared'&&automation[job==='flatpay'?'payouts':job!]?'failed_retry':'failed_manual';
    return found.phase;
