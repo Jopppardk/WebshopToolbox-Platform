@@ -39,7 +39,8 @@ jobs:
       - run: npm ci
       - name: Oprydning
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # Separate, short-lived D1 token; the deploy tokens are limited to one Worker each.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_TOKEN }}
           TARGET: ${{ inputs.target }}
           MODE: ${{ inputs.mode }}
           EXPECTED: ${{ inputs.expected }}
