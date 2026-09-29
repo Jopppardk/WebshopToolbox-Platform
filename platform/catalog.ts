@@ -73,9 +73,16 @@ export function paymentIntegrationName(gateway: string) {
   if (key === 'shopifypayments') return 'Shopify Payments';
   return catalog.find(item => item.kind === 'payment' && key.includes(item.id))?.name ?? null;
 }
-/** The integration(s) behind an order's payment gateways, for display on Salg. */
+// Payment methods that are not integrations but are named unambiguously by the gateway.
+// Matched on the whole normalised name, except MobilePay, which also appears as e.g. "Vipps MobilePay".
+const paymentMethods: Array<[RegExp, string]> = [[/mobilepay/, 'MobilePay'], [/^giftcard$/, 'Gavekort'], [/^manual$/, 'Manuel betaling'], [/^paypal(expresscheckout)?$/, 'PayPal'], [/^klarna$/, 'Klarna']];
+function paymentMethodName(gateway: string) {
+  const key = gateway.toLowerCase().replace(/[^a-z]/g, '');
+  return paymentMethods.find(([pattern]) => pattern.test(key))?.[1] ?? null;
+}
+/** The integration(s) or known payment method behind an order's payment gateways, for display on Salg. */
 export function orderPaymentIntegration(gateways: unknown) {
   const names = Array.isArray(gateways) ? gateways.filter((g): g is string => typeof g === 'string') : [];
-  const labels = [...new Set(names.map(g => paymentIntegrationName(g) ?? 'Uden integration'))];
+  const labels = [...new Set(names.map(g => paymentIntegrationName(g) ?? paymentMethodName(g) ?? 'Uden integration'))];
   return labels.length ? labels.join(', ') : 'Uden integration';
 }
