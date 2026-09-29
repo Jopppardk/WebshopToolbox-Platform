@@ -20,7 +20,7 @@ export async function bookingStatuses(env:PlatformEnv,company:string,shop:string
  const attempts=(await env.PLATFORM_DB.prepare('SELECT job,external_id,failures FROM production_attempts WHERE company_id=? AND webshop_id=?').bind(company,shop).all<any>()).results;
  const preferences=await env.PLATFORM_DB.prepare('SELECT preferences_json FROM tier1_preferences WHERE company_id=? AND webshop_id=?').bind(company,shop).first<{preferences_json:string}>();
  const automation=preferences?JSON.parse(preferences.preferences_json).automation||{}:{};
- return (provider:string,module:string,id:string,date:string,sourceJson:string)=>{
+ return (provider:string,module:string,id:string,date:string,sourceJson:string,upcoming=false)=>{
   const found=live.find(r=>r.provider===provider&&r.module===module&&r.external_id===id);
   const receipt=receipts.find(r=>r.provider===provider&&r.module===module&&r.external_id===id);
   const job=provider==='shopify'?({orders:'sales',refunds:'refunds',payouts:'payouts'} as Record<string,string>)[module]:provider==='flatpay'&&module==='payments'?'flatpay':undefined;
@@ -32,6 +32,8 @@ export async function bookingStatuses(env:PlatformEnv,company:string,shop:string
    return found.phase;
   }
   if(receipt)return onboardingStatus(date,'','',receipt,sourceJson);
+  // A payout that has not been paid out yet is simply waiting; earlier refused attempts are not failures.
+  if(upcoming)return 'expected';
   if(failed)return automation[job==='flatpay'?'payouts':job!]?'failed_retry':'failed_manual';
   if(provider==='shopify'&&module==='orders'){
    const source=JSON.parse(sourceJson);
