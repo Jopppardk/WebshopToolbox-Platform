@@ -226,7 +226,7 @@ async function listCompanies() {
     box,
     ['Virksomhed', 'Status', 'Adgang', ''],
     companies.map((c) => [
-      button(c.name, () => company(c), 'link'),
+      c.demo ? actions(button(c.name, () => company(c), 'link'), el('span', 'Demokonto', 'badge demo')) : button(c.name, () => company(c), 'link'),
       badge(c.status),
       actor.platformAdmin ? 'Platformadministrator' : roles[c.role],
       button('Åbn →', () => company(c)),
@@ -284,7 +284,8 @@ async function company(c) {
   content.replaceChildren();
   const portalUsers=memberData.members.filter(u=>u.status==='active'&&(!u.invitation_state||u.invitation_state==='accepted'));
   content.append(button('← Alle virksomheder',listCompanies,'secondary back'),...(actor.platformAdmin&&portalUsers.length?[button('Åbn kundeportal',()=>startSupport(c,portalUsers),'secondary back')]:[]));
-  if (actor.platformAdmin)
+  if (c.demo) content.append(el('p', 'Demokonto · Alle data er fiktive og nulstilles automatisk hver nat. Demokontoen kan ikke redigeres, slettes eller deaktiveres. Brug Åbn kundeportal for at se den som kunden.', 'demo-notice'));
+  if (actor.platformAdmin && !c.demo)
     content.append(
       button(
         'Redigér virksomhed',
@@ -319,7 +320,7 @@ async function company(c) {
   );
   content.append(box);
   if (canManage) {
-    const members = panel('Brugere', button('Invitér bruger', () => edit(
+    const members = panel('Brugere', c.demo ? null : button('Invitér bruger', () => edit(
       'Invitér bruger til ' + c.name,
       [ {name:'email',label:'Mailadresse',type:'email',max:254},
         {name:'role',label:'Rolle',options:[['member','Medlem'],['admin','Virksomhedsadministrator']]} ],
@@ -376,13 +377,13 @@ async function company(c) {
             },
           ),
         );
-        const controls = u.invitation_state && u.invitation_state !== 'accepted'
+        const controls = c.demo ? actions() : u.invitation_state && u.invitation_state !== 'accepted'
           ? invitationControls(u, `/companies/${c.id}/users`, () => refreshCompany(c)) : actions(access);
-        if ((!u.invitation_state || u.invitation_state==='accepted') && u.id !== actor.id) controls.append(button(u.status === 'active' ? 'Deaktivér' : 'Aktivér', async () => {
+        if (!c.demo && (!u.invitation_state || u.invitation_state==='accepted') && u.id !== actor.id) controls.append(button(u.status === 'active' ? 'Deaktivér' : 'Aktivér', async () => {
           await api(`/companies/${c.id}/users/${u.id}`, 'PATCH', {status: u.status === 'active' ? 'inactive' : 'active'});
           await refreshCompany(c);
         }));
-        if ((!u.invitation_state || u.invitation_state==='accepted') && u.id !== actor.id) controls.append(button('Redigér rolle', () => edit('Virksomhedsrolle', [
+        if (!c.demo && (!u.invitation_state || u.invitation_state==='accepted') && u.id !== actor.id) controls.append(button('Redigér rolle', () => edit('Virksomhedsrolle', [
           {name:'role', label:'Rolle', value:u.role, options:[['member','Medlem'],['admin','Virksomhedsadministrator']]}
         ], async data => { await api(`/companies/${c.id}/members`, 'POST', {userId:u.id,...data}); await refreshCompany(c); })));
         if(actor.platformAdmin && u.status==='active' && (!u.invitation_state || u.invitation_state==='accepted')) controls.append(button('Log ind som bruger',()=>startSupport(c,[u])));

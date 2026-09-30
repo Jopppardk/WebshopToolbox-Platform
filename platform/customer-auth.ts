@@ -1,3 +1,4 @@
+import {DEMO_CODE,DEMO_EMAIL} from './demo';
 import {HttpError,type Actor,type PlatformEnv} from './types';
 
 const encoder=new TextEncoder(),seconds=()=>Math.floor(Date.now()/1000);
@@ -49,17 +50,19 @@ export async function customerLogin(request:Request,env:PlatformEnv,action:strin
  await limit(env,'ip:'+ip+':'+action,action==='start'?10:30,600);
  if(action==='start'){
   const email=address(body.email),invitation=typeof body.invitation==='string'&&/^[a-f0-9]{64}$/.test(body.invitation)?body.invitation:null;
-  await limit(env,'email:'+email,3,600);await limit(env,'global-mail',50,600);
+  // Demokonto: fixed public code, no mail, so the per-address mail limits do not apply. The IP limit above still does.
+  const demo=email===DEMO_EMAIL&&!invitation&&!!await db.prepare("SELECT 1 FROM users u JOIN companies c ON c.id=u.company_id WHERE lower(u.email)=? AND c.demo=1 AND u.status='active'").bind(email).first();
+  if(!demo){await limit(env,'email:'+email,3,600);await limit(env,'global-mail',50,600);}
   await db.batch([db.prepare('DELETE FROM customer_login_limits WHERE expires_at<?').bind(now),db.prepare('DELETE FROM customer_login_challenges WHERE expires_at<?').bind(now),db.prepare('DELETE FROM customer_sessions WHERE expires_at<? OR last_seen+idle_seconds<?').bind(now,now)]);
   const invitationHash=invitation?await loginHash(invitation):null;
   const user=await db.prepare(`SELECT u.id,i.id invitation_id,i.token_hash FROM users u JOIN companies c ON c.id=u.company_id LEFT JOIN invitations i ON i.user_id=u.id
    WHERE lower(u.email)=? AND c.status='active' AND NOT EXISTS(SELECT 1 FROM platform_admins a WHERE a.user_id=u.id)
    AND EXISTS(SELECT 1 FROM company_memberships m WHERE m.company_id=u.company_id AND m.user_id=u.id)
    AND ((u.status='active' AND ? IS NULL) OR (u.identity_issuer='urn:webshop-toolbox:pending' AND i.state='pending' AND i.expires_at>? AND i.token_hash=?))`).bind(email,invitationHash,now,invitationHash).first<{id:string;invitation_id:string|null;token_hash:string|null}>();
-  const id=random(),browser=random();let n:number;do{n=crypto.getRandomValues(new Uint32Array(1))[0];}while(n>=4200000000);const code=String(n%100000000).padStart(8,'0');
+  const id=random(),browser=random();let n:number;do{n=crypto.getRandomValues(new Uint32Array(1))[0];}while(n>=4200000000);const code=demo?DEMO_CODE:String(n%100000000).padStart(8,'0');
   await db.prepare('INSERT INTO customer_login_challenges(id,user_id,code_hash,browser_hash,invitation_id,invitation_hash,expires_at) VALUES(?,?,?,?,?,?,?)').bind(id,user?.id||null,await mac(env,id+':'+code),await loginHash(browser),invitation?user?.invitation_id||null:null,invitation?user?.token_hash||null:null,now+600).run();
   let preview:string|undefined;
-  if(user){
+  if(user&&!demo){
    if(env.PLATFORM_ENV==='local-test')preview=code;
    else if(env.PLATFORM_AUTH_MAIL&&(env.PLATFORM_ENV==='production'||['rj@itm8.com','rene.jeppesen@live.dk'].includes(email))){
     // One attempt per challenge. On uncertainty we never repeat this external write.

@@ -731,3 +731,7 @@ textarea { width:100%; box-sizing:border-box; border:1px solid #cbd5e1; border-r
   .t0:not(.customer) .actions select,
   .t0:not(.customer) .actions input { min-width: 0; flex: 1 1 140px; }
 }
+
+/* Demokonto in Tier 0 */
+.badge.demo{background:#fdf1d8;color:#7a4f06;border:1px solid #f1d49a;margin-left:8px}
+.demo-notice{margin:0 0 18px;padding:14px 16px;border-radius:12px;background:#fdf6e7;border:1px solid #f1d49a;color:#6b4a0c;font-size:14px}

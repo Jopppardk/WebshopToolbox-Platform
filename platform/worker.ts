@@ -1,4 +1,6 @@
 import {runProductionJobs} from './production-jobs';
+import { demoMessage, isDemoCompany, isDemoUser } from './demo';
+import { resetDemoIfDue } from './demo-reset';
 import {productionWrites} from './production-policy';
 import { customerActor, customerLogin, customerLogout } from './customer-auth';
 import { publicSignup } from './signup';
@@ -158,6 +160,12 @@ export default {
       if(path.startsWith('/api/platform/') && ((context && context!==expected) || (actor.support && !['GET','HEAD'].includes(request.method) && context!==expected)))
         throw new HttpError(409,'Din session er ændret. Genindlæs siden før du fortsætter.');
       if(actor.support && path==='/api/platform/profile') throw new HttpError(403,'Profilen kan kun ændres af brugeren selv.');
+      // Demokonto: its users change nothing outside Tier 1 (which isolates them), and Tier 0 cannot edit or delete it.
+      if(path.startsWith('/api/platform/') && !['GET','HEAD'].includes(request.method) && path!=='/api/platform/support'){
+        if(!actor.platformAdmin && !path.startsWith('/api/platform/tier1/') && await isDemoUser(env,actor.id)) throw new HttpError(403,demoMessage);
+        const target=path.match(/^\/api\/platform\/companies\/([\w-]+)/);
+        if(actor.platformAdmin && target && await isDemoCompany(env,target[1])) throw new HttpError(403,'Demokontoen kan ikke redigeres eller slettes. Den nulstilles automatisk hver nat.');
+      }
       if(path==='/api/platform/profile' && request.method==='POST') return secure(await saveProfile(request,env,actor));
       if(path.startsWith('/api/platform/') && path!=='/api/platform/me' && !actor.fullName)
         throw new HttpError(428,'Udfyld din profil for at fortsætte.');
@@ -213,6 +221,8 @@ export default {
   },
   async scheduled(_event: ScheduledController, env: PlatformEnv) {
     assertTestRuntime(env);
+    // The demo is rebuilt once a night; a failure there never stops the real jobs.
+    try{await resetDemoIfDue(env);}catch(error){console.error('Demokontoen kunne ikke nulstilles',error);}
     return productionWrites(env)?runProductionJobs(env):scheduled();
   },
 };

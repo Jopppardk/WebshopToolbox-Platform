@@ -22,6 +22,7 @@ import { handlePayments } from './payments';
 import { financeService } from './finance-source';
 import { dataCutoff,dataStartDate } from './tier1-history';
 import { orderPeriodWindow } from './tier1/src/lib/order-period';
+import { formatDate } from './tier1/src/lib/format';
 import { HttpError,reply,type Actor,type PlatformEnv } from './types';
 
 const forwarded=(request:Request,body:unknown,method='POST')=>new Request(request.url,{method,headers:request.headers,body:JSON.stringify(body)});
@@ -143,7 +144,7 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   const money=(amount:string,currency:string)=>new Intl.NumberFormat('da-DK',{style:'currency',currency}).format(Number(amount));
   const todayWindow=orderPeriodWindow('today',await dataCutoff(env,company,shop));
   const today=await db.prepare("SELECT count(*) AS n FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module='orders' AND occurred_at>=? AND occurred_at<?").bind(company,shop,todayWindow.from,todayWindow.until).first<{n:number}>();
-  return reply({total:total?.n||0,today:today?.n||0,orders:rows.map(row=>{const o=JSON.parse(row.payload_json),m=o.currentTotalPriceSet.shopMoney;return {id:o.name+(o.test?' (test)':''),externalId:o.id,date:new Date(o.createdAt).toLocaleDateString('da-DK'),createdAt:o.createdAt,shipped:o.cancelledAt?'Annulleret':o.displayFulfillmentStatus==='FULFILLED'?'Afsendt':'Ikke afsendt',amount:money(m.amount,m.currencyCode),realized:money(String(Number(m.amount)-Number(o.totalRefundedSet?.shopMoney.amount||0)),m.currencyCode),status:bookingStatusLabel(bookingStatus('shopify','orders',o.id,o.createdAt,row.payload_json)),currency:m.currencyCode,total:m.amount,paymentStatus:o.displayFinancialStatus,paymentProvider:orderPaymentIntegration(o.paymentGatewayNames,connectedPayments)};})});
+  return reply({total:total?.n||0,today:today?.n||0,orders:rows.map(row=>{const o=JSON.parse(row.payload_json),m=o.currentTotalPriceSet.shopMoney;return {id:o.name+(o.test?' (test)':''),externalId:o.id,date:formatDate(o.createdAt),createdAt:o.createdAt,shipped:o.cancelledAt?'Annulleret':o.displayFulfillmentStatus==='FULFILLED'?'Afsendt':'Ikke afsendt',amount:money(m.amount,m.currencyCode),realized:money(String(Number(m.amount)-Number(o.totalRefundedSet?.shopMoney.amount||0)),m.currencyCode),status:bookingStatusLabel(bookingStatus('shopify','orders',o.id,o.createdAt,row.payload_json)),currency:m.currencyCode,total:m.amount,paymentStatus:o.displayFinancialStatus,paymentProvider:orderPaymentIntegration(o.paymentGatewayNames,connectedPayments)};})});
  }
  if(['/sales/log','/payouts/log','/refunds/log'].includes(path)){
   if(!get)throw new HttpError(405,'Brug Hent log.');

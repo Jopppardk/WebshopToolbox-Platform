@@ -1,5 +1,6 @@
 import { paymentProviderPattern } from './catalog';
 import { handlePerformance } from './performance-source';
+import { demoTier1, isDemoCompany } from './demo';
 import { handleReconciliation } from './booking-onboarding';
 import { handleTier1Emballage } from './tier1-emballage';
 import { handleShopifyFields } from './shopify-metafields';
@@ -26,6 +27,8 @@ export async function handleTier1(request:Request, env:PlatformEnv, actor:Actor)
   await requireCompany(db,actor,company.company_id);
   const [,shop,path]=match;
   if(shop!=='none') await requireWebshop(db,actor,company.company_id,shop);
+  // Demokonto: only its own database rows are read or written; provider calls are simulated or refused.
+  if(await isDemoCompany(env,company.company_id)){const demo=await demoTier1(request,path);if(demo)return demo;}
   if(path.startsWith('/performance/'))return handlePerformance(request,env,actor,company.company_id,shop,path);
   if(path==='/feeds'||path.startsWith('/feeds/'))return handleFeeds(request,env,actor,company.company_id,shop,path);
   if(path==='/emballage/shopify-fields')return handleShopifyFields(request,env,actor,company.company_id,shop);
