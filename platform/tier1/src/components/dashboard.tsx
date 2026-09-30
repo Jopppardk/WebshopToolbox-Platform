@@ -6,8 +6,10 @@ import { ArrowDownRight,ArrowUpRight,ArrowRight,BarChart3,Boxes,RefreshCw,Wallet
 import { Button } from '@/components/ui/button';
 import { danishDate } from '@/lib/history-policy';
 import { percentageChange,type calculateFinance } from '@/lib/dashboard-finance';
+import { PerformanceChart } from '@/components/performance';
+import type { MonthComparison } from '@/lib/performance';
 
-type Finance={ready:boolean;data:ReturnType<typeof calculateFinance>|null;message?:string;checkedAt?:string;through?:string;stale?:boolean};
+type Finance={ready:boolean;data:(ReturnType<typeof calculateFinance>&{profitMonths?:MonthComparison[]})|null;message?:string;checkedAt?:string;through?:string;stale?:boolean};
 type ActivityCount={total:number;synced:number;failed:number;pending:number};
 type Platform={inactive:number;activity:{today:string;orders:ActivityCount;payouts:ActivityCount;updated:{sales:string|null;refunds:string|null;packaging:string|null}};connected:number;failed:number;succeeded:number;skipped:number;running:number;successRate:number|null;checkedAt:string;providers:Array<{key:string;name:string;connected:boolean;health:string;checkedAt:string|null}>};
 const money=(value:number|null|undefined)=>value==null?'—':new Intl.NumberFormat('da-DK',{style:'currency',currency:'DKK',maximumFractionDigits:0}).format(value/100);
@@ -106,6 +108,7 @@ function ConnectedDashboard({onIntegrations}:{onIntegrations:()=>void}) {
         <Metric icon={<BarChart3/>} label="Overskud YTD" value={money(data?.profitYtd)} note="Året til dato · før skat"/>
         <Metric icon={<Boxes/>} label="Lagerværdi" value={money(data?.inventory)} note="Bogført saldo på lagerkontoen"/>
       </div>
+      <div className="mt-4"><PerformanceChart title="Overskud pr. måned" icon={<Wallet className="size-5"/>} source="Dinero · Hele virksomheden" description="Resultat før skat pr. måned. Indeværende måned vises til dato." color="#6f8f4e" year={Number((data?.periods.today||danishDate()).slice(0,4))} monetary metric={data?.profitMonths?{months:data.profitMonths}:undefined} error={errors.finance||(finance&&!finance.ready?finance.message:undefined)} loading={!finance&&!errors.finance} note=""/></div>
       <p className="mt-3 text-xs text-muted-foreground">{finance?.checkedAt?'Senest hentet '+timestamp(finance.checkedAt)+'. ':''}{finance?.stale?'Data er forsinkede; opdatering afventes. ':''}Omsætning er ekskl. moms. Overskud er før skat og efter bogførte omkostninger; ikke-fradragsberettiget moms kan indgå i omkostningerne. Lagerværdi følger den bogførte saldo på lagerkontoen. MTD/YTD følger kalenderåret til og med dags dato. — betyder, at datagrundlaget mangler eller ikke kan beregnes sikkert.</p>
     </section>
 

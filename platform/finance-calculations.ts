@@ -18,6 +18,13 @@ export function parseEntries(payload: unknown): LedgerEntry[] {
     return { guid: row.EntryGuid, account: row.AccountNumber, date: row.Date, minor, type: row.Type };
   });
 }
+// Profit before tax per calendar month: this year to date against the whole month last year.
+// Future months and months the accounting years or history do not cover stay unknown (null).
+function profitMonths(p: ReturnType<typeof financePeriods>, metric: (from: string, to: string, turnover: boolean) => number | null) {
+  const year = Number(p.today.slice(0, 4));
+  const month = (y: number, m: number) => { const from = `${y}-${String(m).padStart(2, '0')}-01`, end =new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10); return from > p.today ? null : metric(from, end > p.today ? p.today : end, false); };
+  return Array.from({ length: 12 }, (_, i) => ({ month: i + 1, current: month(year, i + 1), previous: month(year - 1, i + 1) }));
+}
 export function calculateFinance(entries: LedgerEntry[], categories: Record<string, string>, years: LedgerYear[], inventoryAccount: number | null, now = new Date()) {
   const p = financePeriods(now);
   const covered = (from: string, to: string) => {
@@ -45,7 +52,7 @@ export function calculateFinance(entries: LedgerEntry[], categories: Record<stri
   const inventory = currentYear && inventoryAccount !== null ? entries.filter(e => e.account === inventoryAccount && e.date >= currentYear.from && e.date <= p.today && e.type !== 'Ultimo').reduce((sum,e) => sum + e.minor,0) : null;
   return { periods: p, revenueMtd: metric(p.monthStart,p.today,true), revenueYtd: metric(p.yearStart,p.today,true),
     previousMtd: metric(p.priorMonthStart,p.previous,true), previousYtd: metric(p.priorYearStart,p.previous,true),
-    profitMtd: metric(p.monthStart,p.today,false), profitYtd: metric(p.yearStart,p.today,false), inventory };
+    profitMtd: metric(p.monthStart,p.today,false), profitYtd: metric(p.yearStart,p.today,false), inventory, profitMonths: profitMonths(p, metric) };
 }
 export function percentageChange(current: number | null, previous: number | null) {
   return current === null || previous === null || previous <= 0 ? null : (current - previous) / previous * 100;
