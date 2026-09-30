@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { ArrowUpRight, Banknote, Eye, ShoppingBag, RefreshCw, Info } from 'lucide-react';
+import { ArrowUpRight, Banknote, Eye, ShoppingBag, RefreshCw, Info, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { tier1Fetch } from '@/platform/transport';
 import { useWorkspace } from '@/platform/workspace';
@@ -71,6 +71,7 @@ export function Performance({ onIntegrations }: { onIntegrations: () => void }) 
       <PerformanceChart title="Omkostninger" icon={<ArrowUpRight className="size-5"/>} source="Dinero · Hele virksomheden" description="Bogførte omkostninger før skat, uden fradragsberettiget moms." color="#ba7046" year={year} monetary metric={expenseMonths ? { months: expenseMonths } : undefined} error={errors.finance} loading={loading && !finance && !errors.finance} note={sourceNote(finance?.startDate, finance?.checkedAt)} controls={
         <label className="grid min-w-0 gap-1 text-xs text-muted-foreground">Leverandør<select className="h-9 w-full max-w-full rounded-lg border border-border bg-white px-2 text-sm text-foreground sm:max-w-64" aria-label="Filtrér omkostninger efter leverandør" disabled={!finance} value={supplier} onChange={event => setSupplier(event.target.value)}><option value="all">Alle leverandører</option><option value="unassigned">Uden leverandør</option>{finance?.suppliers.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       }/>
+      <div className="min-w-0 xl:col-span-2"><PerformanceChart title="Overskud" icon={<Wallet className="size-5"/>} source="Dinero · Hele virksomheden" description="Resultat før skat pr. måned, som på Dashboardet." color="#6f8f4e" year={year} monetary metric={finance?.profit} error={errors.finance} loading={loading && !finance && !errors.finance} note={sourceNote(finance?.startDate, finance?.checkedAt)}/></div>
       </> : <p className="flex items-center gap-2 rounded-2xl border border-dashed border-[#e0d6c6] bg-white p-5 text-sm text-muted-foreground xl:col-span-2"><Info className="size-4 shrink-0"/>Omsætning og omkostninger kommer fra virksomhedens regnskab og kan kun ses af virksomhedens administratorer.</p>}
       <PerformanceChart title="Besøg" icon={<Eye className="size-5"/>} source={`Shopify · ${shopName}`} description="Besøg (sessioner) i webshoppens analyser." color="#37867b" year={year} metric={shop?.visits} error={errors.shop} loading={loading && !shop && !errors.shop} note={sourceNote(shop?.startDate, shop?.checkedAt)}/>
       <PerformanceChart title="Antal ordrer" icon={<ShoppingBag className="size-5"/>} source={`Shopify · ${shopName}`} description="Antal ordrer ifølge webshoppens salgsrapport." color="#567da3" year={year} metric={shop?.orders} error={errors.shop} loading={loading && !shop && !errors.shop} note={sourceNote(shop?.startDate, shop?.checkedAt)}/>
