@@ -79,7 +79,7 @@ export function Performance({ onIntegrations }: { onIntegrations: () => void }) 
   </div>;
 }
 
-function PerformanceChart({ title, source, description, icon, color, year, monetary = false, metric, error, loading, controls, note }: {
+export function PerformanceChart({ title, source, description, icon, color, year, monetary = false, metric, error, loading, controls, note }: {
   title: string; source: string; description: string; icon: ReactNode; color: string; year: number; monetary?: boolean;
   metric?: PerformanceMetric; error?: string; loading: boolean; controls?: ReactNode; note: string;
 }) {
