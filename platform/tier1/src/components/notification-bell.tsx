@@ -17,6 +17,8 @@ function sourceLabel(source:string){
 function when(value:string){return formatDateTime(value,value);}
 export function NotificationBell({onReporting}:{onReporting:()=>void}) {
   const [open,setOpen]=useState(false),[notices,setNotices]=useState<Notice[]>([]),[failures,setFailures]=useState<Failure[]>([]),[error,setError]=useState(''),[unseen,setUnseen]=useState(0),[loaded,setLoaded]=useState(false);
+  // Failures that were new when the list was opened stay under Nye fejl until it is closed, even once marked as seen.
+  const [openedFresh,setOpenedFresh]=useState<Set<string>>(new Set());
   const apply=(d:Payload)=>{setNotices(d.notifications);setUnseen((d.incidents?.warnings||0)+(d.incidents?.alarms||0));if(d.errors)setFailures(d.errors);setError('');setLoaded(true);};
   useEffect(()=>{
     const controller=new AbortController(); let running=false;
@@ -28,12 +30,13 @@ export function NotificationBell({onReporting}:{onReporting:()=>void}) {
   useEffect(()=>{
     if(!open||!loaded)return;
     const ids=failures.filter(f=>!f.seen).map(f=>f.id);if(!ids.length)return;
+    setOpenedFresh(current=>ids.every(id=>current.has(id))?current:new Set([...current,...ids]));
     let cancelled=false;
     void (async()=>{try{const r=await fetch('/api/notifications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'seen',ids})});const d=await r.json() as Payload;if(!r.ok)throw Error(d.error);if(!cancelled)setUnseen((d.incidents?.warnings||0)+(d.incidents?.alarms||0));}catch{if(!cancelled)setError('Fejlene kunne ikke markeres som set. Klokken nulstilles ved næste forsøg.');}})();
     return()=>{cancelled=true;};
   },[open,loaded,failures]);
-  const close=(next:boolean)=>{setOpen(next);if(!next)setFailures(current=>current.map(f=>({...f,seen:true})));};
-  const count=unseen+notices.length,fresh=failures.filter(f=>!f.seen),earlier=failures.filter(f=>f.seen);
+  const close=(next:boolean)=>{setOpen(next);if(!next){setFailures(current=>current.map(f=>({...f,seen:true})));setOpenedFresh(new Set());}};
+  const count=unseen+notices.length,isFresh=(f:Failure)=>!f.seen||openedFresh.has(f.id),fresh=failures.filter(isFresh),earlier=failures.filter(f=>!isFresh(f));
   const row=(f:Failure,highlight:boolean)=><li key={f.id} className={`rounded-xl border p-3 ${highlight?'border-red-200 bg-red-50/60':'bg-muted/20'}`}><div className="flex items-baseline justify-between gap-3"><p className="text-sm font-medium">{sourceLabel(f.source)}</p><time className="shrink-0 text-xs text-muted-foreground" dateTime={f.created_at}>{when(f.created_at)}</time></div><p className="mt-1 text-sm text-muted-foreground">{f.message||'Kørslen fejlede uden en nærmere besked.'}</p></li>;
   return <><button type="button" className="relative grid size-10 place-items-center rounded-full border bg-white hover:bg-muted" onClick={()=>setOpen(true)} aria-label={`Åbn notifikationer${count ? ': '+count+' nye fejl og beskeder' : ''}`}><Bell className="size-5"/>{count>0&&<span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[11px] font-bold text-white">{count>99?'99+':count}</span>}</button>
     <Dialog open={open} onOpenChange={close}><DialogContent className="max-h-[80vh] overflow-y-auto"><DialogHeader><DialogTitle>Notifikationer</DialogTitle><DialogDescription>Fejlede kørsler for webshoppen. Automatiske kørsler forsøges igen ved næste interval.</DialogDescription></DialogHeader>
