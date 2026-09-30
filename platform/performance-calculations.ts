@@ -1,4 +1,4 @@
-import { parseEntries, type LedgerYear } from './finance-calculations';
+import { parseEntries, resultCategories, type LedgerYear } from './finance-calculations';
 import type { MonthComparison } from './tier1/src/lib/performance';
 
 const guid = /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i;
@@ -37,7 +37,8 @@ export function parsePerformanceEntries(payload: unknown) {
   });
 }
 export function aggregateFinance(entries: ReturnType<typeof parsePerformanceEntries>, categories: Record<string, string>, ranges: LedgerYear[], year: number, today: string, start: string, contacts: Map<string, string>) {
-  const revenue = new Map<string, number>(), expenses = new Map<string, number>();
+  // Profit is the result before tax over all result accounts, the same as Overskud on the dashboard.
+  const revenue = new Map<string, number>(), expenses = new Map<string, number>(), profit = new Map<string, number>();
   const bySupplier = new Map<string, Map<string, number>>(), voucherContacts = new Map<string, string | null>();
   const ids = new Set<string>();
   for (const e of entries) {
@@ -58,6 +59,7 @@ export function aggregateFinance(entries: ReturnType<typeof parsePerformanceEntr
     const category = categories[e.account], month = e.date.slice(0, 7);
     if (![...expenseCategories, ...otherCategories].includes(category)) throw Error('En bogført konto mangler en entydig kategori i Dinero. Kontrollér kontoplanen.');
     if (category === 'Turnover') add(revenue, month, -e.minor);
+    if (resultCategories.includes(category)) add(profit, month, -e.minor);
     if (expenseCategories.includes(category)) {
       add(expenses, month, e.minor);
       const contact = e.contact || (e.voucher && voucherContacts.get(e.voucher)) || '';
@@ -67,7 +69,7 @@ export function aggregateFinance(entries: ReturnType<typeof parsePerformanceEntr
   }
   const series = (sums: Map<string, number>) => comparison(year, today, start, ranges, sums);
   return {
-    revenue: { months: series(revenue) }, expenses: { months: series(expenses) },
+    revenue: { months: series(revenue) }, expenses: { months: series(expenses) }, profit: { months: series(profit) },
     suppliers: [...bySupplier].filter(([id]) => id).map(([id, sums]) => ({ id, name: contacts.get(id) || `Ukendt/slettet leverandør (${id.slice(0, 8)})`, months: series(sums) })).sort((a, b) => a.name.localeCompare(b.name, 'da')),
     unassigned: series(bySupplier.get('') || new Map()),
   };

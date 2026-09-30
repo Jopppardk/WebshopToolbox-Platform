@@ -15,7 +15,7 @@ async function digest(value: string) {
 // Company-scoped, versioned read cache. No ledger, voucher, order or receipt writes.
 // A forced refresh (Opdatér) skips cached numbers older than a minute, so repeated clicks cannot hammer Dinero or Shopify.
 async function cached<T>(env: PlatformEnv, company: string, scope: unknown[], context: unknown[], read: () => Promise<T>, ttl: (data: T) => number = () => 15 * 60000, force = false): Promise<T> {
-  const db = env.PLATFORM_DB, key = 'performance:v1:' + await digest(JSON.stringify([env.PLATFORM_ENV, ...scope]));
+  const db = env.PLATFORM_DB, key = 'performance:v2:' + await digest(JSON.stringify([env.PLATFORM_ENV, ...scope]));
   const revision = await digest(JSON.stringify(context));
   const row = await db.prepare('SELECT setting_value FROM finance_state WHERE tenant=? AND setting_key=?').bind(company, key).first<{ setting_value: string }>();
   const previous = row ? JSON.parse(row.setting_value) : null;

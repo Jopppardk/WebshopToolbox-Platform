@@ -2,7 +2,7 @@ export type MonthComparison = { month: number; current: number | null; previous:
 export type PerformanceMetric = { months: MonthComparison[]; error?: string };
 export type PerformanceFinance = {
   year: number; checkedAt: string; startDate: string; currency: 'DKK';
-  revenue: PerformanceMetric; expenses: PerformanceMetric;
+  revenue: PerformanceMetric; expenses: PerformanceMetric; profit?: PerformanceMetric;
   suppliers: Array<{ id: string; name: string; months: MonthComparison[] }>;
   unassigned: MonthComparison[];
 };
