@@ -4,6 +4,7 @@ export type Workspace = {
   company: {id:string;name:string;role:string};
   webshops: Array<{id:string;name:string;status:string}>;
   webshopId: string|null;
+  demo?: boolean;
   choose: (id:string)=>void;
 };
 const Context = createContext<Workspace|null>(null);

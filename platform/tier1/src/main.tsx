@@ -3,7 +3,8 @@ import { createRoot } from 'react-dom/client';
 import Home from './app/page';
 import './app/globals.css';
 import './fonts/fonts.css';
-import { platformApi, portalRoot, selectWebshop, setActor } from './platform/transport';
+import { platformApi, portalRoot, selectWebshop, setActor, tier1Fetch } from './platform/transport';
+import { DemoBanner } from './platform/demo-banner';
 import { WorkspaceProvider, type Workspace } from './platform/workspace';
 import { SupportBanner } from './platform/support-banner';
 function App() {
@@ -24,7 +25,8 @@ function App() {
       const preferred=sessionStorage.getItem('toolbox-selected-shop');
       const selected=shops.find(shop=>shop.id===preferred)?.id || shops[0]?.id || null;
       selectWebshop(selected);
-      if(active)setWorkspace({user,company,webshops:shops,webshopId:selected,choose:()=>{}});
+      const demo=selected?await tier1Fetch('/api/runtime').then(r=>r.ok?r.json():{}).then((v:{demo?:boolean})=>!!v.demo).catch(()=>false):false;
+      if(active)setWorkspace({user,company,webshops:shops,webshopId:selected,demo,choose:()=>{}});
     })().catch(error=>{if(active)setError(error.message);});
     return ()=>{active=false;};
   },[]);
@@ -42,6 +44,6 @@ function App() {
     sessionStorage.setItem('toolbox-selected-shop',id);
     selectWebshop(id||null);setWorkspace({...workspace,webshopId:id||null});
   };
-  return <WorkspaceProvider value={{...workspace,choose}}><SupportBanner user={workspace.user}/><Home key={workspace.webshopId || 'none'}/></WorkspaceProvider>;
+  return <WorkspaceProvider value={{...workspace,choose}}><SupportBanner user={workspace.user}/>{workspace.demo&&<DemoBanner/>}<Home key={workspace.webshopId || 'none'}/></WorkspaceProvider>;
 }
 createRoot(document.getElementById('root')!).render(<App/>);

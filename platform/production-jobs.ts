@@ -32,7 +32,7 @@ export async function runProductionJobs(env:PlatformEnv){
 // or identity is used, and all adapters recheck company and webshop permissions.
 async function shopRows(env:PlatformEnv,only?:{company:string;shop:string}){
  return (await env.PLATFORM_DB.prepare(`SELECT w.company_id,w.id,COALESCE(p.preferences_json,'{}') preferences_json,p.revision,u.id actor_id,u.email,EXISTS(SELECT 1 FROM webshop_connections k WHERE k.company_id=w.company_id AND k.webshop_id=w.id AND k.provider='shopify' AND k.verified_at IS NOT NULL) shopify
- FROM webshops w JOIN companies c ON c.id=w.company_id AND c.status='active'
+ FROM webshops w JOIN companies c ON c.id=w.company_id AND c.status='active' AND c.demo=0
  LEFT JOIN tier1_preferences p ON p.company_id=w.company_id AND p.webshop_id=w.id
  JOIN users u ON u.id=(SELECT m.user_id FROM company_memberships m JOIN users a ON a.id=m.user_id
  WHERE m.company_id=w.company_id AND m.role='admin' AND a.status='active'

@@ -2,6 +2,7 @@ import {requireCompany,requireWebshop} from './auth';
 import {jsonBody} from './invitations';
 import {feedCatalog,generateFeed,type FeedConfig,type Selection} from './feed-source';
 import {feedFileNamePattern,slugify} from './tier1/src/lib/feed-name';
+import {demoFeed,isDemoCompany} from './demo';
 import {HttpError,reply,type PlatformEnv,type Actor} from './types';
 
 type Feed={id:string;company_id:string;webshop_id:string;name:string;file_name:string|null;service:string;config_json:string;enabled:number;public_token:string;revision:number;xml_key:string|null;item_count:number|null;generated_at:number|null;refresh_lock:string|null;lock_until:number;last_attempt:number;last_error:string|null};
@@ -58,7 +59,7 @@ async function refresh(env:PlatformEnv,f:Feed){
  const claim=await db.prepare('UPDATE product_feeds SET refresh_lock=?,lock_until=?,last_attempt=? WHERE id=? AND company_id=? AND webshop_id=? AND revision=? AND lock_until<=? AND last_attempt<=?').bind(lock,at+300,at,f.id,f.company_id,f.webshop_id,f.revision,at,at-30).run();
  if(claim.meta.changes!==1)throw new HttpError(409,'Feedet opdateres allerede eller er lige forsøgt. Vent 30 sekunder og prøv igen.');
  try{
-  const result=await generateFeed(env,f.company_id,f.webshop_id,JSON.parse(f.config_json));
+  const result=await isDemoCompany(env,f.company_id)?demoFeed(JSON.parse(f.config_json)):await generateFeed(env,f.company_id,f.webshop_id,JSON.parse(f.config_json));
   const key=`${env.PLATFORM_ENV}/companies/${f.company_id}/webshops/${f.webshop_id}/feeds/${f.id}/${f.revision}-${lock}.xml`;
   await env.PLATFORM_DOCUMENTS.put(key,result.xml,{httpMetadata:{contentType:'application/xml; charset=utf-8'}});
   const update=await db.prepare('UPDATE product_feeds SET xml_key=?,item_count=?,generated_at=?,last_error=NULL,refresh_lock=NULL,lock_until=0 WHERE id=? AND revision=? AND refresh_lock=?').bind(key,result.count,now(),f.id,f.revision,lock).run();
