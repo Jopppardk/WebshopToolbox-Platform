@@ -117,12 +117,16 @@ async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promi
  WHERE NOT EXISTS(SELECT 1 FROM platform_payout_documents d WHERE d.company_id=? AND d.webshop_id=? AND d.external_id=c.external_id)
  AND NOT EXISTS(SELECT 1 FROM production_attempts a WHERE a.company_id=? AND a.webshop_id=? AND a.job='reports' AND a.external_id=c.external_id AND a.next_attempt_at>?)
  ORDER BY c.occurred_at DESC LIMIT 5`).bind(company,id,company,id,company,id,company,id,Date.now()).all<{external_id:string}>()).results;
+    // Each payout is reported once in the bell; retries back off from 6 hours to at most a week.
     const failed:string[]=[];
     for(const row of pending){await owns();
      try{await generatePayoutReport(env,company,id,row.external_id);}
-     catch{failed.push(row.external_id);await db.prepare("INSERT INTO production_attempts(company_id,webshop_id,job,external_id,attempted_at,next_attempt_at,failures) VALUES(?,?,'reports',?,?,?,1) ON CONFLICT(company_id,webshop_id,job,external_id) DO UPDATE SET attempted_at=excluded.attempted_at,next_attempt_at=excluded.next_attempt_at,failures=production_attempts.failures+1").bind(company,id,row.external_id,Date.now(),Date.now()+6*3600000).run();}
+     catch(error){
+      const attempt=await db.prepare("INSERT INTO production_attempts(company_id,webshop_id,job,external_id,attempted_at,next_attempt_at,failures) VALUES(?,?,'reports',?,?,?,1) ON CONFLICT(company_id,webshop_id,job,external_id) DO UPDATE SET attempted_at=excluded.attempted_at,next_attempt_at=excluded.attempted_at+min(604800000,21600000*(production_attempts.failures+1)),failures=production_attempts.failures+1 RETURNING failures").bind(company,id,row.external_id,Date.now(),Date.now()+6*3600000).first<{failures:number}>();
+      if((attempt?.failures??1)===1){const provider=row.external_id.startsWith('flatpay:')?'Flatpay':'Shopify Payments',number=row.external_id.split(/[/:]/).pop();failed.push(`Udbetaling ${number} (${provider}): ${error instanceof HttpError?error.message:'Rapporten kunne ikke dannes.'}`);}
+     }
     }
-    if(failed.length)throw new HttpError(409,`${failed.length} udbetalingsrapport${failed.length===1?'':'er'} kunne ikke dannes automatisk. Prøv Generér rapport under Udbetalingsrapporter.`);
+    if(failed.length)throw new HttpError(409,(failed.length===1?'En udbetalingsrapport kunne ikke dannes automatisk. ':`${failed.length} udbetalingsrapporter kunne ikke dannes automatisk. `)+failed.join(' ')+' Prøv Generér rapport under Udbetalingsrapporter, når årsagen er rettet.');
    });
    const processRows=async(job:string,provider:string,module:string,kind:string,book:boolean,email=false):Promise<QueueResult>=>{
     const result:QueueResult={rows:0,failed:0};

@@ -21,6 +21,8 @@ export async function registerPayoutReport(env:PlatformEnv,company:string,shop:s
 }
 
 /** Builds and stores the payout report once. Used by the button, the automatic job and bookkeeping. */
+// The validators throw short Danish explanations; pass them on so the cause is visible.
+const reason=(error:unknown)=>error instanceof Error&&/^[A-ZÆØÅ][^\n]{0,200}$/.test(error.message)&&/[æøåÆØÅ]|Shopify|Flatpay|Udbetaling/.test(error.message)?': '+error.message.replace(/\.?$/,'.'):'.';
 export async function generatePayoutReport(env:PlatformEnv,company:string,shop:string,externalId:string){
  const db=env.PLATFORM_DB;
  if(!payoutReportId.test(externalId))throw new HttpError(400,'Vælg en udbetaling.');
@@ -33,7 +35,7 @@ export async function generatePayoutReport(env:PlatformEnv,company:string,shop:s
   const record=await db.prepare("SELECT payload_json FROM payment_records WHERE company_id=? AND webshop_id=? AND provider='flatpay' AND kind='payments' AND external_id=? AND paid=1").bind(company,shop,flatpay[1]).first<{payload_json:string}>();
   if(!record)throw new HttpError(404,'Hent Flatpay-udbetalingen først. Kun gennemførte udbetalinger har en rapport.');
   try{source=(await readFlatpayPayout(env,company,shop,flatpay[1],JSON.parse(record.payload_json).settlements)).source;bytes=await buildFlatpayReport(source,undefined,companyRow!.name);}
-  catch(error){if(error instanceof HttpError)throw error;throw new HttpError(409,'Flatpay-rapporten kunne ikke kontrolleres. Hent udbetalingen igen, og kontrollér Flatpay-forbindelsen. Ingen delvis rapport gemmes.');}
+  catch(error){if(error instanceof HttpError)throw error;throw new HttpError(409,'Flatpay-rapporten kunne ikke kontrolleres'+reason(error)+' Hent udbetalingen igen, og kontrollér Flatpay-forbindelsen. Ingen delvis rapport gemmes.');}
  }else{
   const record=await db.prepare("SELECT payload_json FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module='payouts' AND external_id=?").bind(company,shop,externalId).first<{payload_json:string}>();
   if(!record)throw new HttpError(404,'Hent udbetalingen først.');
@@ -42,7 +44,7 @@ export async function generatePayoutReport(env:PlatformEnv,company:string,shop:s
    const breakdown=payoutBreakdown(source.summary,source.net);
    source.transactions=await fetchPayoutTransactions(source.id,breakdown.currency,breakdown.net,await shopAccess(env,company,shop));
    bytes=await buildPayoutReport(source,companyRow!.name);
-  }catch{throw new HttpError(409,'Rapporten kunne ikke kontrolleres. Hent udbetalingen igen, og kontrollér Shopify Payments-adgang, status og afstemning. Ingen delvis rapport gemmes.');}
+  }catch(error){throw new HttpError(409,'Rapporten kunne ikke kontrolleres'+reason(error)+' Hent udbetalingen igen, og kontrollér Shopify Payments-adgang, status og afstemning. Ingen delvis rapport gemmes.');}
  }
  const doc=crypto.randomUUID(),key=`companies/${company}/webshops/${shop}/payout-reports/${doc}.pdf`;
  const claim=await db.prepare("INSERT INTO platform_payout_documents(company_id,webshop_id,external_id,id,status,r2_key,source_json) VALUES(?,?,?,?,'generating',?,?) ON CONFLICT DO NOTHING").bind(company,shop,externalId,doc,key,JSON.stringify(source)).run();
