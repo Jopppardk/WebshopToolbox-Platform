@@ -96,15 +96,25 @@ async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promi
    // Payment provider imports are read-only and run for every connection; switches only control bookkeeping.
    for(const connection of connections){
     const provider=connection.provider;
+    // ViaBill rate-limits its API and fetches every payout separately, so it is read at most every
+    // 30 minutes whatever the sync interval, and backs off (1 h doubling to 12 h) when it answers 429.
+    // A 429 is expected throttling, not a failure: it waits quietly instead of ringing the bell.
+    const paced=provider==='viabill',pace=paced?await cursor('viabill.pace'):{};
+    if(paced&&Number(pace.nextAt)>Date.now())continue;
+    let throttled=false;
     for(const kind of provider==='flatpay'?['payments','settlements','transactions']:provider==='pensopay'?['payments','settlements']:['payment','payout']){
+     if(throttled)break;
      await run('auto.import.'+provider+'.'+kind,async()=>{
       const job=provider+'.'+kind,stored=await cursor(job),today=new Date().toISOString().slice(0,10),boundary=[connection.start_date,await dataStartDate(env,company,id,provider)].sort().at(-1)!;
       const signature=JSON.stringify([connection.revision,boundary]),state=stored.scope===signature?stored:{};
       const from=state.start||boundary,end=[plusDay(from,30),today].sort()[0];if(from>today)return;
-      const result=await responseValue(await handlePayments(request({kind,start:from,end,cursor:state.cursor,includeUpcoming:true}),env,actor,company,id,provider,'sync'));
+      let result;
+      try{result=await responseValue(await handlePayments(request({kind,start:from,end,cursor:state.cursor,includeUpcoming:true}),env,actor,company,id,provider,'sync'));}
+      catch(error){if(paced&&error instanceof HttpError&&/HTTP 429/.test(error.message)){throttled=true;return;}throw error;}
       const next=result.next||null;await saveCursor(job,{scope:signature,start:next?from:end<today?plusDay(end,1):boundary,cursor:next});
      });
     }
+    if(paced){const wait=throttled?Math.min(12*3600000,Math.max(3600000,2*(Number(pace.wait)||0))):0;await saveCursor('viabill.pace',{nextAt:Date.now()+(throttled?wait:30*60000),wait});}
    }
    const packaging=await db.prepare('SELECT config_json FROM emballage_connections WHERE company_id=? AND webshop_id=?').bind(company,id).first<{config_json:string}>();
    if(packaging&&mode==='scheduled'){const config=JSON.parse(packaging.config_json),today=new Date().toISOString().slice(0,10),state=await cursor('packaging.history');if(config.startDate&&state.day!==today)await run('auto.packaging.history',async()=>{await syncPackaging(env,company,id,[config.startDate,await dataStartDate(env,company,id)].sort()[1],today);await saveCursor('packaging.history',{day:today});});}
