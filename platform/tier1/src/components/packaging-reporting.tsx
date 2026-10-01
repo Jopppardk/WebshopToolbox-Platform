@@ -23,6 +23,7 @@ type Quarter = {
   submittedAt?: string;
   reason: string;
   statusNote?: string;
+  warning?: string;
   canSubmit: boolean;
   unresolved: number;
 };
@@ -47,6 +48,7 @@ type Preview = {
 export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{revision?:number;onUpdated?:()=>void;onShowConsumption?:(start:string,end:string)=>void}) {
   const [data, setData] = useState<Overview | null>(null),
     [busy, setBusy] = useState(false),
+    [acceptIncomplete, setAcceptIncomplete] = useState(false),
     [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
     [preview, setPreview] = useState<(Preview & { id: string }) | null>(null);
@@ -64,6 +66,7 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
     action: string;
     quarter?: string;
     token?: string;
+    acceptIncomplete?: boolean;
   }) {
     setBusy(true);
     setError('');
@@ -79,7 +82,7 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
           receipt?: { submission_number: string };
         };
       if (!r.ok) throw Error(d.error);
-      if (body.action === 'preview') setPreview({ ...d, id: body.quarter! });
+      if (body.action === 'preview') { setAcceptIncomplete(false); setPreview({ ...d, id: body.quarter! }); }
       else {
         setPreview(null);
         setNotice(
@@ -209,7 +212,7 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
                         : ''}
                     </span>
                   ) : (
-                    q.reason || q.statusNote || 'Klar til indberetning'
+                    q.reason || q.statusNote || (q.warning ? <span className="text-amber-800">Klar til indberetning med advarsel: {q.warning}</span> : 'Klar til indberetning')
                   )}
                   {q.unresolved > 0 && <p className="mt-1 text-xs text-muted-foreground">{q.unresolved} linjer ignoreret</p>}
                 </td>
@@ -259,7 +262,7 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
                 <dd>{kg(preview.commercialKg * 1000)}</dd>
               </div>
             </dl>
-            {preview.ignoredLines > 0 && <p className="mb-3 text-sm text-muted-foreground">{preview.ignoredLines} linjer uden gyldig vægt eller afklaret indberetningspligt er udeladt.</p>}
+            {preview.ignoredLines > 0 && <div role="alert" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">Advarsel: {preview.ignoredLines} {preview.ignoredLines === 1 ? 'leveringslinje mangler' : 'leveringslinjer mangler'} emballageoplysninger</p><p className="mt-1">De kommer ikke med i indberetningen, så mængderne ovenfor kan være for lave. Udfyld vægten under fanen Varer for at få dem med.</p><label className="mt-3 flex items-start gap-2"><input type="checkbox" className="mt-0.5" checked={acceptIncomplete} onChange={e => setAcceptIncomplete(e.target.checked)} />Jeg indberetter alligevel uden disse linjer.</label></div>}
             <p className="mb-5 text-sm">
               {preview.testMode
                 ? 'Testen kontrollerer data uden at afslutte kvartalet.'
@@ -279,12 +282,13 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
                 Annullér
               </Button>
               <Button
-                disabled={busy}
+                disabled={busy || (preview.ignoredLines > 0 && !acceptIncomplete)}
                 onClick={() =>
                   void action({
                     action: 'submit',
                     quarter: preview.id,
                     token: preview.token,
+                    acceptIncomplete: preview.ignoredLines > 0 && acceptIncomplete,
                   })
                 }
               >

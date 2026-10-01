@@ -30,7 +30,9 @@ export async function productionEmballage(request:Request,env:PlatformEnv,actor:
  const result=await handlePackaging(new Request(url,{headers:request.headers}),env,actor,company,shop);if(!result.ok)return result;
  const value=await result.json() as any,p=value.period;
  if(!value.sync||value.sync.coverage_start>start||value.sync.coverage_end<end)fail('Hent komplet historik til indberetning først.');
- if(p.unresolved||p.unknownAudienceGrams||p.unknownReportabilityGrams||p.unconfiguredProductLines)fail('Afklar emballagelinjer uden fuldstændige oplysninger før indberetning.');
+ if(p.unknownAudienceGrams)fail('Afklar kundetypen (husholdning/erhverv) for alle emballagelinjer før indberetning.');
+ // Lines without weight or reportability are left out of the amounts. That is allowed, but must be accepted explicitly.
+ if(input.action==='submit'&&p.unresolved&&input.acceptIncomplete!==true)fail('Bekræft, at linjer uden emballageoplysninger ikke kommer med i indberetningen.');
  const schema=(await eiRequest<EISchema>(key,`/reports/${report.id}/schema`)).data,mapping=config.mappings?.[String(schema.form_version_id)],answers:Record<string,number>={};
  if(!mapping||!mapping.household||mapping.household===mapping.commercial)fail('Vælg forskellige kg-felter for husholdning og erhverv.');
  for(const audience of ['household','commercial']){
@@ -41,7 +43,7 @@ export async function productionEmballage(request:Request,env:PlatformEnv,actor:
  }
  if(schema.fields.some(f=>f.required&&!(f.name in answers)))fail('Formularen kræver yderligere oplysninger hos udbyderen.');
  const payload={answers},token=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({revision:saved.revision,schema,report,period:p,payload})))),n=>n.toString(16).padStart(2,'0')).join('');
- if(input.action==='preview')return reply({token,quarter:String(input.quarter),householdKg:p.householdGrams/1000,commercialKg:p.commercialGrams/1000,ignoredLines:0,testMode:context.api_key.is_test,organisation:context.organisation.name});
+ if(input.action==='preview')return reply({token,quarter:String(input.quarter),householdKg:p.householdGrams/1000,commercialKg:p.commercialGrams/1000,ignoredLines:p.unresolved||0,testMode:context.api_key.is_test,organisation:context.organisation.name});
  if(input.token!==token)fail('Data eller opsætning er ændret. Åbn kontrollen igen.');
  const latest=await db.prepare('SELECT revision FROM emballage_connections WHERE company_id=? AND webshop_id=?').bind(company,shop).first<any>();if(latest?.revision!==saved.revision)fail('Forbindelsen er ændret.');
  let claim=await saveReceipt(env,receiptKey,null,'sending',{token,requestKey:crypto.randomUUID(),payload});
