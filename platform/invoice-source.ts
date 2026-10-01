@@ -19,10 +19,21 @@ export const orderFields = `id name email createdAt updatedAt processedAt test e
 type Access={shop:string;accessToken:string};
 export async function orderQuery<T>(access: Access, query: string, variables: Record<string, unknown>, errorMessage = 'Shopify kunne ikke hente komplette ordredata. Kontrollér read_orders-adgangen og prøv igen.'): Promise<T> {
   if(!/^\s*query\b/.test(query))throw new HttpError(403,'Shopify-ændringer er blokeret i denne adapter.');
+  // Shopify's GraphQL cost bucket drains on long history reads. A THROTTLED answer is retried after the
+  // wait Shopify's throttle status implies (at most 4 times, 2-10 s each); any other error fails at once.
+  for (let attempt = 0; ; attempt++) {
   const response = await fetch(`https://${access.shop}/admin/api/2026-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': access.accessToken }, body: JSON.stringify({ query, variables }), signal: AbortSignal.timeout(25000), redirect: 'manual' });
-  const payload = await response.json() as { data?: T; errors?: unknown[] };
-  if (!response.ok || payload.errors?.length || !payload.data) throw new HttpError(409,errorMessage);
+  const payload = await response.json().catch(() => ({})) as { data?: T; errors?: Array<{ extensions?: { code?: string } }>; extensions?: { cost?: { requestedQueryCost?: number; throttleStatus?: { currentlyAvailable?: number; restoreRate?: number } } } };
+  const code = response.status === 429 ? 'THROTTLED' : payload.errors?.find(e => typeof e?.extensions?.code === 'string')?.extensions?.code;
+  if (code === 'THROTTLED' && attempt < 4) {
+    const cost = payload.extensions?.cost, missing = (cost?.requestedQueryCost ?? 100) - (cost?.throttleStatus?.currentlyAvailable ?? 0);
+    await new Promise(resolve => setTimeout(resolve, Math.min(10000, Math.max(2000, 1000 * missing / (cost?.throttleStatus?.restoreRate || 50)))));
+    continue;
+  }
+  // The error code (never the payload) is added so the cause is visible, e.g. THROTTLED or ACCESS_DENIED.
+  if (!response.ok || payload.errors?.length || !payload.data) throw new HttpError(409, errorMessage + (code && /^[A-Z_]{3,40}$/.test(code) ? ` (Shopify: ${code})` : response.ok ? '' : ` (Shopify: HTTP ${response.status})`));
   return payload.data;
+  }
 }
 class OrderChangedError extends HttpError { constructor(){super(409,'Ordren blev ændret under kontrollen. Prøv igen om lidt.');} }
 export async function completeOrder(order: InvoiceSource, access: Access): Promise<InvoiceSource> {
