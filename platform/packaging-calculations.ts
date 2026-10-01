@@ -10,7 +10,8 @@ export const normalizeReportable = (value: unknown): Reportable => {
 };
 export function ignoredPackaging(row: PackagingRow | ManualPackaging) {
   const grams = row.weightGrams === null ? null : row.weightGrams * ('quantity' in row ? row.quantity : 1);
-  return grams === null || !Number.isSafeInteger(grams) || grams < 0 || !['yes', 'no'].includes(row.reportable);
+  // 0 grams is an approved product without packaging: it is complete without a reportability answer.
+  return grams === null || !Number.isSafeInteger(grams) || grams < 0 || (grams > 0 && !['yes', 'no'].includes(row.reportable));
 }
 export function packagingPeriod(rows: PackagingRow[], manual: ManualPackaging[], start: string, end: string): PackagingPeriod {
   const selectedRows = rows.filter(row => !row.test && row.date >= start && row.date <= end), selectedManual = manual.filter(row => row.date >= start && row.date <= end);
@@ -44,7 +45,7 @@ export function packagingAudienceTotals(rows:PackagingRow[],manual:ManualPackagi
    const valid=grams!==null&&Number.isSafeInteger(grams)&&grams>=0;
    if(ignoredPackaging(row)){unresolved++;continue;}
    if(valid){if(row.audience==='commercial')commercialTotalGrams+=grams;else householdTotalGrams+=grams;}
-   if(row.reportable==='no')continue;
+   if(row.reportable==='no'||grams===0)continue;
    if(!valid||row.reportable!=='yes')unresolved++;
    if(!valid||row.reportable!=='yes')continue;
    if(row.audience==='commercial')commercialGrams+=grams;else householdGrams+=grams;
