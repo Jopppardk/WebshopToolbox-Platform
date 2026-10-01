@@ -11,6 +11,11 @@ import {dataStartDate,historyPolicy,providerStart} from './tier1-history';
 import {HttpError,type Actor,type PlatformEnv} from './types';
 const request=(body:unknown)=>new Request('https://portal.webshoptoolbox.dk/internal-job',{method:'POST',headers:{origin:'https://portal.webshoptoolbox.dk','content-type':'application/json'},body:JSON.stringify(body)});
 const plusDay=(value:string,days:number)=>new Date(Date.parse(value+'T12:00:00Z')+days*86400000).toISOString().slice(0,10);
+// On the payout date Shopify may report a payout as PAID before all its transactions are linked, and
+// Flatpay can lag too, so it cannot be reconciled yet. For 2 days after the payout date a failure only
+// means "not ready": it waits as Afventer and retries every 2 hours without ringing the bell.
+const payoutGraceMs=2*86400000,notReadyRetryMs=2*3600000;
+const payoutNotReady=(date:string)=>Date.now()-Date.parse(date.length===10?date+'T23:59:59Z':date)<payoutGraceMs;
 async function responseValue(response:Response){const value=await response.json() as any;if(!response.ok)throw new HttpError(response.status,value.error||'Jobbet kunne ikke gennemføres.');return value;}
 type Mode='scheduled'|'sales';
 type QueueResult={rows:number;failed:number};
@@ -121,17 +126,18 @@ async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promi
    // Payout reports for every paid payout, whether or not bookkeeping is on. Newest first, a few per
    // run; a failed report waits six hours before the next attempt instead of blocking the others.
    if(mode==='scheduled')await run('auto.reports',async()=>{
-    const pending=(await db.prepare(`SELECT external_id FROM (
+    const pending=(await db.prepare(`SELECT external_id,occurred_at FROM (
  SELECT s.external_id,s.occurred_at FROM operation_snapshots s WHERE s.company_id=? AND s.webshop_id=? AND s.module='payouts' AND json_extract(s.payload_json,'$.status')='PAID' AND json_extract(s.payload_json,'$.transactionType')='DEPOSIT'
  UNION ALL SELECT 'flatpay:'||p.external_id,p.occurred_at FROM payment_records p WHERE p.company_id=? AND p.webshop_id=? AND p.provider='flatpay' AND p.kind='payments' AND p.paid=1) c
  WHERE NOT EXISTS(SELECT 1 FROM platform_payout_documents d WHERE d.company_id=? AND d.webshop_id=? AND d.external_id=c.external_id)
  AND NOT EXISTS(SELECT 1 FROM production_attempts a WHERE a.company_id=? AND a.webshop_id=? AND a.job='reports' AND a.external_id=c.external_id AND a.next_attempt_at>?)
- ORDER BY c.occurred_at DESC LIMIT 5`).bind(company,id,company,id,company,id,company,id,Date.now()).all<{external_id:string}>()).results;
+ ORDER BY c.occurred_at DESC LIMIT 5`).bind(company,id,company,id,company,id,company,id,Date.now()).all<{external_id:string;occurred_at:string}>()).results;
     // Each payout is reported once in the bell; retries back off from 6 hours to at most a week.
     const failed:string[]=[];
     for(const row of pending){await owns();
      try{await generatePayoutReport(env,company,id,row.external_id);}
      catch(error){
+      if(payoutNotReady(row.occurred_at)){await db.prepare("INSERT INTO production_attempts(company_id,webshop_id,job,external_id,attempted_at,next_attempt_at,failures) VALUES(?,?,'reports',?,?,?,0) ON CONFLICT(company_id,webshop_id,job,external_id) DO UPDATE SET attempted_at=excluded.attempted_at,next_attempt_at=excluded.next_attempt_at").bind(company,id,row.external_id,Date.now(),Date.now()+notReadyRetryMs).run();continue;}
       const attempt=await db.prepare("INSERT INTO production_attempts(company_id,webshop_id,job,external_id,attempted_at,next_attempt_at,failures) VALUES(?,?,'reports',?,?,?,1) ON CONFLICT(company_id,webshop_id,job,external_id) DO UPDATE SET attempted_at=excluded.attempted_at,next_attempt_at=excluded.attempted_at+min(604800000,21600000*(production_attempts.failures+1)),failures=production_attempts.failures+1 RETURNING failures").bind(company,id,row.external_id,Date.now(),Date.now()+6*3600000).first<{failures:number}>();
       if((attempt?.failures??1)===1){const provider=row.external_id.startsWith('flatpay:')?'Flatpay':'Shopify Payments',number=row.external_id.split(/[/:]/).pop();failed.push(`Udbetaling ${number} (${provider}): ${error instanceof HttpError?error.message:'Rapporten kunne ikke dannes.'}`);}
      }
@@ -154,7 +160,7 @@ async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promi
  ORDER BY COALESCE(a.attempted_at,0),s.occurred_at,s.external_id LIMIT 10`).bind(job,company,id,...(provider==='shopify'?[module]:[module,provider]),...(module==='orders'?[plusDay(boundary,-1)]:[]),module==='orders'?'1970-01-01':plusDay(boundary,-1),Date.now()).all<any>()).results;
     for(const row of rows){await owns();const externalId=row.external_id;result.rows++;
      await run('auto.'+job,async()=>{
-      let succeeded=false;
+      let succeeded=false;const waiting=(job==='payouts'||job==='flatpay')&&payoutNotReady(row.occurred_at);let notReady=false;
       try{
        if(kind==='sale'||email){const checked=await responseValue(await handleInvoices(request({webshopId:id,externalId}),env,actor,company,'check'));const day=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Copenhagen',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(checked.invoice.date));if(day<boundary){succeeded=true;return;}await bookingDate(env,company,id,provider,checked.invoice.date);}
        else await bookingDate(env,company,id,provider,row.occurred_at);
@@ -167,12 +173,13 @@ async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promi
        }
        succeeded=true;
       }catch(error){
+       if(waiting){notReady=true;return;}
        result.failed++;
        try{await recordFailure(env,company,id,provider,module,externalId,'Automatisk behandling: '+job,error);}catch{/* Keep original error and durable claims. */}
        throw error;
       }finally{
        // Failed sources get a bounded cooldown instead of starving later orders.
-       await db.prepare('INSERT INTO production_attempts(company_id,webshop_id,job,external_id,attempted_at,next_attempt_at,failures) VALUES(?,?,?,?,?,?,?) ON CONFLICT(company_id,webshop_id,job,external_id) DO UPDATE SET attempted_at=excluded.attempted_at,next_attempt_at=excluded.next_attempt_at,failures=CASE WHEN excluded.failures=0 THEN 0 ELSE production_attempts.failures+1 END').bind(company,id,job,externalId,Date.now(),Date.now()+(succeeded?86400000:900000),succeeded?0:1).run();
+       await db.prepare('INSERT INTO production_attempts(company_id,webshop_id,job,external_id,attempted_at,next_attempt_at,failures) VALUES(?,?,?,?,?,?,?) ON CONFLICT(company_id,webshop_id,job,external_id) DO UPDATE SET attempted_at=excluded.attempted_at,next_attempt_at=excluded.next_attempt_at,failures=CASE WHEN excluded.failures=0 THEN 0 ELSE production_attempts.failures+1 END').bind(company,id,job,externalId,Date.now(),Date.now()+(succeeded?86400000:notReady?notReadyRetryMs:900000),succeeded||notReady?0:1).run();
       }
      });
     }
