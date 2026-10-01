@@ -68,7 +68,14 @@ async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promi
    const policy=await historyPolicy(env,company),start=await providerStart(env,company,id,'shopify'),scope=JSON.stringify([policy,start]);
    // Imports are read-only and run whenever Shopify is connected; automation switches only
    // control bookkeeping. Inventory is a full item list and stays behind its own switch.
-   const imports=mode==='scheduled'&&shop.shopify?['orders','payments','refunds','payouts',...(automation.inventory?['inventory']:[])]:[];
+   // Cadence: orders and refunds follow the chosen interval. Payouts (Shopify Payments and the payment
+   // providers) are read every hour, or every 15 minutes while a payout is due today or overdue; inventory
+   // every 4 hours; packaging history once a day (below). Synkronisér nu on a page always reads at once.
+   const lastRun=async(group:string)=>Number((await cursor('pace.'+group)).lastAt)||0,today=new Date().toISOString().slice(0,10);
+   const expecting=!!await db.prepare("SELECT 1 FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module='payouts' AND json_extract(payload_json,'$.status') IN ('SCHEDULED','IN_TRANSIT') AND substr(occurred_at,1,10)<=? UNION ALL SELECT 1 FROM payment_records WHERE company_id=? AND webshop_id=? AND provider='flatpay' AND external_id LIKE 'upcoming:%' AND substr(occurred_at,1,10)<=? LIMIT 1").bind(company,id,today,company,id,today).first();
+   const payoutsDue=mode==='scheduled'&&Date.now()-await lastRun('payouts')>=(expecting?15:60)*60000;
+   const inventoryDue=mode==='scheduled'&&!!automation.inventory&&Date.now()-await lastRun('inventory')>=4*3600000;
+   const imports=mode==='scheduled'&&shop.shopify?['orders','refunds',...(payoutsDue?['payments','payouts']:[]),...(inventoryDue?['inventory']:[])]:[];
    const importModule=(module:string,body:Record<string,unknown>)=>handleOperations(request(body),env,actor,company,id,module).then(responseValue);
    for(const module of imports){
     await run('auto.import.'+module,async()=>{
@@ -99,7 +106,7 @@ async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promi
    }
    const connections=mode!=='scheduled'?[]:(await db.prepare('SELECT provider,start_date,revision FROM payment_connections WHERE company_id=? AND webshop_id=?').bind(company,id).all<any>()).results;
    // Payment provider imports are read-only and run for every connection; switches only control bookkeeping.
-   for(const connection of connections){
+   for(const connection of payoutsDue?connections:[]){
     const provider=connection.provider;
     // ViaBill rate-limits its API and fetches every payout separately, so it is read at most every
     // 30 minutes whatever the sync interval, and backs off (1 h doubling to 12 h) when it answers 429.
@@ -122,6 +129,8 @@ async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promi
     if(paced){const wait=throttled?Math.min(12*3600000,Math.max(3600000,2*(Number(pace.wait)||0))):0;await saveCursor('viabill.pace',{nextAt:Date.now()+(throttled?wait:30*60000),wait});}
    }
    const packaging=await db.prepare('SELECT config_json FROM emballage_connections WHERE company_id=? AND webshop_id=?').bind(company,id).first<{config_json:string}>();
+   if(payoutsDue)await saveCursor('pace.payouts',{lastAt:Date.now()});
+   if(inventoryDue)await saveCursor('pace.inventory',{lastAt:Date.now()});
    if(packaging&&mode==='scheduled'){const config=JSON.parse(packaging.config_json),today=new Date().toISOString().slice(0,10),state=await cursor('packaging.history');if(config.startDate&&state.day!==today)await run('auto.packaging.history',async()=>{await syncPackaging(env,company,id,[config.startDate,await dataStartDate(env,company,id)].sort()[1],today);await saveCursor('packaging.history',{day:today});});}
    // Payout reports for every paid payout, whether or not bookkeeping is on. Newest first, a few per
    // run; a failed report waits six hours before the next attempt instead of blocking the others.
