@@ -206,6 +206,7 @@ export async function demoTier1(request: Request, path: string): Promise<Respons
       return reply(demoPerformance(path.endsWith('finance') ? 'finance' : 'shop', year));
     }
     if (path === '/shopify/inventory' && !url.searchParams.has('history')) return reply(demoInventory());
+    if (path === '/emballage/products') return reply({ writes: true, canWrite: true, products: demoProducts.map(p => ({ id: 'gid://shopify/Product/' + (63000 + p.id), title: p.title, status: 'ACTIVE', weightGrams: [6, 9, 12].includes(p.id) ? null : p.id === 4 ? 0 : Math.round(p.weight * 0.18), reportable: [6, 9, 12].includes(p.id) || p.id === 4 ? 'unknown' : 'yes', openLines: [6, 9, 12].includes(p.id) ? 3 : 0 })) });
     if (path === '/feeds/catalog') {
       const q = (url.searchParams.get('q') || '').toLocaleLowerCase('da'), kind = url.searchParams.get('kind');
       const items = kind === 'collections' ? demoCollections : demoProducts.map(p => ({ id: 'gid://shopify/Product/' + (63000 + p.id), title: p.title }));
