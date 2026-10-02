@@ -13,7 +13,7 @@ import {existingPayoutReport,registerPayoutReport} from './documents';
 import {buildFlatpayReport} from './flatpay-report';
 import {HttpError,type Actor,type PlatformEnv} from './types';
 const fail=(message:string):never=>{throw new HttpError(409,message);};
-const num=(value:unknown)=>{const n=Number(String(value||'').match(/^\d+/)?.[0]);if(!Number.isSafeInteger(n)||n<=0)fail('Vaelg gyldige konti i kontoplanen.');return n;};
+const num=(value:unknown)=>{const n=Number(String(value||'').match(/^\d+/)?.[0]);if(!Number.isSafeInteger(n)||n<=0)fail('Vælg gyldige konti i kontoplanen.');return n;};
 async function chartFor(ctx:BookingContext,accounts:number[]){
  const chart=await readDineroAccounts(ctx.credentials);
  if(new Set(accounts).size!==accounts.length||accounts.some(n=>!chart.some(a=>Number(a.number)===n&&!a.hidden&&!a.vatCode)))fail('Kontiene skal være forskellige, aktive og uden moms i Dinero.');
@@ -51,7 +51,7 @@ async function refund(ctx:BookingContext):Promise<PreparedBooking>{
  const {env,company,shop,id}=ctx,access=await shopAccess(env,company,shop);
  const result=await orderQuery<{node:any}>(access,'query ToolboxProductionRefund($id:ID!){node(id:$id){... on ShopifyPaymentsBalanceTransaction{id type test transactionDate amount{amount currencyCode} associatedOrder{id name} sourceOrderTransactionId}}}',{id});
  const item=result.node;if(item?.id!==id||item.type!=='REFUND'||item.test||item.amount?.currencyCode!=='DKK'||!item.associatedOrder?.id||!item.sourceOrderTransactionId)fail('Refunderingen mangler sikre Shopify-kontroldata.');
- const gross=-minorUnits(item.amount.amount,'DKK');if(gross<=0)fail('Ugyldigt refunderingsbeloeb.');
+ const gross=-minorUnits(item.amount.amount,'DKK');if(gross<=0)fail('Ugyldigt refunderingsbeløb.');
  const sourceId=String(item.sourceOrderTransactionId);if(!/^\d{1,30}$/.test(sourceId)||(typeof item.sourceOrderTransactionId==='number'&&!Number.isSafeInteger(item.sourceOrderTransactionId)))fail('Ugyldigt kilde-ID på refunderingen.');
  const transactionId='gid://shopify/OrderTransaction/'+sourceId;
  const details=await orderQuery<{order:any}>(access,`query ToolboxRefundDetails($id:ID!){order(id:$id){refunds{id processedAt refundLineItems(first:100){nodes{subtotalSet{shopMoney{amount currencyCode}} totalTaxSet{shopMoney{amount currencyCode}}} pageInfo{hasNextPage}} refundShippingLines(first:100){nodes{subtotalAmountSet{shopMoney{amount currencyCode}} taxAmountSet{shopMoney{amount currencyCode}}} pageInfo{hasNextPage}} orderAdjustments(first:100){nodes{amountSet{shopMoney{amount currencyCode}} taxAmountSet{shopMoney{amount currencyCode}}} pageInfo{hasNextPage}} transactions(first:100){nodes{id kind status test amountSet{shopMoney{amount currencyCode}}} pageInfo{hasNextPage}}}}}`,{id:item.associatedOrder.id});
@@ -65,7 +65,7 @@ async function refund(ctx:BookingContext):Promise<PreparedBooking>{
  r.refundLineItems.nodes.forEach((x:any)=>add('goods',x.subtotalSet.shopMoney,x.totalTaxSet.shopMoney));r.refundShippingLines.nodes.forEach((x:any)=>add('shipping',x.subtotalAmountSet.shopMoney,x.taxAmountSet.shopMoney));r.orderAdjustments.nodes.forEach((x:any)=>add('services',x.amountSet.shopMoney,x.taxAmountSet.shopMoney));
  const date=await bookingDate(env,company,shop,'shopify',r.processedAt),mapping=JSON.parse(ctx.mapping.accounts_json);
  mapping.vatCode=String(mapping.vatCode||'').split(' ')[0];mapping.noVatCode=String(mapping.noVatCode||'').split(' ')[0].toLowerCase();
- if(parts.some(p=>p.tax>0)&&mapping.vatCode!=='U25'||parts.some(p=>p.tax===0)&&mapping.noVatCode!=='none')fail('Vaelg U25 og eksplicit ingen moms til refunderingerne.');
+ if(parts.some(p=>p.tax>0)&&mapping.vatCode!=='U25'||parts.some(p=>p.tax===0)&&mapping.noVatCode!=='none')fail('Vælg U25 og eksplicit ingen moms til refunderingerne.');
  const proposal=refundVoucher({transactionId:id,orderName:item.associatedOrder.name,date,gross,parts},mapping);
  const chart=await readDineroAccounts(ctx.credentials);
  for(const line of proposal.voucher.Lines){const account=chart.find(a=>Number(a.number)===line.AccountNumber&&!a.hidden);if(!account||(account.vatCode||'none').toLowerCase()!==line.AccountVatCode.toLowerCase())fail('Refunderingskonto eller momskode stemmer ikke med Dinero.');}
