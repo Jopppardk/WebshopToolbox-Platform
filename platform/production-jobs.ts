@@ -6,7 +6,7 @@ import {handlePayments} from './payments';
 import {handleProductionSale} from './production-sales';
 import {handleProductionOther} from './production-proposals';
 import {generatePayoutReport} from './documents';
-import {fillOrderMarkets} from './order-markets';
+import {domesticOrderSql,fillOrderMarkets} from './order-markets';
 import {productionWrites,bookingDate} from './production-policy';
 import {dataStartDate,historyPolicy,providerStart} from './tier1-history';
 import {HttpError,type Actor,type PlatformEnv} from './types';
@@ -161,7 +161,8 @@ async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promi
     if(!sourceDate||!dineroDate)throw new HttpError(409,'Gem bogføringsstart for integrationen og Dinero.');
     const boundary=[sourceDate,dineroDate].sort()[1];
     const table=provider==='shopify'?'operation_snapshots':'payment_records',filter=provider==='shopify'?'s.module=?':'s.kind=? AND s.provider=?';
-    const eligible=module==='orders'?" AND COALESCE(json_extract(s.payload_json,'$.test'),0)=0 AND json_extract(s.payload_json,'$.cancelledAt') IS NULL AND json_extract(s.payload_json,'$.displayFulfillmentStatus')='FULFILLED' AND substr((SELECT max(json_extract(f.value,'$.createdAt')) FROM json_each(s.payload_json,'$.fulfillments') f WHERE json_extract(f.value,'$.status')='SUCCESS'),1,10)>=?"
+    // Orders wait until their market is known, and only domestic ones are invoiced, mailed or booked (see order-markets.ts).
+    const eligible=module==='orders'?" AND "+domesticOrderSql+" AND COALESCE(json_extract(s.payload_json,'$.test'),0)=0 AND json_extract(s.payload_json,'$.cancelledAt') IS NULL AND json_extract(s.payload_json,'$.displayFulfillmentStatus')='FULFILLED' AND substr((SELECT max(json_extract(f.value,'$.createdAt')) FROM json_each(s.payload_json,'$.fulfillments') f WHERE json_extract(f.value,'$.status')='SUCCESS'),1,10)>=?"
      // Payouts are only booked once paid out; upcoming ones are skipped instead of counted as failures.
      :module==='payouts'?" AND json_extract(s.payload_json,'$.status')='PAID'":provider==='flatpay'&&module==='payments'?" AND json_extract(s.payload_json,'$.paidDate') IS NOT NULL":'';
     const rows=(await db.prepare(`SELECT s.external_id,s.occurred_at FROM ${table} s

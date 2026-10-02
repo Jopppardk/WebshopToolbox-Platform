@@ -6,6 +6,7 @@ import {salesDraft} from './sales-preview';
 import {voucherFor} from '../lib/dinero-sale';
 import {handleProductionBooking,type BookingContext} from './production-booking';
 import {bookingDate} from './production-policy';
+import {foreignHold,isForeignOrder} from './order-markets';
 import {HttpError,type Actor,type PlatformEnv} from './types';
 export {bookingDate,productionWrites} from './production-policy';
 export async function handleProductionSale(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string){
@@ -13,6 +14,7 @@ export async function handleProductionSale(request:Request,env:PlatformEnv,actor
 }
 async function prepareSale({env,company,shop,id,credentials,mapping,prefs}:BookingContext){
  const db=env.PLATFORM_DB;
+ if(await isForeignOrder(db,company,shop,id))throw new HttpError(409,foreignHold);
  const order=await loadCompleteOrder(id,await shopAccess(env,company,shop),checkInvoice),invoice=checkInvoice(order);
  const date=await bookingDate(env,company,shop,'shopify',shipmentDate(order));
  const automation=JSON.parse(prefs.preferences_json).automation,book=automation?.salesBookDinero===true;
