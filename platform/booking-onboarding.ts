@@ -5,11 +5,14 @@ import { seal, unseal } from './connections';
 import { jsonBody } from './invitations';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 
-// Shopify's updatedAt only drives the incremental sync; it changes on any edit and says nothing about the booked content.
+// Shopify's updatedAt only drives the incremental sync and says nothing about the booked content. A refund (or a
+// return) changes the payment status, the refunded amount and the current total, but it is booked as its own
+// voucher and leaves the booked sale correct, so those fields do not make the sale "changed". A cancellation does.
+const volatile=['updatedAt','displayFinancialStatus','totalRefundedSet','currentTotalPriceSet'];
 export function sameSource(a?:string|null,b?:string|null){
  if(a===b)return true;
  if(!a||!b)return false;
- try{const strip=(v:string)=>{const o=JSON.parse(v);if(o&&typeof o==='object')delete o.updatedAt;return JSON.stringify(o);};return strip(a)===strip(b);}catch{return false;}
+ try{const strip=(v:string)=>{const o=JSON.parse(v);if(o&&typeof o==='object')for(const key of volatile)delete o[key];return JSON.stringify(o);};return strip(a)===strip(b);}catch{return false;}
 }
 
 export function onboardingStatus(date:string, sourceDate:string, dineroDate:string, receipt?:{voucher_status:string;source_json:string}, sourceJson?:string) {
