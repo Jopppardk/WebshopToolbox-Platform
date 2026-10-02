@@ -3,6 +3,7 @@ import {PDFDocument} from 'pdf-lib';
 import {invoiceDesign,exampleInvoice} from './invoice-design';
 import { historyPolicy } from './tier1-history';
 import { requireCompany, requireWebshop } from './auth';
+import { foreignHold, isForeignOrder } from './order-markets';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 import { jsonBody } from './invitations';
 import { handleMail, sendCustomerInvoice } from './mail';
@@ -97,6 +98,7 @@ async function invoices(request:Request,env:PlatformEnv,actor:Actor,company:stri
  if(!['generate','check','test','send'].includes(action)||request.method!=='POST')throw new HttpError(404,'Fakturafunktionen findes ikke.');
  const source=await db.prepare('SELECT external_id FROM invoice_orders WHERE company_id=? AND webshop_id=? AND external_id=? AND created_at>=?').bind(company,shop,id,cutoff(s)).first();
  if(!source)throw new HttpError(404,'Hent ordren fra Shopify først; den skal ligge inden for din historik.');
+ if(await isForeignOrder(db,company,shop,id))throw new HttpError(409,foreignHold);
  const order=await loadCompleteOrder(id,await shopAccess(env,company,shop),checkInvoice);
  if(order.createdAt<cutoff(s))throw new HttpError(409,'Ordren ligger uden for historikken.');
  const checked=checkInvoice(order),fingerprint=await invoiceFingerprint(checked);
