@@ -9,7 +9,7 @@ import { COMPANY_NAME, DEMO_COMPANY, DEMO_EMAIL, DEMO_SHOP, DEMO_USER, ORGANIZAT
 import type { PlatformEnv } from './types';
 
 // Children before parents, so foreign keys hold. The company, user and webshop rows are kept.
-export const demoTables = ['operation_acknowledgements', 'record_events', 'payment_records', 'payment_connections', 'operation_runs', 'operation_snapshots', 'invoice_orders', 'platform_invoices',
+export const demoTables = ['order_markets', 'operation_acknowledgements', 'record_events', 'payment_records', 'payment_connections', 'operation_runs', 'operation_snapshots', 'invoice_orders', 'platform_invoices',
   'platform_payout_documents', 'production_receipts', 'production_jobs', 'production_attempts', 'booking_start_dates', 'tier1_preferences', 'product_feeds', 'feed_folders', 'emballage_connections',
   'packaging_snapshots', 'packaging_sync', 'platform_packaging', 'platform_packaging_prices', 'stocktakes', 'accounting_reconciliations', 'source_records', 'webshop_connections', 'accounting_connections',
   'accounting_mapping', 'company_accounting', 'company_integrations', 'integration_history', 'invoice_settings', 'company_mail', 'mail_test_deliveries', 'finance_ledger', 'support_ticket_messages',
@@ -53,6 +53,9 @@ export async function resetDemo(env: PlatformEnv, today = danishDate()) {
     const snapshot = JSON.stringify(orderSnapshot(o));
     records.push(db.prepare("INSERT INTO operation_snapshots(company_id,webshop_id,module,external_id,occurred_at,payload_json) VALUES(?,?,'orders',?,?,?)").bind(DEMO_COMPANY, DEMO_SHOP, o.id, o.createdAt, snapshot));
     records.push(db.prepare('INSERT INTO invoice_orders(company_id,webshop_id,external_id,name,created_at,payload_json) VALUES(?,?,?,?,?,?)').bind(DEMO_COMPANY, DEMO_SHOP, o.id, o.name, o.createdAt, snapshot));
+    // Every fifth order went to Sweden and was paid in SEK (fictional rate 1,45).
+    const swedish = Number(o.name.slice(1)) % 5 === 0;
+    records.push(db.prepare('INSERT INTO order_markets(company_id,webshop_id,external_id,country,currency,presentment_total) VALUES(?,?,?,?,?,?)').bind(DEMO_COMPANY, DEMO_SHOP, o.id, swedish ? 'SE' : 'DK', swedish ? 'SEK' : 'DKK', ((swedish ? 1.45 : 1) * (o.cancelledAt ? 0 : o.totalMinor - o.refundedMinor) / 100).toFixed(2)));
     if (!o.fulfilledAt) continue;
     // Orders fulfilled more than a day ago are booked; the newest wait for the next run.
     if (Date.parse(o.fulfilledAt) < Date.parse(today + 'T00:00:00Z')) records.push(db.prepare("INSERT INTO production_receipts(company_id,webshop_id,provider,module,external_id,destination,phase,version,payload_json) VALUES(?,?,'shopify','orders',?,?,'booked','demo',?)").bind(DEMO_COMPANY, DEMO_SHOP, o.id, ORGANIZATION, JSON.stringify({ sourceJson: snapshot, voucher: 'Demo-bilag ' + o.name })));

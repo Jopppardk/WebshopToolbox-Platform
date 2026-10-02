@@ -34,6 +34,7 @@ import {hasRequiredIntegration,integrationRequirements,supportedModules,type Int
 import { useSyncStatus } from '@/components/sync-status';
 import { syncIntervals } from '@/lib/sync-schedule';
 import { processedSummary } from '@/lib/order-processing';
+import { CountryFlag, countryName } from '@/components/country-flag';
 import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -89,6 +90,7 @@ type OrderView = {
   lines?: Array<{ name: string; quantity: number; discountedTotalSet: { shopMoney: { amount: string; currencyCode: string } } }>;
   shippingLines?: Array<{ title: string; discountedPriceSet: { shopMoney: { amount: string; currencyCode: string } } }>;
   paymentProvider?: string; subtotal?: string; tax?: string; paymentStatus?: string | null;
+  country?: string | null; customerCurrency?: string | null; customerTotal?: string | null;
 };
 
 export default function Home() {
@@ -111,6 +113,7 @@ export default function Home() {
   const [salesOrders, setSalesOrders] = useState<OrderView[]>([]);
   const [ordersToday, setOrdersToday] = useState<number | null>(null);
   const [orderPeriod, setOrderPeriod] = useState<OrderPeriod>('all');
+  const [orderCountry, setOrderCountry] = useState(''), [orderCountries, setOrderCountries] = useState<string[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [orderOffset, setOrderOffset] = useState(0);
   const [orderTotal, setOrderTotal] = useState(0);
@@ -158,15 +161,15 @@ export default function Home() {
     if(connections===null || !connections.has('shopify') || (view!=='orders' && view!=='invoices'))return;
     const controller = new AbortController();
     setOrdersLoading(true);
-    fetch(`/api/shopify/orders?offset=${orderOffset}&limit=${orderPageSize}&period=${activePeriod}`, { signal: controller.signal, cache: 'no-store' })
-      .then(async response => { const data = await response.json() as { orders: OrderView[]; total: number; today?: number; error?: string }; if (!response.ok) throw new Error(data.error || 'Ordrer kunne ikke indlæses'); return data; })
+    fetch(`/api/shopify/orders?offset=${orderOffset}&limit=${orderPageSize}&period=${activePeriod}${view === 'orders' && orderCountry ? '&country=' + orderCountry : ''}`, { signal: controller.signal, cache: 'no-store' })
+      .then(async response => { const data = await response.json() as { orders: OrderView[]; total: number; today?: number; countries?: string[]; error?: string }; if (!response.ok) throw new Error(data.error || 'Ordrer kunne ikke indlæses'); return data; })
       .then((data) => {
-        if (!controller.signal.aborted && Array.isArray(data.orders)) { if (orderOffset > 0 && orderOffset >= data.total) { setOrderOffset(Math.max(0, Math.ceil(data.total / orderPageSize) - 1) * orderPageSize); return; } setSalesOrders(data.orders); setOrderTotal(data.total || 0); setOrdersToday(data.today ?? null); setOrderError(''); }
+        if (!controller.signal.aborted && Array.isArray(data.orders)) { if (orderOffset > 0 && orderOffset >= data.total) { setOrderOffset(Math.max(0, Math.ceil(data.total / orderPageSize) - 1) * orderPageSize); return; } setSalesOrders(data.orders); setOrderTotal(data.total || 0); setOrderCountries(data.countries || []); setOrdersToday(data.today ?? null); setOrderError(''); }
       })
       .catch(error => { if (!controller.signal.aborted) setOrderError(error.message || 'Ordrer kunne ikke indlæses'); })
       .finally(() => { if (!controller.signal.aborted) setOrdersLoading(false); });
     return () => controller.abort();
-  }, [connections, orderOffset, orderRevision, syncState.revision, view, activePeriod, orderPageSize]);
+  }, [connections, orderOffset, orderRevision, syncState.revision, view, activePeriod, orderPageSize, orderCountry]);
   const syncOrders = async () => {
     setSyncingOrders(true);
     try {
@@ -415,6 +418,7 @@ export default function Home() {
                   />
                 </div>
                 <label className="flex w-full flex-col gap-1.5 text-sm sm:w-56"><span>Periode</span><NativeSelect aria-label="Periode for salg" value={orderPeriod} onChange={event => { setOrderPeriod(event.target.value as OrderPeriod); setOrderOffset(0); setSalesOrders([]); setOrderTotal(0); setOrderError(''); }}>{orderPeriods.map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}</NativeSelect></label>
+                {orderCountries.length > 1 && <label className="flex w-full flex-col gap-1.5 text-sm sm:w-48"><span>Land</span><NativeSelect aria-label="Land for salg" value={orderCountry} onChange={event => { setOrderCountry(event.target.value); setOrderOffset(0); setSalesOrders([]); setOrderTotal(0); setOrderError(''); }}><NativeSelectOption value="">Alle lande</NativeSelectOption>{orderCountries.map(code => <NativeSelectOption key={code} value={code}>{countryName(code)}</NativeSelectOption>)}<NativeSelectOption value="unknown">Ukendt land</NativeSelectOption></NativeSelect></label>}
               </div>
               <Table>
                 <TableHeader>
@@ -536,7 +540,7 @@ function OrderRow({ order, onBooked }: { order: OrderView; onBooked: () => void 
   return (
     <TableRow className={state === 'Fejlet' ? 'bg-red-50/35' : ''}>
       <TableCell className="pl-5 font-semibold text-[#365f08]">
-        {order.id}
+        <span className="inline-flex items-center gap-2">{order.country ? <CountryFlag code={order.country} /> : <span className="inline-block w-5" aria-hidden="true" />}{order.id}</span>
       </TableCell>
       <TableCell className="text-muted-foreground">{order.date}</TableCell>
       <TableCell>{order.paymentProvider || 'Afventer opdatering'}</TableCell>
@@ -548,6 +552,7 @@ function OrderRow({ order, onBooked }: { order: OrderView; onBooked: () => void 
       </TableCell>
       <TableCell className="text-right font-medium tabular-nums">
         {order.amount} {order.currency || 'DKK'}
+        {order.customerTotal && <span className="block text-xs font-normal text-muted-foreground">Kunden betalte {order.customerTotal}</span>}
       </TableCell>
       <TableCell className="text-muted-foreground">{order.realized}</TableCell>
       <TableCell>
