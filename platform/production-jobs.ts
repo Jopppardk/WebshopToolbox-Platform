@@ -6,6 +6,7 @@ import {handlePayments} from './payments';
 import {handleProductionSale} from './production-sales';
 import {handleProductionOther} from './production-proposals';
 import {generatePayoutReport} from './documents';
+import {fillOrderMarkets} from './order-markets';
 import {productionWrites,bookingDate} from './production-policy';
 import {dataStartDate,historyPolicy,providerStart} from './tier1-history';
 import {HttpError,type Actor,type PlatformEnv} from './types';
@@ -194,6 +195,8 @@ async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promi
     }
     return result;
    };
+   // Country and currency for new orders (and, in portions, older ones) right after they are imported.
+   if(shop.shopify)await run('auto.import.markets',async()=>{await fillOrderMarkets(env,company,id);});
    if(automation.sales)await run('auto.sales.queue',async()=>{summary.sales=await processRows('sales','shopify','orders','sale',automation.salesBookDinero);});
    if(automation.refunds&&mode==='scheduled')await run('auto.refunds.queue',()=>processRows('refunds','shopify','refunds','refund',automation.refundsBookDinero));
    if(automation.payouts&&mode==='scheduled'){await run('auto.payouts.queue',()=>processRows('payouts','shopify','payouts','payout',automation.payoutsBookDinero));if(connections.some(c=>c.provider==='flatpay'))await run('auto.flatpay.queue',()=>processRows('flatpay','flatpay','payments','flatpay',automation.payoutsBookDinero));}
