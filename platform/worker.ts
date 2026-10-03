@@ -13,6 +13,7 @@ import { onboarding, saveProfile } from './invitations';
 import { authenticate } from './auth';
 import { handleAdmin } from './admin';
 import { assertTestRuntime, scheduled } from './safety';
+import { logUnexpected } from './error-log';
 import { HttpError, reply, type PlatformEnv } from './types';
 
 async function asset(request:Request,env:PlatformEnv,admin=false,tier1Admin=false){
@@ -214,8 +215,9 @@ export default {
             409,
           ),
         );
+      const errorId = logUnexpected(error, request);
       return secure(
-        reply({ error: 'Handlingen kunne ikke gennemføres.' }, 500),
+        reply({ error: `Handlingen kunne ikke gennemføres. Fejl-id: ${errorId}.`, errorId }, 500),
       );
     }
   },
