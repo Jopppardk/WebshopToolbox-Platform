@@ -80,6 +80,7 @@ export async function commitStocktake(env:PlatformEnv,actor:Actor,company:string
   claim={phase:'prepared',version,payload:claimPayload};
  }else claim=await saveReceipt(env,receiptKey,null,'prepared',claimPayload);
  claim=await saveReceipt(env,receiptKey,claim,'creating',claim.payload);
+ let released=false;
  try{
   if(!reconcile){
   const query='mutation SetStocktake($input:InventorySetQuantitiesInput!,$key:String!) { inventorySetQuantities(input:$input) @idempotent(key:$key) { inventoryAdjustmentGroup { createdAt } userErrors { message } } }';
@@ -90,7 +91,19 @@ export async function commitStocktake(env:PlatformEnv,actor:Actor,company:string
   claim=await saveReceipt(env,receiptKey,claim,'creating',{...claim.payload,shopifyUpdated:true});
   }
   if(!value.voucher){claim=await saveReceipt(env,receiptKey,claim,'booked',claim.payload);return reply({phase:'booked',message:'Lagerantal opdateret. Værdien er uændret; intet finansbilag oprettet.'});}
-  const expected=[{net:-value.adjustmentMinor,tax:0,gross:-value.adjustmentMinor}],created=await client('vouchers/manuel','POST',value.voucher) as any;
+  const expected=[{net:-value.adjustmentMinor,tax:0,gross:-value.adjustmentMinor}];
+  let created:any;
+  try{created=await client('vouchers/manuel','POST',value.voucher);}
+  catch(e){
+   // A 4xx answer is Dinero refusing the voucher: nothing was created. A reconciliation has touched nothing else,
+   // so its claim is released and the reason shown. Timeouts, 408, 429 and 5xx stay uncertain below.
+   if(reconcile&&e instanceof DineroHttpError&&e.status>=400&&e.status<500&&![408,429].includes(e.status)){
+    await releaseClaim(env,receiptKey,claim.version,{reason:'dinero-rejected',status:e.status,detail:e.detail},actor.id);
+    released=true;throw new HttpError(409,`Dinero afviste finansbilaget (HTTP ${e.status})${e.detail?': '+e.detail:''}. Intet er bogført, og reguleringen kan prøves igen.`);
+   }
+   if(e instanceof DineroHttpError)claim={...claim,payload:{...claim.payload,dineroError:{status:e.status,detail:e.detail}}};
+   throw e;
+  }
   if(!/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(created?.Guid||''))throw new Error('Missing GUID');
   claim=await saveReceipt(env,receiptKey,claim,'creating',{...claim.payload,guid:created.Guid,expected});
   let remote=verifyVoucher(await client(`vouchers/manuel/${created.Guid}`,'GET'),value.voucher,expected);
@@ -98,5 +111,31 @@ export async function commitStocktake(env:PlatformEnv,actor:Actor,company:string
   claim=await saveReceipt(env,receiptKey,claim,'draft',claim.payload);
   if(book){claim=await saveReceipt(env,receiptKey,claim,'booking',claim.payload);await client(`vouchers/manuel/${created.Guid}/book`,'POST',{Timestamp:remote.Timestamp});remote=verifyVoucher(await client(`vouchers/manuel/${created.Guid}`,'GET'),value.voucher,expected);if(remote.Status!=='Booked'||remote.Guid.toLowerCase()!==created.Guid.toLowerCase())throw new Error('Unverified booking');claim=await saveReceipt(env,receiptKey,claim,'booked',{...claim.payload,voucherNumber:remote.VoucherNumber});}
   return reply({phase:claim.phase,voucherNumber:remote.VoucherNumber,message:reconcile?(book?'Lagerkontoen i Dinero er reguleret til webshoppens lagerværdi.':'Reguleringen af lagerkontoen er oprettet som kladde i Dinero. Bogfør den i Dinero.'):book?'Lageret er opdateret, og reguleringen er bogført i Dinero.':'Lageret er opdateret, og reguleringen er oprettet som kladde i Dinero.'});
- }catch{await uncertainReceipt(env,receiptKey,claim);throw new HttpError(409,'Lagerreguleringen er uafklaret. Kontrollér Shopify og Dinero; handlingen gentages ikke automatisk.');}
+ }catch(e){if(released)throw e;await uncertainReceipt(env,receiptKey,claim);throw new HttpError(409,'Lagerreguleringen er uafklaret. Kontrollér Shopify og Dinero; handlingen gentages ikke automatisk.');}
+}
+// Removes a reconciliation claim that is known to have no voucher in Dinero, keeping the history in record_events and the audit log.
+async function releaseClaim(env:PlatformEnv,key:ReceiptKey,version:string,details:Record<string,unknown>,actorId:string){
+ const db=env.PLATFORM_DB,where="company_id=? AND webshop_id=? AND provider=? AND module=? AND external_id=? AND destination=? AND version=?",args=[key.company,key.shop,key.provider,key.module,key.externalId,key.destination,version];
+ const result=await db.batch([
+  db.prepare("INSERT INTO record_events(company_id,webshop_id,provider,module,external_id,event,details_json) SELECT company_id,webshop_id,provider,module,external_id,'cleanup.receipt_cleared',? FROM production_receipts WHERE "+where).bind(JSON.stringify(details),...args),
+  db.prepare("DELETE FROM production_receipts WHERE "+where).bind(...args),
+  db.prepare("INSERT INTO audit_events(id,company_id,actor_id,action,resource_id,details_json) SELECT ?,?,?,'stocktake.released',?,? WHERE changes()=1").bind(crypto.randomUUID(),key.company,actorId,key.externalId,JSON.stringify({shop:key.shop,...details})),
+ ]);
+ if(result[1].meta.changes!==1)throw new HttpError(409,'Reguleringen er ændret. Hent lagerstatus igen.');
+}
+// Regulations that block a new one; only a reconciliation without a Dinero voucher ID can be released, after the user has checked Dinero.
+export async function pendingRegulations(env:PlatformEnv,company:string){
+ const rows=(await env.PLATFORM_DB.prepare("SELECT webshop_id,external_id,phase,payload_json,updated_at FROM production_receipts WHERE company_id=? AND provider='shopify' AND module='stocktake' AND destination=(SELECT organization_id FROM accounting_connections WHERE company_id=?) AND phase IN ('prepared','creating','booking','uncertain') ORDER BY updated_at DESC LIMIT 20").bind(company,company).all<{webshop_id:string;external_id:string;phase:string;payload_json:string;updated_at:string}>()).results;
+ return rows.map(r=>{const p=JSON.parse(r.payload_json),stale=Date.parse(r.updated_at.replace(' ','T')+'Z')<Date.now()-15*60000;
+  return {id:r.external_id,shop:r.webshop_id,phase:r.phase,at:r.updated_at,kind:p.kind==='reconcile'?'reconcile':'count',adjustmentMinor:Number(p.adjustmentMinor)||0,dineroError:p.dineroError||null,releasable:p.kind==='reconcile'&&!p.guid&&(r.phase==='uncertain'||stale)};});
+}
+export async function releaseRegulation(env:PlatformEnv,actor:Actor,company:string,input:Record<string,unknown>){
+ await requireCompany(env.PLATFORM_DB,actor,company,true);if(actor.support)throw new HttpError(403,'Afslut impersonering før frigivelse.');
+ if(input.confirmation!=='no-voucher-in-dinero'||typeof input.externalId!=='string'||!/^[a-f0-9-]{36}$/.test(input.externalId))throw new HttpError(400,'Bekræft, at der ikke findes et bilag i Dinero.');
+ const found=(await pendingRegulations(env,company)).find(r=>r.id===input.externalId);
+ if(!found?.releasable)throw new HttpError(409,'Reguleringen kan ikke frigives her. Kontakt support.');
+ const row=await env.PLATFORM_DB.prepare("SELECT destination,version FROM production_receipts WHERE company_id=? AND webshop_id=? AND provider='shopify' AND module='stocktake' AND external_id=?").bind(company,found.shop,found.id).first<{destination:string;version:string}>();
+ if(!row)throw new HttpError(409,'Reguleringen er ændret. Hent lagerstatus igen.');
+ await releaseClaim(env,{company,shop:found.shop,provider:'shopify',module:'stocktake',externalId:found.id,destination:row.destination},row.version,{reason:'user-confirmed-no-voucher',phase:found.phase},actor.id);
+ return reply({released:found.id,message:'Reguleringen er frigivet. Du kan regulere igen.'});
 }
