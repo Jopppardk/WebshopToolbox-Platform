@@ -5,7 +5,10 @@ import {productXml,type Product,type Variant} from './feed-format';
 export type Selection={id:string;title:string};
 /** The Shopify market a feed is for, as chosen when it was saved (name and currency are shown in the overview). */
 export type FeedMarketChoice={id:string;country:string;name:string;currency:string};
-export type FeedConfig={allProducts:boolean;collections:Selection[];products:Selection[];shippingCost:string;freeShippingFrom:string|null;deliveryTime:string;category:string;market?:FeedMarketChoice|null};
+export type FeedConfig={allProducts:boolean;collections:Selection[];products:Selection[];shippingCost:string;freeShippingFrom:string|null;deliveryTime:string;category:string;market?:FeedMarketChoice|null;refreshMinutes?:number};
+/** How old a feed's data may be before the next fetch makes it again; feeds without a choice use 15 minutes. */
+export const feedRefreshChoices=[15,60,360,1440] as const;
+export const feedRefreshMinutes=(config:Pick<FeedConfig,'refreshMinutes'>)=>(feedRefreshChoices as readonly number[]).includes(Number(config.refreshMinutes))?Number(config.refreshMinutes):15;
 /** An active Shopify market selling to countries: its currency, its storefront URL and language. */
 export type FeedMarket={id:string;name:string;countries:string[];currency:string;url:string;locale:string|null;primary:boolean};
 type Page<T>={nodes:T[];pageInfo:{hasNextPage:boolean;endCursor:string|null}};

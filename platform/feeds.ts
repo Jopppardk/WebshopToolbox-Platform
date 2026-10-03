@@ -1,6 +1,6 @@
 import {requireCompany,requireWebshop} from './auth';
 import {jsonBody} from './invitations';
-import {feedCatalog,generateFeed,shopMarkets,type FeedConfig,type FeedMarketChoice,type Selection} from './feed-source';
+import {feedCatalog,feedRefreshChoices,feedRefreshMinutes,generateFeed,shopMarkets,type FeedConfig,type FeedMarketChoice,type Selection} from './feed-source';
 import {feedFileNamePattern,slugify} from './tier1/src/lib/feed-name';
 import {demoFeed,demoMarkets,isDemoCompany} from './demo';
 import {HttpError,reply,type PlatformEnv,type Actor} from './types';
@@ -36,6 +36,11 @@ const unique=(error:unknown)=>/UNIQUE constraint failed/i.test(String((error as 
 const token=()=>crypto.randomUUID().replaceAll('-','')+crypto.randomUUID().replaceAll('-','');
 function text(v:unknown,max:number,optional=false){if(typeof v!=='string'||v.length>max||(!optional&&!v.trim())||/[\x00-\x1f]/.test(v))throw new HttpError(400,'Udfyld feedets navn og indstillinger korrekt.');return v.trim();}
 function money(v:unknown){if(typeof v!=='string'||!/^\d{1,6}(\.\d{1,2})?$/.test(v))throw new HttpError(400,'Angiv fragtbeløb med højst to decimaler.');return Number(v).toFixed(2);}
+function refreshChoice(v:unknown){
+ if(v===undefined||v===null)return 15;
+ if(!(feedRefreshChoices as readonly unknown[]).includes(v))throw new HttpError(400,'Vælg hvor tit feedet opdateres: hvert 15. minut, hver time, hver 6. time eller dagligt.');
+ return v as number;
+}
 function marketChoice(v:unknown):FeedMarketChoice|null{
  if(v===null||v===undefined)return null;
  const m=v as Record<string,unknown>;
@@ -57,7 +62,7 @@ function selection(v:unknown,kind:string):Selection[]{
 }
 export function feedInput(b:any){
  if(b.service!=='partnerads'||typeof b.enabled!=='boolean'||typeof b.allProducts!=='boolean')throw new HttpError(400,'Vælg PartnerAds og en gyldig feedstatus.');
- const config:FeedConfig={allProducts:b.allProducts,collections:selection(b.collections,'Collection'),products:selection(b.products,'Product'),shippingCost:money(b.shippingCost),freeShippingFrom:b.freeShippingFrom===null?null:money(b.freeShippingFrom),deliveryTime:text(b.deliveryTime,100),category:text(b.category,200,true),market:marketChoice(b.market)};
+ const config:FeedConfig={allProducts:b.allProducts,collections:selection(b.collections,'Collection'),products:selection(b.products,'Product'),shippingCost:money(b.shippingCost),freeShippingFrom:b.freeShippingFrom===null?null:money(b.freeShippingFrom),deliveryTime:text(b.deliveryTime,100),category:text(b.category,200,true),market:marketChoice(b.market),refreshMinutes:refreshChoice(b.refreshMinutes)};
  if(!config.allProducts&&!config.collections.length&&!config.products.length)throw new HttpError(400,'Vælg mindst én kollektion eller ét produkt.');
  if(config.allProducts){config.collections=[];config.products=[];}
  return {name:text(b.name,100),fileName:fileName(b.fileName),config,enabled:b.enabled?1:0};
@@ -66,7 +71,7 @@ async function find(env:PlatformEnv,company:string,shop:string,id:string){
  const f=await env.PLATFORM_DB.prepare('SELECT * FROM product_feeds WHERE company_id=? AND webshop_id=? AND id=?').bind(company,shop,id).first<Feed>();
  if(!f)throw new HttpError(404,'Feedet findes ikke.');return f;
 }
-function view(f:Feed,origin:string,folder:string|null){return {id:f.id,name:f.name,fileName:f.file_name,service:f.service,...JSON.parse(f.config_json),enabled:!!f.enabled,revision:f.revision,url:f.file_name&&folder?origin+'/feeds/'+folder+'/'+f.file_name+'.xml':origin+'/feeds/'+f.public_token+'.xml',itemCount:f.item_count,generatedAt:f.generated_at,lastError:f.last_error};}
+function view(f:Feed,origin:string,folder:string|null){const config=JSON.parse(f.config_json);return {id:f.id,name:f.name,fileName:f.file_name,service:f.service,...config,refreshMinutes:feedRefreshMinutes(config),enabled:!!f.enabled,revision:f.revision,url:f.file_name&&folder?origin+'/feeds/'+folder+'/'+f.file_name+'.xml':origin+'/feeds/'+f.public_token+'.xml',itemCount:f.item_count,generatedAt:f.generated_at,lastError:f.last_error};}
 function audit(env:PlatformEnv,actor:Actor,f:Feed,action:string){return env.PLATFORM_DB.prepare('INSERT INTO audit_events(id,company_id,actor_id,action,resource_id,details_json) VALUES(?,?,?,?,?,?)').bind(crypto.randomUUID(),f.company_id,actor.id,'feed.'+action,f.id,JSON.stringify({webshopId:f.webshop_id}));}
 async function refresh(env:PlatformEnv,f:Feed){
  const db=env.PLATFORM_DB,lock=crypto.randomUUID(),at=now();
@@ -96,7 +101,8 @@ export async function publicFeed(request:Request,env:PlatformEnv){
  if(!match&&!named)throw new HttpError(404,'Feedet findes ikke.');
  const lookup=()=>env.PLATFORM_DB.prepare(`SELECT f.* FROM product_feeds f JOIN companies c ON c.id=f.company_id JOIN webshop_connections sc ON sc.company_id=f.company_id AND sc.webshop_id=f.webshop_id AND sc.provider='shopify' JOIN webshops w ON w.company_id=f.company_id AND w.id=f.webshop_id WHERE ${match?'f.public_token=?':'f.file_name=? AND EXISTS(SELECT 1 FROM feed_folders ff WHERE ff.company_id=f.company_id AND ff.webshop_id=f.webshop_id AND ff.slug=?)'} AND f.enabled=1 AND c.status='active' AND w.status='active'`).bind(...(match?[match[1]]:[named![2],named![1]])).first<Feed>();
  let f=await lookup();if(!f)throw new HttpError(404,'Feedet findes ikke eller er sat på pause.');
- if(!f.xml_key||!f.generated_at||f.generated_at<now()-900){
+ // The feed is made again when it is fetched and its data is older than its chosen update interval.
+ if(!f.xml_key||!f.generated_at||f.generated_at<now()-feedRefreshMinutes(JSON.parse(f.config_json))*60){
   if(request.method==='HEAD')return new Response(null,{status:503});
   const updated=await refresh(env,f),current=await lookup();
   if(!current||updated.revision!==current.revision||updated.xml_key!==current.xml_key)throw new HttpError(409,'Feedet er ændret. Prøv igen.');f=current;
