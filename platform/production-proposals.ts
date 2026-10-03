@@ -11,6 +11,9 @@ import {flatpayDraft} from '../lib/flatpay-draft';
 import {readFlatpayPayout} from './flatpay-payout';
 import {existingPayoutReport,registerPayoutReport} from './documents';
 import {buildFlatpayReport} from './flatpay-report';
+import {readOrderRefunds,saleBookedSql,type OrderRefund} from './order-refunds';
+import {ensureCreditNote} from './credit-notes';
+import {foreignHold,isForeignOrder} from './order-markets';
 import {HttpError,type Actor,type PlatformEnv} from './types';
 const fail=(message:string):never=>{throw new HttpError(409,message);};
 const num=(value:unknown)=>{const n=Number(String(value||'').match(/^\d+/)?.[0]);if(!Number.isSafeInteger(n)||n<=0)fail('Vælg gyldige konti i kontoplanen.');return n;};
@@ -57,6 +60,8 @@ async function refund(ctx:BookingContext):Promise<PreparedBooking>{
  const details=await orderQuery<{order:any}>(access,`query ToolboxRefundDetails($id:ID!){order(id:$id){refunds{id processedAt refundLineItems(first:100){nodes{subtotalSet{shopMoney{amount currencyCode}} totalTaxSet{shopMoney{amount currencyCode}}} pageInfo{hasNextPage}} refundShippingLines(first:100){nodes{subtotalAmountSet{shopMoney{amount currencyCode}} taxAmountSet{shopMoney{amount currencyCode}}} pageInfo{hasNextPage}} orderAdjustments(first:100){nodes{amountSet{shopMoney{amount currencyCode}} taxAmountSet{shopMoney{amount currencyCode}}} pageInfo{hasNextPage}} transactions(first:100){nodes{id kind status test amountSet{shopMoney{amount currencyCode}}} pageInfo{hasNextPage}}}}}`,{id:item.associatedOrder.id});
  const matches=(details.order?.refunds||[]).filter((r:any)=>r.transactions?.nodes?.some((t:any)=>t.id===transactionId&&t.kind==='REFUND'&&t.status==='SUCCESS'&&!t.test));
  if(matches.length!==1)fail('Refunderingen kan ikke knyttes entydigt til ordren.');const r=matches[0];
+ // Refunds are now booked per order (order_refund); never book the same refund through both.
+ if(await env.PLATFORM_DB.prepare("SELECT 1 FROM production_receipts WHERE company_id=? AND webshop_id=? AND provider='shopify' AND module='order_refunds' AND external_id=? AND phase<>'prepared'").bind(company,shop,r.id).first())fail('Tilbagebetalingen er allerede bogført under Tilbagebetalinger → Ordrer.');
  for(const field of ['refundLineItems','refundShippingLines','orderAdjustments','transactions'])if(!Array.isArray(r[field]?.nodes)||r[field].pageInfo?.hasNextPage!==false)fail('Refunderingen er ufuldstændig.');
  const transaction=r.transactions.nodes.find((t:any)=>t.id===transactionId);
  if(transaction.amountSet?.shopMoney?.currencyCode!=='DKK'||Math.abs(minorUnits(transaction.amountSet.shopMoney.amount,'DKK'))!==gross)fail('Transaktionen stemmer ikke med refunderingen.');
@@ -71,6 +76,33 @@ async function refund(ctx:BookingContext):Promise<PreparedBooking>{
  for(const line of proposal.voucher.Lines){const account=chart.find(a=>Number(a.number)===line.AccountNumber&&!a.hidden);if(!account||(account.vatCode||'none').toLowerCase()!==line.AccountVatCode.toLowerCase())fail('Refunderingskonto eller momskode stemmer ikke med Dinero.');}
  proposal.voucher.ExternalReference=`wtb:${shop}:refund:${id.split('/').pop()}`;
  return {snapshot:{voucher:proposal.voucher,expected:proposal.expected,source:{item,refund:r},book:JSON.parse(ctx.prefs.preferences_json).automation.refundsBookDinero===true}};
+}
+// A refund of a Shopify order, whatever the gateway: credits the same clearing account the sale debited,
+// against the refund accounts per line, with the refund's credit note attached when the order was invoiced.
+async function orderRefund(ctx:BookingContext):Promise<PreparedBooking>{
+ const {env,company,shop,id}=ctx,db=env.PLATFORM_DB,stored=JSON.parse(ctx.sourceRow.payload_json) as OrderRefund;
+ if(await isForeignOrder(db,company,shop,stored.orderId))fail(foreignHold);
+ const legacy=await db.prepare("SELECT 1 FROM production_receipts WHERE company_id=? AND webshop_id=? AND provider='shopify' AND module='refunds' AND phase<>'prepared' AND json_extract(payload_json,'$.source.refund.id')=?").bind(company,shop,id).first();
+ if(legacy)fail('Tilbagebetalingen er allerede bogført som Shopify Payments-tilbagebetaling.');
+ // The refund credits the clearing account the sale debited, so the sale must be in Dinero first.
+ if(!await db.prepare('SELECT 1 FROM order_refunds s WHERE s.company_id=? AND s.webshop_id=? AND s.external_id=? AND '+saleBookedSql).bind(company,shop,id).first())fail('Salget på ordren er ikke bogført endnu. Tilbagebetalingen bogføres, når salget er bogført.');
+ // Always booked from Shopify's current data, never from the stored copy alone.
+ const r=(await readOrderRefunds(await shopAccess(env,company,shop),stored.orderId)).find(x=>x.id===id);
+ if(!r)fail('Tilbagebetalingen findes ikke længere på ordren i Shopify.');
+ if(r!.problem)fail(r!.problem!);
+ if(r!.currency!=='DKK')fail('Tilbagebetalinger i andre valutaer end DKK bogføres ikke automatisk.');
+ const parts:RefundPart[]=r!.lines.map(l=>({kind:l.kind,net:l.net,tax:l.tax,description:l.title}));
+ const date=await bookingDate(env,company,shop,'shopify',r!.processedAt),mapping=JSON.parse(ctx.mapping.accounts_json);
+ mapping.vatCode=String(mapping.vatCode||'').split(' ')[0];mapping.noVatCode=String(mapping.noVatCode||'').split(' ')[0].toLowerCase();
+ if(parts.some(p=>p.tax!==0)&&mapping.vatCode!=='U25'||parts.some(p=>p.tax===0)&&mapping.noVatCode!=='none')fail('Vælg U25 og eksplicit ingen moms til refunderingerne.');
+ const proposal=refundVoucher({transactionId:id,orderName:r!.orderName,date,gross:r!.gross,parts},mapping);
+ const chart=await readDineroAccounts(ctx.credentials);
+ for(const line of proposal.voucher.Lines){const account=chart.find(a=>Number(a.number)===line.AccountNumber&&!a.hidden);if(!account||(account.vatCode||'none').toLowerCase()!==line.AccountVatCode.toLowerCase())fail('Refunderingskonto eller momskode stemmer ikke med Dinero.');}
+ proposal.voucher.ExternalReference=`wtb:${shop}:orderrefund:${id.split('/').pop()}`;
+ const automation=JSON.parse(ctx.prefs.preferences_json).automation,attach=automation.attachments===true;
+ const note=attach?await ensureCreditNote(env,company,shop,r!):null;
+ if(note&&note.file.size>6000000)fail('Kreditnotaen er for stor til Dinero.');
+ return {file:note?.file,snapshot:{attach,voucher:proposal.voucher,expected:proposal.expected,source:{refund:r},creditNote:note?{id:note.id,number:note.number,pdfKey:note.key,pdfEtag:note.file.etag}:null,book:automation.refundsBookDinero===true}};
 }
 async function flatpay(ctx:BookingContext):Promise<PreparedBooking>{
  const {env,company,shop,id}=ctx,saved=JSON.parse(ctx.sourceRow.payload_json);
@@ -87,6 +119,7 @@ async function flatpay(ctx:BookingContext):Promise<PreparedBooking>{
 export function handleProductionOther(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string,kind:string){
  if(kind==='payout')return handleProductionBooking(request,env,actor,company,shop,kind,'payouts','shopify',/^gid:\/\/shopify\/ShopifyPaymentsPayout\/\d{1,30}$/,payout);
  if(kind==='refund')return handleProductionBooking(request,env,actor,company,shop,kind,'refunds','shopify',/^gid:\/\/shopify\/ShopifyPaymentsBalanceTransaction\/\d{1,30}$/,refund);
+ if(kind==='order_refund')return handleProductionBooking(request,env,actor,company,shop,kind,'order_refunds','shopify',/^gid:\/\/shopify\/Refund\/\d{1,30}$/,orderRefund);
  if(kind==='flatpay')return handleProductionBooking(request,env,actor,company,shop,kind,'payments','flatpay',/^\d{1,30}$/,flatpay);
  throw new HttpError(400,'Ukendt bogføringstype.');
 }

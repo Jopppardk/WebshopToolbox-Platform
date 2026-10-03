@@ -7,7 +7,6 @@ import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BookingStatus } from '@/components/booking-status';
-import { ManualBookingAction } from '@/components/manual-booking-action';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -291,7 +290,7 @@ export function Payments({
       ))}
       <p className="mb-4 text-sm text-muted-foreground">
         {refund
-          ? 'Når modulet er aktiveret under Indstillinger, bogføres nye tilbagebetalinger fra Shopify Payments automatisk i Dinero. Flatpay vises til kontrol og bogføres ikke automatisk. Flatpay-beløb vises med API’ets fortegn; gebyrer og netto afrundes til visning. En afregning er ikke nødvendigvis udbetalt endnu.'
+          ? 'Udbydernes egne poster til kontrol. Bogføring og kreditnotaer sker pr. ordre under fanen Ordrer, uanset betalingsudbyder. Flatpay-beløb vises med API’ets fortegn; gebyrer og netto afrundes til visning. En afregning er ikke nødvendigvis udbetalt endnu.'
           : 'Bogføring i Dinero er ikke aktiveret for betalinger. Testbetalinger og tilbagebetalinger indgår ikke her.'}
       </p>
       <section
@@ -369,17 +368,10 @@ export function Payments({
                   </TableCell>
                   <TableCell>
                     {refund && <PayoutLog kind="refund" provider={payment.provider==='flatpay'?'flatpay':'shopify'} externalId={(payment as PaymentView & {logExternalId?:string}).logExternalId||payment.id}/>}
-                    {refund && payment.provider!=='flatpay' && payment.bookingStatus !== 'booked' ? (
-                      <ManualBookingAction
-                        kind="refund"
-                        externalId={payment.id}
-                        onDone={() => setRevision((value) => value + 1)}
-                      />
-                    ) : (
-                      <span className="text-sm text-muted-foreground">
-                        {payment.bookingStatus === 'booked' ? 'Bogført' : '—'}
-                      </span>
-                    )}
+                    {/* Refunds are booked per order under Tilbagebetalinger → Ordrer, whatever the gateway. */}
+                    <span className="text-sm text-muted-foreground">
+                      {payment.bookingStatus === 'booked' ? 'Bogført' : '—'}
+                    </span>
                   </TableCell>
                 </TableRow>
               ))

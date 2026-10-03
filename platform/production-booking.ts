@@ -36,7 +36,8 @@ async function productionBooking(request:Request,env:PlatformEnv,actor:Actor,com
   current=await saveReceipt(env,key,current,'booked',{...current.payload,voucherNumber:remote.VoucherNumber});
   return reply({phase:current.phase,guid:remote.Guid,message:'Eksisterende bogføring er verificeret i Dinero.'});
  }
- const sourceRow=provider==='shopify'?await db.prepare('SELECT payload_json,occurred_at FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module=? AND external_id=?').bind(company,shop,module,id).first<any>():await db.prepare('SELECT payload_json,occurred_at FROM payment_records WHERE company_id=? AND webshop_id=? AND provider=? AND kind=? AND external_id=?').bind(company,shop,provider,module,id).first<any>();
+ // Order refunds have their own table with the same shape (see migration 0038).
+ const sourceRow=provider==='shopify'?await db.prepare(`SELECT payload_json,occurred_at FROM ${module==='order_refunds'?'order_refunds':'operation_snapshots'} WHERE company_id=? AND webshop_id=? AND module=? AND external_id=?`).bind(company,shop,module,id).first<any>():await db.prepare('SELECT payload_json,occurred_at FROM payment_records WHERE company_id=? AND webshop_id=? AND provider=? AND kind=? AND external_id=?').bind(company,shop,provider,module,id).first<any>();
  if(!sourceRow)throw new HttpError(404,'Hent posten fra integrationen først.');
  const mapping=await db.prepare('SELECT accounts_json FROM accounting_mapping WHERE company_id=?').bind(company).first<any>();
  const prefs=await db.prepare('SELECT preferences_json,revision FROM tier1_preferences WHERE company_id=? AND webshop_id=?').bind(company,shop).first<any>();

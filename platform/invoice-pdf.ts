@@ -5,25 +5,31 @@ import { invoiceTotals } from '../lib/invoice-totals';
 import { checkInvoice, InvoiceCheckError, type InvoiceSource } from './order-check';
 
 
+/** A credit note: the refunded lines of an invoiced order, numbered after the invoice (e.g. 2683-K1). */
+export type CreditNote={number:string;date:string;invoiceNumber:string;currency:string;lines:Array<{kind:string;title:string;quantity:number;net:number;tax:number}>};
 export type InvoiceIssuer={name:string;address:string;cvr:string;contact:string;webshopName?:string;design?:InvoiceDesign;example?:boolean};
 const money = (value: number) => new Intl.NumberFormat('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 
 
-export async function buildInvoicePdf(order: InvoiceSource, issuer:InvoiceIssuer, logoBytes?: ArrayBuffer | Uint8Array) {
-  const checked = checkInvoice(order),design=invoiceDesign(issuer.design);
+export async function buildInvoicePdf(order: InvoiceSource, issuer:InvoiceIssuer, logoBytes?: ArrayBuffer | Uint8Array, credit?: CreditNote) {
+  const invoiceChecked = checkInvoice(order),design=invoiceDesign(issuer.design);
+  // A credit note uses the invoice's customer and layout with the refunded lines (25 % or no VAT).
+  const checked = credit ? { ...invoiceChecked, date: credit.date, lines: credit.lines.map((l, i) => ({ id: 'credit-' + i, title: l.title, quantity: l.quantity, kind: (l.kind === 'goods' ? 'goods' : l.kind === 'shipping' ? 'shipping' : 'unclassified') as 'goods' | 'shipping' | 'unclassified', net: l.net, tax: l.tax, gross: l.net + l.tax, discount: 0, rates: [l.tax ? .25 : 0], channelLiable: false })) } : invoiceChecked;
+  const documentNumber = credit ? credit.number : order.name.replace(/^#/, '');
+  const label = credit ? { title: 'KREDITNOTA', number: 'KREDITNOTANUMMER', date: 'KREDITNOTADATO', to: 'KREDITERES TIL', lines: 'KREDITEREDE LINJER', reference: `Faktura ${credit.invoiceNumber} · Ordre ${order.name}`, status: 'TILBAGEBETALT', total: 'KREDITERET' } : { title: 'FAKTURA', number: 'FAKTURANUMMER', date: 'FAKTURADATO', to: 'FAKTURERES TIL', lines: 'FAKTURALINJER', reference: `Ordre ${order.name}`, status: '', total: 'TOTAL' };
   const pdf = await PDFDocument.create();
   if(issuer.example){pdf.setCreationDate(new Date('2026-09-04T09:00:00Z'));pdf.setModificationDate(new Date('2026-09-04T09:00:00Z'));}
   const classic=design.layout==='classic';
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   if(bold.widthOfTextAtSize(issuer.name,7.5)+regular.widthOfTextAtSize(issuer.contact,7.5)>465 || regular.widthOfTextAtSize(issuer.address+' / CVR '+issuer.cvr,7.5)>487)throw new InvoiceCheckError('Fakturaoplysningerne er for lange til sidefoden.');
-  if (bold.widthOfTextAtSize(`Fakturanr. ${order.name}`, 10) > 155) throw new InvoiceCheckError('Fakturanummeret er for langt til PDF-layoutet.');
+  if (bold.widthOfTextAtSize(`Fakturanr. ${documentNumber}`, 10) > 155) throw new InvoiceCheckError('Fakturanummeret er for langt til PDF-layoutet.');
   let logo: Awaited<ReturnType<typeof pdf.embedPng>> | undefined;
   try { if (logoBytes) logo = await pdf.embedPng(logoBytes); } catch { throw new InvoiceCheckError('Virksomhedens logo kunne ikke indlæses i PDF’en.'); }
-  const { total } = invoiceTotals(order.currentTotalPriceSet.shopMoney.amount, order.currentTotalTaxSet?.shopMoney.amount, order.currentTotalPriceSet.shopMoney.currencyCode);
-  const currency = order.currentTotalPriceSet.shopMoney.currencyCode;
+  const currency = credit ? credit.currency : order.currentTotalPriceSet.shopMoney.currencyCode;
   const address = order.billingAddress || order.shippingAddress || {};
   const factor = 10 ** new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions().maximumFractionDigits!;
+  const total = credit ? checked.lines.reduce((sum, l) => sum + l.gross, 0) / factor : invoiceTotals(order.currentTotalPriceSet.shopMoney.amount, order.currentTotalTaxSet?.shopMoney.amount, currency).total;
   const wrap = (value: string, width: number, size: number) => {
     const lines: string[] = []; let line = '';
     for (const word of value.trim().split(/\s+/)) {
@@ -61,7 +67,7 @@ export async function buildInvoicePdf(order: InvoiceSource, issuer:InvoiceIssuer
   if (customerLines.length > 7) throw new InvoiceCheckError('Kundeadressen er for lang til PDF-layoutet. Ingen PDF gemmes.');
   const black = rgb(.09, .09, .095), gold = classic?rgb(.35,.35,.35):rgb(parseInt(design.accent.slice(1,3),16)/255,parseInt(design.accent.slice(3,5),16)/255,parseInt(design.accent.slice(5,7),16)/255), softGold = rgb(.96,.96,.96), ink = rgb(.13, .13, .14), muted = rgb(.40, .42, .46), line = rgb(.86, .84, .80), paper = rgb(.985, .982, .972);
   const invoiceDate = new Intl.DateTimeFormat('da-DK', { timeZone: 'Europe/Copenhagen' }).format(new Date(checked.date));
-  const paid = order.displayFinancialStatus === 'PAID';
+  const paid = !!credit || order.displayFinancialStatus === 'PAID';
   chunks.forEach((pageRows, pageIndex) => {
     const page = pdf.addPage([595.28, 841.89]);
     const { width } = page.getSize();
@@ -70,25 +76,25 @@ export async function buildInvoicePdf(order: InvoiceSource, issuer:InvoiceIssuer
     if(!logo){const title=wrap(issuer.name,285,14);if(title.length>2)throw new InvoiceCheckError('Virksomhedsnavnet er for langt.');title.forEach((t,i)=>page.drawText(t,{x:54,y:779-i*17,size:14,font:bold,color:ink}));
      const shop=wrap(issuer.webshopName||'',285,10);if(shop.length>2)throw new InvoiceCheckError('Webshopnavnet er for langt.');shop.forEach((t,i)=>page.drawText(t,{x:54,y:742-i*12,size:10,font:regular,color:muted}));}
     if(issuer.example)page.drawText('EKSEMPEL - IKKE EN GYLDIG FAKTURA',{x:54,y:816,size:8,font:bold,color:muted});
-    const pageTitle=pageIndex ? 'FAKTURA - FORTSAT' : 'FAKTURA',titleSize=classic?14:18;
+    const pageTitle=pageIndex ? label.title+' - FORTSAT' : label.title,titleSize=classic?14:18;
     page.drawText(pageTitle, { x: 541-bold.widthOfTextAtSize(pageTitle,titleSize), y: 770, size: titleSize, font: bold, color: black });
     page.drawText(`Side ${pageIndex + 1} af ${chunks.length}`, { x: 541 - regular.widthOfTextAtSize(`Side ${pageIndex + 1} af ${chunks.length}`, 7), y: 816, size: 7, font: regular, color: muted });
     page.drawLine({ start: { x: 54, y: 721 }, end: { x: 541, y: 721 }, thickness: .7, color: line });
 
     if (!pageIndex) {
-      page.drawText('FAKTURERES TIL', { x: 54, y: 667, size: 7.5, font: bold, color: gold });
+      page.drawText(label.to, { x: 54, y: 667, size: 7.5, font: bold, color: gold });
       customerLines.forEach((text, i) => page.drawText(text, { x: 54, y: 647 - i * 13, size: i ? 9 : 11, font: i ? regular : bold, color: ink }));
       if(!classic)page.drawRectangle({ x: 356, y: 589, width: 185, height: 80, color: paper, borderColor: line, borderWidth: .7 });
-      page.drawText('FAKTURANUMMER', { x: 372, y: 649, size: 7, font: bold, color: muted });
-      page.drawText(order.name.replace(/^#/, ''), { x: 372, y: 633, size: 10, font: bold, color: ink });
-      page.drawText('FAKTURADATO', { x: 372, y: 617, size: 7, font: bold, color: muted });
+      page.drawText(label.number, { x: 372, y: 649, size: 7, font: bold, color: muted });
+      page.drawText(documentNumber, { x: 372, y: 633, size: 10, font: bold, color: ink });
+      page.drawText(label.date, { x: 372, y: 617, size: 7, font: bold, color: muted });
       page.drawText(invoiceDate, { x: 455, y: 617, size: 9, font: regular, color: ink });
-      page.drawText(`Ordre ${order.name}`, { x: 372, y: 601, size: 8, font: regular, color: muted });
+      page.drawText(label.reference, { x: 372, y: 601, size: 8, font: regular, color: muted });
       if(!classic)page.drawRectangle({ x: 443, y: 678, width: 98, height: 23, color: paid ? softGold : rgb(.96, .92, .84), borderColor: gold, borderWidth: .5 });
-      const status = paid ? 'BETALT' : 'AFVENTER BETALING';
+      const status = label.status || (paid ? 'BETALT' : 'AFVENTER BETALING');
       page.drawText(status, { x: 492 - bold.widthOfTextAtSize(status, 8) / 2, y: 686, size: 8, font: bold, color: black });
     }
-    page.drawText('FAKTURALINJER', { x: 54, y: 583, size: 8, font: bold, color: gold });
+    page.drawText(label.lines, { x: 54, y: 583, size: 8, font: bold, color: gold });
     page.drawText('Priser er inkl. moms og efter rabatter', { x: 352, y: 583, size: 7.5, font: regular, color: muted });
     if(classic)page.drawLine({start:{x:54,y:552},end:{x:541,y:552},thickness:.5,color:line});
     else page.drawRectangle({ x: 54, y: 552, width: 487, height: 24, color: softGold, borderColor: line, borderWidth: .5 });
@@ -111,7 +117,7 @@ export async function buildInvoicePdf(order: InvoiceSource, issuer:InvoiceIssuer
         summaryY -= 18;
       });
       page.drawLine({ start: { x: 299, y: 111 }, end: { x: 523, y: 111 }, thickness: .7, color: line });
-      page.drawText(`TOTAL ${currency} inkl. moms`, { x: 299, y: 91, size: 10, font: bold, color: black }); amount(total, 523, 89, 13, bold);
+      page.drawText(`${label.total} ${currency} inkl. moms`, { x: 299, y: 91, size: 10, font: bold, color: black }); amount(total, 523, 89, 13, bold);
       if(!classic)page.drawRectangle({ x: 281, y: 70, width: 4, height: boxHeight, color: gold });
     }
     page.drawLine({ start: { x: 54, y: 43 }, end: { x: 541, y: 43 }, thickness: .7, color: gold });

@@ -36,7 +36,8 @@ import { syncIntervals } from '@/lib/sync-schedule';
 import { processedSummary } from '@/lib/order-processing';
 import { CountryFlag, countryName } from '@/components/country-flag';
 import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { OrderRefunds } from '@/components/order-refunds';
 
 import { useEffect, useState } from 'react';
 import { Payments } from '@/components/payments';
@@ -451,7 +452,12 @@ export default function Home() {
         )}
         {view === 'documents' && integrationAvailable('documents') && <Documents syncRevision={syncState.revision} />}
         {view === 'refunds' && integrationAvailable('refunds') && (
-          <Payments syncRevision={syncState.revision} kind="refund" />
+          // Refunds per order across all gateways; the providers' own refund records stay available for control.
+          <Tabs defaultValue="orders" className="gap-0">
+            <div className="mx-auto w-full max-w-[1440px] px-5 pt-6 md:px-8"><TabsList aria-label="Tilbagebetalinger"><TabsTrigger value="orders" className="px-4">Ordrer</TabsTrigger><TabsTrigger value="providers" className="px-4">Udbyderposter</TabsTrigger></TabsList></div>
+            <TabsContent value="orders"><OrderRefunds syncRevision={syncState.revision} /></TabsContent>
+            <TabsContent value="providers"><Payments syncRevision={syncState.revision} kind="refund" /></TabsContent>
+          </Tabs>
         )}
         {view === 'payouts' && integrationAvailable('payouts') && (
           <ProviderLedger kind="payout" syncRevision={syncState.revision} />

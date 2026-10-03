@@ -121,15 +121,16 @@ export async function handleMail(request:Request,env:PlatformEnv,actor:Actor,com
 
 // Ordinary invoice delivery is separate from the demo endpoint and can only use
 // the Shopify-derived recipient and a persisted invoice selected by the server.
-export async function sendCustomerInvoice(env:PlatformEnv,actor:Actor,company:string,shop:string,invoiceId:string,recipientValue:string,subject:string,text:string,attachment:{content:ArrayBuffer;filename:string;type:string;disposition:"attachment"}){
+export async function sendCustomerInvoice(env:PlatformEnv,actor:Actor,company:string,shop:string,invoiceId:string,recipientValue:string,subject:string,text:string,attachment:{content:ArrayBuffer;filename:string;type:string;disposition:"attachment"},kind:'invoice'|'credit'='invoice'){
  await requireCompany(env.PLATFORM_DB,actor,company,true);
  if(actor.support||actor.platformAdmin||env.PLATFORM_ENV!=='production'||String(env.PLATFORM_CUSTOMER_EMAIL)!=='enabled')throw new HttpError(403,'Kundeafsendelse er ikke aktiveret her.');
  await requireWebshop(env.PLATFORM_DB,actor,company,shop);
- const invoice=await env.PLATFORM_DB.prepare("SELECT id FROM platform_invoices WHERE company_id=? AND webshop_id=? AND id=? AND status='generated'").bind(company,shop,invoiceId).first();
- if(!invoice)throw new HttpError(404,'Den genererede faktura findes ikke i webshoppen.');
+ // A credit note is sent like an invoice, with its own receipt so each document is mailed at most once.
+ const invoice=await env.PLATFORM_DB.prepare(`SELECT id FROM ${kind==='credit'?'platform_credit_notes':'platform_invoices'} WHERE company_id=? AND webshop_id=? AND id=? AND status='generated'`).bind(company,shop,invoiceId).first();
+ if(!invoice)throw new HttpError(404,kind==='credit'?'Den genererede kreditnota findes ikke i webshoppen.':'Den genererede faktura findes ikke i webshoppen.');
  const recipient=mailAddress(recipientValue),settings=await row(env,company),from=effectiveSender(settings,standardFrom(env));
  const name=settings?.sender_name||await defaultSenderName(env,company);
- const key:ReceiptKey={company,shop,provider:'invoice',module:'email',externalId:invoiceId,destination:'customer'};
+ const key:ReceiptKey={company,shop,provider:'invoice',module:kind==='credit'?'credit_email':'email',externalId:invoiceId,destination:'customer'};
  let current=await readReceipt(env,key);
  if(current?.phase==='accepted')return reply({sent:true,recipient:current.payload.recipient,existing:true,status:'accepted'});
  if(current)throw new HttpError(409,'Fakturamailen er allerede under afsendelse eller har et uafklaret resultat. Den genafsendes ikke automatisk.');

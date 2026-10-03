@@ -34,18 +34,18 @@ export async function bookingStatuses(env:PlatformEnv,company:string,shop:string
  return (provider:string,module:string,id:string,date:string,sourceJson:string,upcoming=false)=>{
   const found=live.find(r=>r.provider===provider&&r.module===module&&r.external_id===id);
   const receipt=receipts.find(r=>r.provider===provider&&r.module===module&&r.external_id===id);
-  const job=provider==='shopify'?({orders:'sales',refunds:'refunds',payouts:'payouts'} as Record<string,string>)[module]:provider==='flatpay'&&module==='payments'?'flatpay':undefined;
+  const job=provider==='shopify'?({orders:'sales',refunds:'refunds',order_refunds:'order_refunds',payouts:'payouts'} as Record<string,string>)[module]:provider==='flatpay'&&module==='payments'?'flatpay':undefined;
   const failed=job&&attempts.some(a=>a.job===job&&a.external_id===id&&a.failures>0);
   if(found){
    if(found.phase==='booked')return !sameSource(JSON.parse(found.payload_json).sourceJson,sourceJson)?'booked_changed':'booked';
    if(['uncertain','held'].includes(found.phase))return 'failed_manual';
-   if(failed)return found.phase==='prepared'&&automation[job==='flatpay'?'payouts':job!]?'failed_retry':'failed_manual';
+   if(failed)return found.phase==='prepared'&&automation[job==='flatpay'?'payouts':job==='order_refunds'?'refunds':job!]?'failed_retry':'failed_manual';
    return found.phase;
   }
   if(receipt)return onboardingStatus(date,'','',receipt,sourceJson);
   // A payout that has not been paid out yet is simply waiting; earlier refused attempts are not failures.
   if(upcoming)return 'expected';
-  if(failed)return automation[job==='flatpay'?'payouts':job!]?'failed_retry':'failed_manual';
+  if(failed)return automation[job==='flatpay'?'payouts':job==='order_refunds'?'refunds':job!]?'failed_retry':'failed_manual';
   if(provider==='shopify'&&module==='orders'){
    const source=JSON.parse(sourceJson);
    if(!source.cancelledAt&&typeof source.displayFulfillmentStatus==='string'&&source.displayFulfillmentStatus!=='FULFILLED')return 'pending';

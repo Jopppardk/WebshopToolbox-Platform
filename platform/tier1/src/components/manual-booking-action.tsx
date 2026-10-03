@@ -6,7 +6,7 @@ import {Button} from '@/components/ui/button';
 import {Checkbox} from '@/components/ui/checkbox';
 import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from '@/components/ui/dialog';
 type Result={version?:string;phase?:string;guid?:string;reference?:string;organizationId?:string;message?:string};
-export function ManualBookingAction({kind,externalId,onDone}:{kind:'sale'|'payout'|'refund'|'flatpay';externalId:string;onDone:()=>void}){
+export function ManualBookingAction({kind,externalId,onDone}:{kind:'sale'|'payout'|'refund'|'order_refund'|'flatpay';externalId:string;onDone:()=>void}){
  const capabilities=useCapabilities();
  const[open,setOpen]=useState(false),[busy,setBusy]=useState(false),[confirmed,setConfirmed]=useState(false),[result,setResult]=useState<Result|null>(null),[error,setError]=useState(''),[done,setDone]=useState(false);
  async function request(action:'inspect'|'retry'){
