@@ -194,6 +194,11 @@ const databaseReads = new Set(['/runtime', '/admin/sync-status', '/notifications
   '/flatpay/records', '/viabill/records', '/pensopay/records', '/order-refunds', '/order-refunds/credit-note', '/integrations', '/integrations/selection', '/admin/history', '/integrations/start-date', '/admin/settings', '/feeds', '/feeds/file-name', '/admin/errors', '/admin/insights']);
 const databaseWrites: Array<[string, RegExp]> = [['POST', /^\/admin\/settings$/], ['PUT', /^\/invoices\/settings$/], ['POST', /^\/notifications$/], ['POST', /^\/integrations\/selection$/],
   ['POST', /^\/feeds$/], ['PUT', /^\/feeds\/[a-f0-9-]{36}$/], ['DELETE', /^\/feeds\/[a-f0-9-]{36}$/], ['POST', /^\/feeds\/[a-f0-9-]{36}\/(refresh|rotate)$/]];
+/** The demo shop's Shopify markets: Denmark (primary) and Sweden. */
+export function demoMarkets() {
+  return [{ id: 'gid://shopify/Market/1001', name: 'Danmark', countries: ['DK'], currency: 'DKK', url: 'https://' + PUBLIC_DOMAIN.replace(/^https?:\/\//, ''), locale: 'da', primary: true },
+    { id: 'gid://shopify/Market/1002', name: 'Sverige', countries: ['SE'], currency: 'SEK', url: 'https://' + PUBLIC_DOMAIN.replace(/^https?:\/\//, '').replace(/\.dk$/, '.se'), locale: 'sv', primary: false }];
+}
 export async function demoTier1(request: Request, path: string): Promise<Response | null> {
   const url = new URL(request.url), get = request.method === 'GET' || request.method === 'HEAD';
   if (get) {
@@ -207,6 +212,7 @@ export async function demoTier1(request: Request, path: string): Promise<Respons
     }
     if (path === '/shopify/inventory' && !url.searchParams.has('history')) return reply(demoInventory());
     if (path === '/emballage/products') return reply({ writes: true, canWrite: true, products: demoProducts.map(p => ({ id: 'gid://shopify/Product/' + (63000 + p.id), title: p.title, status: 'ACTIVE', weightGrams: [6, 9, 12].includes(p.id) ? null : p.id === 4 ? 0 : Math.round(p.weight * 0.18), reportable: [6, 9, 12].includes(p.id) || p.id === 4 ? 'unknown' : 'yes', openLines: [6, 9, 12].includes(p.id) ? 3 : 0 })) });
+    if (path === '/feeds/markets') return reply({ markets: demoMarkets() });
     if (path === '/feeds/catalog') {
       const q = (url.searchParams.get('q') || '').toLocaleLowerCase('da'), kind = url.searchParams.get('kind');
       const items = kind === 'collections' ? demoCollections : demoProducts.map(p => ({ id: 'gid://shopify/Product/' + (63000 + p.id), title: p.title }));

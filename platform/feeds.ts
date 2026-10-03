@@ -1,8 +1,8 @@
 import {requireCompany,requireWebshop} from './auth';
 import {jsonBody} from './invitations';
-import {feedCatalog,generateFeed,type FeedConfig,type Selection} from './feed-source';
+import {feedCatalog,generateFeed,shopMarkets,type FeedConfig,type FeedMarketChoice,type Selection} from './feed-source';
 import {feedFileNamePattern,slugify} from './tier1/src/lib/feed-name';
-import {demoFeed,isDemoCompany} from './demo';
+import {demoFeed,demoMarkets,isDemoCompany} from './demo';
 import {HttpError,reply,type PlatformEnv,type Actor} from './types';
 
 type Feed={id:string;company_id:string;webshop_id:string;name:string;file_name:string|null;service:string;config_json:string;enabled:number;public_token:string;revision:number;xml_key:string|null;item_count:number|null;generated_at:number|null;refresh_lock:string|null;lock_until:number;last_attempt:number;last_error:string|null};
@@ -35,7 +35,21 @@ const taken=()=>new HttpError(409,'Filnavnet er allerede i brug i denne webshop.
 const unique=(error:unknown)=>/UNIQUE constraint failed/i.test(String((error as Error)?.message||error));
 const token=()=>crypto.randomUUID().replaceAll('-','')+crypto.randomUUID().replaceAll('-','');
 function text(v:unknown,max:number,optional=false){if(typeof v!=='string'||v.length>max||(!optional&&!v.trim())||/[\x00-\x1f]/.test(v))throw new HttpError(400,'Udfyld feedets navn og indstillinger korrekt.');return v.trim();}
-function money(v:unknown){if(typeof v!=='string'||!/^\d{1,6}(\.\d{1,2})?$/.test(v))throw new HttpError(400,'Angiv fragtbeløb i DKK med højst to decimaler.');return Number(v).toFixed(2);}
+function money(v:unknown){if(typeof v!=='string'||!/^\d{1,6}(\.\d{1,2})?$/.test(v))throw new HttpError(400,'Angiv fragtbeløb med højst to decimaler.');return Number(v).toFixed(2);}
+function marketChoice(v:unknown):FeedMarketChoice|null{
+ if(v===null||v===undefined)return null;
+ const m=v as Record<string,unknown>;
+ if(typeof m.id!=='string'||!/^gid:\/\/shopify\/Market\/\d{1,30}$/.test(m.id)||typeof m.country!=='string'||!/^[A-Z]{2}$/.test(m.country))throw new HttpError(400,'Vælg et gyldigt marked.');
+ return {id:m.id,country:m.country,name:'',currency:''};
+}
+// The chosen market must be active in Shopify now; its name and currency are kept for the overview.
+async function checkedMarket(env:PlatformEnv,company:string,shop:string,choice:FeedMarketChoice|null|undefined){
+ if(!choice)return null;
+ const markets=await isDemoCompany(env,company)?demoMarkets():await shopMarkets(env,company,shop);
+ const market=markets.find(m=>m.id===choice.id);
+ if(!market||!market.countries.includes(choice.country))throw new HttpError(409,'Markedet er ikke aktivt i Shopify. Vælg et af de aktive markeder.');
+ return {id:market.id,country:choice.country,name:market.name,currency:market.currency};
+}
 function selection(v:unknown,kind:string):Selection[]{
  if(!Array.isArray(v)||v.length>100)throw new HttpError(400,'Vælg højst 100 kollektioner og 100 enkeltprodukter.');
  const result=v.map(x=>{if(!x||typeof x.id!=='string'||!new RegExp('^gid://shopify/'+kind+'/\\d+$').test(x.id))throw new HttpError(400,'Ugyldigt produkt- eller kollektionsvalg.');return {id:x.id,title:text(x.title,200)};});
@@ -43,7 +57,7 @@ function selection(v:unknown,kind:string):Selection[]{
 }
 export function feedInput(b:any){
  if(b.service!=='partnerads'||typeof b.enabled!=='boolean'||typeof b.allProducts!=='boolean')throw new HttpError(400,'Vælg PartnerAds og en gyldig feedstatus.');
- const config:FeedConfig={allProducts:b.allProducts,collections:selection(b.collections,'Collection'),products:selection(b.products,'Product'),shippingCost:money(b.shippingCost),freeShippingFrom:b.freeShippingFrom===null?null:money(b.freeShippingFrom),deliveryTime:text(b.deliveryTime,100),category:text(b.category,200,true)};
+ const config:FeedConfig={allProducts:b.allProducts,collections:selection(b.collections,'Collection'),products:selection(b.products,'Product'),shippingCost:money(b.shippingCost),freeShippingFrom:b.freeShippingFrom===null?null:money(b.freeShippingFrom),deliveryTime:text(b.deliveryTime,100),category:text(b.category,200,true),market:marketChoice(b.market)};
  if(!config.allProducts&&!config.collections.length&&!config.products.length)throw new HttpError(400,'Vælg mindst én kollektion eller ét produkt.');
  if(config.allProducts){config.collections=[];config.products=[];}
  return {name:text(b.name,100),fileName:fileName(b.fileName),config,enabled:b.enabled?1:0};
@@ -95,6 +109,7 @@ export async function handleFeeds(request:Request,env:PlatformEnv,actor:Actor,co
  if(actor.support||actor.platformAdmin)throw new HttpError(403,'Feeds administreres af virksomhedens administrator.');
  const db=env.PLATFORM_DB,url=new URL(request.url);
  if(path==='/feeds/catalog'&&request.method==='GET')return reply(await feedCatalog(env,company,shop,url));
+ if(path==='/feeds/markets'&&request.method==='GET')return reply({markets:await isDemoCompany(env,company)?demoMarkets():await shopMarkets(env,company,shop)});
  if(path==='/feeds'){
   // Named feeds always need their folder, also when it has not been reserved yet.
   const named=!!await db.prepare('SELECT 1 FROM product_feeds WHERE company_id=? AND webshop_id=? AND file_name IS NOT NULL').bind(company,shop).first();
@@ -102,6 +117,7 @@ export async function handleFeeds(request:Request,env:PlatformEnv,actor:Actor,co
   if(request.method==='GET')return reply({folderUrl:url.origin+'/feeds/'+(folder??await proposedFolder(env,company,shop))+'/',feeds:(await db.prepare('SELECT * FROM product_feeds WHERE company_id=? AND webshop_id=? ORDER BY created_at,id').bind(company,shop).all<Feed>()).results.map(f=>view(f,url.origin,folder))});
   if(request.method!=='POST')throw new HttpError(405,'Brug Opret feed.');
   const input=feedInput(await jsonBody(request,50000)),id=crypto.randomUUID();
+  input.config.market=await checkedMarket(env,company,shop,input.config.market);
   if(await fileNameTaken(env,company,shop,input.fileName,null))throw taken();
   const created=await db.prepare(`INSERT INTO product_feeds(id,company_id,webshop_id,name,file_name,service,config_json,enabled,public_token) SELECT ?,?,?,?,?,'partnerads',?,?,? WHERE (SELECT count(*) FROM product_feeds WHERE company_id=? AND webshop_id=?)<25`).bind(id,company,shop,input.name,input.fileName,JSON.stringify(input.config),input.enabled,token(),company,shop).run().catch(error=>{throw unique(error)?taken():error;});
   if(created.meta.changes!==1)throw new HttpError(409,'Der kan højst oprettes 25 feeds pr. webshop.');
@@ -126,6 +142,7 @@ export async function handleFeeds(request:Request,env:PlatformEnv,actor:Actor,co
  }
  if(!match[2]&&request.method==='PUT'){
   const input=feedInput(b);
+  input.config.market=await checkedMarket(env,company,shop,input.config.market);
   if(await fileNameTaken(env,company,shop,input.fileName,f.id))throw taken();
   const change=await db.prepare('UPDATE product_feeds SET name=?,file_name=?,config_json=?,enabled=?,revision=revision+1,xml_key=NULL,item_count=NULL,generated_at=NULL,last_error=NULL WHERE id=? AND revision=?').bind(input.name,input.fileName,JSON.stringify(input.config),input.enabled,f.id,f.revision).run().catch(error=>{throw unique(error)?taken():error;});
   if(change.meta.changes!==1)throw new HttpError(409,'Feedet blev ændret.');
