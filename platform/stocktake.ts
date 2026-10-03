@@ -1,4 +1,4 @@
-import {commitStocktake,dineroInventory,assertNoPendingRegulation,companyInventory,assertReconcilable} from './production-stocktake';
+import {commitStocktake,dineroInventory,assertNoPendingRegulation,companyInventory,assertReconcilable,pendingRegulations,releaseRegulation} from './production-stocktake';
 import {unseal} from './connections';
 import {productionWrites} from './production-policy';
 import { requireCompany,requireWebshop } from './auth';
@@ -25,7 +25,10 @@ export async function handleStocktake(request:Request,env:PlatformEnv,actor:Acto
   const failed=(fallback:string)=>(e:unknown)=>({error:e instanceof HttpError?e.message:fallback});
   const inventory=await readInventory(env,company,shop);
   const [dinero,all]=await Promise.all([dineroInventory(env,company).then(d=>({account:d.account,valueMinor:d.balanceMinor,from:d.from,to:d.to}),failed('Lagerværdien kunne ikke hentes fra Dinero.')),companyInventory(env,company,shop,inventory).then(a=>({shops:a.shops,valueMinor:a.valueMinor,incomplete:a.incomplete,dkk:a.dkk}),failed('Lagerværdien for virksomhedens webshops kunne ikke hentes.'))]);
-  return reply({...inventory,dinero,company:all});
+  // The list spans all the company's webshops, so only a company admin (who alone can regulate or release) sees it.
+  const admin=await requireCompany(db,actor,company,true).then(()=>true,()=>false);
+  const pending=admin?(await pendingRegulations(env,company)).map(({destination:_d,version:_v,...item})=>item):undefined;
+  return reply({...inventory,dinero,company:all,pending});
  }
  if(request.method!=='POST')throw new HttpError(405,'Ugyldig handling.');
  await requireCompany(db,actor,company,true);if(actor.support)throw new HttpError(403,'Afslut impersonering før lageroptælling.');
@@ -42,7 +45,7 @@ export async function handleStocktake(request:Request,env:PlatformEnv,actor:Acto
   const adjustmentMinor=costed.reduce((sum,r)=>sum+(r.quantity-r.compareQuantity)*r.unitCostMinor,0);
   if(!Number.isSafeInteger(adjustmentMinor))throw new HttpError(409,'Ugyldig reguleringsværdi.');
   const id=crypto.randomUUID(),version=crypto.randomUUID(),date=new Date().toISOString().slice(0,10);
-  const voucher=adjustmentMinor===0?null:{VoucherDate:date,ExternalReference:`toolbox:${company}:${shop}:stocktake:${id}`,Lines:[{Description:`Lagerregulering · ${changes.length} lagerlinjer`,AccountNumber:account.adjustment,BalancingAccountNumber:account.inventory,Amount:-adjustmentMinor/100,AccountVatCode:'none',BalancingAccountVatCode:'none'}]};
+  const voucher=adjustmentMinor===0?null:{VoucherDate:date,ExternalReference:`wtb:stocktake:${id}`,Lines:[{Description:`Lagerregulering · ${changes.length} lagerlinjer`,AccountNumber:account.adjustment,BalancingAccountNumber:account.inventory,Amount:-adjustmentMinor/100,AccountVatCode:'none',BalancingAccountVatCode:'none'}]};
   const payload={changes:costed,account,adjustmentMinor,voucher,expiresAt:Date.now()+600000};
   await db.prepare("INSERT INTO stocktakes(company_id,webshop_id,id,version,phase,payload_json,created_by) VALUES(?,?,?,?,'prepared',?,?)").bind(company,shop,id,version,JSON.stringify(payload),actor.id).run();
   return reply({id,version,...payload,mode:productionWrites(env)?'production':'simulation',externalWrites:productionWrites(env)?'enabled':'blocked'});
@@ -61,11 +64,12 @@ export async function handleStocktake(request:Request,env:PlatformEnv,actor:Acto
   let credentials:Record<string,string>;try{credentials=await unseal(env,[company,'dinero',saved.organization_id],saved.credentials_encrypted);}catch{throw new HttpError(409,'Dinero-forbindelsen kunne ikke åbnes.');}
   await assertNoPendingRegulation(env,company,account.organizationId,credentials);
   const id=crypto.randomUUID(),version=crypto.randomUUID(),date=dinero.to;
-  const voucher={VoucherDate:date,ExternalReference:`toolbox:${company}:${shop}:stocktake:${id}`,Lines:[{Description:'Lagerafstemning mod webshoppens lagerværdi',AccountNumber:account.adjustment,BalancingAccountNumber:account.inventory,Amount:-adjustmentMinor/100,AccountVatCode:'none',BalancingAccountVatCode:'none'}]};
+  const voucher={VoucherDate:date,ExternalReference:`wtb:stocktake:${id}`,Lines:[{Description:'Lagerafstemning mod webshoppens lagerværdi',AccountNumber:account.adjustment,BalancingAccountNumber:account.inventory,Amount:-adjustmentMinor/100,AccountVatCode:'none',BalancingAccountVatCode:'none'}]};
   const payload={kind:'reconcile',changes:[],account,adjustmentMinor,shopifyValueMinor:inventory.valueMinor,webshops:inventory.shops,dineroValueMinor:dinero.balanceMinor,voucher,expiresAt:Date.now()+600000};
   await db.prepare("INSERT INTO stocktakes(company_id,webshop_id,id,version,phase,payload_json,created_by) VALUES(?,?,?,?,'prepared',?,?)").bind(company,shop,id,version,JSON.stringify(payload),actor.id).run();
   return reply({id,version,...payload,mode:productionWrites(env)?'production':'simulation',externalWrites:productionWrites(env)?'enabled':'blocked'});
  }
+ if(b.action==='release')return releaseRegulation(env,actor,company,b);
  if(b.action==='commit')return commitStocktake(env,actor,company,shop,b);
  if(!['simulate','cancel'].includes(String(b.action))||typeof b.id!=='string'||typeof b.version!=='string')throw new HttpError(400,'Ugyldig handling.');
  const state=await db.prepare('SELECT * FROM stocktakes WHERE company_id=? AND webshop_id=? AND id=?').bind(company,shop,b.id).first<Saved>();
