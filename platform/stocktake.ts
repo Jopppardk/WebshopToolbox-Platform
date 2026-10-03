@@ -27,7 +27,7 @@ export async function handleStocktake(request:Request,env:PlatformEnv,actor:Acto
   const [dinero,all]=await Promise.all([dineroInventory(env,company).then(d=>({account:d.account,valueMinor:d.balanceMinor,from:d.from,to:d.to}),failed('Lagerværdien kunne ikke hentes fra Dinero.')),companyInventory(env,company,shop,inventory).then(a=>({shops:a.shops,valueMinor:a.valueMinor,incomplete:a.incomplete,dkk:a.dkk}),failed('Lagerværdien for virksomhedens webshops kunne ikke hentes.'))]);
   // The list spans all the company's webshops, so only a company admin (who alone can regulate or release) sees it.
   const admin=await requireCompany(db,actor,company,true).then(()=>true,()=>false);
-  const pending=admin?(await pendingRegulations(env,company)).map(({destination:_d,version:_v,...item})=>item):undefined;
+  const pending=admin?(await pendingRegulations(env,company)).map(({destination:_d,version:_v,guid:_g,reference:_r,payload:_p,...item})=>item):undefined;
   return reply({...inventory,dinero,company:all,pending});
  }
  if(request.method!=='POST')throw new HttpError(405,'Ugyldig handling.');
