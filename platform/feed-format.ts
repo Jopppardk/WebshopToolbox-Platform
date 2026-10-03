@@ -1,5 +1,7 @@
 // Adapted from the existing feed.sablen.dk formatter, read-only source reference 2026-09-23.
-export type FeedFormat={SHOPIFY_COLLECTION_TITLE:string;SHIPPING_COST:string;FREE_SHIPPING_FROM:number|null;DELIVERY_TIME:string};
+export type FeedFormat={SHOPIFY_COLLECTION_TITLE:string;SHIPPING_COST:string;FREE_SHIPPING_FROM:number|null;DELIVERY_TIME:string;LOCALE?:string|null};
+// Stock text in the market's language; Danish when the language is unknown.
+const stockText:Record<string,[string,string]>={sv:['I lager','Ej i lager'],nb:['På lager','Ikke på lager'],no:['På lager','Ikke på lager'],en:['In stock','Out of stock'],de:['Auf Lager','Nicht auf Lager'],fi:['Varastossa','Ei varastossa']};
 export interface Variant {
   id: string;
   barcode: string | null;
@@ -37,7 +39,8 @@ export function productXml(product: Product, variant: Variant, primaryDomain: st
   const oldPrice = variant.compareAtPrice && Number(variant.compareAtPrice) > Number(variant.price)
     ? variant.compareAtPrice
     : variant.price;
-  const stockStatus = variant.availableForSale ? "På lager" : "Ikke på lager";
+  const [inStock, outOfStock] = stockText[(env.LOCALE || "").split("-")[0].toLowerCase()] ?? ["På lager", "Ikke på lager"];
+  const stockStatus = variant.availableForSale ? inStock : outOfStock;
   const productUrl = `${primaryDomain.replace(/\/$/, "")}/products/${encodeURIComponent(product.handle)}?variant=${numericVariantId}`;
 
   return [
