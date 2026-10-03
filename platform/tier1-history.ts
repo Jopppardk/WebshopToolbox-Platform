@@ -2,7 +2,7 @@ import { historyProviders, paymentProviders } from './catalog';
 import { requireCompany } from './auth';
 import { jsonBody } from './invitations';
 import { HttpError,reply,type Actor,type PlatformEnv } from './types';
-import { historyWindow,validateHistory } from './tier1/src/lib/history-policy';
+import { danishDate,historyWindow,validateHistory } from './tier1/src/lib/history-policy';
 
 export async function historyPolicy(env:PlatformEnv,company:string){
  const row=await env.PLATFORM_DB.prepare("SELECT months,start_date FROM integration_history WHERE company_id=? AND scope='' AND provider='history'").bind(company).first<{months:number;start_date:string}>();
@@ -34,7 +34,7 @@ export async function handleHistory(request:Request,env:PlatformEnv,actor:Actor,
   const policy=await historyPolicy(env,company);
   let value;
   try{value=validateHistory({months:isHistory?Number(body.months):24,startDate:body.startDate as string});}catch{throw new HttpError(400,'Angiv en gyldig dato og 1–120 måneders historik.');}
-  if(value.startDate>new Date().toISOString().slice(0,10))throw new HttpError(400,'Startdato må ikke ligge i fremtiden.');
+  if(value.startDate>danishDate())throw new HttpError(400,'Startdato må ikke ligge i fremtiden.');
   if(isHistory&&value.startDate!==policy.startDate&&!body.confirmStartDateChange)throw new HttpError(400,'Bekræft ændringen af startdato.');
   if(body.revision!==undefined&&body.revision!==(existing?.revision||0))throw new HttpError(409,'Indstillingerne er ændret. Genindlæs.');
   const bookingDate=body.bookingStartDate===undefined?undefined:String(body.bookingStartDate);
