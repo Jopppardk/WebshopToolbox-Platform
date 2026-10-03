@@ -7,7 +7,7 @@ import {dineroClient,DineroHttpError} from './dinero-write';
 import {financePeriods} from './finance-calculations';
 import {verifyVoucher} from '../lib/dinero-sale';
 import {productionWrites,bookingDate} from './production-policy';
-import {readReceipt,saveReceipt,uncertainReceipt,type ReceiptKey} from './production-receipts';
+import {readReceipt,saveReceipt,uncertainReceipt,type Receipt,type ReceiptKey} from './production-receipts';
 import {HttpError,reply,type Actor,type PlatformEnv} from './types';
 // The inventory account's booked balance in Dinero, read live: a reconciliation never trusts a cached ledger.
 export async function dineroInventory(env:PlatformEnv,company:string,supplied?:Record<string,string>){
@@ -20,9 +20,22 @@ export async function dineroInventory(env:PlatformEnv,company:string,supplied?:R
  try{return {organizationId:c.organization_id,...await readDineroAccountBalance(supplied||await unseal(env,[company,'dinero',c.organization_id],c.credentials_encrypted),account,financePeriods().today)};}
  catch(e){throw new HttpError(409,e instanceof Error&&/^(Dinero|Lagerkontoen)/.test(e.message)?e.message:'Lagerværdien kunne ikke hentes fra Dinero.');}
 }
+// The inventory account is company-wide in Dinero, so it is compared with all the company's active Shopify webshops together.
+export async function companyInventory(env:PlatformEnv,company:string,shop:string,current?:Awaited<ReturnType<typeof readInventory>>){
+ const ids=(await env.PLATFORM_DB.prepare("SELECT c.webshop_id id FROM webshop_connections c JOIN webshops w ON w.company_id=c.company_id AND w.id=c.webshop_id WHERE c.company_id=? AND c.provider='shopify' AND w.status='active' ORDER BY c.webshop_id").bind(company).all<{id:string}>()).results.map(r=>r.id);
+ if(!ids.includes(shop))ids.push(shop);
+ const reads=await Promise.all(ids.map(id=>id===shop&&current?current:readInventory(env,company,id)));
+ const valueMinor=reads.reduce((sum,r)=>sum+r.totalValueMinor,0);
+ if(!Number.isSafeInteger(valueMinor))throw new HttpError(409,'Ugyldig samlet lagerværdi.');
+ return {shops:ids.length,valueMinor,incomplete:reads.reduce((n,r)=>n+(r.incomplete?.length||0),0),dkk:reads.every(r=>r.rows.every(x=>x.currency==='DKK'))};
+}
+export function assertReconcilable(all:Awaited<ReturnType<typeof companyInventory>>){
+ if(!all.dkk)throw new HttpError(409,'Lagerregulering kræver kostpriser i DKK.');
+ if(all.incomplete)throw new HttpError(409,`${all.incomplete} lagerstyrede varer mangler lagerantal eller kostpris i Shopify. Ret dem, før Dinero reguleres.`);
+}
 // A regulation still in flight, uncertain or lying as a draft is not yet in Dinero's balance; another one would count the difference twice.
-export async function assertNoPendingRegulation(env:PlatformEnv,company:string,shop:string,organizationId:string,credentials:Record<string,string>){
- const rows=(await env.PLATFORM_DB.prepare("SELECT phase,payload_json FROM production_receipts WHERE company_id=? AND webshop_id=? AND provider='shopify' AND module='stocktake' AND destination=? AND phase IN ('prepared','creating','booking','uncertain','draft')").bind(company,shop,organizationId).all<{phase:string;payload_json:string}>()).results;
+export async function assertNoPendingRegulation(env:PlatformEnv,company:string,organizationId:string,credentials:Record<string,string>){
+ const rows=(await env.PLATFORM_DB.prepare("SELECT phase,payload_json FROM production_receipts WHERE company_id=? AND provider='shopify' AND module='stocktake' AND destination=? AND phase IN ('prepared','creating','booking','uncertain','draft')").bind(company,organizationId).all<{phase:string;payload_json:string}>()).results;
  if(rows.some(r=>r.phase!=='draft'))throw new HttpError(409,'En tidligere lagerregulering afventer afklaring. Kontrollér Dinero, før lageret reguleres igen.');
  if(!rows.length)return;
  const client=await dineroClient(credentials);
@@ -50,13 +63,22 @@ export async function commitStocktake(env:PlatformEnv,actor:Actor,company:string
  if([value.account.inventory,value.account.adjustment].some(n=>!chart.some(a=>Number(a.number)===n&&!a.hidden&&!a.vatCode)))throw new HttpError(409,'Lagerkontiene er ikke længere gyldige.');
  const fresh=await readInventory(env,company,shop),reconcile=value.kind==='reconcile';
  if(reconcile){
-  if(fresh.totalValueMinor!==value.shopifyValueMinor||fresh.rows.some(r=>r.currency!=='DKK'))throw new HttpError(409,'Lagerværdien i webshoppen er ændret. Hent et nyt forslag.');
+  const all=await companyInventory(env,company,shop,fresh);assertReconcilable(all);
+  if(all.valueMinor!==value.shopifyValueMinor)throw new HttpError(409,'Lagerværdien i webshoppen er ændret. Hent et nyt forslag.');
   if((await dineroInventory(env,company,credentials)).balanceMinor!==value.dineroValueMinor)throw new HttpError(409,'Lagerværdien i Dinero er ændret. Hent et nyt forslag.');
-  await assertNoPendingRegulation(env,company,shop,connection.organization_id,credentials);
+  await assertNoPendingRegulation(env,company,connection.organization_id,credentials);
  }
  for(const c of value.changes){const row=fresh.rows.find(r=>r.inventoryItemId===c.inventoryItemId&&r.locationId===c.locationId);if(!row||row.quantity!==c.compareQuantity||row.unitCostMinor!==c.unitCostMinor||row.currency!=='DKK')throw new HttpError(409,'Lagerantal eller kostpris er ændret. Hent et nyt forslag.');}
  const access=await shopAccess(env,company,shop),client=await dineroClient(credentials),book=JSON.parse(prefs.preferences_json).automation?.inventoryBookDinero===true;
- let claim=await saveReceipt(env,receiptKey,null,'prepared',{...value,stocktakeVersion:state.version,connectionRevision:connection.revision,preferencesRevision:prefs.revision,mappingJson:mapping.accounts_json,approvedBy:actor.id,book});
+ const claimPayload={...value,stocktakeVersion:state.version,connectionRevision:connection.revision,preferencesRevision:prefs.revision,mappingJson:mapping.accounts_json,approvedBy:actor.id,book};
+ let claim:Receipt;
+ if(reconcile){
+  // One atomic claim: no other inventory regulation for this Dinero organization may be in flight or have finished since this proposal was made.
+  // Otherwise two approvals of the same old balance could both book the whole difference.
+  const version=crypto.randomUUID(),inserted=await db.prepare(`INSERT INTO production_receipts(company_id,webshop_id,provider,module,external_id,destination,phase,version,payload_json) SELECT ?,?,'shopify','stocktake',?,?,'prepared',?,? WHERE NOT EXISTS(SELECT 1 FROM production_receipts WHERE company_id=? AND provider='shopify' AND module='stocktake' AND destination=? AND (phase IN ('prepared','creating','booking','uncertain') OR updated_at>=?)) ON CONFLICT DO NOTHING`).bind(company,shop,id,receiptKey.destination,version,JSON.stringify(claimPayload),company,receiptKey.destination,state.created_at).run();
+  if(!inserted.meta.changes)throw new HttpError(409,'En anden lagerregulering er behandlet eller i gang. Hent lagerstatus igen.');
+  claim={phase:'prepared',version,payload:claimPayload};
+ }else claim=await saveReceipt(env,receiptKey,null,'prepared',claimPayload);
  claim=await saveReceipt(env,receiptKey,claim,'creating',claim.payload);
  try{
   if(!reconcile){
