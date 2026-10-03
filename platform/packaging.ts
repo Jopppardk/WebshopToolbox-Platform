@@ -4,11 +4,12 @@ import { requireCompany,requireWebshop } from './auth';
 import { jsonBody } from './invitations';
 import { packagingPeriod,packagingEstimate,validateManualPackaging,validatePackagingPrice,type ManualPackaging } from './packaging-calculations';
 import { HttpError,reply,type Actor,type PlatformEnv } from './types';
+import { danishDate } from './tier1/src/lib/history-policy';
 function date(value:string){return /^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString().slice(0,10)===value;}
 export async function handlePackaging(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string){
  const db=env.PLATFORM_DB;await requireWebshop(db,actor,company,shop);
  if(request.method==='GET'){
-  const url=new URL(request.url),today=new Date().toISOString().slice(0,10),start=url.searchParams.get('from')||today.slice(0,4)+'-01-01',end=url.searchParams.get('to')||today;
+  const url=new URL(request.url),today=danishDate(),start=url.searchParams.get('from')||today.slice(0,4)+'-01-01',end=url.searchParams.get('to')||today;
   if(!date(start)||!date(end)||start>end)throw new HttpError(400,'Vælg en gyldig periode.');
   const cutoff=await dataStartDate(env,company,shop);
   const rows=await db.prepare("SELECT payload_json,version FROM platform_packaging WHERE company_id=? AND webshop_id=? AND json_extract(payload_json,'$.date')>=? AND json_extract(payload_json,'$.date')<=? LIMIT 5001").bind(company,shop,start>cutoff?start:cutoff,end).all<{payload_json:string;version:number}>();
@@ -24,7 +25,7 @@ export async function handlePackaging(request:Request,env:PlatformEnv,actor:Acto
  await requireCompany(db,actor,company,true);if(actor.support)throw new HttpError(403,'Afslut impersonering før ændringer.');
  const b=await jsonBody(request);
  if(b.action==='sync'){
-  if(typeof b.start!=='string'||typeof b.end!=='string'||!date(b.start)||!date(b.end)||b.start>b.end||b.end>new Date().toISOString().slice(0,10))throw new HttpError(400,'Vælg en gyldig periode.');
+  if(typeof b.start!=='string'||typeof b.end!=='string'||!date(b.start)||!date(b.end)||b.start>b.end||b.end>danishDate())throw new HttpError(400,'Vælg en gyldig periode.');
   try{return reply(await syncPackaging(env,company,shop,b.start,b.end));}catch(e){if(e instanceof HttpError)throw e;throw new HttpError(409,'Emballagehistorikken kunne ikke hentes komplet. Ingen delvis import er gemt.');}
  }
  const audited=async(statement:D1PreparedStatement)=>db.batch([statement,db.prepare("INSERT INTO audit_events(id,company_id,actor_id,action,resource_id,details_json) SELECT ?,?,?,'packaging.updated',?,'{}' WHERE changes()=1").bind(crypto.randomUUID(),company,actor.id,shop)]);
