@@ -1,6 +1,6 @@
 import { handleTier1Data } from './tier1-data';
 import { financeService } from './finance-source';
-import { signupSettings,signupOverview } from './signup';
+import { signupSettings, signupOverview } from './signup';
 import { jsonBody } from './invitations';
 import { handleStocktake } from './stocktake';
 import { handlePayments } from './payments';
@@ -13,7 +13,13 @@ import { handleInvoices } from './invoices';
 import { handleMail } from './mail';
 import { connectionStatement, website } from './connections';
 import { invite, renewInvitation } from './invitations';
-import { catalog, apiStatus, integrationUsage, optionalIntegrations, paymentProviderPattern } from './catalog';
+import {
+  catalog,
+  apiStatus,
+  integrationUsage,
+  optionalIntegrations,
+  paymentProviderPattern,
+} from './catalog';
 import { requireCompany, requireWebshop } from './auth';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 
@@ -41,7 +47,11 @@ function domain(body: Body) {
   return value;
 }
 function customerShopManager(actor: Actor) {
-  if(actor.platformAdmin || actor.support) throw new HttpError(403,'Webshops oprettes og opsættes af virksomhedens administrator i Tier 1. Tier 0 har kun visningsadgang.');
+  if (actor.platformAdmin || actor.support)
+    throw new HttpError(
+      403,
+      'Webshops oprettes og opsættes af virksomhedens administrator i Tier 1. Tier 0 har kun visningsadgang.',
+    );
 }
 function admin(actor: Actor) {
   if (!actor.platformAdmin)
@@ -82,7 +92,15 @@ function audit(
       actor.support?.adminId || actor.id,
       action,
       resource,
-      JSON.stringify({...details,...(actor.support?{supportSession:actor.support.sessionId,impersonatedUser:actor.id}:{})}),
+      JSON.stringify({
+        ...details,
+        ...(actor.support
+          ? {
+              supportSession: actor.support.sessionId,
+              impersonatedUser: actor.id,
+            }
+          : {}),
+      }),
     );
 }
 
@@ -95,99 +113,264 @@ export async function handleAdmin(
   const url = new URL(request.url),
     path = url.pathname,
     method = request.method;
-  if(path==='/api/platform/settings/welcome')return signupSettings(request,env,actor);
-  if(path==='/api/platform/settings/signups')return signupOverview(request,env,actor);
-  const insights=path.match(/^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/insights$/);
-  if(insights){admin(actor);await requireWebshop(db,actor,insights[1],insights[2]);if(method!=='GET')throw new HttpError(405,'Brug Hent.');return (await handleTier1Data(request,env,actor,insights[1],insights[2],'/admin/insights'))!;}
-  const finance=path.match(/^\/api\/platform\/companies\/([\w-]+)\/finance$/);
-  if(finance){await requireCompany(db,actor,finance[1],true);const service=financeService(env,finance[1]);if(method==='GET')return reply(await service.dashboardFinance());if(method==='POST'&&!actor.support){await jsonBody(request);try{return reply(await service.syncDashboardFinance());}catch{throw new HttpError(409,'Regnskabstal kunne ikke hentes komplet. Se status på dashboardet.');}}throw new HttpError(403,'Regnskabstal kan kun opdateres af virksomhedsadministratoren.');}
-  const stocktake=path.match(/^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/stocktake$/);
-  if(stocktake)return handleStocktake(request,env,actor,stocktake[1],stocktake[2]);
-  const payment=path.match(new RegExp(String.raw`^/api/platform/companies/([\w-]+)/webshops/([\w-]+)/payments/(${paymentProviderPattern})/(connection|records)$`));
-  if(payment)return handlePayments(request,env,actor,payment[1],payment[2],payment[3],payment[4]);
-  const dashboard=path.match(/^\/api\/platform\/companies\/([\w-]+)\/dashboard$/);
-  if(dashboard&&method==='GET')return dashboardData(env,actor,dashboard[1]);
-  const documents=path.match(/^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/documents$/);
-  if(documents)return handleDocuments(request,env,actor,documents[1],documents[2]);
-  const packaging=path.match(/^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/packaging$/);
-  if(packaging)return handlePackaging(request,env,actor,packaging[1],packaging[2]);
-  const accountingAction=path.match(/^\/api\/platform\/companies\/([\w-]+)\/accounting\/(connection|mapping)$/);
-  if(accountingAction)return handleAccounting(request,env,actor,accountingAction[1],accountingAction[2]);
-  const operation=path.match(/^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/data\/(orders|refunds|payouts|inventory|insights|sales-preview|connection-test)$/);
-  if(operation)return handleOperations(request,env,actor,operation[1],operation[2],operation[3]);
-  const tickets=path.match(/^\/api\/platform(?:\/companies\/([\w-]+))?\/tickets(?:\/([\w-]+))?$/);
-  if(tickets)return handleTickets(request,env,actor,tickets[1],tickets[2]);
-  const invoiceMatch=path.match(/^\/api\/platform\/companies\/([\w-]+)\/invoices(?:\/(settings|logo|sync|generate|check|pdf|test|test-latest))?$/);
-  if(invoiceMatch)return handleInvoices(request,env,actor,invoiceMatch[1],invoiceMatch[2]);
-  const mailMatch=path.match(/^\/api\/platform\/companies\/([\w-]+)\/mail(?:\/(test))?$/);
-  if(mailMatch)return handleMail(request,env,actor,mailMatch[1],mailMatch[2]);
+  if (path === '/api/platform/settings/welcome')
+    return signupSettings(request, env, actor);
+  if (path === '/api/platform/settings/signups')
+    return signupOverview(request, env, actor);
+  const insights = path.match(
+    /^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/insights$/,
+  );
+  if (insights) {
+    admin(actor);
+    await requireWebshop(db, actor, insights[1], insights[2]);
+    if (method !== 'GET') throw new HttpError(405, 'Brug Hent.');
+    return (await handleTier1Data(
+      request,
+      env,
+      actor,
+      insights[1],
+      insights[2],
+      '/admin/insights',
+    ))!;
+  }
+  const finance = path.match(/^\/api\/platform\/companies\/([\w-]+)\/finance$/);
+  if (finance) {
+    await requireCompany(db, actor, finance[1], true);
+    const service = financeService(env, finance[1]);
+    if (method === 'GET') return reply(await service.dashboardFinance());
+    if (method === 'POST' && !actor.support) {
+      await jsonBody(request);
+      try {
+        return reply(await service.syncDashboardFinance());
+      } catch {
+        throw new HttpError(
+          409,
+          'Regnskabstal kunne ikke hentes komplet. Se status på dashboardet.',
+        );
+      }
+    }
+    throw new HttpError(
+      403,
+      'Regnskabstal kan kun opdateres af virksomhedsadministratoren.',
+    );
+  }
+  const stocktake = path.match(
+    /^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/stocktake$/,
+  );
+  if (stocktake)
+    return handleStocktake(request, env, actor, stocktake[1], stocktake[2]);
+  const payment = path.match(
+    new RegExp(
+      String.raw`^/api/platform/companies/([\w-]+)/webshops/([\w-]+)/payments/(${paymentProviderPattern})/(connection|records)$`,
+    ),
+  );
+  if (payment)
+    return handlePayments(
+      request,
+      env,
+      actor,
+      payment[1],
+      payment[2],
+      payment[3],
+      payment[4],
+    );
+  const dashboard = path.match(
+    /^\/api\/platform\/companies\/([\w-]+)\/dashboard$/,
+  );
+  if (dashboard && method === 'GET')
+    return dashboardData(env, actor, dashboard[1]);
+  const documents = path.match(
+    /^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/documents$/,
+  );
+  if (documents)
+    return handleDocuments(request, env, actor, documents[1], documents[2]);
+  const packaging = path.match(
+    /^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/packaging$/,
+  );
+  if (packaging)
+    return handlePackaging(request, env, actor, packaging[1], packaging[2]);
+  const accountingAction = path.match(
+    /^\/api\/platform\/companies\/([\w-]+)\/accounting\/(connection|mapping)$/,
+  );
+  if (accountingAction)
+    return handleAccounting(
+      request,
+      env,
+      actor,
+      accountingAction[1],
+      accountingAction[2],
+    );
+  const operation = path.match(
+    /^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/data\/(orders|refunds|payouts|inventory|insights|sales-preview|connection-test)$/,
+  );
+  if (operation)
+    return handleOperations(
+      request,
+      env,
+      actor,
+      operation[1],
+      operation[2],
+      operation[3],
+    );
+  const tickets = path.match(
+    /^\/api\/platform(?:\/companies\/([\w-]+))?\/tickets(?:\/([\w-]+))?$/,
+  );
+  if (tickets)
+    return handleTickets(request, env, actor, tickets[1], tickets[2]);
+  const invoiceMatch = path.match(
+    /^\/api\/platform\/companies\/([\w-]+)\/invoices(?:\/(settings|logo|sync|generate|check|pdf|test|test-latest))?$/,
+  );
+  if (invoiceMatch)
+    return handleInvoices(
+      request,
+      env,
+      actor,
+      invoiceMatch[1],
+      invoiceMatch[2],
+    );
+  const mailMatch = path.match(
+    /^\/api\/platform\/companies\/([\w-]+)\/mail(?:\/(test))?$/,
+  );
+  if (mailMatch)
+    return handleMail(request, env, actor, mailMatch[1], mailMatch[2]);
   if (path === '/api/platform/me' && method === 'GET')
     return reply({ user: actor });
   if (path === '/api/platform/catalog' && method === 'GET') {
-    if(!actor.platformAdmin) {
-      const own=await db.prepare('SELECT company_id FROM users WHERE id=?').bind(actor.id).first<{company_id:string}>();
-      if(!own?.company_id) throw new HttpError(403,'Ingen virksomhed.');
-      await requireCompany(db,actor,own.company_id);
+    if (!actor.platformAdmin) {
+      const own = await db
+        .prepare('SELECT company_id FROM users WHERE id=?')
+        .bind(actor.id)
+        .first<{ company_id: string }>();
+      if (!own?.company_id) throw new HttpError(403, 'Ingen virksomhed.');
+      await requireCompany(db, actor, own.company_id);
     }
-    return reply({integrations:catalog});
+    return reply({ integrations: catalog });
   }
-  if(path==='/api/platform/catalog/status' && method==='GET') {
+  if (path === '/api/platform/catalog/status' && method === 'GET') {
     admin(actor);
-    const [status,usage]=await Promise.all([apiStatus(),integrationUsage(db)]);
-    return reply({integrations:status.map(i=>({...i,usage:usage[i.id]}))});
+    const [status, usage] = await Promise.all([
+      apiStatus(),
+      integrationUsage(db),
+    ]);
+    return reply({
+      integrations: status.map((i) => ({ ...i, usage: usage[i.id] })),
+    });
   }
-  const selectionMatch=path.match(/^\/api\/platform\/companies\/([\w-]+)\/integrations$/);
-  if(selectionMatch) {
-    const company=selectionMatch[1];
-    await requireCompany(db,actor,company,method!=='GET');
-    if(method==='GET') return reply({selected:(await db.prepare('SELECT integration_id FROM company_integrations WHERE company_id=? ORDER BY integration_id').bind(company).all()).results});
-    if(method==='POST' || method==='DELETE') {
-      const input=await body(request),id=text(input,'integrationId');
-      if(!optionalIntegrations.includes(id)) throw new HttpError(400,'Regnskab og webshops administreres særskilt.');
+  const selectionMatch = path.match(
+    /^\/api\/platform\/companies\/([\w-]+)\/integrations$/,
+  );
+  if (selectionMatch) {
+    const company = selectionMatch[1];
+    await requireCompany(db, actor, company, method !== 'GET');
+    if (method === 'GET')
+      return reply({
+        selected: (
+          await db
+            .prepare(
+              'SELECT integration_id FROM company_integrations WHERE company_id=? ORDER BY integration_id',
+            )
+            .bind(company)
+            .all()
+        ).results,
+      });
+    if (method === 'POST' || method === 'DELETE') {
+      const input = await body(request),
+        id = text(input, 'integrationId');
+      if (!optionalIntegrations.includes(id))
+        throw new HttpError(
+          400,
+          'Regnskab og webshops administreres særskilt.',
+        );
       await db.batch([
-        db.prepare(method==='POST'?'INSERT OR IGNORE INTO company_integrations(company_id,integration_id) VALUES(?,?)':'DELETE FROM company_integrations WHERE company_id=? AND integration_id=?').bind(company,id),
-        audit(db,actor,company,method==='POST'?'integration.selected':'integration.removed',company,{integrationId:id}),
+        db
+          .prepare(
+            method === 'POST'
+              ? 'INSERT OR IGNORE INTO company_integrations(company_id,integration_id) VALUES(?,?)'
+              : 'DELETE FROM company_integrations WHERE company_id=? AND integration_id=?',
+          )
+          .bind(company, id),
+        audit(
+          db,
+          actor,
+          company,
+          method === 'POST' ? 'integration.selected' : 'integration.removed',
+          company,
+          { integrationId: id },
+        ),
       ]);
-      return reply({ok:true});
+      return reply({ ok: true });
     }
   }
   if (path === '/api/platform/workspace' && method === 'GET') {
-    const company = await db.prepare(`SELECT c.*,m.role FROM users u
+    const company = await db
+      .prepare(`SELECT c.*,m.role FROM users u
       JOIN companies c ON c.id=u.company_id
       JOIN company_memberships m ON m.company_id=c.id AND m.user_id=u.id
-      WHERE u.id=? AND c.status='active'`).bind(actor.id).first();
-    if (!company) throw new HttpError(403, 'Din bruger har ikke adgang til en aktiv virksomhed.');
-    return reply({company});
+      WHERE u.id=? AND c.status='active'`)
+      .bind(actor.id)
+      .first();
+    if (!company)
+      throw new HttpError(
+        403,
+        'Din bruger har ikke adgang til en aktiv virksomhed.',
+      );
+    return reply({ company });
   }
-  const connectionMatch=path.match(/^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/connection$/);
-  if(connectionMatch && method==='PUT') {
+  const connectionMatch = path.match(
+    /^\/api\/platform\/companies\/([\w-]+)\/webshops\/([\w-]+)\/connection$/,
+  );
+  if (connectionMatch && method === 'PUT') {
     customerShopManager(actor);
-    const [,company,shop]=connectionMatch;
-    await requireCompany(db,actor,company,true);
-    await requireWebshop(db,actor,company,shop);
-    if(actor.support) throw new HttpError(403,'Afslut supportadgang før ændring af adgangsoplysninger.');
-    const input=await body(request);
-    const statement=await connectionStatement(env,company,shop,input);
-    await db.batch([statement,audit(db,actor,company,'webshop.connection.saved',shop,{provider:'shopify'})]);
-    return reply({ok:true});
+    const [, company, shop] = connectionMatch;
+    await requireCompany(db, actor, company, true);
+    await requireWebshop(db, actor, company, shop);
+    if (actor.support)
+      throw new HttpError(
+        403,
+        'Afslut supportadgang før ændring af adgangsoplysninger.',
+      );
+    const input = await body(request);
+    const statement = await connectionStatement(env, company, shop, input);
+    await db.batch([
+      statement,
+      audit(db, actor, company, 'webshop.connection.saved', shop, {
+        provider: 'shopify',
+      }),
+    ]);
+    return reply({ ok: true });
   }
-  const accountingMatch = path.match(/^\/api\/platform\/companies\/([\w-]+)\/accounting$/);
+  const accountingMatch = path.match(
+    /^\/api\/platform\/companies\/([\w-]+)\/accounting$/,
+  );
   if (accountingMatch) {
     const company = accountingMatch[1];
     await requireCompany(db, actor, company, method !== 'GET');
-    if (method === 'GET') return reply({accounting: await db.prepare(
-      'SELECT provider,account_name,status FROM company_accounting WHERE company_id=?'
-    ).bind(company).first()});
+    if (method === 'GET')
+      return reply({
+        accounting: await db
+          .prepare(
+            'SELECT provider,account_name,status FROM company_accounting WHERE company_id=?',
+          )
+          .bind(company)
+          .first(),
+      });
     if (method === 'PUT') {
       const input = await body(request);
-      const provider = text(input, 'provider'), name = text(input, 'accountName');
-      if (!['dinero','e-conomic'].includes(provider)) throw new HttpError(400, 'Vælg et understøttet regnskabsprogram.');
+      const provider = text(input, 'provider'),
+        name = text(input, 'accountName');
+      if (!['dinero', 'e-conomic'].includes(provider))
+        throw new HttpError(400, 'Vælg et understøttet regnskabsprogram.');
       await db.batch([
-        db.prepare(`INSERT INTO company_accounting(company_id,provider,account_name) VALUES(?,?,?)
-          ON CONFLICT(company_id) DO UPDATE SET provider=excluded.provider,account_name=excluded.account_name,updated_at=CURRENT_TIMESTAMP`).bind(company,provider,name),
-        audit(db,actor,company,'accounting.configured',company,{provider,accountName:name}),
+        db
+          .prepare(`INSERT INTO company_accounting(company_id,provider,account_name) VALUES(?,?,?)
+          ON CONFLICT(company_id) DO UPDATE SET provider=excluded.provider,account_name=excluded.account_name,updated_at=CURRENT_TIMESTAMP`)
+          .bind(company, provider, name),
+        audit(db, actor, company, 'accounting.configured', company, {
+          provider,
+          accountName: name,
+        }),
       ]);
-      return reply({ok:true});
+      return reply({ ok: true });
     }
   }
   if (path === '/api/platform/companies') {
@@ -226,7 +409,7 @@ export async function handleAdmin(
             .all()
         ).results,
       });
-    if(method==='POST') return invite(request,env,actor,null);
+    if (method === 'POST') return invite(request, env, actor, null);
   }
 
   const userMatch = path.match(/^\/api\/platform\/settings\/admins\/([\w-]+)$/);
@@ -237,33 +420,82 @@ export async function handleAdmin(
       target = userMatch[1];
     if (target === actor.id)
       throw new HttpError(409, 'Du kan ikke deaktivere din egen bruger.');
-    if (!(await db.prepare('SELECT user_id FROM platform_admins WHERE user_id=?').bind(target).first()))
+    if (
+      !(await db
+        .prepare('SELECT user_id FROM platform_admins WHERE user_id=?')
+        .bind(target)
+        .first())
+    )
       throw new HttpError(404, 'Portaladministratoren findes ikke.');
-    if(await db.prepare("SELECT id FROM invitations WHERE user_id=? AND state<>'accepted'").bind(target).first()) throw new HttpError(409,'Brug invitationshandlingerne for denne bruger.');
+    if (
+      await db
+        .prepare(
+          "SELECT id FROM invitations WHERE user_id=? AND state<>'accepted'",
+        )
+        .bind(target)
+        .first()
+    )
+      throw new HttpError(
+        409,
+        'Brug invitationshandlingerne for denne bruger.',
+      );
     await db.batch([
       db.prepare('UPDATE users SET status=? WHERE id=?').bind(next, target),
       audit(db, actor, null, 'user.status', target, { status: next }),
     ]);
     return reply({ ok: true });
   }
-  const invitationMatch=path.match(/^\/api\/platform\/(?:companies\/([\w-]+)\/users|settings\/admins)\/([\w-]+)\/invitation$/);
-  if(invitationMatch && ['POST','DELETE'].includes(method)) return renewInvitation(request,env,actor,invitationMatch[1]||null,invitationMatch[2]);
-  const companyUser = path.match(/^\/api\/platform\/companies\/([\w-]+)\/users(?:\/([\w-]+))?$/);
+  const invitationMatch = path.match(
+    /^\/api\/platform\/(?:companies\/([\w-]+)\/users|settings\/admins)\/([\w-]+)\/invitation$/,
+  );
+  if (invitationMatch && ['POST', 'DELETE'].includes(method))
+    return renewInvitation(
+      request,
+      env,
+      actor,
+      invitationMatch[1] || null,
+      invitationMatch[2],
+    );
+  const companyUser = path.match(
+    /^\/api\/platform\/companies\/([\w-]+)\/users(?:\/([\w-]+))?$/,
+  );
   if (companyUser) {
-    const company = companyUser[1], target = companyUser[2];
+    const company = companyUser[1],
+      target = companyUser[2];
     await requireCompany(db, actor, company, true);
-    if (!target && method==='POST') return invite(request,env,actor,company);
+    if (!target && method === 'POST')
+      return invite(request, env, actor, company);
     if (target && method === 'PATCH') {
-      const input = await body(request), next = status(input);
-      if (!(await db.prepare('SELECT id FROM users WHERE id=? AND company_id=?').bind(target,company).first()))
+      const input = await body(request),
+        next = status(input);
+      if (
+        !(await db
+          .prepare('SELECT id FROM users WHERE id=? AND company_id=?')
+          .bind(target, company)
+          .first())
+      )
         throw new HttpError(404, 'Brugeren findes ikke i virksomheden.');
-      if (target === actor.id) throw new HttpError(409, 'Du kan ikke deaktivere din egen bruger.');
-      if(await db.prepare("SELECT id FROM invitations WHERE user_id=? AND state<>'accepted'").bind(target).first()) throw new HttpError(409,'Brug invitationshandlingerne for denne bruger.');
+      if (target === actor.id)
+        throw new HttpError(409, 'Du kan ikke deaktivere din egen bruger.');
+      if (
+        await db
+          .prepare(
+            "SELECT id FROM invitations WHERE user_id=? AND state<>'accepted'",
+          )
+          .bind(target)
+          .first()
+      )
+        throw new HttpError(
+          409,
+          'Brug invitationshandlingerne for denne bruger.',
+        );
       await db.batch([
-        db.prepare('UPDATE users SET status=? WHERE id=? AND company_id=?').bind(next,target,company),
-        audit(db,actor,company,'user.status',target,{status:next}),
+        db
+          .prepare('UPDATE users SET status=? WHERE id=? AND company_id=?')
+          .bind(next, target, company),
+        audit(db, actor, company, 'user.status', target, { status: next }),
       ]);
-      return reply({ok:true});
+      return reply({ ok: true });
     }
   }
   const companyMatch = path.match(
@@ -306,9 +538,21 @@ export async function handleAdmin(
           id = crypto.randomUUID(),
           name = text(input, 'name'),
           host = website(input.domain);
-        if(actor.support && input.provider) throw new HttpError(403,'Afslut supportadgang før ændring af adgangsoplysninger.');
-        const connection=input.provider ? await connectionStatement(env,company,id,input) : null;
-        if(!input.provider && ('clientSecret' in input || 'clientId' in input || 'shopDomain' in input)) throw new HttpError(400,'Vælg webshopplatform.');
+        if (actor.support && input.provider)
+          throw new HttpError(
+            403,
+            'Afslut supportadgang før ændring af adgangsoplysninger.',
+          );
+        const connection = input.provider
+          ? await connectionStatement(env, company, id, input)
+          : null;
+        if (
+          !input.provider &&
+          ('clientSecret' in input ||
+            'clientId' in input ||
+            'shopDomain' in input)
+        )
+          throw new HttpError(400, 'Vælg webshopplatform.');
         await db.batch([
           db
             .prepare(
@@ -347,12 +591,18 @@ export async function handleAdmin(
           user = text(input, 'userId');
         if (
           !(await db
-            .prepare("SELECT id FROM users WHERE id=? AND company_id=? AND status='active'")
+            .prepare(
+              "SELECT id FROM users WHERE id=? AND company_id=? AND status='active'",
+            )
             .bind(user, company)
             .first())
         )
           throw new HttpError(400, 'Vælg en aktiv bruger.');
-        if (user === actor.id) throw new HttpError(409, 'Du kan ikke fjerne eller ændre din egen administratorrolle.');
+        if (user === actor.id)
+          throw new HttpError(
+            409,
+            'Du kan ikke fjerne eller ændre din egen administratorrolle.',
+          );
         if (method === 'DELETE') {
           await db.batch([
             db

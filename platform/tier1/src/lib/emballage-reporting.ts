@@ -1,4 +1,4 @@
-import {packagingAudienceTotals} from '@/lib/packaging';
+import { packagingAudienceTotals } from '@/lib/packaging';
 import { danishDate } from '@/lib/history-policy';
 import type { PackagingRow, ManualPackaging } from '@/lib/packaging';
 import type { EISchema } from '@/lib/emballage-api';
@@ -21,7 +21,8 @@ export function validateEIConfig(v: EIConfig): EIConfig {
     v.startDate > '2100-01-01'
   )
     throw Error('Startdatoen skal være første dag i et kvartal.');
-  if (!v.responsibility || v.responsibility.length > 120) throw Error('Vælg producentansvar.');
+  if (!v.responsibility || v.responsibility.length > 120)
+    throw Error('Vælg producentansvar.');
   return {
     startDate: v.startDate,
     responsibility: v.responsibility,
@@ -47,10 +48,14 @@ export function recentQuarters(now = new Date()) {
 }
 export const audienceRule = 'company-name-v1';
 export function orderAudience(order: {
-  billingAddress?: {company: string|null}|null;
-  shippingAddress?: {company: string|null}|null;
+  billingAddress?: { company: string | null } | null;
+  shippingAddress?: { company: string | null } | null;
 }): Audience {
-  if (order.billingAddress?.company?.trim() || order.shippingAddress?.company?.trim()) return 'commercial';
+  if (
+    order.billingAddress?.company?.trim() ||
+    order.shippingAddress?.company?.trim()
+  )
+    return 'commercial';
   return 'household';
 }
 export function quarterTotals(
@@ -59,8 +64,14 @@ export function quarterTotals(
   start: string,
   end: string,
 ) {
-  const selectedRows=rows.filter(r=>!r.test&&r.date>=start&&r.date<=end),selectedManual=manual.filter(r=>r.date>=start&&r.date<=end);
-  return {...packagingAudienceTotals(selectedRows,selectedManual),sources:[...selectedRows,...selectedManual]};
+  const selectedRows = rows.filter(
+      (r) => !r.test && r.date >= start && r.date <= end,
+    ),
+    selectedManual = manual.filter((r) => r.date >= start && r.date <= end);
+  return {
+    ...packagingAudienceTotals(selectedRows, selectedManual),
+    sources: [...selectedRows, ...selectedManual],
+  };
 }
 export function mappedAnswers(
   schema: EISchema,

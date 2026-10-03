@@ -1,11 +1,16 @@
 export const syncIntervals = [1, 5, 10, 15, 30, 60] as const;
-export type SyncInterval = typeof syncIntervals[number];
+export type SyncInterval = (typeof syncIntervals)[number];
 
 export function normalizeSyncInterval(value: unknown): SyncInterval {
-  return syncIntervals.includes(value as SyncInterval) ? value as SyncInterval : 5;
+  return syncIntervals.includes(value as SyncInterval)
+    ? (value as SyncInterval)
+    : 5;
 }
 
-export function scheduledRunIsDue(scheduledTime: number, intervalMinutes: unknown) {
+export function scheduledRunIsDue(
+  scheduledTime: number,
+  intervalMinutes: unknown,
+) {
   const interval = normalizeSyncInterval(intervalMinutes);
   return Math.floor(scheduledTime / 60_000) % interval === 0;
 }

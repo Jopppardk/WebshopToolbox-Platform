@@ -5,8 +5,8 @@ import { ShopifyPackagingFields } from '@/components/shopify-packaging-fields';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
 import { useState, useEffect } from 'react';
 import { PackageCheck, Save } from 'lucide-react';
-import type {ReactNode} from 'react';
-import {IntegrationCard} from '@/components/integration-card';
+import type { ReactNode } from 'react';
+import { IntegrationCard } from '@/components/integration-card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { emptyEIConfig, type EIConfig } from '@/lib/emballage-reporting';
@@ -40,7 +40,12 @@ export function EmballageConnection({
     [schema, setSchema] = useState<EISchema | null>(null),
     [mapping, setMapping] = useState({ household: '', commercial: '' });
   // Opened from a link (e.g. the Emballage page warning): bring the card into view once it renders.
-  useEffect(() => { if (initialExpanded) document.getElementById('emballage-connection-panel')?.scrollIntoView({ block: 'center' }); }, [initialExpanded]);
+  useEffect(() => {
+    if (initialExpanded)
+      document
+        .getElementById('emballage-connection-panel')
+        ?.scrollIntoView({ block: 'center' });
+  }, [initialExpanded]);
   async function load() {
     const r = await fetch('/api/emballage/connection', { cache: 'no-store' }),
       d = (await r.json()) as Status;
@@ -54,8 +59,10 @@ export function EmballageConnection({
     });
   }
   useEffect(() => {
-    const timer=window.setTimeout(()=>{void load().catch((e) => setError(e.message));},0);
-    return ()=>window.clearTimeout(timer);
+    const timer = window.setTimeout(() => {
+      void load().catch((e) => setError(e.message));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
   async function act(body: unknown) {
     setBusy(true);
@@ -67,14 +74,19 @@ export function EmballageConnection({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         }),
-        d = (await r.json()) as { error?: string; initialHistory?: { count: number } };
+        d = (await r.json()) as {
+          error?: string;
+          initialHistory?: { count: number };
+        };
       if (!r.ok) throw Error(d.error);
       setApiKey('');
       await load();
       onConnected();
-      setMessage(d.initialHistory
-        ? `Forbindelsen og indstillingerne er gemt. Tidligere emballagehistorik blev hentet automatisk (${d.initialHistory.count} linjer).`
-        : 'Forbindelsen og indstillingerne er gemt.');
+      setMessage(
+        d.initialHistory
+          ? `Forbindelsen og indstillingerne er gemt. Tidligere emballagehistorik blev hentet automatisk (${d.initialHistory.count} linjer).`
+          : 'Forbindelsen og indstillingerne er gemt.',
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Kunne ikke gemme.');
     } finally {
@@ -110,141 +122,161 @@ export function EmballageConnection({
     }
   }
   return (
-    <IntegrationCard name="Emballage Indberetning" description={supportedModules('emballage')} icon={PackageCheck} connected={status?.connected??null} testMode={status?.testMode} expanded={open} onToggle={()=>setOpen(!open)} panelId="emballage-connection-panel" footer={footer}>
-          {status?.connected&&<p className="text-sm">Forbundet til {status.organisation}.</p>}
-          <ShopifyPackagingFields />
-          <label htmlFor="emballage-api-key" className="block text-sm">
-            API-nøgle
+    <IntegrationCard
+      name="Emballage Indberetning"
+      description={supportedModules('emballage')}
+      icon={PackageCheck}
+      connected={status?.connected ?? null}
+      testMode={status?.testMode}
+      expanded={open}
+      onToggle={() => setOpen(!open)}
+      panelId="emballage-connection-panel"
+      footer={footer}
+    >
+      {status?.connected && (
+        <p className="text-sm">Forbundet til {status.organisation}.</p>
+      )}
+      <ShopifyPackagingFields />
+      <label htmlFor="emballage-api-key" className="block text-sm">
+        API-nøgle
+        <Input
+          id="emballage-api-key"
+          type="password"
+          autoComplete="off"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          placeholder="esk_….secret"
+        />
+      </label>
+      <Button
+        disabled={busy || !apiKey}
+        onClick={() => void act({ action: 'connect', apiKey })}
+      >
+        {busy ? 'Arbejder…' : 'Validér og gem forbindelse'}
+      </Button>
+      {status?.connected && (
+        <>
+          <p className="text-xs text-muted-foreground">
+            Nøglen opbevares krypteret.
+            {status.testMode
+              ? ' Testnøgle tilsluttet: der hentes data, men der sendes ingen rigtige indberetninger.'
+              : ''}
+          </p>
+          <TestModeNote className="text-xs text-muted-foreground">
+            Testmiljøet henter og viser data. Ekstern indberetning er blokeret.
+          </TestModeNote>
+          <label htmlFor="emballage-start" className="block text-sm">
+            Startdato
             <Input
-              id="emballage-api-key" type="password"
-              autoComplete="off"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="esk_….secret"
+              id="emballage-start"
+              type="date"
+              value={config.startDate}
+              onChange={(e) =>
+                setConfig({ ...config, startDate: e.target.value })
+              }
             />
+            <span className="text-xs text-muted-foreground">
+              Første dag i det første kvartal, der skal indberettes. Ved første
+              opsætning hentes historikken automatisk fra Shopify.
+            </span>
           </label>
-          <Button
-            disabled={busy || !apiKey}
-            onClick={() => void act({ action: 'connect', apiKey })}
-          >
-            {busy ? 'Arbejder…' : 'Validér og gem forbindelse'}
-          </Button>
-          {status?.connected && (
-            <>
-              <p className="text-xs text-muted-foreground">
-                Nøglen opbevares krypteret.{status.testMode ? ' Testnøgle tilsluttet: der hentes data, men der sendes ingen rigtige indberetninger.' : ''}
-              </p>
-              <TestModeNote className="text-xs text-muted-foreground">Testmiljøet henter og viser data. Ekstern indberetning er blokeret.</TestModeNote>
-              <label htmlFor="emballage-start" className="block text-sm">
-                Startdato
-                <Input
-                  id="emballage-start" type="date"
-                  value={config.startDate}
-                  onChange={(e) =>
-                    setConfig({ ...config, startDate: e.target.value })
-                  }
-                />
-                <span className="text-xs text-muted-foreground">
-                  Første dag i det første kvartal, der skal indberettes. Ved første opsætning hentes historikken automatisk fra Shopify.
-                </span>
-              </label>
-              <label className="block text-sm">
-                Producentansvar
-                <select
-                  className="mt-1 h-10 w-full rounded-lg border bg-white px-3"
-                  value={config.responsibility}
-                  onChange={(e) => {
-                    setConfig({ ...config, responsibility: e.target.value });
-                    setReportId('');
-                    setSchema(null);
-                  }}
-                >
-                  <option value="">Vælg</option>
-                  {status.responsibilities?.map((r) => (
-                    <option key={r.code} value={r.code}>
-                      {r.code}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="rounded-xl border bg-white p-3">
-                <p className="text-sm font-medium">Erhvervsordrer identificeres ved Company name</p>
-                <p className="mt-2 text-xs text-muted-foreground">Et udfyldt firmanavn på fakturerings- eller leveringsadressen betyder erhverv. Ellers husholdning. Hent historikken igen på fanen Indberetning for at opdatere tidligere ordrer.</p>
-              </div>
-              <label className="block text-sm">
-                Formular til feltopsætning
-                <select
-                  className="mt-1 h-10 w-full rounded-lg border bg-white px-3"
-                  value={reportId}
-                  disabled={busy}
-                  onChange={(e) => void chooseReport(e.target.value)}
-                >
-                  <option value="">Vælg kvartal</option>
-                  {status.reports
-                    ?.filter(
-                      (r) => r.responsibility.code === config.responsibility,
-                    )
-                    .map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.period.label}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              {schema && (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {(['household', 'commercial'] as const).map((a) => (
-                    <label key={a} className="text-sm">
-                      {a === 'household' ? 'Husholdning (kg)' : 'Erhverv (kg)'}
-                      <select
-                        className="mt-1 h-10 w-full rounded-lg border bg-white px-3"
-                        value={mapping[a]}
-                        onChange={(e) =>
-                          setMapping({ ...mapping, [a]: e.target.value })
-                        }
-                      >
-                        <option value="">Vælg modtagerfelt</option>
-                        {schema.fields
-                          .filter(
-                            (f) =>
-                              f.type === 'number' &&
-                              f.unit?.trim().toLowerCase() === 'kg',
-                          )
-                          .map((f) => (
-                            <option key={f.name} value={f.name}>
-                              {f.label.da || f.label.en || f.name}
-                            </option>
-                          ))}
-                      </select>
-                    </label>
-                  ))}
-                </div>
-              )}
-              <Button
-                disabled={busy}
-                onClick={() =>
-                  void act({
-                    action: 'settings',
-                    config,
-                    ...(schema ? { reportId: Number(reportId), mapping } : {}),
-                  })
-                }
-              >
-                <Save />
-                Gem indstillinger
-              </Button>
-            </>
-          )}
-          {error && (
-            <p role="alert" className="text-sm text-red-700">
-              {error}
+          <label className="block text-sm">
+            Producentansvar
+            <select
+              className="mt-1 h-10 w-full rounded-lg border bg-white px-3"
+              value={config.responsibility}
+              onChange={(e) => {
+                setConfig({ ...config, responsibility: e.target.value });
+                setReportId('');
+                setSchema(null);
+              }}
+            >
+              <option value="">Vælg</option>
+              {status.responsibilities?.map((r) => (
+                <option key={r.code} value={r.code}>
+                  {r.code}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="rounded-xl border bg-white p-3">
+            <p className="text-sm font-medium">
+              Erhvervsordrer identificeres ved Company name
             </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Et udfyldt firmanavn på fakturerings- eller leveringsadressen
+              betyder erhverv. Ellers husholdning. Hent historikken igen på
+              fanen Indberetning for at opdatere tidligere ordrer.
+            </p>
+          </div>
+          <label className="block text-sm">
+            Formular til feltopsætning
+            <select
+              className="mt-1 h-10 w-full rounded-lg border bg-white px-3"
+              value={reportId}
+              disabled={busy}
+              onChange={(e) => void chooseReport(e.target.value)}
+            >
+              <option value="">Vælg kvartal</option>
+              {status.reports
+                ?.filter((r) => r.responsibility.code === config.responsibility)
+                .map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.period.label}
+                  </option>
+                ))}
+            </select>
+          </label>
+          {schema && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(['household', 'commercial'] as const).map((a) => (
+                <label key={a} className="text-sm">
+                  {a === 'household' ? 'Husholdning (kg)' : 'Erhverv (kg)'}
+                  <select
+                    className="mt-1 h-10 w-full rounded-lg border bg-white px-3"
+                    value={mapping[a]}
+                    onChange={(e) =>
+                      setMapping({ ...mapping, [a]: e.target.value })
+                    }
+                  >
+                    <option value="">Vælg modtagerfelt</option>
+                    {schema.fields
+                      .filter(
+                        (f) =>
+                          f.type === 'number' &&
+                          f.unit?.trim().toLowerCase() === 'kg',
+                      )
+                      .map((f) => (
+                        <option key={f.name} value={f.name}>
+                          {f.label.da || f.label.en || f.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              ))}
+            </div>
           )}
-          {message && (
-            <output  className="text-sm text-green-800">
-              {message}
-            </output>
-          )}
+          <Button
+            disabled={busy}
+            onClick={() =>
+              void act({
+                action: 'settings',
+                config,
+                ...(schema ? { reportId: Number(reportId), mapping } : {}),
+              })
+            }
+          >
+            <Save />
+            Gem indstillinger
+          </Button>
+        </>
+      )}
+      {error && (
+        <p role="alert" className="text-sm text-red-700">
+          {error}
+        </p>
+      )}
+      {message && <output className="text-sm text-green-800">{message}</output>}
     </IntegrationCard>
   );
 }

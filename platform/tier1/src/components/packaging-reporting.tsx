@@ -16,8 +16,8 @@ type Quarter = {
   start: string;
   end: string;
   householdGrams: number;
-  reportableGrams:number;
-  unknownAudienceGrams:number;
+  reportableGrams: number;
+  unknownAudienceGrams: number;
   commercialGrams: number;
   submitted: boolean;
   submittedAt?: string;
@@ -34,7 +34,7 @@ type Overview = {
   startDate?: string;
   quarters: Quarter[];
   error?: string;
-  providerError?:string;
+  providerError?: string;
 };
 type Preview = {
   token: string;
@@ -45,7 +45,15 @@ type Preview = {
   testMode: boolean;
   organisation: string;
 };
-export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{revision?:number;onUpdated?:()=>void;onShowConsumption?:(start:string,end:string)=>void}) {
+export function PackagingReporting({
+  revision = 0,
+  onUpdated,
+  onShowConsumption,
+}: {
+  revision?: number;
+  onUpdated?: () => void;
+  onShowConsumption?: (start: string, end: string) => void;
+}) {
   const [data, setData] = useState<Overview | null>(null),
     [busy, setBusy] = useState(false),
     [acceptIncomplete, setAcceptIncomplete] = useState(false),
@@ -59,8 +67,10 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
     setData(d);
   }
   useEffect(() => {
-    const timer=window.setTimeout(()=>{void load().catch((e) => setError(e.message));},0);
-    return ()=>window.clearTimeout(timer);
+    const timer = window.setTimeout(() => {
+      void load().catch((e) => setError(e.message));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [revision]);
   async function action(body: {
     action: string;
@@ -82,8 +92,10 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
           receipt?: { submission_number: string };
         };
       if (!r.ok) throw Error(d.error);
-      if (body.action === 'preview') { setAcceptIncomplete(false); setPreview({ ...d, id: body.quarter! }); }
-      else {
+      if (body.action === 'preview') {
+        setAcceptIncomplete(false);
+        setPreview({ ...d, id: body.quarter! });
+      } else {
         setPreview(null);
         setNotice(
           body.action === 'sync'
@@ -93,7 +105,7 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
               : `Indberettet · ${d.receipt?.submission_number}`,
         );
         await load();
-        if(body.action==='sync')onUpdated?.();
+        if (body.action === 'sync') onUpdated?.();
       }
     } catch (e) {
       setError(
@@ -103,9 +115,10 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
       setBusy(false);
     }
   }
-  const visibleQuarters = data?.quarters.filter(
-    (q) => !data.startDate || q.start >= data.startDate,
-  ) ?? [];
+  const visibleQuarters =
+    data?.quarters.filter(
+      (q) => !data.startDate || q.start >= data.startDate,
+    ) ?? [];
   const kg = (g: number) =>
     new Intl.NumberFormat('da-DK', {
       minimumFractionDigits: 3,
@@ -159,8 +172,17 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
           </Button>
         </div>
       </div>
-      <p className="px-5 pt-4 text-xs text-muted-foreground">Indberetningspligtige mængder fra Forbrug for samme afsluttede kvartal. Klik på kvartalet for at se registreringerne. Manglende kundetype regnes som Privat. Linjer uden gyldig vægt eller afklaret indberetningspligt ignoreres.</p>
-      {data?.providerError&&<p role="alert" className="m-5 rounded-xl bg-amber-50 p-4 text-sm">{data.providerError}</p>}
+      <p className="px-5 pt-4 text-xs text-muted-foreground">
+        Indberetningspligtige mængder fra Forbrug for samme afsluttede kvartal.
+        Klik på kvartalet for at se registreringerne. Manglende kundetype regnes
+        som Privat. Linjer uden gyldig vægt eller afklaret indberetningspligt
+        ignoreres.
+      </p>
+      {data?.providerError && (
+        <p role="alert" className="m-5 rounded-xl bg-amber-50 p-4 text-sm">
+          {data.providerError}
+        </p>
+      )}
       {error && (
         <p
           role="alert"
@@ -170,10 +192,7 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
         </p>
       )}
       {notice && (
-        <output
-
-          className="m-5 rounded-xl bg-green-50 p-4 text-sm text-green-800"
-        >
+        <output className="m-5 rounded-xl bg-green-50 p-4 text-sm text-green-800">
           {notice}
         </output>
       )}
@@ -182,19 +201,40 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
           <thead className="bg-muted/30 text-left">
             <tr>
               <th className="p-4">Kvartal</th>
-              <th className="p-4 text-right">I alt</th><th className="p-4 text-right">Privat</th>
+              <th className="p-4 text-right">I alt</th>
+              <th className="p-4 text-right">Privat</th>
               <th className="p-4 text-right">Erhverv</th>
               <th className="p-4">Status</th>
-              <th className="p-4"><span className="sr-only">Handling</span></th>
+              <th className="p-4">
+                <span className="sr-only">Handling</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {data && visibleQuarters.length === 0 && (
-              <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">Der er endnu ingen afsluttede kvartaler fra integrationens startdato.</td></tr>
+              <tr>
+                <td
+                  colSpan={6}
+                  className="p-6 text-center text-muted-foreground"
+                >
+                  Der er endnu ingen afsluttede kvartaler fra integrationens
+                  startdato.
+                </td>
+              </tr>
             )}
             {visibleQuarters.map((q) => (
               <tr key={q.id} className="border-t">
-                <td className="p-4 font-medium"><button className="text-left underline decoration-dotted underline-offset-4" onClick={()=>onShowConsumption?.(q.start,q.end)}>{q.label}</button></td><td className="p-4 text-right tabular-nums">{kg(q.reportableGrams)}</td>
+                <td className="p-4 font-medium">
+                  <button
+                    className="text-left underline decoration-dotted underline-offset-4"
+                    onClick={() => onShowConsumption?.(q.start, q.end)}
+                  >
+                    {q.label}
+                  </button>
+                </td>
+                <td className="p-4 text-right tabular-nums">
+                  {kg(q.reportableGrams)}
+                </td>
                 <td className="p-4 text-right tabular-nums">
                   {kg(q.householdGrams)}
                 </td>
@@ -206,15 +246,24 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
                     <span className="inline-flex items-center gap-2 text-green-800">
                       <CheckCircle2 className="size-4" />
                       Indberettet
-                      {q.submittedAt
-                        ? ' ' +
-                          formatDate(q.submittedAt)
-                        : ''}
+                      {q.submittedAt ? ' ' + formatDate(q.submittedAt) : ''}
                     </span>
                   ) : (
-                    q.reason || q.statusNote || (q.warning ? <span className="text-amber-800">Klar til indberetning med advarsel: {q.warning}</span> : 'Klar til indberetning')
+                    q.reason ||
+                    q.statusNote ||
+                    (q.warning ? (
+                      <span className="text-amber-800">
+                        Klar til indberetning med advarsel: {q.warning}
+                      </span>
+                    ) : (
+                      'Klar til indberetning'
+                    ))
                   )}
-                  {q.unresolved > 0 && <p className="mt-1 text-xs text-muted-foreground">{q.unresolved} linjer ignoreret</p>}
+                  {q.unresolved > 0 && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {q.unresolved} linjer ignoreret
+                    </p>
+                  )}
                 </td>
                 <td className="p-4 text-right">
                   {!q.submitted && (
@@ -234,11 +283,7 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
           </tbody>
         </table>
       </div>
-      {busy && (
-        <output className="px-5 pb-5 text-sm" >
-          Arbejder…
-        </output>
-      )}
+      {busy && <output className="px-5 pb-5 text-sm">Arbejder…</output>}
       {preview && (
         <Dialog
           open
@@ -262,7 +307,34 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
                 <dd>{kg(preview.commercialKg * 1000)}</dd>
               </div>
             </dl>
-            {preview.ignoredLines > 0 && <div role="alert" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">Advarsel: {preview.ignoredLines} {preview.ignoredLines === 1 ? 'leveringslinje mangler' : 'leveringslinjer mangler'} emballageoplysninger</p><p className="mt-1">De kommer ikke med i indberetningen, så mængderne ovenfor kan være for lave. Udfyld vægten under fanen Varer for at få dem med.</p><label className="mt-3 flex items-start gap-2"><input type="checkbox" className="mt-0.5" checked={acceptIncomplete} onChange={e => setAcceptIncomplete(e.target.checked)} />Jeg indberetter alligevel uden disse linjer.</label></div>}
+            {preview.ignoredLines > 0 && (
+              <div
+                role="alert"
+                className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"
+              >
+                <p className="font-semibold">
+                  Advarsel: {preview.ignoredLines}{' '}
+                  {preview.ignoredLines === 1
+                    ? 'leveringslinje mangler'
+                    : 'leveringslinjer mangler'}{' '}
+                  emballageoplysninger
+                </p>
+                <p className="mt-1">
+                  De kommer ikke med i indberetningen, så mængderne ovenfor kan
+                  være for lave. Udfyld vægten under fanen Varer for at få dem
+                  med.
+                </p>
+                <label className="mt-3 flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={acceptIncomplete}
+                    onChange={(e) => setAcceptIncomplete(e.target.checked)}
+                  />
+                  Jeg indberetter alligevel uden disse linjer.
+                </label>
+              </div>
+            )}
             <p className="mb-5 text-sm">
               {preview.testMode
                 ? 'Testen kontrollerer data uden at afslutte kvartalet.'
@@ -282,13 +354,16 @@ export function PackagingReporting({revision=0,onUpdated,onShowConsumption}:{rev
                 Annullér
               </Button>
               <Button
-                disabled={busy || (preview.ignoredLines > 0 && !acceptIncomplete)}
+                disabled={
+                  busy || (preview.ignoredLines > 0 && !acceptIncomplete)
+                }
                 onClick={() =>
                   void action({
                     action: 'submit',
                     quarter: preview.id,
                     token: preview.token,
-                    acceptIncomplete: preview.ignoredLines > 0 && acceptIncomplete,
+                    acceptIncomplete:
+                      preview.ignoredLines > 0 && acceptIncomplete,
                   })
                 }
               >

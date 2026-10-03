@@ -4,14 +4,15 @@ export type IntegrationGuide = {
   note?: string;
   steps: string[];
   troubleshoot: string;
-  sources: {label: string; url: string}[];
+  sources: { label: string; url: string }[];
 };
 
 // Provider documentation checked 2026-09-28. UI labels below match this portal.
 export const integrationGuides: Record<string, IntegrationGuide> = {
   Shopify: {
     title: 'Shopify og Shopify Payments',
-    needs: 'Butikkens myshopify.com-adresse, Client ID og Client Secret fra en app i din egen Shopify-organisation.',
+    needs:
+      'Butikkens myshopify.com-adresse, Client ID og Client Secret fra en app i din egen Shopify-organisation.',
     note: 'Appen og butikken skal tilhøre samme Shopify-organisation. Denne opsætning bruger Client Credentials Grant. Et Storefront-token eller en midlertidig Admin API-tokenværdi kan ikke indsættes i Client Secret-feltet.',
     steps: [
       'Log ind i Shopify Dev Dashboard med en bruger, som må udvikle og installere apps. Vælg den organisation, der ejer din butik.',
@@ -23,19 +24,33 @@ export const integrationGuides: Record<string, IntegrationGuide> = {
       'Vælg Install app, vælg den rigtige butik, og godkend installationen. Ved senere ændringer af rettigheder skal den nye version udgives, og rettighederne godkendes i butikken.',
       'Åbn appens Settings i Dev Dashboard, og kopiér Client ID og Client secret. Find butikkens permanente adresse, som ender på .myshopify.com, i Shopify-administrationen.',
       'Åbn Integrationer → Shopify i WebshopToolbox. Indsæt butiksadresse, Client ID og Client Secret i de tilsvarende felter, og vælg Test og forbind. WebshopToolbox henter selv de kortlivede adgangstokens.',
-      'Shopify Payments bruger samme Shopify-forbindelse og kræver ingen separat API-nøgle. Shopify Payments skal være tilgængelig på butikken. En godkendt forbindelsestest kontrollerer butikkens navn; kontrollér også hentning af de relevante moduldata bagefter.'
+      'Shopify Payments bruger samme Shopify-forbindelse og kræver ingen separat API-nøgle. Shopify Payments skal være tilgængelig på butikken. En godkendt forbindelsestest kontrollerer butikkens navn; kontrollér også hentning af de relevante moduldata bagefter.',
     ],
-    troubleshoot: 'Ved afvist adgang: kontrollér organisation, installation og Client Secret. Mangler kun ordrer, lager eller udbetalinger, kontrollér modulets rettigheder og eventuelle Shopify-godkendelser. Forny hemmeligheder via Shopify og opdatér derefter forbindelsen i portalen.',
+    troubleshoot:
+      'Ved afvist adgang: kontrollér organisation, installation og Client Secret. Mangler kun ordrer, lager eller udbetalinger, kontrollér modulets rettigheder og eventuelle Shopify-godkendelser. Forny hemmeligheder via Shopify og opdatér derefter forbindelsen i portalen.',
     sources: [
-      {label:'Shopify: opret og installér en app',url:'https://shopify.dev/docs/apps/build/dev-dashboard/create-apps-using-dev-dashboard'},
-      {label:'Shopify: Client ID, secret og tokens',url:'https://shopify.dev/docs/apps/build/authentication-authorization/client-credentials-grant'},
-      {label:'Shopify: rettigheder og ordrehistorik',url:'https://shopify.dev/docs/api/usage/access-scopes'},
-      {label:'Shopify: rapportadgang til Performance',url:'https://shopify.dev/docs/api/admin-graphql/2026-07/queries/shopifyqlQuery'}
-    ]
+      {
+        label: 'Shopify: opret og installér en app',
+        url: 'https://shopify.dev/docs/apps/build/dev-dashboard/create-apps-using-dev-dashboard',
+      },
+      {
+        label: 'Shopify: Client ID, secret og tokens',
+        url: 'https://shopify.dev/docs/apps/build/authentication-authorization/client-credentials-grant',
+      },
+      {
+        label: 'Shopify: rettigheder og ordrehistorik',
+        url: 'https://shopify.dev/docs/api/usage/access-scopes',
+      },
+      {
+        label: 'Shopify: rapportadgang til Performance',
+        url: 'https://shopify.dev/docs/api/admin-graphql/2026-07/queries/shopifyqlQuery',
+      },
+    ],
   },
   Dinero: {
     title: 'Dinero – adgang skal afklares',
-    needs: 'Den nuværende formular har Client ID, Client secret, API-nøgle og Organisation-ID. Det er Dineros personlige integrationsmodel.',
+    needs:
+      'Den nuværende formular har Client ID, Client secret, API-nøgle og Organisation-ID. Det er Dineros personlige integrationsmodel.',
     note: 'Dinero angiver, at en integration, der markedsføres og sælges til flere kunder, skal bruge OAuth2 frem for personlige API-nøgler. WebshopToolbox har endnu ikke denne kommercielle Visma Connect-tilslutning. Kontakt WebshopToolbox før ny kundetilslutning; opret ikke personlige nøgler som genvej.',
     steps: [
       'Kontrollér med WebshopToolbox, hvilken Dinero-tilslutning der er godkendt til din virksomhed. API-adgang kræver ifølge Dinero et gyldigt Pro- eller Total-abonnement.',
@@ -43,18 +58,29 @@ export const integrationGuides: Record<string, IntegrationGuide> = {
       'Gem det viste Client ID og Secret sikkert, og afvent Dineros godkendelse. Opret derefter en API-nøgle til præcis det regnskab, der skal forbindes. Brug et særskilt testregnskab til afprøvning.',
       'Find regnskabets Organisation-ID. Hvis du er i tvivl, få det bekræftet hos Dinero; CVR-nummeret er ikke en erstatning for Organisation-ID.',
       'Efter afklaret adgang: indsæt de fire værdier i de tilsvarende Dinero-felter i WebshopToolbox, og vælg Test og forbind. Værdierne skal indtastes som udleveret; du skal ikke selv Base64-kode dem eller hente et access token.',
-      'Kontrollér, at det rigtige regnskab er forbundet, før kontoplan, startdato og bogføring sættes op. En forbindelsestest er ikke en prøvebogføring.'
+      'Kontrollér, at det rigtige regnskab er forbundet, før kontoplan, startdato og bogføring sættes op. En forbindelsestest er ikke en prøvebogføring.',
     ],
-    troubleshoot: 'Afvises adgangen, kontrollér abonnement, godkendelse og sammenhængen mellem nøgle og regnskab. Visma Connect-credentials kan ikke bruges direkte i den nuværende personlige formular.',
+    troubleshoot:
+      'Afvises adgangen, kontrollér abonnement, godkendelse og sammenhængen mellem nøgle og regnskab. Visma Connect-credentials kan ikke bruges direkte i den nuværende personlige formular.',
     sources: [
-      {label:'Dinero: personlig kontra kommerciel integration',url:'https://developer.dinero.dk/news/personal-integration/'},
-      {label:'Dinero: personlig adgang og nøgler',url:'https://developer.dinero.dk/documentation/personal-integration/'},
-      {label:'Dinero: OAuth2-autorisation',url:'https://developer.dinero.dk/documentation/authorization/'}
-    ]
+      {
+        label: 'Dinero: personlig kontra kommerciel integration',
+        url: 'https://developer.dinero.dk/news/personal-integration/',
+      },
+      {
+        label: 'Dinero: personlig adgang og nøgler',
+        url: 'https://developer.dinero.dk/documentation/personal-integration/',
+      },
+      {
+        label: 'Dinero: OAuth2-autorisation',
+        url: 'https://developer.dinero.dk/documentation/authorization/',
+      },
+    ],
   },
   Flatpay: {
     title: 'Flatpay via Saga/Valitor',
-    needs: 'Et Saga API-brugernavn, en API-adgangskode og adgang til den relevante indløsningsaftale.',
+    needs:
+      'Et Saga API-brugernavn, en API-adgangskode og adgang til den relevante indløsningsaftale.',
     note: 'Denne forbindelse læser afregningsdata gennem Saga/Valitor. Den opsætter ikke kortbetaling i webshoppen. Flatpay-aftaler kan have forskellige indløsere; få bekræftet, at din aftale understøtter denne adgang.',
     steps: [
       'Kontakt din Flatpay-kontakt og bed om Saga/Valitor API-adgang til transaktioner, afregninger og udbetalinger for din aftale. Bed om en separat API-bruger med adgang til netop din virksomhed.',
@@ -62,10 +88,16 @@ export const integrationGuides: Record<string, IntegrationGuide> = {
       'Modtag API-brugernavn og API-adgangskode sikkert fra leverandøren. Brug de udleverede API-oplysninger; dit almindelige Flatpay-login eller en betalingsgateway-nøgle er ikke nødvendigvis gyldig.',
       'Åbn Integrationer → Flatpay i WebshopToolbox. Gem først de ønskede historik- og bogføringsdatoer. Udfyld API-brugernavn og API-adgangskode.',
       'Vælg Kontrollér adgang og hent aftaler. Vælg den aftale, der tilhører din webshop; kontrollér aftalenummer og valuta.',
-      'Vælg Validér og gem forbindelse. Kontrollér derefter de hentede afregninger mod leverandørens oversigt.'
+      'Vælg Validér og gem forbindelse. Kontrollér derefter de hentede afregninger mod leverandørens oversigt.',
     ],
-    troubleshoot: 'Hvis ingen aftaler vises, skal leverandøren kontrollere API-brugerens aftaleadgang og miljø. Ved udskiftning af adgangskode skal forbindelsen valideres og gemmes igen.',
-    sources: [{label:'Rapyd/Valitor: Saga-adgang og autentificering',url:'https://specs.valitor.is/introduction/iso/'}]
+    troubleshoot:
+      'Hvis ingen aftaler vises, skal leverandøren kontrollere API-brugerens aftaleadgang og miljø. Ved udskiftning af adgangskode skal forbindelsen valideres og gemmes igen.',
+    sources: [
+      {
+        label: 'Rapyd/Valitor: Saga-adgang og autentificering',
+        url: 'https://specs.valitor.is/introduction/iso/',
+      },
+    ],
   },
   ViaBill: {
     title: 'ViaBill',
@@ -76,13 +108,20 @@ export const integrationGuides: Record<string, IntegrationGuide> = {
       'Har du allerede API-oplysninger til webshoppen, få bekræftet, at de også giver adgang til afregningsdata. Installér ikke Drupal eller et nyt betalingsmodul for at følge referenceguiden.',
       'Åbn Integrationer → ViaBill i WebshopToolbox. Angiv forbindelsens startdato, og indsæt API key og Secret i hver sit felt.',
       'Vælg Test og hent konti. Vælg virksomhedens Merchant Account ID fra listen. Kræver portalen manuel indtastning, brug det ID, ViaBill har bekræftet; brug ikke et tilfældigt forhandler- eller CVR-nummer.',
-      'Vælg Validér og gem forbindelse. Kontrollér, at den viste konto og afregningerne tilhører den rigtige virksomhed. Forbindelsen ændrer ikke din eksisterende ViaBill-betalingsopsætning i Shopify.'
+      'Vælg Validér og gem forbindelse. Kontrollér, at den viste konto og afregningerne tilhører den rigtige virksomhed. Forbindelsen ændrer ikke din eksisterende ViaBill-betalingsopsætning i Shopify.',
     ],
-    troubleshoot: 'Forkert key/Secret-par eller manglende adgang til afregninger skal afklares hos ViaBill. Nøgler fra forskellige konti eller miljøer kan ikke blandes.',
+    troubleshoot:
+      'Forkert key/Secret-par eller manglende adgang til afregninger skal afklares hos ViaBill. Nøgler fra forskellige konti eller miljøer kan ikke blandes.',
     sources: [
-      {label:'ViaBill: officiel modulguide med API-credentials (PDF)',url:'https://viabill.com/user-guides/drupal_commerce_viabill_payments.pdf'},
-      {label:'ViaBill: integrationer og API',url:'https://www.viabill.com/dk/integrationer/'}
-    ]
+      {
+        label: 'ViaBill: officiel modulguide med API-credentials (PDF)',
+        url: 'https://viabill.com/user-guides/drupal_commerce_viabill_payments.pdf',
+      },
+      {
+        label: 'ViaBill: integrationer og API',
+        url: 'https://www.viabill.com/dk/integrationer/',
+      },
+    ],
   },
   Pensopay: {
     title: 'Pensopay',
@@ -93,17 +132,25 @@ export const integrationGuides: Record<string, IntegrationGuide> = {
       'Gå til Indstillinger → Keys, og vælg Create New token under API keys. Kopiér nøglen med det samme; Pensopay viser den ikke igen.',
       'Åbn Integrationer → Pensopay i WebshopToolbox. Angiv forbindelsens startdato, og indsæt API-nøglen.',
       'Vælg Test nøglen. Kontrollér, at den viste konto er virksomhedens egen Pensopay-konto.',
-      'Vælg Forbind. Hent derefter afregninger under Udbetalinger (vælg Pensopay).'
+      'Vælg Forbind. Hent derefter afregninger under Udbetalinger (vælg Pensopay).',
     ],
-    troubleshoot: 'HTTP 401 betyder, at nøglen er forkert eller tilbagekaldt; opret en ny under Indstillinger → Keys. HTTP 403 betyder, at nøglen mangler adgang; kontrollér dens rettigheder hos Pensopay.',
+    troubleshoot:
+      'HTTP 401 betyder, at nøglen er forkert eller tilbagekaldt; opret en ny under Indstillinger → Keys. HTTP 403 betyder, at nøglen mangler adgang; kontrollér dens rettigheder hos Pensopay.',
     sources: [
-      {label:'Pensopay: kom i gang med API\'et',url:'https://docs.pensopay.com/reference/getting-started'},
-      {label:'Pensopay: afregninger (settlements)',url:'https://docs.pensopay.com/reference/getsettlements-1'}
-    ]
+      {
+        label: "Pensopay: kom i gang med API'et",
+        url: 'https://docs.pensopay.com/reference/getting-started',
+      },
+      {
+        label: 'Pensopay: afregninger (settlements)',
+        url: 'https://docs.pensopay.com/reference/getsettlements-1',
+      },
+    ],
   },
   'Emballage Indberetning': {
     title: 'Emballage Indberetning',
-    needs: 'En samlet API-nøgle i formatet esk_….secret fra virksomhedens ejerkonto.',
+    needs:
+      'En samlet API-nøgle i formatet esk_….secret fra virksomhedens ejerkonto.',
     steps: [
       'Log ind som organisationens ejer på app.emballageindberetning.dk, og kontrollér, at den rigtige virksomhed er valgt.',
       'Åbn Settings → Developer (Indstillinger → Udvikler). Den officielle adresse til nøgleopsætning er /settings/developer.',
@@ -114,9 +161,19 @@ export const integrationGuides: Record<string, IntegrationGuide> = {
       'Udfyld felterne pr. produkt i Shopify under produktets Metafelter, eller for mange produkter ad gangen med masseredigering. Indberetningspligtig er ja/nej, vægten angives i hele gram pr. solgt enhed, og leverandørland som landekode, fx DK.',
       'Kontrollér virksomhedsnavn og test/live-status. Vælg første kvartals startdato, producentansvar og felterne til husholdning/erhverv. Ved første opsætning henter portalen Shopify-historik fra den valgte start; kontrollér perioden før du gemmer.',
       'Forbindelsen er ikke i sig selv en indberetning. Kontrollér data og modtagerfelter i indberetningsforløbet før endelig afsendelse. Testnøgler må ikke forveksles med en rigtig indberetning.',
-      'Ved nøgleskift: opret en ny nøgle, gem og kontrollér den nye forbindelse i WebshopToolbox, og tilbagekald derefter den gamle nøgle hos leverandøren. En bortkommet nøgle skal erstattes.'
+      'Ved nøgleskift: opret en ny nøgle, gem og kontrollér den nye forbindelse i WebshopToolbox, og tilbagekald derefter den gamle nøgle hos leverandøren. En bortkommet nøgle skal erstattes.',
     ],
-    troubleshoot: '401: kontrollér hele nøglen, udløb og tilbagekaldelse. 403: få API-adgangen afklaret hos leverandøren. 429: vent før nyt forsøg. Oplys eventuelt fejlens request-reference til support, aldrig selve nøglen.',
-    sources: [{label:'Emballage Indberetning: officiel Public API-guide',url:'https://app.emballageindberetning.dk/docs/public-api'},{label:'Shopify: metafelter på produkter',url:'https://help.shopify.com/da/manual/custom-data/metafields'}]
-  }
+    troubleshoot:
+      '401: kontrollér hele nøglen, udløb og tilbagekaldelse. 403: få API-adgangen afklaret hos leverandøren. 429: vent før nyt forsøg. Oplys eventuelt fejlens request-reference til support, aldrig selve nøglen.',
+    sources: [
+      {
+        label: 'Emballage Indberetning: officiel Public API-guide',
+        url: 'https://app.emballageindberetning.dk/docs/public-api',
+      },
+      {
+        label: 'Shopify: metafelter på produkter',
+        url: 'https://help.shopify.com/da/manual/custom-data/metafields',
+      },
+    ],
+  },
 };

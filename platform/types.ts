@@ -17,13 +17,46 @@ export interface PlatformEnv {
   PLATFORM_CREDENTIALS_KEY?: string;
   PLATFORM_MAIL_FROM?: string;
   PLATFORM_MAIL_TEST_RECIPIENTS?: string;
-  PLATFORM_MAIL_TEST?: {send(message:{from:{email:string;name:string};to:string;replyTo?:string;subject:string;text:string;attachments?:{content:ArrayBuffer;filename:string;type:string;disposition:"attachment"}[]}):Promise<{messageId:string}>};
+  PLATFORM_MAIL_TEST?: {
+    send(message: {
+      from: { email: string; name: string };
+      to: string;
+      replyTo?: string;
+      subject: string;
+      text: string;
+      attachments?: {
+        content: ArrayBuffer;
+        filename: string;
+        type: string;
+        disposition: 'attachment';
+      }[];
+    }): Promise<{ messageId: string }>;
+  };
   PLATFORM_INVITATION_MODE?: 'preview' | 'restricted' | 'registered';
   PLATFORM_INVITATION_FROM?: string;
   PLATFORM_INVITATION_RECIPIENTS?: string;
-  PLATFORM_INVITATIONS?: { send(message: {from:string;to:string;subject:string;text:string}): Promise<unknown> };
+  PLATFORM_INVITATIONS?: {
+    send(message: {
+      from: string;
+      to: string;
+      subject: string;
+      text: string;
+    }): Promise<unknown>;
+  };
 }
-export type Actor = { support?: {sessionId:string;adminId:string;adminEmail:string;expiresAt:number}; id: string; email: string; platformAdmin: boolean; fullName?: string | null; phone?: string | null };
+export type Actor = {
+  support?: {
+    sessionId: string;
+    adminId: string;
+    adminEmail: string;
+    expiresAt: number;
+  };
+  id: string;
+  email: string;
+  platformAdmin: boolean;
+  fullName?: string | null;
+  phone?: string | null;
+};
 export class HttpError extends Error {
   constructor(
     public status: number,

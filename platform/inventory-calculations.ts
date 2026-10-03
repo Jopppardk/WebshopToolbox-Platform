@@ -10,7 +10,10 @@ export type InventoryRow = {
 };
 
 export const inventoryValueMinor = (rows: InventoryRow[]) =>
-  rows.reduce((sum, row) => sum + Math.max(0, row.quantity) * row.unitCostMinor, 0);
+  rows.reduce(
+    (sum, row) => sum + Math.max(0, row.quantity) * row.unitCostMinor,
+    0,
+  );
 
 export function validateStocktakeChanges(value: unknown) {
   if (!Array.isArray(value) || value.length < 1 || value.length > 100)
@@ -22,12 +25,21 @@ export function validateStocktakeChanges(value: unknown) {
     const locationId = String(item.locationId || '');
     const quantity = Number(item.quantity);
     const compareQuantity = Number(item.compareQuantity);
-    if (!/^gid:\/\/shopify\/InventoryItem\/\d+$/.test(inventoryItemId) || !/^gid:\/\/shopify\/Location\/\d+$/.test(locationId))
+    if (
+      !/^gid:\/\/shopify\/InventoryItem\/\d+$/.test(inventoryItemId) ||
+      !/^gid:\/\/shopify\/Location\/\d+$/.test(locationId)
+    )
       throw new Error('En lagerlinje har et ugyldigt Shopify-ID.');
-    if (!Number.isSafeInteger(quantity) || quantity < 0 || quantity > 10_000_000 || !Number.isSafeInteger(compareQuantity))
+    if (
+      !Number.isSafeInteger(quantity) ||
+      quantity < 0 ||
+      quantity > 10_000_000 ||
+      !Number.isSafeInteger(compareQuantity)
+    )
       throw new Error('Et lagerantal er ugyldigt.');
     const key = `${inventoryItemId}:${locationId}`;
-    if (seen.has(key)) throw new Error('Den samme lagerlinje er angivet flere gange.');
+    if (seen.has(key))
+      throw new Error('Den samme lagerlinje er angivet flere gange.');
     seen.add(key);
     return { inventoryItemId, locationId, quantity, compareQuantity };
   });

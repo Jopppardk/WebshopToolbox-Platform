@@ -3,8 +3,12 @@ import { HttpError, type PlatformEnv } from './types';
 export function assertTestRuntime(env: PlatformEnv) {
   if (
     !['local-test', 'remote-test', 'production'].includes(env.PLATFORM_ENV) ||
-    !(env.PLATFORM_ENV==='production'?['blocked','enabled']:['blocked']).includes(env.PLATFORM_EXTERNAL_WRITES) ||
-    !(env.PLATFORM_ENV==='production'?['blocked','enabled']:['blocked']).includes(env.PLATFORM_CUSTOMER_EMAIL)
+    !(
+      env.PLATFORM_ENV === 'production' ? ['blocked', 'enabled'] : ['blocked']
+    ).includes(env.PLATFORM_EXTERNAL_WRITES) ||
+    !(
+      env.PLATFORM_ENV === 'production' ? ['blocked', 'enabled'] : ['blocked']
+    ).includes(env.PLATFORM_CUSTOMER_EMAIL)
   ) {
     throw new HttpError(503, 'Platformens sikkerhedsindstillinger mangler.');
   }
@@ -14,7 +18,18 @@ export function assertTestRuntime(env: PlatformEnv) {
   ) {
     throw new HttpError(503, 'Fjernmiljøet kræver Cloudflare Access.');
   }
-  if(env.PLATFORM_ENV==='production' && (!/^[a-f0-9]{64}$/.test(env.PLATFORM_ACCESS_AUD||'') || ['4edbc15bc801d85de33ef29839e2e3803b733ce3cebbe60728d8e3277982e646','ddda465e15f3bae8973ad8ac8b8667c42cf01948d4a8ac5515bd6f10abcdc681'].includes(env.PLATFORM_ACCESS_AUD!)))throw new HttpError(503,'Produktionsportalen kræver sin egen loginopsætning.');
+  if (
+    env.PLATFORM_ENV === 'production' &&
+    (!/^[a-f0-9]{64}$/.test(env.PLATFORM_ACCESS_AUD || '') ||
+      [
+        '4edbc15bc801d85de33ef29839e2e3803b733ce3cebbe60728d8e3277982e646',
+        'ddda465e15f3bae8973ad8ac8b8667c42cf01948d4a8ac5515bd6f10abcdc681',
+      ].includes(env.PLATFORM_ACCESS_AUD!))
+  )
+    throw new HttpError(
+      503,
+      'Produktionsportalen kræver sin egen loginopsætning.',
+    );
   // No legacy bindings or provider secrets are accepted by this entrypoint.
   for (const key of Object.keys(env)) {
     if (

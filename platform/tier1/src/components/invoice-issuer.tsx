@@ -1,29 +1,257 @@
-import {useEffect,useState} from 'react';
-import {tier1Fetch as fetch,tier1Url} from '@/platform/transport';
-import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
-type Design={accent:string;layout:'classic'|'modern';footer:string};
-type Settings={name:string;address:string;cvr:string;contact:string;hasLogo:boolean;revision:number;design:Design};
-export function InvoiceIssuer(){
- const [value,setValue]=useState<Settings|null>(null),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[dirty,setDirty]=useState(false),[stamp,setStamp]=useState(0);
- async function load(){const r=await fetch('/api/invoices/settings');const d=await r.json() as Settings & {error?:string};if(!r.ok)throw Error(d.error);setValue(d);setDirty(false);setStamp(Date.now());}
- useEffect(()=>{void load().catch(e=>setMessage(e.message));},[]);
- const change=(patch:Partial<Settings>)=>{setValue(v=>v?{...v,...patch}:v);setDirty(true);setMessage('');};
- async function persist(){
-  const current=await fetch('/api/invoices/settings');const latest=await current.json() as Settings & {error?:string};if(!current.ok)throw Error(latest.error);
-  const r=await fetch('/api/invoices/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({...latest,name:value?.name,address:value?.address,cvr:value?.cvr,contact:value?.contact,design:value?.design,revision:value?.revision})});const d=await r.json() as Settings & {error?:string};if(!r.ok)throw Error(d.error);await load();
- }
- async function save(){setBusy(true);setMessage('');try{await persist();setMessage('Design og fakturaoplysninger gemt. Ændringer gælder nye fakturaer.');}catch(e){setMessage(e instanceof Error?e.message:'Kunne ikke gemmes.');}finally{setBusy(false);}}
- async function logo(file?:File){if(!file)return;setBusy(true);setMessage('');try{
-  if(file.type!=='image/png'||file.size>300000)throw Error('Vælg et PNG-logo på højst 300 KB og 2048 × 2048 pixels.');
-  if(dirty)await persist();
-  const r=await fetch('/api/invoices/logo',{method:'PUT',headers:{'Content-Type':'image/png'},body:file});const d=await r.json() as Settings & {error?:string};if(!r.ok)throw Error(d.error);await load();setMessage('Logo uploadet. Se det på eksempelfakturaen.');
- }catch(e){setMessage(e instanceof Error?e.message:'Logo kunne ikke uploades.');}finally{setBusy(false);}}
- async function removeLogo(){setBusy(true);setMessage('');try{if(dirty)await persist();const r=await fetch('/api/invoices/logo',{method:'DELETE'});if(!r.ok)throw Error(((await r.json()) as {error:string}).error);await load();setMessage('Logo fjernet. Firma- og webshopnavn vises i stedet.');}catch(e){setMessage(e instanceof Error?e.message:'Kunne ikke fjerne logoet.');}finally{setBusy(false);}}
- return <><section className="mb-6 rounded-2xl border bg-white p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">1. Design din faktura</h2><p className="mt-1 text-sm text-muted-foreground">Gælder virksomhedens nye fakturaer. Eksisterende PDF’er bevares.</p></div><a className="rounded-lg border px-4 py-2 text-sm font-medium" href={tier1Url('/api/invoices/preview?v='+stamp)} target="_blank" rel="noreferrer">Se gemt eksempel (PDF) ↗</a></div>
- <p className="mt-3 text-xs text-muted-foreground">Eksemplet bruger fiktive data og navnet på den valgte webshop. Gem ændringer for at se dem i eksemplet.</p>
- <fieldset disabled={!value||busy} className="mt-5 space-y-5"><div className="grid gap-4 sm:grid-cols-2">{(['name','address','cvr','contact'] as const).map(key=><label key={key} className="text-sm">{{name:'Virksomhedsnavn',address:'Adresse',cvr:'CVR',contact:'Kontaktoplysninger'}[key]}<Input value={value?.[key]||''} onChange={e=>change({[key]:e.target.value})}/></label>)}</div>
- <div className="rounded-xl border bg-muted/20 p-4"><h3 className="mb-2 text-sm font-semibold">Dit logo</h3>{value?.hasLogo&&<img src={tier1Url('/api/invoices/logo?v='+stamp)} alt="Virksomhedens fakturalogo" className="mb-3 max-h-20 max-w-64 object-contain"/>}<label className="block text-sm">Upload logo (PNG)<input className="mt-2 block w-full text-sm" type="file" accept="image/png" onChange={e=>{void logo(e.target.files?.[0]);e.target.value='';}}/></label><p className="mt-2 text-xs text-muted-foreground">Højst 300 KB og 2048 × 2048 pixels. Gerne gennemsigtig baggrund. Uden logo står firma- og webshopnavn øverst.</p>{value?.hasLogo&&<Button type="button" variant="outline" className="mt-3" onClick={()=>void removeLogo()}>Fjern logo</Button>}</div>
- <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm">Layout<select className="mt-1 block h-10 w-full rounded-lg border px-3" value={value?.design.layout||'classic'} onChange={e=>value&&change({design:{...value.design,layout:e.target.value as Design['layout']}})}><option value="classic">Klassisk · nedtonet uden farvefelter</option><option value="modern">Moderne · farver og indrammede felter</option></select></label><label className="text-sm">Fakturafarve (moderne layout)<Input type="color" disabled={value?.design.layout==='classic'} className="mt-1 h-10 w-24" value={value?.design.accent||'#ad8030'} onChange={e=>value&&change({design:{...value.design,accent:e.target.value}})}/></label></div>
- <label className="block text-sm">Egen bundtekst (valgfri)<Input maxLength={180} placeholder="Tak fordi du handler hos os" value={value?.design.footer||''} onChange={e=>value&&change({design:{...value.design,footer:e.target.value}})}/></label><Button onClick={()=>void save()}>{busy?'Gemmer…':'Gem fakturadesign'}</Button>{dirty&&<span className="ml-3 text-xs text-muted-foreground">Der er ændringer, som endnu ikke er gemt.</span>}</fieldset>{message&&<p className="mt-3 text-sm" role="status">{message}</p>}</section></>;
+import { useEffect, useState } from 'react';
+import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+type Design = { accent: string; layout: 'classic' | 'modern'; footer: string };
+type Settings = {
+  name: string;
+  address: string;
+  cvr: string;
+  contact: string;
+  hasLogo: boolean;
+  revision: number;
+  design: Design;
+};
+export function InvoiceIssuer() {
+  const [value, setValue] = useState<Settings | null>(null),
+    [message, setMessage] = useState(''),
+    [busy, setBusy] = useState(false),
+    [dirty, setDirty] = useState(false),
+    [stamp, setStamp] = useState(0);
+  async function load() {
+    const r = await fetch('/api/invoices/settings');
+    const d = (await r.json()) as Settings & { error?: string };
+    if (!r.ok) throw Error(d.error);
+    setValue(d);
+    setDirty(false);
+    setStamp(Date.now());
+  }
+  useEffect(() => {
+    void load().catch((e) => setMessage(e.message));
+  }, []);
+  const change = (patch: Partial<Settings>) => {
+    setValue((v) => (v ? { ...v, ...patch } : v));
+    setDirty(true);
+    setMessage('');
+  };
+  async function persist() {
+    const current = await fetch('/api/invoices/settings');
+    const latest = (await current.json()) as Settings & { error?: string };
+    if (!current.ok) throw Error(latest.error);
+    const r = await fetch('/api/invoices/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...latest,
+        name: value?.name,
+        address: value?.address,
+        cvr: value?.cvr,
+        contact: value?.contact,
+        design: value?.design,
+        revision: value?.revision,
+      }),
+    });
+    const d = (await r.json()) as Settings & { error?: string };
+    if (!r.ok) throw Error(d.error);
+    await load();
+  }
+  async function save() {
+    setBusy(true);
+    setMessage('');
+    try {
+      await persist();
+      setMessage(
+        'Design og fakturaoplysninger gemt. Ændringer gælder nye fakturaer.',
+      );
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Kunne ikke gemmes.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function logo(file?: File) {
+    if (!file) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      if (file.type !== 'image/png' || file.size > 300000)
+        throw Error('Vælg et PNG-logo på højst 300 KB og 2048 × 2048 pixels.');
+      if (dirty) await persist();
+      const r = await fetch('/api/invoices/logo', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'image/png' },
+        body: file,
+      });
+      const d = (await r.json()) as Settings & { error?: string };
+      if (!r.ok) throw Error(d.error);
+      await load();
+      setMessage('Logo uploadet. Se det på eksempelfakturaen.');
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Logo kunne ikke uploades.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function removeLogo() {
+    setBusy(true);
+    setMessage('');
+    try {
+      if (dirty) await persist();
+      const r = await fetch('/api/invoices/logo', { method: 'DELETE' });
+      if (!r.ok) throw Error(((await r.json()) as { error: string }).error);
+      await load();
+      setMessage('Logo fjernet. Firma- og webshopnavn vises i stedet.');
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Kunne ikke fjerne logoet.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <section className="mb-6 rounded-2xl border bg-white p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">1. Design din faktura</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Gælder virksomhedens nye fakturaer. Eksisterende PDF’er bevares.
+            </p>
+          </div>
+          <a
+            className="rounded-lg border px-4 py-2 text-sm font-medium"
+            href={tier1Url('/api/invoices/preview?v=' + stamp)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Se gemt eksempel (PDF) ↗
+          </a>
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Eksemplet bruger fiktive data og navnet på den valgte webshop. Gem
+          ændringer for at se dem i eksemplet.
+        </p>
+        <fieldset disabled={!value || busy} className="mt-5 space-y-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            {(['name', 'address', 'cvr', 'contact'] as const).map((key) => (
+              <label key={key} className="text-sm">
+                {
+                  {
+                    name: 'Virksomhedsnavn',
+                    address: 'Adresse',
+                    cvr: 'CVR',
+                    contact: 'Kontaktoplysninger',
+                  }[key]
+                }
+                <Input
+                  value={value?.[key] || ''}
+                  onChange={(e) => change({ [key]: e.target.value })}
+                />
+              </label>
+            ))}
+          </div>
+          <div className="rounded-xl border bg-muted/20 p-4">
+            <h3 className="mb-2 text-sm font-semibold">Dit logo</h3>
+            {value?.hasLogo && (
+              <img
+                src={tier1Url('/api/invoices/logo?v=' + stamp)}
+                alt="Virksomhedens fakturalogo"
+                className="mb-3 max-h-20 max-w-64 object-contain"
+              />
+            )}
+            <label className="block text-sm">
+              Upload logo (PNG)
+              <input
+                className="mt-2 block w-full text-sm"
+                type="file"
+                accept="image/png"
+                onChange={(e) => {
+                  void logo(e.target.files?.[0]);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Højst 300 KB og 2048 × 2048 pixels. Gerne gennemsigtig baggrund.
+              Uden logo står firma- og webshopnavn øverst.
+            </p>
+            {value?.hasLogo && (
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-3"
+                onClick={() => void removeLogo()}
+              >
+                Fjern logo
+              </Button>
+            )}
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="text-sm">
+              Layout
+              <select
+                className="mt-1 block h-10 w-full rounded-lg border px-3"
+                value={value?.design.layout || 'classic'}
+                onChange={(e) =>
+                  value &&
+                  change({
+                    design: {
+                      ...value.design,
+                      layout: e.target.value as Design['layout'],
+                    },
+                  })
+                }
+              >
+                <option value="classic">
+                  Klassisk · nedtonet uden farvefelter
+                </option>
+                <option value="modern">
+                  Moderne · farver og indrammede felter
+                </option>
+              </select>
+            </label>
+            <label className="text-sm">
+              Fakturafarve (moderne layout)
+              <Input
+                type="color"
+                disabled={value?.design.layout === 'classic'}
+                className="mt-1 h-10 w-24"
+                value={value?.design.accent || '#ad8030'}
+                onChange={(e) =>
+                  value &&
+                  change({
+                    design: { ...value.design, accent: e.target.value },
+                  })
+                }
+              />
+            </label>
+          </div>
+          <label className="block text-sm">
+            Egen bundtekst (valgfri)
+            <Input
+              maxLength={180}
+              placeholder="Tak fordi du handler hos os"
+              value={value?.design.footer || ''}
+              onChange={(e) =>
+                value &&
+                change({ design: { ...value.design, footer: e.target.value } })
+              }
+            />
+          </label>
+          <Button onClick={() => void save()}>
+            {busy ? 'Gemmer…' : 'Gem fakturadesign'}
+          </Button>
+          {dirty && (
+            <span className="ml-3 text-xs text-muted-foreground">
+              Der er ændringer, som endnu ikke er gemt.
+            </span>
+          )}
+        </fieldset>
+        {message && (
+          <p className="mt-3 text-sm" role="status">
+            {message}
+          </p>
+        )}
+      </section>
+    </>
+  );
 }
