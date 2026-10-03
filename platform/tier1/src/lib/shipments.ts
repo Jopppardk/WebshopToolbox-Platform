@@ -7,7 +7,7 @@ export type ShipmentEvent = { status: string; label: string; at: string; message
 export type Shipment = {
   id: string; orderId: string; orderName: string; test: boolean; customer: string; city: string; country: string | null;
   carrier: Carrier | null; carrierName: string | null; trackingNumber: string | null; trackingUrl: string | null;
-  pickupPoint: boolean; steps: ShipmentStep[]; current: StepKey; issue: string | null; readyAt: string | null; deliveredAt: string | null;
+  pickupPoint: boolean; steps: ShipmentStep[]; current: StepKey; issue: string | null; readyAt: string | null; delivered: boolean; deliveredAt: string | null;
   events: ShipmentEvent[]; shippedAt: string; method: string | null;
 };
 export type ShipmentList = { checkedAt: string; days: number; since: string; truncated: boolean; shipments: Shipment[] };
@@ -99,7 +99,7 @@ export function buildShipment(order: RawOrder, f: RawFulfillment): Shipment {
     customer: (address?.name || billing?.name || '').trim() || 'Ukendt modtager', city: (address?.city || billing?.city || '').trim(), country: address?.countryCodeV2 || null,
     carrier, carrierName: carrier ? carriers[carrier].name : (tracking?.company || '').trim() || null,
     trackingNumber: (tracking?.number || '').trim() || null, trackingUrl,
-    pickupPoint, steps, current: steps[reachedIndex].key, issue, readyAt, deliveredAt: delivered ? deliveredAt : null,
+    pickupPoint, steps, current: steps[reachedIndex].key, issue, readyAt, delivered, deliveredAt: delivered ? deliveredAt : null,
     events, shippedAt: f.createdAt, method,
   };
 }
@@ -118,8 +118,9 @@ const between = (from: string, to: string) => Math.round((Date.parse(to + 'T12:0
  * Estimated last pickup day for a parcel waiting in a parcel shop. The carriers do not report the deadline to Shopify,
  * so it is the day it became ready plus the carrier's usual storage time. `soon` = 2 days or less left.
  */
-export function pickupDeadline(s: Pick<Shipment, 'readyAt' | 'deliveredAt' | 'carrier' | 'pickupPoint'>, today: string) {
-  if (!s.pickupPoint || !s.readyAt || s.deliveredAt) return null;
+export function pickupDeadline(s: Pick<Shipment, 'readyAt' | 'delivered' | 'carrier' | 'pickupPoint'>, today: string) {
+  // Shopify may report a parcel as delivered or picked up without a date; it is never due for return then.
+  if (!s.pickupPoint || !s.readyAt || s.delivered) return null;
   const holdDays = s.carrier ? carriers[s.carrier].holdDays : 7;
   const deadline = addDays(day(s.readyAt), holdDays), daysLeft = between(today, deadline);
   return { deadline, daysLeft, holdDays, state: daysLeft < 0 ? 'overdue' as const : daysLeft <= 2 ? 'soon' as const : 'ok' as const };

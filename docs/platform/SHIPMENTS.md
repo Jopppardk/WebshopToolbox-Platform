@@ -6,9 +6,9 @@ Shopify-butik med fragtapp.
 
 ## Funktion
 
-**Tools → Forsendelser** viser webshoppens afsendte ordrer for de seneste 14, 30 eller 60
-dage. Der vises én række pr. afsendelse i Shopify. En ordre med delleveringer giver flere
-rækker.
+**Tools → Forsendelser** viser de afsendelser, der er oprettet i Shopify inden for de seneste
+14, 30 eller 60 dage. Perioden regnes ud fra afsendelsesdatoen, ikke ordredatoen. Der vises
+én række pr. afsendelse, så en ordre med delleveringer giver flere rækker.
 
 | Kolonne | Kilde |
 |---|---|
@@ -51,6 +51,7 @@ fragtfirmaer (`carriers` i `platform/tier1/src/lib/shipments.ts`).
 
 - Med 2 dage eller mindre tilbage markeres rækken med gult ("Returneres om …").
 - Når fristen er passeret, markeres rækken med rødt ("Fristen er sandsynligvis overskredet").
+- En pakke, som Shopify melder leveret eller afhentet, får intet varsel, heller ikke uden dato.
 
 Opbevaringstiden er ikke bekræftet fra officielle kilder. DAO opgives andre steder til op
 til 10 dage. Den skal bekræftes, før man stoler på varslet.
@@ -64,6 +65,12 @@ til 10 dage. Den skal bekræftes, før man stoler på varslet.
 - Resultatet caches i `finance_state` under nøglen `shipments:v1:` i 5 minutter pr.
   virksomhed, webshop og periode, med samme lås som Performance.
 - Opdatér henter igen, dog højst én gang i minuttet.
+- Ved skift af webshop eller periode ryddes listen straks, så data fra to webshops ikke
+  blandes på skærmen.
+- Ordrerne findes med `updated_at` i perioden, fordi en afsendelse opdaterer ordren.
+  Derefter afgrænses rækkerne på afsendelsesdato i dansk tid.
+- Listeforespørgslen henter 3 afsendelser pr. ordre. Har en ordre flere, hentes den igen
+  alene med op til 30 afsendelser.
 - Der hentes højst 300 ordrer pr. kald, og siden siger til, når grænsen nås.
 - Historikstarten under Indstillinger respekteres.
 

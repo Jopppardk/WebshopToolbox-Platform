@@ -93,13 +93,15 @@ function TrackingDialog({ s, onClose, today }: { s: Shipment | null; onClose: ()
 
 export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
   const { webshopId, webshops } = useWorkspace();
-  const [days, setDays] = useState<number>(30), [revision, setRevision] = useState(0), refresh = useRef(false);
+  const [days, setDays] = useState<number>(30), [revision, setRevision] = useState(0), refresh = useRef(false), loadedFor = useRef('');
   const [data, setData] = useState<ShipmentList | null>(null), [error, setError] = useState(''), [loading, setLoading] = useState(true);
   const [query, setQuery] = useState(''), [filter, setFilter] = useState<Filter>('all'), [carrier, setCarrier] = useState<'all' | Carrier>('all');
   const [open, setOpen] = useState<Set<string>>(new Set()), [tracking, setTracking] = useState<Shipment | null>(null);
   const today = danishDate(), stackRef = useStackTable<HTMLTableElement>();
   useEffect(() => {
-    const controller = new AbortController(), forced = refresh.current; refresh.current = false;
+    const controller = new AbortController(), forced = refresh.current, key = `${webshopId}:${days}`; refresh.current = false;
+    // Another webshop or period is never shown under this one's name while it loads.
+    if (loadedFor.current !== key) { setData(null); setOpen(new Set()); setTracking(null); loadedFor.current = key; }
     setLoading(true); setError('');
     void (async () => {
       try {
@@ -125,13 +127,15 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
     waiting: all.filter(s => s.current === 'ready').length,
     return: all.filter(s => returnWarning(s, today)).length,
   }), [all, today]);
+  const used = [...new Set(all.map(s => s.carrier).filter((c): c is Carrier => c !== null))];
+  // A carrier chosen for another webshop or period no longer hides every row.
+  const activeCarrier = carrier !== 'all' && used.includes(carrier) && used.length > 1 ? carrier : 'all';
   const term = query.trim().toLocaleLowerCase('da');
-  const rows = all.filter(s => (carrier === 'all' || s.carrier === carrier)
+  const rows = all.filter(s => (activeCarrier === 'all' || s.carrier === activeCarrier)
     && (filter === 'all' || (filter === 'moving' ? s.current !== 'delivered' && s.current !== 'ready' : filter === 'waiting' ? s.current === 'ready' : Boolean(returnWarning(s, today))))
     && (!term || [s.orderName, s.customer, s.city, s.trackingNumber || ''].some(v => v.toLocaleLowerCase('da').includes(term))));
   const toggle = (id: string) => setOpen(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const shopName = webshops.find(s => s.id === webshopId)?.name || 'Valgt webshop';
-  const used = [...new Set(all.map(s => s.carrier).filter((c): c is Carrier => c !== null))];
   return <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
     <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div><p className="eyebrow">Tools · Track & trace</p><h1 className="page-title">Forsendelser</h1><p className="mt-2 text-sm text-muted-foreground">Følg pakkerne fra label til kunde, og se hvilke der snart sendes retur.</p></div>
@@ -154,7 +158,7 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
       <div className="flex flex-wrap items-center gap-3 border-b border-[#f0ece6] px-4 py-3 sm:px-5">
         <div className="relative min-w-0 flex-1 sm:max-w-xs"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"/><Input className="pl-9" aria-label="Søg i forsendelser" placeholder="Ordre, navn, by eller trackingnr." value={query} onChange={e => setQuery(e.target.value)}/></div>
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrér efter status">{filters.map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => setFilter(key)} className={'rounded-full px-3 py-1 text-xs ' + (filter === key ? 'bg-[#2b2620] text-white' : 'bg-[#f4efe7] text-[#5c4524] hover:bg-[#ebe2d4]')}>{label}</button>)}</div>
-        {used.length > 1 && <select className="ml-auto h-9 rounded-lg border bg-white px-2 text-sm" aria-label="Filtrér efter fragtfirma" value={carrier} onChange={e => setCarrier(e.target.value as 'all' | Carrier)}><option value="all">Alle fragtfirmaer</option>{used.map(c => <option key={c} value={c}>{carriers[c].name}</option>)}</select>}
+        {used.length > 1 && <select className="ml-auto h-9 rounded-lg border bg-white px-2 text-sm" aria-label="Filtrér efter fragtfirma" value={activeCarrier} onChange={e => setCarrier(e.target.value as 'all' | Carrier)}><option value="all">Alle fragtfirmaer</option>{used.map(c => <option key={c} value={c}>{carriers[c].name}</option>)}</select>}
       </div>
       {error ? <div role="alert" className="m-5 rounded-xl bg-amber-50 p-5 text-sm leading-6 text-amber-900">{error}</div>
         : loading && !data ? <div role="status" className="flex h-64 items-center justify-center gap-2 text-sm text-muted-foreground"><RefreshCw className="size-4 animate-spin"/>Henter forsendelser fra Shopify…</div>

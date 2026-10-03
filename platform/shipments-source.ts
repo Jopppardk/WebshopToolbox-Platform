@@ -7,10 +7,17 @@ import { orderShipments, shipmentDays, type RawOrder, type Shipment, type Shipme
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 
 // Forsendelser is read-only: Shopify fulfillments and their tracking, never an order, booking or receipt write.
-const query = `query ShipmentOrders($after:String,$query:String!){orders(first:10,after:$after,query:$query,sortKey:CREATED_AT,reverse:true){nodes{id name test cancelledAt shippingAddress{name city countryCodeV2} billingAddress{name city} shippingLine{title code source carrierIdentifier} fulfillments(first:3){id createdAt status displayStatus inTransitAt deliveredAt trackingInfo(first:2){company number url} events(first:20,sortKey:HAPPENED_AT,reverse:true){nodes{status happenedAt message}}}} pageInfo{hasNextPage endCursor}}}`;
+const fulfillmentFields = (first: number) => `fulfillments(first:${first}){id createdAt status displayStatus inTransitAt deliveredAt trackingInfo(first:2){company number url} events(first:20,sortKey:HAPPENED_AT,reverse:true){nodes{status happenedAt message}}}`;
+const orderFields = 'id name test cancelledAt shippingAddress{name city countryCodeV2} billingAddress{name city} shippingLine{title code source carrierIdentifier}';
+// A shipment updates the order, so orders updated in the period include every order shipped in it, also orders created earlier.
+const query = `query ShipmentOrders($after:String,$query:String!){orders(first:10,after:$after,query:$query,sortKey:UPDATED_AT,reverse:true){nodes{${orderFields} ${fulfillmentFields(3)}} pageInfo{hasNextPage endCursor}}}`;
+// Orders with more partial deliveries than the list query returns are read again on their own (Shopify's fulfillments is a plain list).
+const moreFulfillments = 30;
+const orderQueryAll = `query ShipmentOrder($id:ID!){order(id:$id){${orderFields} ${fulfillmentFields(moreFulfillments)}}}`;
 const maxPages = 30;
 const safe = (error: unknown) => error instanceof Error && error.message.startsWith('Shopify') ? error.message : 'Forsendelserne kunne ikke hentes fra Shopify. Prøv igen senere.';
 const cache = { prefix: 'shipments:v1:', busy: 'Forsendelserne hentes allerede. Prøv igen om lidt.', safe };
+const copenhagenDay = (value: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Copenhagen', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
 const addDays = (date: string, days: number) => { const d = new Date(date + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
 
 export async function readShipments(env: PlatformEnv, company: string, shop: string, days: number, start: string): Promise<ShipmentList> {
@@ -21,12 +28,20 @@ export async function readShipments(env: PlatformEnv, company: string, shop: str
   for (let page = 0; ; page++) {
     if (page >= maxPages) { truncated = true; break; }
     const data: { orders?: { nodes?: RawOrder[]; pageInfo?: { hasNextPage?: boolean; endCursor?: string | null } } } = await orderQuery(access, query,
-      { after, query: `created_at:>=${since} (fulfillment_status:shipped OR fulfillment_status:partial)` }, 'Shopify kunne ikke hente forsendelserne. Kontrollér read_orders-adgangen og prøv igen.');
+      { after, query: `updated_at:>=${since} (fulfillment_status:shipped OR fulfillment_status:partial)` }, 'Shopify kunne ikke hente forsendelserne. Kontrollér read_orders-adgangen og prøv igen.');
     const nodes = data.orders?.nodes, info = data.orders?.pageInfo;
     if (!Array.isArray(nodes) || typeof info?.hasNextPage !== 'boolean') throw Error('Shopify returnerede en ufuldstændig forsendelsesliste.');
     for (const order of nodes) {
       if (typeof order?.id !== 'string' || seen.has(order.id)) throw Error('Shopify returnerede en ugyldig forsendelsesliste.');
-      seen.add(order.id); shipments.push(...orderShipments(order));
+      seen.add(order.id);
+      let full = order;
+      if ((order.fulfillments?.length || 0) >= 3) {
+        const one = await orderQuery<{ order: RawOrder | null }>(access, orderQueryAll, { id: order.id }, 'Shopify kunne ikke hente alle delleveringer. Prøv igen.');
+        if (!one.order || one.order.id !== order.id || !Array.isArray(one.order.fulfillments)) throw Error('Shopify returnerede en ufuldstændig ordre.');
+        if (one.order.fulfillments.length >= moreFulfillments) throw Error(`Shopify-ordre ${order.name} har for mange delleveringer til oversigten.`);
+        full = one.order;
+      }
+      shipments.push(...orderShipments(full).filter(s => copenhagenDay(s.shippedAt) >= since));
     }
     if (!info.hasNextPage) break;
     if (!info.endCursor || info.endCursor === after) throw Error('Shopify kunne ikke fortsætte forsendelseslisten.');
