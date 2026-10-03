@@ -1,6 +1,7 @@
 import { orderPaymentIntegration, paymentProviders } from './catalog';
 import {recordHistory} from './record-history';
 import { payoutStatusLabel } from './tier1/src/lib/payout-status';
+import { normalizeSyncInterval } from './tier1/src/lib/sync-schedule';
 import {handleProductionSale} from './production-sales';
 import {handleProductionOther} from './production-proposals';
 import {productionWrites} from './production-policy';
@@ -44,7 +45,7 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
  const blocked=['/bookkeeping/manual','/sales/transfer','/refunds/transfer','/payouts/transfer','/flatpay/draft','/flatpay/production','/invoices/email'];
  if(blocked.includes(path)&&!get)throw new HttpError(403,'Denne overførsel er ikke tilgængelig her. Brug Bogfør manuelt på posten i produktionsportalen.');
  const runs=async()=> (await db.prepare('SELECT * FROM operation_runs WHERE company_id=? AND webshop_id=? ORDER BY started_at DESC,id DESC LIMIT 1000').bind(company,shop).all<any>()).results;
- if(path==='/admin/sync-status'&&get){const row=(await runs())[0],saved=await db.prepare('SELECT preferences_json FROM tier1_preferences WHERE company_id=? AND webshop_id=?').bind(company,shop).first<{preferences_json:string}>();return reply({automatic:productionWrites(env),intervalMinutes:Math.max(15,Number(saved?JSON.parse(saved.preferences_json).syncIntervalMinutes:15)||15),serverNow:Date.now(),status:row?.status==='success'?'succeeded':row?.status||'unknown',startedAt:row?.started_at||null,finishedAt:row?.finished_at||null,blockedUntil:null});}
+ if(path==='/admin/sync-status'&&get){const row=(await runs())[0],saved=await db.prepare('SELECT preferences_json FROM tier1_preferences WHERE company_id=? AND webshop_id=?').bind(company,shop).first<{preferences_json:string}>();return reply({automatic:productionWrites(env),intervalMinutes:normalizeSyncInterval(saved?JSON.parse(saved.preferences_json).syncIntervalMinutes:15),serverNow:Date.now(),status:row?.status==='success'?'succeeded':row?.status||'unknown',startedAt:row?.started_at||null,finishedAt:row?.finished_at||null,blockedUntil:null});}
  if(path==='/admin/insights'&&get){
   if(!actor.platformAdmin||actor.support)throw new HttpError(403,'Joboversigten findes kun i Tier 0.');
   const list=(await runs()).map(r=>({...r,job_key:r.module,job_name:r.module,status:r.status==='success'?'succeeded':r.status,duration_ms:r.finished_at?Date.parse(r.finished_at)-Date.parse(r.started_at):null}));

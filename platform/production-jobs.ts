@@ -1,4 +1,5 @@
 import {recordFailure} from './record-history';
+import {normalizeSyncInterval} from './tier1/src/lib/sync-schedule';
 import {syncPackaging} from './packaging-source';
 import {handleOperations} from './operations';
 import {handleInvoices} from './invoices';
@@ -53,7 +54,8 @@ async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promi
   const db=env.PLATFORM_DB;
   const company=shop.company_id,id=shop.id,actor:Actor={id:shop.actor_id,email:shop.email,platformAdmin:false};
   const owner=crypto.randomUUID(),now=Date.now(),prefs=JSON.parse(shop.preferences_json),automation=prefs.automation||{};
-  const interval=Math.max(5,Math.min(1440,Number(prefs.syncIntervalMinutes)||15))*60000;
+  // Same choices as the settings page (5, 15, 30, 60); anything else stored earlier runs as 15.
+  const interval=normalizeSyncInterval(prefs.syncIntervalMinutes)*60000;
   const claim=await db.prepare(`INSERT INTO production_jobs(company_id,webshop_id,job,lease_owner,lease_until) VALUES(?,?,'runtime',?,?)
  ON CONFLICT(company_id,webshop_id,job) DO UPDATE SET lease_owner=excluded.lease_owner,lease_until=excluded.lease_until
  WHERE production_jobs.lease_until<? AND (?='sales' OR production_jobs.next_run_at<=?)`).bind(company,id,owner,now+300000,now,mode,now).run();
