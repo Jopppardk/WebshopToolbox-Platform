@@ -1,4 +1,5 @@
 import { HttpError } from './types';
+import { parseEntries } from './finance-calculations';
 
 export type PreviewAccount={number:string;name:string;vatCode:string;kind:'entry'|'deposit';hidden:boolean};
 
@@ -107,4 +108,31 @@ export async function readExistingVoucher(credentials:Record<string,string>,guid
  const voucher={guid:String(raw.Guid??raw.guid??'').toLowerCase(),status:raw.Status??raw.status,timestamp:raw.Timestamp??raw.timestamp,date:raw.VoucherDate??raw.voucherDate,reference:raw.ExternalReference??raw.externalReference??'',number:raw.VoucherNumber??raw.voucherNumber??null,lines:raw.Lines??raw.lines};
  if(voucher.guid!==guid.toLowerCase()||!['Booked','Draft'].includes(voucher.status)||typeof voucher.timestamp!=='string'||!voucher.timestamp||typeof voucher.date!=='string'||!Array.isArray(voucher.lines)||!voucher.lines.length)throw new HttpError(409,'Dinero returnerede et ufuldstændigt eller ukendt bilag.');
  return voucher;
+}
+
+// Booked balance of one account from the start of today's accounting year to today, primo included.
+// Authenticates and reads; never writes. Drafts are not entries and are not part of the balance.
+export async function readDineroAccountBalance(credentials: Record<string, string>, account: number, today: string) {
+  const tokenResponse = await fetch('https://authz.dinero.dk/dineroapi/oauth/token', {
+    method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(20000),
+    headers: { Authorization: `Basic ${btoa(`${credentials.clientId}:${credentials.clientSecret}`)}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'password', scope: 'read write', username: credentials.apiKey, password: credentials.apiKey }),
+  });
+  if (!tokenResponse.ok) throw Error('Dinero-adgangen kunne ikke fornyes.');
+  const token = await tokenResponse.json() as { access_token?: string };
+  if (!token.access_token) throw Error('Dinero-adgangen kunne ikke fornyes.');
+  const read = async (path: string) => {
+    const response = await fetch(`https://api.dinero.dk/v1/${encodeURIComponent(credentials.organizationId)}/${path}`, { method: 'GET', redirect: 'manual', cache: 'no-store', signal: AbortSignal.timeout(20000), headers: { Authorization: `Bearer ${token.access_token}`, Accept: 'application/json' } });
+    if (!response.ok) throw Error(`Lagerkontoen kunne ikke hentes fra Dinero (HTTP ${response.status}).`);
+    return response.json();
+  };
+  const years = await read('accountingyears') as Array<{ FromDate: string; ToDate: string }>;
+  if (!Array.isArray(years) || years.some(y => !/^\d{4}-\d{2}-\d{2}$/.test(y?.FromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(y?.ToDate))) throw Error('Dinero returnerede ukendte regnskabsår.');
+  const year = years.find(y => y.FromDate <= today && y.ToDate >= today);
+  if (!year) throw Error('Dinero har intet regnskabsår, der omfatter dags dato.');
+  const entries = parseEntries(await read('entries?' + new URLSearchParams({ fromDate: year.FromDate, toDate: today, includePrimo: 'true' })));
+  if (entries.some(e => e.date < year.FromDate || e.date > today)) throw Error('Dinero returnerede posteringer uden for perioden.');
+  const balanceMinor = entries.filter(e => e.account === account && e.type !== 'Ultimo').reduce((sum, e) => sum + e.minor, 0);
+  if (!Number.isSafeInteger(balanceMinor)) throw Error('Dinero returnerede en ugyldig saldo.');
+  return { account, balanceMinor, from: year.FromDate, to: today };
 }
