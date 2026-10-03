@@ -8,6 +8,7 @@ import { calculateFinance, type LedgerEntry } from './finance-calculations';
 import { aggregateFinance, comparison } from './performance-calculations';
 import { inventoryValueMinor, type InventoryRow } from './tier1/src/lib/inventory';
 import { danishDate } from './tier1/src/lib/history-policy';
+import { orderShipments, type RawOrder, type ShipmentList } from './tier1/src/lib/shipments';
 import { HttpError, reply, type PlatformEnv } from './types';
 
 export const DEMO_EMAIL = 'demo@webshoptoolbox.dk';
@@ -172,6 +173,28 @@ export function demoPerformance(kind: 'finance' | 'shop', year: number, today = 
   const series = (sums: Map<string, number>) => ({ months: comparison(year, today, start, [{ from: start, to: today }], sums) });
   return { year, startDate: start, checkedAt: new Date().toISOString(), timezone: 'Europe/Copenhagen', visits: series(visits), orders: series(orders) };
 }
+// Forsendelser: fictitious tracking for the fulfilled demo orders, spread over every step and carrier,
+// including parcels waiting in a parcel shop close to being returned.
+export function demoShipments(days: number, today = danishDate(), now = Date.now()): ShipmentList {
+  const since = addDays(today + 'T12:00:00Z', -days).slice(0, 10), carriers = [
+    ['PostNord', 'https://tracking.postnord.com/dk/?id=', 'PostNord Pakkeshop'], ['GLS', 'https://gls-group.com/DK/da/find-pakke?match=', 'GLS ParcelShop'],
+    ['DAO', 'https://www.dao.as/privat/find-din-pakke?stregkode=', 'DAO Pakkeshop'], ['Bring', 'https://tracking.bring.dk/tracking/', 'Bring Hjemmelevering'],
+  ] as const;
+  const shipments = demoDataset(today).orders.filter(o => o.fulfilledAt && o.fulfilledAt.slice(0, 10) >= since).flatMap((o, i) => {
+    const [company, link, method] = carriers[i % carriers.length], shipped = Date.parse(o.fulfilledAt!), number = String(70000000 + Number(o.name.slice(1)) * 137);
+    const pickup = !/Hjemmelevering/.test(method), at = (hours: number) => new Date(shipped + hours * 3600000).toISOString();
+    const age = (now - shipped) / 3600000, events: Array<{ status: string; happenedAt: string; message: string | null }> = [{ status: 'LABEL_PRINTED', happenedAt: at(0), message: null }];
+    // Every fourth parcel shop parcel waits uncollected, so the return warning can be seen.
+    const waiting = pickup && i % 4 !== 3 && i % 3 === 0;
+    for (const [hours, status] of [[3, 'CARRIER_PICKED_UP'], [14, 'IN_TRANSIT'], [30, pickup ? 'READY_FOR_PICKUP' : 'OUT_FOR_DELIVERY'], [pickup ? 70 : 34, 'DELIVERED']] as const)
+      if (age > hours && !(waiting && status === 'DELIVERED')) events.push({ status, happenedAt: at(hours), message: status === 'READY_FOR_PICKUP' ? 'Pakken er klar til afhentning i ' + method + ', ' + o.customer[3] : null });
+    const raw: RawOrder = { id: o.id, name: o.name, test: false, cancelledAt: null, shippingAddress: { name: o.customer[0], city: o.customer[3], countryCodeV2: 'DK' }, shippingLine: { title: method, code: method },
+      fulfillments: [{ id: 'gid://shopify/Fulfillment/' + (7100000 + Number(o.name.slice(1))), createdAt: o.fulfilledAt!, status: 'SUCCESS', displayStatus: events.at(-1)!.status, deliveredAt: null, inTransitAt: null,
+        trackingInfo: [{ company, number, url: link + number }], events: { nodes: events } }] };
+    return orderShipments(raw);
+  }).sort((a, b) => Date.parse(b.shippedAt) - Date.parse(a.shippedAt));
+  return { checkedAt: new Date(now).toISOString(), days, since, truncated: false, shipments };
+}
 export function demoInventory() {
   const rows: InventoryRow[] = demoProducts.map(p => ({ inventoryItemId: 'gid://shopify/InventoryItem/' + (61000 + p.id), locationId: 'gid://shopify/Location/1', product: p.title, variant: 'Default Title', sku: p.sku, quantity: p.stock, unitCostMinor: p.cost * 100, currency: 'DKK' } as InventoryRow));
   const totalValueMinor = inventoryValueMinor(rows), today = new Date().toISOString().slice(0, 10);
@@ -211,6 +234,11 @@ export async function demoTier1(request: Request, path: string): Promise<Respons
       const year = Number(url.searchParams.get('year')), current = Number(danishDate().slice(0, 4));
       if (!Number.isInteger(year) || year < current - 9 || year > current) throw new HttpError(400, 'Vælg et af de seneste ti kalenderår.');
       return reply(demoPerformance(path.endsWith('finance') ? 'finance' : 'shop', year));
+    }
+    if (path === '/shipments') {
+      const days = Number(url.searchParams.get('days') || 30);
+      if (![14, 30, 60].includes(days)) throw new HttpError(400, 'Vælg 14, 30 eller 60 dage.');
+      return reply(demoShipments(days));
     }
     if (path === '/shopify/inventory' && !url.searchParams.has('history')) return reply(demoInventory());
     if (path === '/emballage/products') return reply({ writes: true, canWrite: true, products: demoProducts.map(p => ({ id: 'gid://shopify/Product/' + (63000 + p.id), title: p.title, status: 'ACTIVE', weightGrams: [6, 9, 12].includes(p.id) ? null : p.id === 4 ? 0 : Math.round(p.weight * 0.18), reportable: [6, 9, 12].includes(p.id) || p.id === 4 ? 'unknown' : 'yes', openLines: [6, 9, 12].includes(p.id) ? 3 : 0 })) });

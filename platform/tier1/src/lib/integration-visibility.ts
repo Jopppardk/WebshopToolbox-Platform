@@ -7,6 +7,7 @@ export const integrationRequirements = {
   packaging:{title:'Emballage',providers:['shopify']},
   documents:{title:'Udbetalingsrapporter',providers:['shopify','flatpay']},
   feeds:{title:'Produktfeeds',providers:['shopify']},
+  shipments:{title:'Forsendelser',providers:['shopify']},
 } as const;
 
 export type IntegrationGatedView=keyof typeof integrationRequirements;
