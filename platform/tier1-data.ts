@@ -129,7 +129,7 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
  if(path==='/shopify/inventory'){
   if(get)return handleStocktake(request,env,actor,company,shop);
   const b=await jsonBody(request,40000);const response=await handleStocktake(forwarded(request,b),env,actor,company,shop);
-  if(b.action==='prepare'&&response.ok){const d=await response.json() as any;return reply({...d,operationId:d.id});}return response;
+  if(['prepare','prepare-reconcile'].includes(String(b.action))&&response.ok){const d=await response.json() as any;return reply({...d,operationId:d.id});}return response;
  }
  // Tilbagebetalinger: every refund of an order, whatever the gateway, with its credit note and booking.
  if(path==='/order-refunds/sync'){

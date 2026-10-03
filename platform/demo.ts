@@ -174,7 +174,9 @@ export function demoPerformance(kind: 'finance' | 'shop', year: number, today = 
 }
 export function demoInventory() {
   const rows: InventoryRow[] = demoProducts.map(p => ({ inventoryItemId: 'gid://shopify/InventoryItem/' + (61000 + p.id), locationId: 'gid://shopify/Location/1', product: p.title, variant: 'Default Title', sku: p.sku, quantity: p.stock, unitCostMinor: p.cost * 100, currency: 'DKK' } as InventoryRow));
-  return { rows, locations: [{ id: 'gid://shopify/Location/1', name: 'Lager Aarhus' }], totalValueMinor: inventoryValueMinor(rows), incomplete: [], fetchedAt: new Date().toISOString() };
+  const totalValueMinor = inventoryValueMinor(rows), today = new Date().toISOString().slice(0, 10);
+  // A fictional Dinero balance a little off, so the demo shows a difference to regulate.
+  return { rows, locations: [{ id: 'gid://shopify/Location/1', name: 'Lager Aarhus' }], totalValueMinor, incomplete: [], company: { shops: 1, valueMinor: totalValueMinor, incomplete: 0, dkk: true }, dinero: { account: 5800, valueMinor: totalValueMinor - 124_550, from: today.slice(0, 4) + '-01-01', to: today }, fetchedAt: new Date().toISOString() };
 }
 function feedProduct(p: typeof demoProducts[number]): { product: Product; variant: Variant } {
   const variant: Variant = { id: 'gid://shopify/ProductVariant/' + (62000 + p.id), barcode: '57' + String(10000000000 + p.id * 7919).slice(-11), title: 'Default Title', price: p.price.toFixed(2), compareAtPrice: p.compare ? p.compare.toFixed(2) : null, availableForSale: p.stock > 0, inventoryQuantity: p.stock, selectedOptions: [], image: null };
