@@ -14,8 +14,9 @@ async function digest(value: string) {
 }
 // Company-scoped, versioned read cache. No ledger, voucher, order or receipt writes.
 // A forced refresh (Opdatér) skips cached numbers older than a minute, so repeated clicks cannot hammer Dinero or Shopify.
-async function cached<T>(env: PlatformEnv, company: string, scope: unknown[], context: unknown[], read: () => Promise<T>, ttl: (data: T) => number = () => 15 * 60000, force = false): Promise<T> {
-  const db = env.PLATFORM_DB, key = 'performance:v2:' + await digest(JSON.stringify([env.PLATFORM_ENV, ...scope]));
+export type ReadCache = { prefix: string; busy: string; safe: (error: unknown) => string };
+export async function cachedRead<T>(env: PlatformEnv, company: string, options: ReadCache, scope: unknown[], context: unknown[], read: () => Promise<T>, ttl: (data: T) => number = () => 15 * 60000, force = false): Promise<T> {
+  const db = env.PLATFORM_DB, key = options.prefix + await digest(JSON.stringify([env.PLATFORM_ENV, ...scope]));
   const revision = await digest(JSON.stringify(context));
   const row = await db.prepare('SELECT setting_value FROM finance_state WHERE tenant=? AND setting_key=?').bind(company, key).first<{ setting_value: string }>();
   const previous = row ? JSON.parse(row.setting_value) : null;
@@ -23,23 +24,25 @@ async function cached<T>(env: PlatformEnv, company: string, scope: unknown[], co
     if (previous.error) throw new HttpError(409, previous.error);
     return previous.data;
   }
-  if (previous?.leaseUntil > Date.now()) throw new HttpError(409, 'Performance-tallene hentes allerede. Prøv igen om lidt.');
+  if (previous?.leaseUntil > Date.now()) throw new HttpError(409, options.busy);
   const claim = JSON.stringify({ leaseUntil: Date.now() + 3 * 60000, owner: crypto.randomUUID() });
   const acquired = row
     ? await db.prepare('UPDATE finance_state SET setting_value=? WHERE tenant=? AND setting_key=? AND setting_value=?').bind(claim, company, key, row.setting_value).run()
     : await db.prepare('INSERT INTO finance_state(tenant,setting_key,setting_value) VALUES(?,?,?) ON CONFLICT DO NOTHING').bind(company, key, claim).run();
-  if (acquired.meta.changes !== 1) throw new HttpError(409, 'Performance-tallene hentes allerede. Prøv igen om lidt.');
+  if (acquired.meta.changes !== 1) throw new HttpError(409, options.busy);
   try {
     const data = await read();
     const saved = await db.prepare('UPDATE finance_state SET setting_value=?,updated_at=CURRENT_TIMESTAMP WHERE tenant=? AND setting_key=? AND setting_value=?').bind(JSON.stringify({ data, revision, savedAt: Date.now(), expiresAt: Date.now() + ttl(data) }), company, key, claim).run();
     if (saved.meta.changes !== 1) throw Error('Cache ownership changed');
     return data;
   } catch (error) {
-    const message = safeError(error);
+    const message = options.safe(error);
     await db.prepare('UPDATE finance_state SET setting_value=?,updated_at=CURRENT_TIMESTAMP WHERE tenant=? AND setting_key=? AND setting_value=?').bind(JSON.stringify({ error: message, revision, expiresAt: Date.now() + 30000 }), company, key, claim).run();
     throw new HttpError(409, message);
   }
 }
+const performanceCache: ReadCache = { prefix: 'performance:v2:', busy: 'Performance-tallene hentes allerede. Prøv igen om lidt.', safe: safeError };
+const cached = <T>(env: PlatformEnv, company: string, scope: unknown[], context: unknown[], read: () => Promise<T>, ttl?: (data: T) => number, force = false) => cachedRead(env, company, performanceCache, scope, context, read, ttl, force);
 
 export async function readPerformanceFinance(credentials: Record<string, string>, year: number, start: string, today = danishDate()): Promise<PerformanceFinance> {
   const tokenResponse = await fetch('https://authz.dinero.dk/dineroapi/oauth/token', {

@@ -1,5 +1,7 @@
 # Udviklingsplan
 
+> 3. oktober 2026 – Forsendelser/track & trace: implementeret og lokalt testet, ikke sat i drift. Næste skridt er CI og gennemgang, udgivelse og kontrol mod en rigtig butik med fragtapp samt bekræftede opbevaringstider. Se [SHIPMENTS.md](SHIPMENTS.md).
+
 > 29. september 2026 – Performance-dashboard og Tools-menu: implementeret, testet og sat i drift på Dev og Prod via PR #53 og run `36628986416`. Fire månedsgrafer med sammenligningsår samt leverandørfilter er afsluttet; 413 tests og begge HTTP-gates bestået. Tilbage er kontrol af rigtige rapporttal og butikkens Shopify-rapportadgang ved ibrugtagning. Se [PERFORMANCE.md](PERFORMANCE.md).
 
 > Cloud-deployprocedure 28. september: implementering, PR #14, obligatorisk CI, gemt GH_TOKEN samt Cloud-læse-/Actions-write-kontrol er afsluttet. Run `36471598436` bekræfter Cloud-bestilling og tilsigtet versionsafvisning før deployment; rigtige dev→prod-udgivelser med HTTP-gates er bestået i runs `36468362953` og `36471085328` fra andet arbejde. Brug det opdaterede miljø til nye Cloud-opgaver. Se CODEX-CLOUD-DEPLOY.md for præcis testafgrænsning og fremgangsmåde.

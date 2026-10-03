@@ -24,7 +24,8 @@ import { Dashboard } from '@/components/dashboard';
 import {ProductFeeds} from '@/components/product-feeds';
 import { Performance } from '@/components/performance';
 import {IntegrationRequired} from '@/components/integration-required';
-import {Rss} from 'lucide-react';
+import {Rss,Truck} from 'lucide-react';
+import { Shipments } from '@/components/shipments';
 import { Support } from '@/platform/support';
 import { CustomerIdentity, WebshopSelector } from '@/platform/workspace';
 import { vatCodeOptions } from '@/lib/vat-code-options';
@@ -122,7 +123,7 @@ export default function Home() {
   const [syncingOrders, setSyncingOrders] = useState(false);
   const [packagingEntry,setPackagingEntry]=useState({tab:'consumption' as 'consumption'|'reporting',key:0});
   const [view, setView] = useState<
-    'dashboard' | 'orders' | 'invoices' | 'documents' | 'refunds' | 'payouts' | 'inventory' | 'packaging' | 'support' | 'feeds' | 'performance' | 'settings'
+    'dashboard' | 'orders' | 'invoices' | 'documents' | 'refunds' | 'payouts' | 'inventory' | 'packaging' | 'support' | 'feeds' | 'performance' | 'shipments' | 'settings'
   >('dashboard');
   useEffect(() => {
     if (sessionStorage.getItem('toolbox-refresh-sales') === '1') {
@@ -270,6 +271,7 @@ export default function Home() {
           <button className={`nav-item w-full ${view === 'documents' ? 'active' : ''}`} onClick={() => setView('documents')}><BookOpenCheck />Udbetalingsrapporter</button>
           <p className="nav-label mt-7">Tools</p>
           <button className={`nav-item w-full ${view === 'performance' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('performance'); }}><Activity />Performance</button>
+          <button className={`nav-item w-full ${view === 'shipments' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('shipments'); }}><Truck />Forsendelser</button>
           <button className={`nav-item w-full ${view === 'packaging' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('packaging'); }}><Boxes />Emballage</button>
           <button className={`nav-item w-full ${view === 'feeds' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('feeds'); }}><Rss />Produktfeeds</button>
           <p className="nav-label mt-7">System</p>
@@ -330,6 +332,7 @@ export default function Home() {
           <button className={`nav-item w-full ${view === 'documents' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('documents'); }}><BookOpenCheck />Udbetalingsrapporter</button>
           <p className="nav-label mt-7">Tools</p>
           <button className={`nav-item w-full ${view === 'performance' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('performance'); }}><Activity />Performance</button>
+          <button className={`nav-item w-full ${view === 'shipments' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('shipments'); }}><Truck />Forsendelser</button>
           <button className={`nav-item w-full ${view === 'packaging' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('packaging'); }}><Boxes />Emballage</button>
           <button className={`nav-item w-full ${view === 'feeds' ? 'active' : ''}`} onClick={() => { setMobileOpen(false); setView('feeds'); }}><Rss />Produktfeeds</button>
           <p className="nav-label mt-7">System</p>
@@ -465,6 +468,7 @@ export default function Home() {
         {view === 'inventory' && integrationAvailable('inventory') && <Inventory />}
         {view === 'packaging' && integrationAvailable('packaging') && <Packaging key={packagingEntry.key} initialTab={packagingEntry.tab} onIntegrations={()=>{setIntegrationTarget('emballage');setSettingsTab('integrations');setView('settings');}}/>}
         {view === 'feeds' && integrationAvailable('feeds') && <ProductFeeds />}
+        {view === 'shipments' && integrationAvailable('shipments') && <Shipments onIntegrations={() => { setIntegrationTarget('shopify'); setSettingsTab('integrations'); setView('settings'); }}/>}
         {view === 'support' && <Support />}
         {view === 'settings' && (
           <div>
