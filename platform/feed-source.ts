@@ -31,7 +31,8 @@ export async function shopMarkets(env:PlatformEnv,company:string,shop:string):Pr
  const markets:FeedMarket[]=[];
  for(const m of Array.isArray(data.markets?.nodes)?data.markets.nodes:[]){
   const countries=(m?.conditions?.regionsCondition?.regions?.nodes||[]).map((r:any)=>r?.code).filter((c:unknown):c is string=>typeof c==='string'&&/^[A-Z]{2}$/.test(c)).sort();
-  const currency=m?.currencySettings?.baseCurrency?.currencyCode;
+  // Shopify gives no currency settings for a market that sells in the shop's own currency (typically the home market).
+  const currency=m?.currencySettings?.baseCurrency?.currencyCode??data.shop?.currencyCode;
   if(m?.status!=='ACTIVE'||!countries.length||typeof currency!=='string'||!/^[A-Z]{3}$/.test(currency)||!/^gid:\/\/shopify\/Market\/\d+$/.test(m.id))continue;
   // A market with its own domain or subfolder is sold there in its default language; otherwise on the primary domain.
   const presence=m.webPresences?.nodes?.[0],locale=typeof presence?.defaultLocale?.locale==='string'?presence.defaultLocale.locale:null;
@@ -40,7 +41,7 @@ export async function shopMarkets(env:PlatformEnv,company:string,shop:string):Pr
   if(typeof root==='string'){const parsed=new URL(root);if(parsed.protocol!=='https:'||parsed.username||parsed.password)continue;url=(parsed.origin+parsed.pathname).replace(/\/$/,'');}
   markets.push({id:m.id,name:String(m.name).slice(0,100),countries,currency,url,locale,primary:!!home&&countries.includes(home)&&currency===data.shop.currencyCode});
  }
- if(!markets.some(m=>m.primary)&&markets.length)markets[0].primary=true;
+ // Never guess the primary market: without one, feeds made before markets show no market instead of a wrong one.
  return markets.sort((a,b)=>Number(b.primary)-Number(a.primary)||a.name.localeCompare(b.name,'da'));
 }
 export async function feedCatalog(env:PlatformEnv,company:string,shop:string,url:URL){
