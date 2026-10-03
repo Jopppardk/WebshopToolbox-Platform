@@ -14,7 +14,11 @@ export function redactForLog(text: string) {
   );
 }
 
-export function logUnexpected(error: unknown, request: Request) {
+// A request, or for the scheduled jobs the job name in place of the path.
+export function logUnexpected(
+  error: unknown,
+  where: Request | { method: string; path: string },
+) {
   const errorId = crypto.randomUUID().slice(0, 8);
   const message = error instanceof Error ? error.message : String(error);
   const stack =
@@ -25,8 +29,10 @@ export function logUnexpected(error: unknown, request: Request) {
     JSON.stringify({
       level: 'error',
       errorId,
-      method: request.method,
-      path: redactForLog(new URL(request.url).pathname),
+      method: where.method,
+      path: redactForLog(
+        where instanceof Request ? new URL(where.url).pathname : where.path,
+      ),
       name: error instanceof Error ? error.name : typeof error,
       message: redactForLog(message),
       stack: redactForLog(stack),

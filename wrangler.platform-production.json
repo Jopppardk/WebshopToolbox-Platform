@@ -61,5 +61,8 @@
       "pattern": "portal.webshoptoolbox.dk",
       "custom_domain": true
     }
-  ]
+  ],
+  "observability": {
+    "enabled": true
+  }
 }

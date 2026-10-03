@@ -21,6 +21,7 @@ import { sendCreditNote } from './credit-notes';
 import { productionWrites, bookingDate } from './production-policy';
 import { dataStartDate, historyPolicy, providerStart } from './tier1-history';
 import { HttpError, type Actor, type PlatformEnv } from './types';
+import { logUnexpected } from './error-log';
 const request = (body: unknown) =>
   new Request('https://portal.webshoptoolbox.dk/internal-job', {
     method: 'POST',
@@ -127,7 +128,12 @@ async function runShop(
       .first();
     if (!active) throw new HttpError(409, 'Joblåsen er udløbet.');
   };
-  const run = async (name: string, work: () => Promise<unknown>) => {
+  // item names the order or payout in the bell; an unexpected error is logged with an id shown there too.
+  const run = async (
+    name: string,
+    work: () => Promise<unknown>,
+    item?: string,
+  ) => {
     const runId = crypto.randomUUID();
     await db
       .prepare(
@@ -147,8 +153,8 @@ async function runShop(
     } catch (error) {
       const message =
         error instanceof HttpError
-          ? error.message
-          : 'Integrationen kunne ikke behandles. Kontrollér forbindelse og postens detaljer.';
+          ? (item ? item + ': ' : '') + error.message
+          : `Integrationen kunne ikke behandles${item ? ' (' + item + ')' : ''}. Kontrollér forbindelse og postens detaljer. Fejl-id: ${logUnexpected(error, { method: 'JOB', path: name })}.`;
       await db
         .prepare(
           "UPDATE operation_runs SET status='failed',message=?,finished_at=CURRENT_TIMESTAMP WHERE id=?",
@@ -540,7 +546,7 @@ async function runShop(
                 : '';
       const rows = (
         await db
-          .prepare(`SELECT s.external_id,s.occurred_at FROM ${table} s
+          .prepare(`SELECT s.external_id,s.occurred_at,json_extract(s.payload_json,'$.name') name FROM ${table} s
  LEFT JOIN production_attempts a ON a.company_id=s.company_id AND a.webshop_id=s.webshop_id AND a.job=? AND a.external_id=s.external_id
  WHERE s.company_id=? AND s.webshop_id=? AND ${filter}${eligible} AND substr(s.occurred_at,1,10)>=? AND COALESCE(a.next_attempt_at,0)<=?
  ORDER BY COALESCE(a.attempted_at,0),s.occurred_at,s.external_id LIMIT 10`)
@@ -559,137 +565,153 @@ async function runShop(
         await owns();
         const externalId = row.external_id;
         result.rows++;
-        await run('auto.' + job, async () => {
-          let succeeded = false;
-          const waiting =
-            (job === 'payouts' || job === 'flatpay') &&
-            payoutNotReady(row.occurred_at);
-          let notReady = false;
-          try {
-            if (kind === 'sale' || email) {
-              const checked = await responseValue(
-                await handleInvoices(
-                  request({ webshopId: id, externalId }),
+        await run(
+          'auto.' + job,
+          async () => {
+            let succeeded = false;
+            const waiting =
+              (job === 'payouts' || job === 'flatpay') &&
+              payoutNotReady(row.occurred_at);
+            let notReady = false;
+            try {
+              if (kind === 'sale' || email) {
+                const checked = await responseValue(
+                  await handleInvoices(
+                    request({ webshopId: id, externalId }),
+                    env,
+                    actor,
+                    company,
+                    'check',
+                  ),
+                );
+                const day = new Intl.DateTimeFormat('en-CA', {
+                  timeZone: 'Europe/Copenhagen',
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                }).format(new Date(checked.invoice.date));
+                if (day < boundary) {
+                  succeeded = true;
+                  return;
+                }
+                await bookingDate(
                   env,
-                  actor,
                   company,
-                  'check',
-                ),
-              );
-              const day = new Intl.DateTimeFormat('en-CA', {
-                timeZone: 'Europe/Copenhagen',
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-              }).format(new Date(checked.invoice.date));
-              if (day < boundary) {
+                  id,
+                  provider,
+                  checked.invoice.date,
+                );
+              } else
+                await bookingDate(env, company, id, provider, row.occurred_at);
+              if (custom) {
+                await custom(externalId);
                 succeeded = true;
                 return;
               }
-              await bookingDate(
-                env,
-                company,
-                id,
-                provider,
-                checked.invoice.date,
-              );
-            } else
-              await bookingDate(env, company, id, provider, row.occurred_at);
-            if (custom) {
-              await custom(externalId);
-              succeeded = true;
-              return;
-            }
-            if (kind === 'sale' || email)
-              await responseValue(
-                await handleInvoices(
-                  request({ webshopId: id, externalId }),
-                  env,
-                  actor,
-                  company,
-                  'generate',
-                ),
-              );
-            if (email) {
-              await responseValue(
-                await handleInvoices(
-                  request({ webshopId: id, externalId }),
-                  env,
-                  actor,
-                  company,
-                  'send',
-                ),
-              );
-            } else {
-              const invoke = (body: unknown) =>
-                kind === 'sale'
-                  ? handleProductionSale(request(body), env, actor, company, id)
-                  : handleProductionOther(
-                      request(body),
-                      env,
-                      actor,
-                      company,
-                      id,
-                      kind,
-                    );
-              const inspected = await responseValue(
-                await invoke({ kind, externalId, action: 'inspect' }),
-              );
-              if (
-                inspected.phase !== 'booked' &&
-                !(inspected.phase === 'draft' && !book)
-              )
+              if (kind === 'sale' || email)
                 await responseValue(
-                  await invoke({
-                    kind,
-                    externalId,
-                    action: 'retry',
-                    version: inspected.version,
-                    confirmed: true,
-                  }),
+                  await handleInvoices(
+                    request({ webshopId: id, externalId }),
+                    env,
+                    actor,
+                    company,
+                    'generate',
+                  ),
                 );
+              if (email) {
+                await responseValue(
+                  await handleInvoices(
+                    request({ webshopId: id, externalId }),
+                    env,
+                    actor,
+                    company,
+                    'send',
+                  ),
+                );
+              } else {
+                const invoke = (body: unknown) =>
+                  kind === 'sale'
+                    ? handleProductionSale(
+                        request(body),
+                        env,
+                        actor,
+                        company,
+                        id,
+                      )
+                    : handleProductionOther(
+                        request(body),
+                        env,
+                        actor,
+                        company,
+                        id,
+                        kind,
+                      );
+                const inspected = await responseValue(
+                  await invoke({ kind, externalId, action: 'inspect' }),
+                );
+                if (
+                  inspected.phase !== 'booked' &&
+                  !(inspected.phase === 'draft' && !book)
+                )
+                  await responseValue(
+                    await invoke({
+                      kind,
+                      externalId,
+                      action: 'retry',
+                      version: inspected.version,
+                      confirmed: true,
+                    }),
+                  );
+              }
+              succeeded = true;
+            } catch (error) {
+              if (waiting) {
+                notReady = true;
+                return;
+              }
+              result.failed++;
+              try {
+                await recordFailure(
+                  env,
+                  company,
+                  id,
+                  provider,
+                  module,
+                  externalId,
+                  'Automatisk behandling: ' + job,
+                  error,
+                );
+              } catch {
+                /* Keep original error and durable claims. */
+              }
+              throw error;
+            } finally {
+              // Failed sources get a bounded cooldown instead of starving later orders.
+              await db
+                .prepare(
+                  'INSERT INTO production_attempts(company_id,webshop_id,job,external_id,attempted_at,next_attempt_at,failures) VALUES(?,?,?,?,?,?,?) ON CONFLICT(company_id,webshop_id,job,external_id) DO UPDATE SET attempted_at=excluded.attempted_at,next_attempt_at=excluded.next_attempt_at,failures=CASE WHEN excluded.failures=0 THEN 0 ELSE production_attempts.failures+1 END',
+                )
+                .bind(
+                  company,
+                  id,
+                  job,
+                  externalId,
+                  Date.now(),
+                  Date.now() +
+                    (succeeded
+                      ? 86400000
+                      : notReady
+                        ? notReadyRetryMs
+                        : 900000),
+                  succeeded || notReady ? 0 : 1,
+                )
+                .run();
             }
-            succeeded = true;
-          } catch (error) {
-            if (waiting) {
-              notReady = true;
-              return;
-            }
-            result.failed++;
-            try {
-              await recordFailure(
-                env,
-                company,
-                id,
-                provider,
-                module,
-                externalId,
-                'Automatisk behandling: ' + job,
-                error,
-              );
-            } catch {
-              /* Keep original error and durable claims. */
-            }
-            throw error;
-          } finally {
-            // Failed sources get a bounded cooldown instead of starving later orders.
-            await db
-              .prepare(
-                'INSERT INTO production_attempts(company_id,webshop_id,job,external_id,attempted_at,next_attempt_at,failures) VALUES(?,?,?,?,?,?,?) ON CONFLICT(company_id,webshop_id,job,external_id) DO UPDATE SET attempted_at=excluded.attempted_at,next_attempt_at=excluded.next_attempt_at,failures=CASE WHEN excluded.failures=0 THEN 0 ELSE production_attempts.failures+1 END',
-              )
-              .bind(
-                company,
-                id,
-                job,
-                externalId,
-                Date.now(),
-                Date.now() +
-                  (succeeded ? 86400000 : notReady ? notReadyRetryMs : 900000),
-                succeeded || notReady ? 0 : 1,
-              )
-              .run();
-          }
-        });
+          },
+          module === 'orders' && row.name
+            ? 'ordre ' + row.name
+            : 'post ' + String(externalId).split(/[/:]/).pop(),
+        );
       }
       return result;
     };
