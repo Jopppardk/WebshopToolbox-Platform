@@ -191,7 +191,7 @@ export function demoFeed(config: { allProducts: boolean; collections: Array<{ id
 // Reads served straight from the demo company's own rows; everything else is simulated or refused.
 const databaseReads = new Set(['/runtime', '/admin/sync-status', '/notifications', '/dinero/accounts', '/dashboard/platform', '/shopify/packaging', '/invoices/sender', '/invoices/preview', '/invoices/settings', '/invoices/logo',
   '/shopify/orders', '/shopify/refunds', '/shopify/payouts', '/shopify/payments', '/refunds/overview', '/payouts/overview', '/sales/log', '/payouts/log', '/refunds/log', '/documents', '/invoices', '/invoices/pdf',
-  '/flatpay/records', '/viabill/records', '/pensopay/records', '/integrations', '/integrations/selection', '/admin/history', '/integrations/start-date', '/admin/settings', '/feeds', '/feeds/file-name', '/admin/errors', '/admin/insights']);
+  '/flatpay/records', '/viabill/records', '/pensopay/records', '/order-refunds', '/order-refunds/credit-note', '/integrations', '/integrations/selection', '/admin/history', '/integrations/start-date', '/admin/settings', '/feeds', '/feeds/file-name', '/admin/errors', '/admin/insights']);
 const databaseWrites: Array<[string, RegExp]> = [['POST', /^\/admin\/settings$/], ['PUT', /^\/invoices\/settings$/], ['POST', /^\/notifications$/], ['POST', /^\/integrations\/selection$/],
   ['POST', /^\/feeds$/], ['PUT', /^\/feeds\/[a-f0-9-]{36}$/], ['DELETE', /^\/feeds\/[a-f0-9-]{36}$/], ['POST', /^\/feeds\/[a-f0-9-]{36}\/(refresh|rotate)$/]];
 export async function demoTier1(request: Request, path: string): Promise<Response | null> {
@@ -216,6 +216,7 @@ export async function demoTier1(request: Request, path: string): Promise<Respons
     throw new HttpError(409, demoMessage);
   }
   if (path === '/shopify/orders') return reply({ count: 0, synced: 0, invoicesCreated: 0, orders: [], hasNextPage: false, endCursor: null, warning: 'Demokonto: ordrerne er fiktive og hentes ikke fra Shopify.' });
+  if (path === '/order-refunds/sync') return reply({ synced: 0, orders: 0, more: false });
   if (path === '/shopify/orders/process') return reply({ status: 'completed', invoices: 0, booked: 0, drafts: 0, sent: 0, failed: 0 });
   if (databaseWrites.some(([method, pattern]) => method === request.method && pattern.test(path))) return null;
   throw new HttpError(409, demoMessage);

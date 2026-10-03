@@ -6,7 +6,9 @@ import {handlePayments} from './payments';
 import {handleProductionSale} from './production-sales';
 import {handleProductionOther} from './production-proposals';
 import {generatePayoutReport} from './documents';
-import {domesticOrderSql,fillOrderMarkets} from './order-markets';
+import {domesticOrderOfSql,domesticOrderSql,fillOrderMarkets} from './order-markets';
+import {legacyRefundSql,saleBookedSql,syncOrderRefunds} from './order-refunds';
+import {sendCreditNote} from './credit-notes';
 import {productionWrites,bookingDate} from './production-policy';
 import {dataStartDate,historyPolicy,providerStart} from './tier1-history';
 import {HttpError,type Actor,type PlatformEnv} from './types';
@@ -154,16 +156,19 @@ async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promi
     }
     if(failed.length)throw new HttpError(409,(failed.length===1?'En udbetalingsrapport kunne ikke dannes automatisk. ':`${failed.length} udbetalingsrapporter kunne ikke dannes automatisk. `)+failed.join(' ')+' Prøv Generér rapport under Udbetalingsrapporter, når årsagen er rettet.');
    });
-   const processRows=async(job:string,provider:string,module:string,kind:string,book:boolean,email=false):Promise<QueueResult>=>{
+   const processRows=async(job:string,provider:string,module:string,kind:string,book:boolean,email=false,custom?:(externalId:string)=>Promise<unknown>):Promise<QueueResult>=>{
     const result:QueueResult={rows:0,failed:0};
     const dates=(await db.prepare('SELECT provider,start_date FROM booking_start_dates WHERE company_id=? AND webshop_id=?').bind(company,id).all<{provider:string;start_date:string}>()).results;
     const sourceDate=dates.find(d=>d.provider===provider)?.start_date,dineroDate=dates.find(d=>d.provider==='dinero')?.start_date;
     if(!sourceDate||!dineroDate)throw new HttpError(409,'Gem bogføringsstart for integrationen og Dinero.');
     const boundary=[sourceDate,dineroDate].sort()[1];
-    const table=provider==='shopify'?'operation_snapshots':'payment_records',filter=provider==='shopify'?'s.module=?':'s.kind=? AND s.provider=?';
+    const table=provider==='shopify'?(module==='order_refunds'?'order_refunds':'operation_snapshots'):'payment_records',filter=provider==='shopify'?'s.module=?':'s.kind=? AND s.provider=?';
     // Orders wait until their market is known, and only domestic ones are invoiced, mailed or booked (see order-markets.ts).
     const eligible=module==='orders'?" AND "+domesticOrderSql+" AND COALESCE(json_extract(s.payload_json,'$.test'),0)=0 AND json_extract(s.payload_json,'$.cancelledAt') IS NULL AND json_extract(s.payload_json,'$.displayFulfillmentStatus')='FULFILLED' AND substr((SELECT max(json_extract(f.value,'$.createdAt')) FROM json_each(s.payload_json,'$.fulfillments') f WHERE json_extract(f.value,'$.status')='SUCCESS'),1,10)>=?"
      // Payouts are only booked once paid out; upcoming ones are skipped instead of counted as failures.
+     // Refunds of domestic orders that add up (others are shown for control), never one the earlier flow booked;
+     // credit notes are only mailed for refunds from the last 14 days, so customers never get an old one out of the blue.
+     :module==='order_refunds'?" AND "+domesticOrderOfSql('s.order_id')+" AND NOT "+legacyRefundSql+" AND json_extract(s.payload_json,'$.problem') IS NULL"+(job==='order_refunds'?" AND "+saleBookedSql:'')+(job==='credit'?" AND s.occurred_at>=strftime('%Y-%m-%dT%H:%M:%SZ','now','-14 days')":'')
      :module==='payouts'?" AND json_extract(s.payload_json,'$.status')='PAID'":provider==='flatpay'&&module==='payments'?" AND json_extract(s.payload_json,'$.paidDate') IS NOT NULL":'';
     const rows=(await db.prepare(`SELECT s.external_id,s.occurred_at FROM ${table} s
  LEFT JOIN production_attempts a ON a.company_id=s.company_id AND a.webshop_id=s.webshop_id AND a.job=? AND a.external_id=s.external_id
@@ -175,6 +180,7 @@ async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promi
       try{
        if(kind==='sale'||email){const checked=await responseValue(await handleInvoices(request({webshopId:id,externalId}),env,actor,company,'check'));const day=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Copenhagen',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(checked.invoice.date));if(day<boundary){succeeded=true;return;}await bookingDate(env,company,id,provider,checked.invoice.date);}
        else await bookingDate(env,company,id,provider,row.occurred_at);
+       if(custom){await custom(externalId);succeeded=true;return;}
        if(kind==='sale'||email)await responseValue(await handleInvoices(request({webshopId:id,externalId}),env,actor,company,'generate'));
        if(email){await responseValue(await handleInvoices(request({webshopId:id,externalId}),env,actor,company,'send'));}
        else{
@@ -199,9 +205,12 @@ async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promi
    // Country and currency for new orders (and, in portions, older ones) right after they are imported.
    if(shop.shopify)await run('auto.import.markets',async()=>{await fillOrderMarkets(env,company,id);});
    if(automation.sales)await run('auto.sales.queue',async()=>{summary.sales=await processRows('sales','shopify','orders','sale',automation.salesBookDinero);});
-   if(automation.refunds&&mode==='scheduled')await run('auto.refunds.queue',()=>processRows('refunds','shopify','refunds','refund',automation.refundsBookDinero));
+   // Refunds of every order whatever the gateway, read from the orders whose refunded amount changed.
+   if(shop.shopify&&mode==='scheduled')await run('auto.import.order_refunds',async()=>{await syncOrderRefunds(env,company,id);});
+   if(automation.refunds&&mode==='scheduled')await run('auto.order_refunds.queue',()=>processRows('order_refunds','shopify','order_refunds','order_refund',automation.refundsBookDinero));
    if(automation.payouts&&mode==='scheduled'){await run('auto.payouts.queue',()=>processRows('payouts','shopify','payouts','payout',automation.payoutsBookDinero));if(connections.some(c=>c.provider==='flatpay'))await run('auto.flatpay.queue',()=>processRows('flatpay','flatpay','payments','flatpay',automation.payoutsBookDinero));}
    if(automation.invoiceEmails&&env.PLATFORM_CUSTOMER_EMAIL==='enabled')await run('auto.invoice.queue',async()=>{summary.invoices=await processRows('invoice','shopify','orders','sale',false,true);});
+   if(automation.invoiceEmails&&env.PLATFORM_CUSTOMER_EMAIL==='enabled'&&mode==='scheduled')await run('auto.credit.queue',()=>processRows('credit','shopify','order_refunds','credit',false,false,externalId=>sendCreditNote(env,actor,company,id,externalId)));
    return summary;
   }finally{
    // "Synkronisér nu" leaves the schedule as it was.

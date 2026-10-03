@@ -1,5 +1,7 @@
 // Nightly rebuild of the demo account (see demo.ts). Kept apart because it renders PDFs.
 import { buildInvoicePdf } from './invoice-pdf';
+import { creditNoteNumber } from './credit-notes';
+import type { OrderRefund } from './order-refunds';
 import { checkInvoice, invoiceFingerprint } from './order-check';
 import { invoiceDesign } from './invoice-design';
 import { buildPayoutReport } from './payout-pdf';
@@ -9,7 +11,7 @@ import { COMPANY_NAME, DEMO_COMPANY, DEMO_EMAIL, DEMO_SHOP, DEMO_USER, ORGANIZAT
 import type { PlatformEnv } from './types';
 
 // Children before parents, so foreign keys hold. The company, user and webshop rows are kept.
-export const demoTables = ['order_markets', 'operation_acknowledgements', 'record_events', 'payment_records', 'payment_connections', 'operation_runs', 'operation_snapshots', 'invoice_orders', 'platform_invoices',
+export const demoTables = ['order_refunds', 'order_refund_checks', 'platform_credit_notes', 'order_markets', 'operation_acknowledgements', 'record_events', 'payment_records', 'payment_connections', 'operation_runs', 'operation_snapshots', 'invoice_orders', 'platform_invoices',
   'platform_payout_documents', 'production_receipts', 'production_jobs', 'production_attempts', 'booking_start_dates', 'tier1_preferences', 'product_feeds', 'feed_folders', 'emballage_connections',
   'packaging_snapshots', 'packaging_sync', 'platform_packaging', 'platform_packaging_prices', 'stocktakes', 'accounting_reconciliations', 'source_records', 'webshop_connections', 'accounting_connections',
   'accounting_mapping', 'company_accounting', 'company_integrations', 'integration_history', 'invoice_settings', 'company_mail', 'mail_test_deliveries', 'finance_ledger', 'support_ticket_messages',
@@ -59,11 +61,24 @@ export async function resetDemo(env: PlatformEnv, today = danishDate()) {
     if (!o.fulfilledAt) continue;
     // Orders fulfilled more than a day ago are booked; the newest wait for the next run.
     if (Date.parse(o.fulfilledAt) < Date.parse(today + 'T00:00:00Z')) records.push(db.prepare("INSERT INTO production_receipts(company_id,webshop_id,provider,module,external_id,destination,phase,version,payload_json) VALUES(?,?,'shopify','orders',?,?,'booked','demo',?)").bind(DEMO_COMPANY, DEMO_SHOP, o.id, ORGANIZATION, JSON.stringify({ sourceJson: snapshot, voucher: 'Demo-bilag ' + o.name })));
-    if (o.refundedMinor === 0) {
+    {
+      // Refunded orders were invoiced before the refund, so they are invoiced in full and credited below.
       const source = invoiceSource(o), doc = `demo-invoice-${o.name.slice(1)}`, key = `companies/${DEMO_COMPANY}/webshops/${DEMO_SHOP}/invoices/${doc}.pdf`;
       const issuer = { ...invoiceIssuer, webshopName: SHOP_NAME, design: invoiceDesign({}) };
       pdfs.push({ key, bytes: await buildInvoicePdf(source, issuer) });
       records.push(db.prepare("INSERT INTO platform_invoices(company_id,webshop_id,external_id,id,fingerprint,status,r2_key,issuer_json,source_json) VALUES(?,?,?,?,?,'generated',?,?,?)").bind(DEMO_COMPANY, DEMO_SHOP, o.id, doc, await invoiceFingerprint(checkInvoice(source)), key, JSON.stringify(issuer), JSON.stringify(source)));
+      if (o.refundedMinor) {
+        // One unit of the first product returned three days after shipping, with its credit note and booking.
+        const n = Number(o.name.slice(1)), tax = Math.round(o.refundedMinor / 5), at = addDays(o.fulfilledAt, 3);
+        const refund: OrderRefund = { id: 'gid://shopify/Refund/' + (880000 + n), orderId: o.id, orderName: o.name, processedAt: at, currency: 'DKK', gross: o.refundedMinor, full: false, sequence: 1, note: null,
+          gateways: [{ gateway: o.gateway, name: o.gateway === 'shopify_payments' ? 'Shopify Payments' : o.gateway, amount: o.refundedMinor }],
+          lines: [{ kind: 'goods', title: o.lines[0].product.title, quantity: 1, net: o.refundedMinor - tax, tax }], problem: null };
+        const refundJson = JSON.stringify(refund), number = creditNoteNumber(o.name, 1), noteKey = `companies/${DEMO_COMPANY}/webshops/${DEMO_SHOP}/credit-notes/demo-credit-${n}.pdf`;
+        records.push(db.prepare('INSERT INTO order_refunds(company_id,webshop_id,external_id,order_id,occurred_at,payload_json) VALUES(?,?,?,?,?,?)').bind(DEMO_COMPANY, DEMO_SHOP, refund.id, o.id, at, refundJson));
+        pdfs.push({ key: noteKey, bytes: await buildInvoicePdf(source, issuer, undefined, { number, date: at, invoiceNumber: o.name.slice(1), currency: 'DKK', lines: refund.lines }) });
+        records.push(db.prepare("INSERT INTO platform_credit_notes(company_id,webshop_id,external_id,id,order_id,number,status,r2_key,source_json) VALUES(?,?,?,?,?,?,'generated',?,?)").bind(DEMO_COMPANY, DEMO_SHOP, refund.id, 'demo-credit-' + n, o.id, number, noteKey, refundJson));
+        if (Date.parse(at) < Date.parse(today + 'T00:00:00Z')) records.push(db.prepare("INSERT INTO production_receipts(company_id,webshop_id,provider,module,external_id,destination,phase,version,payload_json) VALUES(?,?,'shopify','order_refunds',?,?,'booked','demo',?)").bind(DEMO_COMPANY, DEMO_SHOP, refund.id, ORGANIZATION, JSON.stringify({ sourceJson: refundJson, voucher: 'Demo-bilag tilbagebetaling ' + o.name })));
+      }
     }
     o.lines.forEach((l, i) => {
       const event = `${o.id}:${i}`, row = { audience: 'household', eventId: event, fulfillmentId: 'gid://shopify/Fulfillment/' + (7100000 + Number(o.name.slice(1))), fulfilledAt: o.fulfilledAt, date: o.fulfilledAt!.slice(0, 10), orderId: o.id, orderName: o.name, productId: 'gid://shopify/Product/' + (63000 + l.product.id), product: l.product.title, variantId: 'gid://shopify/ProductVariant/' + (62000 + l.product.id), variant: 'Default Title', quantity: l.quantity, weightGrams: Math.round(l.product.weight * 0.18), reportable: 'yes', supplier: 'Demofirma A/S', supplierCountry: 'DK', supplierCvr: '12345678', snapshottedAt: now };

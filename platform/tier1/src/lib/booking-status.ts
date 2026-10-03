@@ -17,6 +17,9 @@ export const bookingStatuses: Record<string, { label: string; tone: string }> = 
   held: { label: 'Fejlet - Kræver manuel handling', tone: 'badge-pending' },
   expected: { label: 'Afventer udbetaling', tone: 'badge-pending' },
   not_enabled: { label: 'Ikke understøttet', tone: 'bg-muted text-muted-foreground' },
+  foreign: { label: 'Afventer · udenlandsk ordre', tone: 'badge-pending' },
+  check: { label: 'Kræver kontrol', tone: 'bg-red-50 text-red-800' },
+  sale_pending: { label: 'Afventer bogføring af salget', tone: 'badge-pending' },
 };
 
 export const bookingStatusLabel = (status: string) => bookingStatuses[status]?.label ?? 'Ukendt status';
