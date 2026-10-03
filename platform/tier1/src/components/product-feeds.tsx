@@ -15,8 +15,10 @@ type Pick={id:string;title:string};
 type Market={id:string;name:string;countries:string[];currency:string;url:string;locale:string|null;primary:boolean};
 type MarketChoice={id:string;country:string;name:string;currency:string};
 const choiceOf=(m:Market):MarketChoice=>({id:m.id,country:m.countries[0],name:m.name,currency:m.currency});
-type Feed={market?:MarketChoice|null;id?:string;revision?:number;name:string;fileName:string;service:'partnerads';enabled:boolean;allProducts:boolean;collections:Pick[];products:Pick[];shippingCost:string;freeShippingFrom:string|null;deliveryTime:string;category:string;url?:string;itemCount?:number|null;generatedAt?:number|null;lastError?:string|null};
-const blank=():Feed=>({name:'PartnerAds',fileName:'partnerads',service:'partnerads',enabled:true,allProducts:false,collections:[],products:[],shippingCost:'0.00',freeShippingFrom:null,deliveryTime:'1-3 hverdage',category:''});
+const refreshOptions:Array<[number,string]>=[[15,'Hvert 15. minut'],[60,'Hver time'],[360,'Hver 6. time'],[1440,'Dagligt']];
+const refreshLabel=(minutes?:number)=>(refreshOptions.find(([m])=>m===(minutes||15))?.[1]||'Hvert 15. minut').toLocaleLowerCase('da');
+type Feed={market?:MarketChoice|null;refreshMinutes?:number;id?:string;revision?:number;name:string;fileName:string;service:'partnerads';enabled:boolean;allProducts:boolean;collections:Pick[];products:Pick[];shippingCost:string;freeShippingFrom:string|null;deliveryTime:string;category:string;url?:string;itemCount?:number|null;generatedAt?:number|null;lastError?:string|null};
+const blank=():Feed=>({name:'PartnerAds',fileName:'partnerads',service:'partnerads',enabled:true,refreshMinutes:15,allProducts:false,collections:[],products:[],shippingCost:'0.00',freeShippingFrom:null,deliveryTime:'1-3 hverdage',category:''});
 async function api<T>(path:string,method='GET',body?:unknown):Promise<T>{const r=await tier1Fetch('/api/feeds'+path,{method,...(body?{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});const d=await r.json() as T & {error?:string};if(!r.ok)throw Error(d.error||'Handlingen kunne ikke gennemføres.');return d;}
 const variants=(n:number)=>`${n.toLocaleString('da-DK')} ${n===1?'variant':'varianter'}`;
 
@@ -109,7 +111,8 @@ function FeedEditor({feed,folderUrl,busy,markets,marketsError,onChange,onSave,on
      <Field label="Leveringstid"><Input maxLength={100} value={feed.deliveryTime} onChange={e=>onChange({deliveryTime:e.target.value})}/></Field>
     </div>
    </Step>
-   <Step number={5} title="Offentliggørelse" description="Alle med linket kan læse produktdata. Linket indeholder ingen Shopify-adgangsnøgle.">
+   <Step number={5} title="Opdatering og offentliggørelse" description="Feedet hentes på ny fra Shopify, når PartnerAds henter linket, og data er ældre end den valgte frekvens. Alle med linket kan læse produktdata; linket indeholder ingen Shopify-adgangsnøgle.">
+    <Field label="Opdatér produktdata" hint="Oftere giver mere aktuelle priser og lager. Sjældnere belaster Shopify mindre ved store feeds. Opdatér produkter henter altid med det samme."><select className="h-9 w-full rounded-lg border bg-white px-3 text-sm sm:w-64" value={feed.refreshMinutes||15} onChange={e=>onChange({refreshMinutes:Number(e.target.value)})}>{refreshOptions.map(([m,label])=><option key={m} value={m}>{label}</option>)}</select></Field>
     <label className="flex items-center justify-between gap-4 rounded-xl border bg-[#fcfbf9] px-4 py-3 text-sm"><span><span className="block font-medium">Feedet er aktivt</span><span className="text-xs text-muted-foreground">Slå fra for at sætte linket på pause uden at slette feedet.</span></span><Switch checked={feed.enabled} onCheckedChange={value=>onChange({enabled:value})} aria-label="Feedet er aktivt"/></label>
    </Step>
    <footer className="flex flex-wrap items-center justify-end gap-3 border-t bg-[#fcfbf9] px-5 py-4 sm:px-6">
@@ -133,7 +136,7 @@ function FeedCard({feed,primary,busy,onEdit,onAction,onCopied,onCopyFailed}:{fee
   <div className="flex flex-wrap items-start justify-between gap-3 p-5 sm:p-6">
    <div className="flex min-w-0 items-start gap-3"><span className="relative grid size-10 shrink-0 place-items-center rounded-xl bg-[#f4efe7] text-[#9a7440]"><Rss className="size-5"/>{(feed.market?.country||primary?.countries[0])&&<CountryFlag code={feed.market?.country||primary!.countries[0]} className="absolute -bottom-1 -right-1.5 ring-2 ring-white"/>}</span>
     <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-base font-semibold">{feed.name}</h2><MarketBadge feed={feed} primary={primary}/><Badge variant="outline" className={feed.enabled?'border-emerald-200 bg-emerald-50 text-emerald-800':'border-slate-200 bg-slate-50 text-slate-600'}>{feed.enabled?'Aktivt':'På pause'}</Badge></div>
-     <p className="mt-1 text-xs text-muted-foreground">PartnerAds · {feed.itemCount==null?'Ikke hentet endnu':variants(feed.itemCount)} · {feed.generatedAt?'Opdateret '+formatDateTime(feed.generatedAt*1000):'Aldrig opdateret'}</p></div></div>
+     <p className="mt-1 text-xs text-muted-foreground">PartnerAds · {feed.itemCount==null?'Ikke hentet endnu':variants(feed.itemCount)} · {feed.generatedAt?'Opdateret '+formatDateTime(feed.generatedAt*1000):'Aldrig opdateret'} · Opdateres {refreshLabel(feed.refreshMinutes)}</p></div></div>
    <Button variant="outline" size="sm" disabled={busy} onClick={onEdit}><Pencil className="size-3.5"/>Redigér</Button>
   </div>
   {feed.lastError&&<p role="alert" className="mx-5 mb-4 flex items-start gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-800 sm:mx-6"><CircleAlert className="mt-0.5 size-4 shrink-0"/>{feed.lastError}</p>}
@@ -169,7 +172,7 @@ export function ProductFeeds(){
  }
  return <div className="mx-auto max-w-[1100px] px-5 py-7 md:px-8 md:py-9">{dialog}
   <header className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">Tools · PartnerAds</p><h1 className="page-title">Produktfeeds</h1><p className="mt-2 text-sm text-muted-foreground">Del webshoppens produkter med PartnerAds som et XML-feed.</p></div>{!edit&&<Button className="h-10 rounded-xl px-4" disabled={busy} onClick={create}><Plus className="size-4"/>Opret feed</Button>}</header>
-  <p className="mb-6 flex items-start gap-2 rounded-xl border border-[#e9e2d7] bg-[#faf8f5] px-4 py-3 text-xs leading-5 text-muted-foreground"><Info className="mt-0.5 size-4 shrink-0"/>Feeds opdateres automatisk, når PartnerAds henter dem, og data er over 15 minutter gamle. Hvert feed er til ét marked med markedets priser inkl. moms i markedets valuta.</p>
+  <p className="mb-6 flex items-start gap-2 rounded-xl border border-[#e9e2d7] bg-[#faf8f5] px-4 py-3 text-xs leading-5 text-muted-foreground"><Info className="mt-0.5 size-4 shrink-0"/>Feeds opdateres automatisk, når PartnerAds henter dem, og data er ældre end feedets valgte frekvens (standard hvert 15. minut). Hvert feed er til ét marked med markedets priser inkl. moms i markedets valuta.</p>
   {error&&<div role="alert" className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"><CircleAlert className="size-4"/>{error}<button className="ml-auto underline" onClick={()=>void run(load)}>Hent igen</button></div>}
   {message&&<p role="status" className="mb-5 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"><CircleCheck className="size-4"/>{message}</p>}
   {edit&&<div className="mb-8"><FeedEditor feed={edit} folderUrl={folderUrl} busy={busy} markets={markets} marketsError={marketsError} onChange={change} onSave={()=>void save()} onCancel={()=>setEdit(null)}/></div>}
