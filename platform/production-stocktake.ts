@@ -155,6 +155,9 @@ export async function releaseRegulation(env:PlatformEnv,actor:Actor,company:stri
  if(String(remote.Guid||'').toLowerCase()!==found.guid.toLowerCase()||(found.reference&&remote.ExternalReference!==found.reference))throw new HttpError(409,'Dinero returnerede et andet bilag. Kontakt support.');
  if(remote.Status==='Draft')throw new HttpError(409,'Reguleringen ligger som kladde i Dinero. Bogfør eller slet kladden, og afklar igen.');
  if(remote.Status!=='Booked')throw new HttpError(409,'Dinero returnerede en ukendt bilagsstatus. Kontakt support.');
+ // The receipt documents the booked voucher, so it must match the approved regulation line by line (a draft may have been edited).
+ if(!found.payload.voucher||!Array.isArray(found.payload.expected))throw new HttpError(409,'Reguleringen kan ikke sammenholdes med bilaget i Dinero. Kontakt support.');
+ try{verifyVoucher(remote,found.payload.voucher,found.payload.expected);}catch{throw new HttpError(409,'Det bogførte bilag i Dinero afviger fra reguleringen. Kontakt support.');}
  await saveReceipt(env,key,{phase:found.phase as Receipt['phase'],version:found.version,payload:found.payload},'booked',{...found.payload,voucherNumber:remote.VoucherNumber??null,resolvedBy:actor.id});
  return reply({released:found.id,message:`Bilaget er bogført i Dinero${remote.VoucherNumber?' (nr. '+remote.VoucherNumber+')':''}. Reguleringen er afklaret, og du kan regulere igen.`});
 }
