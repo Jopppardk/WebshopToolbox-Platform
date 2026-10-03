@@ -10,13 +10,25 @@ export function useStackTable<T extends HTMLTableElement>() {
     observer.current = null;
     if (!table) return;
     const label = () => {
-      const headings = [...table.querySelectorAll('thead th')].map(th => th.textContent?.trim() || '');
+      const headings = [...table.querySelectorAll('thead th')].map(
+        (th) => th.textContent?.trim() || '',
+      );
       for (const row of table.querySelectorAll('tbody tr')) {
-        [...row.children].forEach((cell, index) => { if (headings[index] && cell.getAttribute('data-label') !== headings[index]) cell.setAttribute('data-label', headings[index]); });
+        [...row.children].forEach((cell, index) => {
+          if (
+            headings[index] &&
+            cell.getAttribute('data-label') !== headings[index]
+          )
+            cell.setAttribute('data-label', headings[index]);
+        });
       }
     };
     label();
     observer.current = new MutationObserver(label);
-    observer.current.observe(table, { childList: true, subtree: true, characterData: true });
+    observer.current.observe(table, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
   }, []);
 }

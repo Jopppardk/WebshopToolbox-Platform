@@ -3,9 +3,7 @@
   "account_id": "cab062dd85faea98c9b8c4969175c39f",
   "main": "platform/worker.ts",
   "compatibility_date": "2026-05-15",
-  "compatibility_flags": [
-    "nodejs_compat"
-  ],
+  "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "preview_urls": false,
   "assets": {
@@ -42,28 +40,20 @@
     }
   ],
   "triggers": {
-    "crons": [
-      "*/5 * * * *"
-    ]
+    "crons": ["*/5 * * * *"]
   },
   "send_email": [
     {
       "name": "PLATFORM_INVITATIONS",
-      "allowed_sender_addresses": [
-        "no-reply@webshoptoolbox.dk"
-      ]
+      "allowed_sender_addresses": ["no-reply@webshoptoolbox.dk"]
     },
     {
       "name": "PLATFORM_MAIL_TEST",
-      "allowed_sender_addresses": [
-        "faktura@webshoptoolbox.dk"
-      ]
+      "allowed_sender_addresses": ["faktura@webshoptoolbox.dk"]
     },
     {
       "name": "PLATFORM_AUTH_MAIL",
-      "allowed_sender_addresses": [
-        "no-reply@webshoptoolbox.dk"
-      ]
+      "allowed_sender_addresses": ["no-reply@webshoptoolbox.dk"]
     }
   ],
   "routes": [
@@ -71,5 +61,8 @@
       "pattern": "portal.webshoptoolbox.dk",
       "custom_domain": true
     }
-  ]
+  ],
+  "observability": {
+    "enabled": true
+  }
 }

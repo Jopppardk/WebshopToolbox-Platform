@@ -1,4 +1,4 @@
-import {assertPlatformRepository} from './platform-repository.mjs';
+import { assertPlatformRepository } from './platform-repository.mjs';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -46,7 +46,14 @@ function localSecret() {
       `PLATFORM_LOCAL_SECRET=${randomBytes(32).toString('hex')}\n`,
       { flag: 'wx' },
     );
-  if(!/^PLATFORM_LOGIN_SECRET=/m.test(readFileSync(path,'utf8')))writeFileSync(path,readFileSync(path,'utf8')+'\nPLATFORM_LOGIN_SECRET='+randomBytes(32).toString('hex')+'\n');
+  if (!/^PLATFORM_LOGIN_SECRET=/m.test(readFileSync(path, 'utf8')))
+    writeFileSync(
+      path,
+      readFileSync(path, 'utf8') +
+        '\nPLATFORM_LOGIN_SECRET=' +
+        randomBytes(32).toString('hex') +
+        '\n',
+    );
   const match = readFileSync(path, 'utf8').match(
     /^PLATFORM_LOCAL_SECRET=([a-f0-9]{64})$/m,
   );
@@ -54,12 +61,29 @@ function localSecret() {
     throw Error('Lokal testnøgle mangler. Ingen eksisterende fil overskrives.');
   return match[1];
 }
-if(['deploy','migrate-remote','seed-remote'].includes(task))assertPlatformRepository();
-if(task==='deploy'&&process.env.GITHUB_ACTIONS==='true'&&!process.env.CLOUDFLARE_API_TOKEN?.trim())throw Error('GitHub Environment dev mangler CLOUDFLARE_API_TOKEN. Ingen build/upload startet.');
-if (['dev','build','build-remote','deploy'].includes(task)) {
-  const build = spawnSync(process.execPath, [resolve(root,'node_modules/vite/bin/vite.js'),'build','--config','platform/tier1/vite.config.mjs'], {stdio:'inherit'});
-  if(build.error) throw build.error;
-  if(build.status!==0) process.exit(build.status || 1);
+if (['deploy', 'migrate-remote', 'seed-remote'].includes(task))
+  assertPlatformRepository();
+if (
+  task === 'deploy' &&
+  process.env.GITHUB_ACTIONS === 'true' &&
+  !process.env.CLOUDFLARE_API_TOKEN?.trim()
+)
+  throw Error(
+    'GitHub Environment dev mangler CLOUDFLARE_API_TOKEN. Ingen build/upload startet.',
+  );
+if (['dev', 'build', 'build-remote', 'deploy'].includes(task)) {
+  const build = spawnSync(
+    process.execPath,
+    [
+      resolve(root, 'node_modules/vite/bin/vite.js'),
+      'build',
+      '--config',
+      'platform/tier1/vite.config.mjs',
+    ],
+    { stdio: 'inherit' },
+  );
+  if (build.error) throw build.error;
+  if (build.status !== 0) process.exit(build.status || 1);
 }
 switch (task) {
   case 'check':
