@@ -16,7 +16,7 @@ type Market={id:string;name:string;countries:string[];currency:string;url:string
 type MarketChoice={id:string;country:string;name:string;currency:string};
 const choiceOf=(m:Market):MarketChoice=>({id:m.id,country:m.countries[0],name:m.name,currency:m.currency});
 type Feed={market?:MarketChoice|null;id?:string;revision?:number;name:string;fileName:string;service:'partnerads';enabled:boolean;allProducts:boolean;collections:Pick[];products:Pick[];shippingCost:string;freeShippingFrom:string|null;deliveryTime:string;category:string;url?:string;itemCount?:number|null;generatedAt?:number|null;lastError?:string|null};
-const blank=():Feed=>({name:'PartnerAds',fileName:'partnerads',service:'partnerads',enabled:false,allProducts:false,collections:[],products:[],shippingCost:'0.00',freeShippingFrom:null,deliveryTime:'1-3 hverdage',category:''});
+const blank=():Feed=>({name:'PartnerAds',fileName:'partnerads',service:'partnerads',enabled:true,allProducts:false,collections:[],products:[],shippingCost:'0.00',freeShippingFrom:null,deliveryTime:'1-3 hverdage',category:''});
 async function api<T>(path:string,method='GET',body?:unknown):Promise<T>{const r=await tier1Fetch('/api/feeds'+path,{method,...(body?{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});const d=await r.json() as T & {error?:string};if(!r.ok)throw Error(d.error||'Handlingen kunne ikke gennemføres.');return d;}
 const variants=(n:number)=>`${n.toLocaleString('da-DK')} ${n===1?'variant':'varianter'}`;
 
@@ -161,7 +161,7 @@ export function ProductFeeds(){
  const create=()=>{setEdit({...blank(),market:primary?choiceOf(primary):null});setError('');setMessage('');};
  function change(p:Partial<Feed>){setEdit(v=>v?{...v,...p}:v);}
  async function run(fn:()=>Promise<void>){setBusy(true);setError('');setMessage('');try{await fn();await load();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- async function save(){if(!edit)return;await run(async()=>{await api(edit.id?'/'+edit.id:'',edit.id?'PUT':'POST',edit);setEdit(null);setMessage('Feedet er gemt. Vælg Opdatér produkter for at hente produktdata.');});}
+ async function save(){if(!edit)return;await run(async()=>{await api(edit.id?'/'+edit.id:'',edit.id?'PUT':'POST',edit);setEdit(null);setMessage(edit.enabled?'Feedet er gemt og aktivt. Vælg Opdatér produkter for at hente produktdata.':'Feedet er gemt, men sat på pause: linket svarer først, når du slår "Feedet er aktivt" til.');});}
  async function action(f:Feed,type:'refresh'|'rotate'|'delete'){
   if(type==='delete'&&!await ask({title:'Slet feed',message:`Slet feedet “${f.name}”? Linket stopper med at virke.`,confirmLabel:'Slet feed'}))return;
   if(type==='rotate'&&!await ask({title:'Skift link',message:'Opret et nyt link? Det gamle link stopper straks med at virke og skal erstattes hos PartnerAds.',confirmLabel:'Skift link'}))return;
