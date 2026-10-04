@@ -34,7 +34,7 @@ export async function handleTier1(request:Request, env:PlatformEnv, actor:Actor)
   if(await isDemoCompany(env,company.company_id)){const demo=await demoTier1(request,path);if(demo)return demo;}
   if(path==='/shipmondo/connection')return handleShipmondo(request,env,actor,company.company_id,shop);
   if(path.startsWith('/performance/'))return handlePerformance(request,env,actor,company.company_id,shop,path);
-  if(path==='/shipments')return handleShipments(request,env,actor,company.company_id,shop,path);
+  if(path==='/shipments'||path==='/shipments/refresh')return handleShipments(request,env,actor,company.company_id,shop,path);
   if(path==='/feeds'||path.startsWith('/feeds/'))return handleFeeds(request,env,actor,company.company_id,shop,path);
   if(path==='/emballage/shopify-fields')return handleShopifyFields(request,env,actor,company.company_id,shop);
   if(path==='/emballage/products')return handlePackagingProducts(request,env,actor,company.company_id,shop);

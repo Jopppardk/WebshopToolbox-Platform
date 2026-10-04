@@ -102,16 +102,18 @@ function TrackingDialog({ s, onClose, today }: { s: Shipment | null; onClose: ()
 }
 
 export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
-  const { webshopId, webshops } = useWorkspace();
+  const { webshopId, webshops, user, demo } = useWorkspace();
   const [days, setDays] = useState<number>(30), [revision, setRevision] = useState(0), refresh = useRef(false), loadedFor = useRef('');
   const [data, setData] = useState<ShipmentList | null>(null), [error, setError] = useState(''), [loading, setLoading] = useState(true);
   const [query, setQuery] = useState(''), [filter, setFilter] = useState<Filter>('all'), [carrier, setCarrier] = useState<'all' | Carrier>('all');
   const [open, setOpen] = useState<Set<string>>(new Set()), [tracking, setTracking] = useState<Shipment | null>(null);
+  const [refreshingId,setRefreshingId]=useState<string|null>(null), [parcelFeedback,setParcelFeedback]=useState<Record<string,string>>({});
+  const activeView=useRef('');activeView.current=`${webshopId}:${days}`;
   const today = danishDate(), stackRef = useStackTable<HTMLTableElement>();
   useEffect(() => {
     const controller = new AbortController(), forced = refresh.current, key = `${webshopId}:${days}`; refresh.current = false;
     // Another webshop or period is never shown under this one's name while it loads.
-    if (loadedFor.current !== key) { setData(null); setOpen(new Set()); setTracking(null); loadedFor.current = key; }
+    if (loadedFor.current !== key) { setData(null); setOpen(new Set()); setTracking(null); setParcelFeedback({}); loadedFor.current = key; }
     setLoading(true); setError('');
     void (async () => {
       try {
@@ -132,6 +134,20 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
     return () => controller.abort();
   }, [days, revision, webshopId]);
   useEffect(() => { const timer=window.setInterval(()=>{if(document.visibilityState==='visible')setRevision(v=>v+1);},60000);return ()=>window.clearInterval(timer); },[]);
+  const refreshParcel=async(s:Shipment)=>{
+    if(refreshingId||s.delivered)return;
+    const view=activeView.current;setRefreshingId(s.id);setParcelFeedback(p=>({...p,[s.id]:''}));
+    try{
+      const response=await tier1Fetch(`/api/shipments/refresh?days=${days}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shipmentId:s.id})});
+      const value=await response.json() as ShipmentList & {error?:string};
+      if(!response.ok)throw Error(value.error||'Status kunne ikke opdateres.');
+      if(activeView.current!==view)return;
+      const updated=value.shipments.find(x=>x.id===s.id);
+      if(updated){setData(previous=>previous?{...previous,shipments:previous.shipments.map(x=>x.id===s.id?updated:x)}:previous);setTracking(previous=>previous?.id===s.id?updated:previous);}
+      setParcelFeedback(p=>({...p,[s.id]:updated?.publicTracking?.error||'Status er hentet på ny.'}));
+    }catch(e){if(activeView.current===view)setParcelFeedback(p=>({...p,[s.id]:e instanceof Error?e.message:'Status kunne ikke opdateres.'}));}
+    finally{setRefreshingId(null);}
+  };
   const all = useMemo(() => data?.shipments || [], [data]);
   const counts = useMemo(() => ({
     moving: all.filter(s => s.current !== 'delivered' && s.current !== 'ready').length,
@@ -159,7 +175,7 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
       <p className="flex items-center gap-2"><Info className="size-4 shrink-0"/>Webshop: {shopName}{data ? ` · Hentet ${formatDateTime(data.checkedAt)} · Ordrer fra ${formatDate(data.since)}` : ''}</p>
       <Button variant="link" className="h-auto p-0 text-xs" onClick={onIntegrations}>Se integrationer<ArrowUpRight className="size-3"/></Button>
     </div>
-    <p className="mb-4 text-xs text-muted-foreground">Tracking hentes fra Shipmondos offentlige trackingside på tværs af fragtfirmaer. Ingen API-nøgle eller Pro-abonnement kræves. Aktive pakker kontrolleres højst hver sjette time; Opdatér tilsidesætter ikke intervallet. Leverede pakker kontrolleres ikke igen.</p>
+    <p className="mb-4 text-xs text-muted-foreground">Tracking hentes fra Shipmondos offentlige trackingside på tværs af fragtfirmaer. Ingen API-nøgle eller Pro-abonnement kræves. Aktive pakker kontrolleres automatisk hver sjette time. Brug “Hent ny status” ved en pakke for et manuelt opslag (højst én gang pr. minut). Leverede pakker kontrolleres ikke igen.</p>
     <div className="mb-4 grid gap-3 sm:grid-cols-3">
       {([['moving', 'På vej', counts.moving, Truck, 'text-[#567da3]'], ['waiting', 'Venter i pakkeshop', counts.waiting, MapPin, 'text-[#9a7440]'], ['return', 'Returneres snart', counts.return, AlertTriangle, counts.return ? 'text-amber-700' : 'text-muted-foreground']] as const).map(([key, label, n, Icon, color]) =>
         <button type="button" key={key} onClick={() => setFilter(filter === key ? 'all' : key)} aria-pressed={filter === key} className={'flex items-center justify-between rounded-2xl border bg-white p-4 text-left shadow-sm transition ' + (filter === key ? 'border-[#9a7440] ring-2 ring-[#9a7440]/20' : 'hover:bg-[#fcfbf9]')}>
@@ -185,7 +201,10 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
                 <td className="py-3 pl-5"><span className="font-medium">{s.orderName}</span>{s.test && <span className="ml-1 text-xs text-muted-foreground">(test)</span>}<span className="block text-[11px] text-muted-foreground">Sendt {formatDate(s.shippedAt)}</span></td>
                 <td className="py-3 pr-3">{s.customer}</td>
                 <td className="py-3 pr-3">{s.city || '—'}{s.country && s.country !== 'DK' && <span className="ml-1 text-xs text-muted-foreground">({s.country})</span>}</td>
-                <td className="py-1.5 pr-3"><StatusCell s={s} open={expanded} onToggle={() => toggle(s.id)} today={today}/></td>
+                <td className="py-1.5 pr-3"><StatusCell s={s} open={expanded} onToggle={() => toggle(s.id)} today={today}/>
+                  {!s.delivered && !user.support && !demo && s.publicTracking?.state!=='unavailable' && <Button variant="ghost" size="sm" disabled={Boolean(refreshingId)} onClick={()=>void refreshParcel(s)} aria-label={`Hent ny status for ${s.orderName}, ${s.trackingNumber||'pakken'}`}><RefreshCw className={refreshingId===s.id?'animate-spin':''}/>{refreshingId===s.id?'Henter…':'Hent ny status'}</Button>}
+                  {parcelFeedback[s.id] && <p role="status" className="max-w-64 px-2 text-xs text-muted-foreground">{parcelFeedback[s.id]}</p>}
+                </td>
                 <td className="py-3 pr-3">{s.trackingNumber || s.trackingUrl || s.events.length ? <Button variant="outline" size="sm" onClick={() => setTracking(s)}><MapPin/>{s.trackingNumber ? <span className="max-w-32 truncate font-mono text-xs">{s.trackingNumber}</span> : 'Se forsendelse'}</Button> : <span className="text-xs text-muted-foreground">Ikke oplyst</span>}</td>
                 <td className="py-3 pr-5"><CarrierIcon carrier={s.carrier} name={s.carrierName}/></td>
               </tr>
