@@ -98,6 +98,7 @@ async function refreshRow(env:PlatformEnv,row:Row,manual=false){
 }
 
 export function applyPublicTracking(s:Shipment,row:Row|null):Shipment {
+ if(s.current==='manual'||s.current==='untracked')return {...s,publicTracking:undefined};
  const target=trackingTarget(s);
  if(!target)return {...s,publicTracking:{checkedAt:null,error:null,state:'unavailable',text:'Automatisk tracking er ikke tilgængelig for dette pakkenummer.'}};
  if(!row?.data_json)return {...s,trackingUrl:s.trackingUrl||target.url,publicTracking:{checkedAt:null,error:row?.error||null,state:row?.error?'error':'pending',text:row?.error?'Tracking kunne ikke hentes fra Shipmondo.':'Afventer første trackingopslag fra Shipmondo.'}};
@@ -109,7 +110,7 @@ export function applyPublicTracking(s:Shipment,row:Row|null):Shipment {
  const current=mapped[data.status]||'printed', ready=data.events.find(e=>e.status==='READY_FOR_PICKUP')?.at||null;
  const pickup=s.pickupPoint||Boolean(ready),delivered=data.status==='DELIVERED';
  const keys:StepKey[]=pickup?['printed','dropped','transit','ready','delivered']:['printed','dropped','transit','delivered'];
- const labels:Record<StepKey,string>={printed:'Registreret',dropped:'Indleveret til fragtfirmaet',transit:'Under transport',ready:'Klar i pakkeshop',delivered:pickup?'Afhentet af kunden':'Leveret hos kunden'};
+ const labels:Record<StepKey,string>={manual:'Afsluttet – manuelt håndteret',untracked:'Afventer trackingnummer',printed:'Registreret',dropped:'Indleveret til fragtfirmaet',transit:'Under transport',ready:'Klar i pakkeshop',delivered:pickup?'Afhentet af kunden':'Leveret hos kunden'};
  const times:Partial<Record<StepKey,string>>={};for(const e of data.events){const key=mapped[e.status];if(key&&!times[key])times[key]=e.at;}
  const index=keys.indexOf(current);
  return {...s,trackingUrl:s.trackingUrl||target.url,events:data.events,current,pickupPoint:pickup,readyAt:ready,delivered,deliveredAt:delivered?last.at:null,

@@ -18,7 +18,7 @@ const moreFulfillments = 30;
 const orderQueryAll = `query ShipmentOrder($id:ID!){order(id:$id){${orderFields} ${fulfillmentFields(moreFulfillments)}}}`;
 const maxPages = 30;
 const safe = (error: unknown) => error instanceof Error && error.message.startsWith('Shopify') ? error.message : 'Forsendelserne kunne ikke hentes fra Shopify. Prøv igen senere.';
-const cache = { prefix: 'shipments:v1:', busy: 'Forsendelserne hentes allerede. Prøv igen om lidt.', safe };
+const cache = { prefix: 'shipments:v2:', busy: 'Forsendelserne hentes allerede. Prøv igen om lidt.', safe };
 const copenhagenDay = (value: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Copenhagen', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
 const addDays = (date: string, days: number) => { const d = new Date(date + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
 

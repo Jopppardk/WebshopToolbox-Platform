@@ -29,7 +29,7 @@ function returnWarning(s: Shipment, today: string) {
 
 function StatusCell({ s, open, onToggle, today }: { s: Shipment; open: boolean; onToggle: () => void; today: string }) {
   const step = s.steps.find(x => x.key === s.current)!, index = s.steps.indexOf(step), warning = returnWarning(s, today);
-  const done = s.current === 'delivered';
+  const done = s.current === 'delivered' || s.current === 'manual';
   return <button type="button" onClick={onToggle} aria-expanded={open} className="group flex w-full min-w-48 flex-col gap-1.5 rounded-lg px-2 py-1.5 text-left hover:bg-[#faf8f5]">
     <span className="flex items-center gap-2 text-sm font-medium">
       {done ? <PackageCheck className="size-4 shrink-0 text-emerald-700"/> : s.current === 'ready' ? <Store className="size-4 shrink-0 text-[#9a7440]"/> : <Truck className="size-4 shrink-0 text-[#567da3]"/>}
@@ -63,7 +63,7 @@ function Timeline({ s, today }: { s: Shipment; today: string }) {
     </ol>
     {deadline && <p className={'flex items-start gap-2 rounded-lg px-3 py-2 text-xs ' + (warning?.tone === 'red' ? 'bg-red-50 text-red-800' : warning ? 'bg-amber-50 text-amber-900' : 'bg-[#faf8f5] text-muted-foreground')}><Info className="mt-0.5 size-3.5 shrink-0"/>
       {warning ? warning.detail : `Klar i pakkeshop siden ${formatDate(s.readyAt)}. Anslået sidste afhentning ${formatDate(deadline.deadline)}.`}</p>}
-    <p className="text-[11px] text-muted-foreground">{s.method ? `Fragtmetode: ${s.method} · ` : ''}{s.pickupPoint ? 'Sendt til pakkeshop' : 'Sendt til kundens adresse'}</p>
+    <p className="text-[11px] text-muted-foreground">{s.method ? `Fragtmetode: ${s.method} · ` : ''}{s.current === 'manual' ? 'Afsluttet i Shopify uden trackingnummer. Levering hos kunden er ikke bekræftet.' : s.current === 'untracked' ? 'Intet trackingnummer registreret.' : s.pickupPoint ? 'Sendt til pakkeshop' : 'Sendt til kundens adresse'}</p>
   </div>;
 }
 
@@ -150,7 +150,7 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
   };
   const all = useMemo(() => data?.shipments || [], [data]);
   const counts = useMemo(() => ({
-    moving: all.filter(s => s.current !== 'delivered' && s.current !== 'ready').length,
+    moving: all.filter(s => s.current !== 'delivered' && s.current !== 'manual' && s.current !== 'untracked' && s.current !== 'ready').length,
     waiting: all.filter(s => s.current === 'ready').length,
     return: all.filter(s => returnWarning(s, today)).length,
   }), [all, today]);
@@ -159,7 +159,7 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
   const activeCarrier = carrier !== 'all' && used.includes(carrier) && used.length > 1 ? carrier : 'all';
   const term = query.trim().toLocaleLowerCase('da');
   const rows = all.filter(s => (activeCarrier === 'all' || s.carrier === activeCarrier)
-    && (filter === 'all' || (filter === 'moving' ? s.current !== 'delivered' && s.current !== 'ready' : filter === 'waiting' ? s.current === 'ready' : Boolean(returnWarning(s, today))))
+    && (filter === 'all' || (filter === 'moving' ? s.current !== 'delivered' && s.current !== 'manual' && s.current !== 'untracked' && s.current !== 'ready' : filter === 'waiting' ? s.current === 'ready' : Boolean(returnWarning(s, today))))
     && (!term || [s.orderName, s.customer, s.city, s.trackingNumber || ''].some(v => v.toLocaleLowerCase('da').includes(term))));
   const toggle = (id: string) => setOpen(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const shopName = webshops.find(s => s.id === webshopId)?.name || 'Valgt webshop';
@@ -202,7 +202,7 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
                 <td className="py-3 pr-3">{s.customer}</td>
                 <td className="py-3 pr-3">{s.city || '—'}{s.country && s.country !== 'DK' && <span className="ml-1 text-xs text-muted-foreground">({s.country})</span>}</td>
                 <td className="py-1.5 pr-3"><StatusCell s={s} open={expanded} onToggle={() => toggle(s.id)} today={today}/>
-                  {!s.delivered && !user.support && !demo && s.publicTracking?.state!=='unavailable' && <Button variant="ghost" size="sm" disabled={Boolean(refreshingId)} onClick={()=>void refreshParcel(s)} aria-label={`Hent ny status for ${s.orderName}, ${s.trackingNumber||'pakken'}`}><RefreshCw className={refreshingId===s.id?'animate-spin':''}/>{refreshingId===s.id?'Henter…':'Hent ny status'}</Button>}
+                  {Boolean(s.trackingNumber) && !s.delivered && !user.support && !demo && s.publicTracking?.state!=='unavailable' && <Button variant="ghost" size="sm" disabled={Boolean(refreshingId)} onClick={()=>void refreshParcel(s)} aria-label={`Hent ny status for ${s.orderName}, ${s.trackingNumber||'pakken'}`}><RefreshCw className={refreshingId===s.id?'animate-spin':''}/>{refreshingId===s.id?'Henter…':'Hent ny status'}</Button>}
                   {parcelFeedback[s.id] && <p role="status" className="max-w-64 px-2 text-xs text-muted-foreground">{parcelFeedback[s.id]}</p>}
                 </td>
                 <td className="py-3 pr-3">{s.trackingNumber || s.trackingUrl || s.events.length ? <Button variant="outline" size="sm" onClick={() => setTracking(s)}><MapPin/>{s.trackingNumber ? <span className="max-w-32 truncate font-mono text-xs">{s.trackingNumber}</span> : 'Se forsendelse'}</Button> : <span className="text-xs text-muted-foreground">Ikke oplyst</span>}</td>
