@@ -1,3 +1,4 @@
+import { HttpError } from './types';
 import type { PlatformEnv } from './types';
 import type { Shipment, ShipmentList, ShipmentEvent, StepKey } from './tier1/src/lib/shipments';
 
@@ -79,10 +80,10 @@ export async function fetchPublicTracking(target:TrackingTarget,shippedAt:string
 }
 
 const safeError='Tracking kunne ikke opdateres. Senest kendte oplysninger vises; prøv det originale trackinglink.';
-async function refreshRow(env:PlatformEnv,row:Row){
+async function refreshRow(env:PlatformEnv,row:Row,manual=false){
  const db=env.PLATFORM_DB,owner=crypto.randomUUID(),now=Date.now();
- const claim=await db.prepare('UPDATE shipment_tracking_cache SET lease_owner=?,lease_until=?,next_check=?,attempted_at=? WHERE company_id=? AND webshop_id=? AND parcel_key=? AND source_key=? AND terminal=0 AND next_check<=? AND lease_until<=? AND COALESCE(unixepoch(attempted_at)*1000,0)<=?').bind(owner,now+60000,now+checkInterval,new Date(now).toISOString(),row.company_id,row.webshop_id,row.parcel_key,row.source_key,now,now,now-checkInterval).run();
- if(claim.meta.changes!==1)return;
+ const claim=await db.prepare('UPDATE shipment_tracking_cache SET lease_owner=?,lease_until=?,next_check=?,attempted_at=? WHERE company_id=? AND webshop_id=? AND parcel_key=? AND source_key=? AND terminal=0 AND (?=1 OR next_check<=?) AND lease_until<=? AND COALESCE(unixepoch(attempted_at)*1000,0)<=?').bind(owner,now+60000,now+checkInterval,new Date(now).toISOString(),row.company_id,row.webshop_id,row.parcel_key,row.source_key,manual?1:0,now,now,now-(manual?60000:checkInterval)).run();
+ if(claim.meta.changes!==1){if(manual)throw new HttpError(429,'Pakken er netop forsøgt opdateret eller opdateres allerede. Vent ét minut og prøv igen.');return;}
  const suffix=[row.company_id,row.webshop_id,row.parcel_key,row.source_key,owner];
  try{
   const data=await fetchPublicTracking({url:row.url,carrier:row.carrier,number:row.tracking_number},row.shipped_at);
@@ -99,7 +100,7 @@ async function refreshRow(env:PlatformEnv,row:Row){
 export function applyPublicTracking(s:Shipment,row:Row|null):Shipment {
  const target=trackingTarget(s);
  if(!target)return {...s,publicTracking:{checkedAt:null,error:null,state:'unavailable',text:'Automatisk tracking er ikke tilgængelig for dette pakkenummer.'}};
- if(!row?.data_json)return {...s,trackingUrl:s.trackingUrl||target.url,publicTracking:{checkedAt:null,error:row?.error||null,state:row?.error?'error':'pending',text:'Afventer tracking fra Shipmondo.'}};
+ if(!row?.data_json)return {...s,trackingUrl:s.trackingUrl||target.url,publicTracking:{checkedAt:null,error:row?.error||null,state:row?.error?'error':'pending',text:row?.error?'Tracking kunne ikke hentes fra Shipmondo.':'Afventer første trackingopslag fra Shipmondo.'}};
  const data=JSON.parse(row.data_json) as PublicTracking;
  if(data.confirmedBy==='shopify')return {...s,delivered:true,deliveredAt:data.deliveredAt||null,current:'delivered',issue:null,events:data.events,steps:s.steps.map(step=>({...step,reached:true,at:step.key==='delivered'?data.deliveredAt||null:step.at})),publicTracking:{checkedAt:null,error:null,state:'ok',text:data.text}};
  const last=data.events.at(-1)!;
@@ -117,7 +118,9 @@ export function applyPublicTracking(s:Shipment,row:Row|null):Shipment {
   publicTracking:{checkedAt:row.checked_at,error:row.error,state:row.error?'error':'ok',text:data.text||data.status,shipmentId:data.shipmentId}};
 }
 
-export async function enrichPublicTracking(env:PlatformEnv,company:string,shop:string,list:ShipmentList,source:string){
+export async function enrichPublicTracking(env:PlatformEnv,company:string,shop:string,list:ShipmentList,source:string,manualId?:string){
+ if(manualId!==undefined && !list.shipments.some(s=>s.id===manualId))throw new HttpError(404,'Forsendelsen findes ikke i den valgte webshop og periode.');
+ if(manualId!==undefined && !trackingTarget(list.shipments.find(s=>s.id===manualId)!))throw new HttpError(409,'Forsendelsen mangler et understøttet trackingnummer eller trackinglink.');
  const db=env.PLATFORM_DB,sourceKey=await trackingSourceKey(source);
  await db.prepare('DELETE FROM shipment_tracking_cache WHERE company_id=? AND webshop_id=? AND source_key<>? AND terminal=0').bind(company,shop,sourceKey).run();
  const keys=new Map<string,string>();const statements=[];
@@ -131,9 +134,9 @@ export async function enrichPublicTracking(env:PlatformEnv,company:string,shop:s
  }
  for(let i=0;i<statements.length;i+=50)await db.batch(statements.slice(i,i+50));
  let rows=(await db.prepare('SELECT * FROM shipment_tracking_cache WHERE company_id=? AND webshop_id=? AND source_key=?').bind(company,shop,sourceKey).all<Row>()).results;
- const needed=new Set(keys.values()),due=rows.filter(r=>needed.has(r.parcel_key)&&!r.terminal&&r.next_check<=Date.now()&&(!r.attempted_at||Date.parse(r.attempted_at)<=Date.now()-checkInterval)).sort((a,b)=>a.next_check-b.next_check).slice(0,8);
+ const needed=new Set(keys.values()),due=manualId!==undefined?rows.filter(r=>r.parcel_key===keys.get(manualId)&&!r.terminal):rows.filter(r=>needed.has(r.parcel_key)&&!r.terminal&&r.next_check<=Date.now()&&(!r.attempted_at||Date.parse(r.attempted_at)<=Date.now()-checkInterval)).sort((a,b)=>a.next_check-b.next_check).slice(0,8);
  // Bound foreground latency; remaining parcels are processed by the background schedule.
- for(let i=0;i<due.length;i+=4)await Promise.all(due.slice(i,i+4).map(r=>refreshRow(env,r)));
+ for(let i=0;i<due.length;i+=4)await Promise.all(due.slice(i,i+4).map(r=>refreshRow(env,r,manualId!==undefined)));
  if(due.length)rows=(await db.prepare('SELECT * FROM shipment_tracking_cache WHERE company_id=? AND webshop_id=? AND source_key=?').bind(company,shop,sourceKey).all<Row>()).results;
  const map=new Map(rows.map(r=>[r.parcel_key,r]));
  return {...list,shipmondo:undefined,shipments:list.shipments.map(s=>applyPublicTracking(s,map.get(keys.get(s.id)||'')||null))};

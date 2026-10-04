@@ -1,5 +1,7 @@
 # Overlevering
 
+> Manuel tracking: Hent ny status på hver ikke-leveret pakke. Ét minuts pause mellem forsøg, fælles lease med cron og kun serverfundne forsendelser i brugerens webshop/periode. Fejltekst skelnes fra afventer første opslag. Implementeret; udgivelsesbevis følger PR/workflow.
+
 > Trackinginterval: seks timer mellem forsøg, også for tidligere cacheposter med kortere next_check. Leveringsbekræftelser fra Shipmondo og Shopify stopper opslag, bevares ved udskiftning af credentials og ryddes ikke af cacheoprydning. Implementeret; udgivelsesbevis følger PR/workflow.
 
 > 4. oktober 2026 – Fælles tracking via offentlige Shipmondo-links: implementeret via PR #90/#91, 451 tests og obligatorisk CI bestået. Migration 0040 anvendt på dev/prod. Driftsstatus og HTTP-gates: [release 37202026243](https://github.com/Jopppardk/WebshopToolbox-Platform/actions/runs/37202026243). Ingen API-nøgle eller webhook kræves. DAO/GLS/PostNord/Bring og gyldige eksisterende Shipmondo-links bruger samme parser; flere pakkenumre vises separat. Scoped cache med fejltolerant snapshot, timeinterval og baggrundsopdatering af registrerede pakker i prod. Migration 0040. Se [PUBLIC-TRACKING.md](PUBLIC-TRACKING.md).

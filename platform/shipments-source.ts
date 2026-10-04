@@ -1,3 +1,4 @@
+import { jsonBody } from './invitations';
 import { enrichPublicTracking } from './public-tracking';
 import { requireCompany, requireWebshop } from './auth';
 import { shopAccess, orderQuery } from './invoice-source';
@@ -53,9 +54,13 @@ export async function readShipments(env: PlatformEnv, company: string, shop: str
 }
 
 export async function handleShipments(request: Request, env: PlatformEnv, actor: Actor, company: string, shop: string, path: string) {
-  if (request.method !== 'GET') throw new HttpError(405, 'Forsendelser understøtter kun læsning.');
-  if (path !== '/shipments') throw new HttpError(404, 'Funktionen findes ikke.');
-  const url = new URL(request.url), days = Number(url.searchParams.get('days') || 30), force = url.searchParams.get('refresh') === '1';
+  const manual=path==='/shipments/refresh';
+  if(path!=='/shipments' && !manual)throw new HttpError(404,'Funktionen findes ikke.');
+  if(request.method!==(manual?'POST':'GET'))throw new HttpError(405,'Brug den enkelte forsendelses opdateringsknap.');
+  const body=manual?await jsonBody(request,2000):{};
+  const manualId=manual&&typeof body.shipmentId==='string'&&body.shipmentId.length<=200?body.shipmentId:undefined;
+  if(manual&&!manualId)throw new HttpError(400,'Vælg en forsendelse.');
+  const url = new URL(request.url), days = Number(url.searchParams.get('days') || 30), force = !manual && url.searchParams.get('refresh') === '1';
   if (!(shipmentDays as readonly number[]).includes(days)) throw new HttpError(400, 'Vælg 14, 30 eller 60 dage.');
   await requireCompany(env.PLATFORM_DB, actor, company);
   if (shop === 'none') throw new HttpError(409, 'Vælg en webshop for at se forsendelser.');
@@ -66,5 +71,5 @@ export async function handleShipments(request: Request, env: PlatformEnv, actor:
   // Tracking changes during the day, so the list is reused for five minutes; Opdatér fetches again after a minute.
   const list = await cachedRead(env, company, cache, ['shopify', shop, days], [saved.shop_domain, saved.credentials_encrypted, start, danishDate()],
     () => readShipments(env, company, shop, days, start), () => 5 * 60000, force);
-  return reply(await enrichPublicTracking(env,company,shop,list,JSON.stringify([saved.shop_domain,saved.credentials_encrypted])));
+  return reply(await enrichPublicTracking(env,company,shop,list,JSON.stringify([saved.shop_domain,saved.credentials_encrypted]),manualId));
 }
