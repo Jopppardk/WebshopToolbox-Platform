@@ -1,4 +1,5 @@
 export const integrationCatalog = [
+  {id:'shipmondo',name:'Shipmondo',description:'Supplér Forsendelser med trackingstatus direkte fra Shipmondo.',category:'Fragt'},
   {id:'flatpay',name:'Flatpay',description:'Forbind Saga/Valitor og kontrollér transaktioner, afregninger og udbetalinger.',category:'Betaling'},
   {id:'shopify',name:'Shopify',description:'Hent salg, tilbagebetalinger, udbetalinger, lager og emballagedata.',category:'Webshop'},
   {id:'dinero',name:'Dinero',description:'Overfør bilag, hent kontoplan og følg økonomien på dashboardet.',category:'Regnskab'},

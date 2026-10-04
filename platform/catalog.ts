@@ -6,6 +6,7 @@
 //  history    has its own history start date
 //  booking    has a booking start date and can be reconciled against Dinero
 export const catalog = [
+  {id:'shipmondo',name:'Shipmondo',category:'Fragt',description:'Trackingstatus direkte fra Shipmondo på Forsendelser.',kind:'shipping',optional:true,history:false,booking:false},
   {id:'shopify',name:'Shopify',category:'Webshop',description:'Salg, tilbagebetalinger, udbetalinger og lager.',kind:'webshop',optional:false,history:true,booking:true},
   {id:'dinero',name:'Dinero',category:'Regnskab',description:'Bilag, kontoplan og økonomisk overblik.',kind:'accounting',optional:false,history:true,booking:true},
   {id:'flatpay',name:'Flatpay',category:'Betaling',description:'Transaktioner, afregninger og udbetalinger.',kind:'payment',optional:true,history:true,booking:true},
@@ -25,6 +26,7 @@ export const paymentProviderPattern = paymentProviders.join('|');
 
 // API base addresses the adapters call. The probe sends no credentials and reads no body.
 const endpoints: Record<(typeof catalog)[number]['id'], string> = {
+  shipmondo: 'https://app.shipmondo.com/api/public/v3/shipments',
   shopify: 'https://admin.shopify.com/',
   dinero: 'https://api.dinero.dk/v1',
   flatpay: 'https://api.saga.valitor.com/panthro',
@@ -49,6 +51,7 @@ async function reachability(url: string, request: typeof fetch) {
 export async function integrationUsage(db: D1Database) {
   const active = (table: string, extra = '') => `SELECT count(DISTINCT t.company_id) FROM ${table} t JOIN companies c ON c.id=t.company_id WHERE c.status='active'${extra}`;
   const row = await db.prepare(`SELECT
+    (${active('shipping_connections', " AND t.provider='shipmondo'")}) AS shipmondo,
     (${active('webshop_connections', " AND t.provider='shopify'")}) AS shopify,
     (${active('accounting_connections')}) AS dinero,
     (${active('payment_connections', " AND t.provider='flatpay'")}) AS flatpay,

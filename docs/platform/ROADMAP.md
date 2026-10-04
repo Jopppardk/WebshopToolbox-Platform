@@ -1,5 +1,8 @@
 # Udviklingsplan
 
+
+> 4. oktober 2026 – Shipmondo-tracking er implementeret lokalt på platform/shipmondo-tracking: krypteret webshopforbindelse, signeret Shipment Monitor-webhook og berigelse af Forsendelser. Migration 0039. Ikke udgivet; rigtig API-/webhook- og browserkontrol udestår. Se [SHIPMONDO.md](SHIPMONDO.md).
+
 > 3. oktober 2026 – Forsendelser/track & trace: implementeret og lokalt testet, ikke sat i drift. Næste skridt er CI og gennemgang, udgivelse og kontrol mod en rigtig butik med fragtapp samt bekræftede opbevaringstider. Se [SHIPMENTS.md](SHIPMENTS.md).
 
 > 29. september 2026 – Performance-dashboard og Tools-menu: implementeret, testet og sat i drift på Dev og Prod via PR #53 og run `36628986416`. Fire månedsgrafer med sammenligningsår samt leverandørfilter er afsluttet; 413 tests og begge HTTP-gates bestået. Tilbage er kontrol af rigtige rapporttal og butikkens Shopify-rapportadgang ved ibrugtagning. Se [PERFORMANCE.md](PERFORMANCE.md).

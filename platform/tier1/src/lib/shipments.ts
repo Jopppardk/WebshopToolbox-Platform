@@ -5,12 +5,13 @@ export type StepKey = 'printed' | 'dropped' | 'transit' | 'ready' | 'delivered';
 export type ShipmentStep = { key: StepKey; label: string; at: string | null; reached: boolean };
 export type ShipmentEvent = { status: string; label: string; at: string; message: string | null };
 export type Shipment = {
+  shipmondo?: { shipmentId: string; status: string; text: string; at: string };
   id: string; orderId: string; orderName: string; test: boolean; customer: string; city: string; country: string | null;
   carrier: Carrier | null; carrierName: string | null; trackingNumber: string | null; trackingUrl: string | null;
   pickupPoint: boolean; steps: ShipmentStep[]; current: StepKey; issue: string | null; readyAt: string | null; delivered: boolean; deliveredAt: string | null;
   events: ShipmentEvent[]; shippedAt: string; method: string | null;
 };
-export type ShipmentList = { checkedAt: string; days: number; since: string; truncated: boolean; shipments: Shipment[] };
+export type ShipmentList = { checkedAt: string; days: number; since: string; truncated: boolean; shipments: Shipment[]; shipmondo?: {connected: boolean; lastEventAt: string | null; limited: boolean} };
 export const shipmentDays = [14, 30, 60] as const;
 
 export const carriers: Record<Carrier, { name: string; short: string; color: string; text: string; holdDays: number }> = {

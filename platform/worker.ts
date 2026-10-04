@@ -1,3 +1,4 @@
+import { shipmondoWebhook } from './shipmondo';
 import {runProductionJobs} from './production-jobs';
 import { demoMessage, isDemoCompany, isDemoUser } from './demo';
 import { resetDemoIfDue } from './demo-reset';
@@ -62,6 +63,7 @@ export default {
       const admin=customerEnabled&&(url.pathname==='/admin'||url.pathname.startsWith('/admin/'));
       if(admin){url.pathname=url.pathname.slice(6)||'/';request=new Request(url,request);}
       const path=url.pathname;
+      if(!admin && path.startsWith('/webhooks/shipmondo/')) return secure(await shipmondoWebhook(request,env));
       if(!admin&&path.startsWith('/feeds/'))return secure(await publicFeed(request,env));
       if(path==='/robots.txt'&&['GET','HEAD'].includes(request.method))return secure(new Response(request.method==='HEAD'?null:'User-agent: *\nDisallow:\n# Indexing is disabled by X-Robots-Tag on every response.\n',{headers:{'Content-Type':'text/plain; charset=utf-8'}}));
       if(customerEnabled&&!admin){

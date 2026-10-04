@@ -1,5 +1,8 @@
 # WebshopToolbox – fælles platform
 
+
+> 4. oktober 2026 – Shipmondo-tracking er implementeret lokalt på platform/shipmondo-tracking: krypteret webshopforbindelse, signeret Shipment Monitor-webhook og berigelse af Forsendelser. Migration 0039. Ikke udgivet; rigtig API-/webhook- og browserkontrol udestår. Se [SHIPMONDO.md](SHIPMONDO.md).
+
 > 3. oktober 2026 – Tools har fået Forsendelser: track & trace pr. afsendelse fra Shopify med status, datoer, fragtfirmaikon og varsel om pakker, der snart returneres fra pakkeshop. Implementeret og lokalt testet. Ikke udgivet. Se [SHIPMENTS.md](SHIPMENTS.md).
 
 > 29. september 2026 – Performance er udgivet på Dev og Prod efter brugerens bestilling. PR #53, SHA `120581fbfe81ad7cc2bde539a6e003ae8104e41a`, run `36628986416`: 413 tests, obligatoriske checks og begge HTTP-gates bestået. Tools samler Performance, Emballage og Produktfeeds. Månedsgrafer med sammenligningsår og leverandørfilter er browserkontrolleret med testdata; rigtige rapporttal og Shopify-rapportadgang afventer kontrol. Se [PERFORMANCE.md](PERFORMANCE.md).

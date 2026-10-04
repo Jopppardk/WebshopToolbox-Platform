@@ -17,11 +17,12 @@ export async function handleTier1Connections(request:Request,env:PlatformEnv,act
   // Reads are scoped by the gateway; only company administrators may change connections.
   if(request.method!=='GET')await requireCompany(db,actor,company,true);
   const connected=async()=>{
+    const shipping=shop==='none'?[]:(await db.prepare('SELECT provider FROM shipping_connections WHERE company_id=? AND webshop_id=?').bind(company,shop).all<{provider:string}>()).results;
     const accounting=await db.prepare('SELECT organization_id FROM accounting_connections WHERE company_id=?').bind(company).first<{organization_id:string}>();
     const webshop=shop==='none'?null:await db.prepare('SELECT shop_domain FROM webshop_connections WHERE company_id=? AND webshop_id=? AND verified_at IS NOT NULL').bind(company,shop).first<{shop_domain:string}>();
     const payments=shop==='none'?[]:(await db.prepare('SELECT provider FROM payment_connections WHERE company_id=? AND webshop_id=?').bind(company,shop).all<{provider:string}>()).results;
     const packaging=shop==='none'?null:await db.prepare('SELECT identity FROM emballage_connections WHERE company_id=? AND webshop_id=?').bind(company,shop).first();
-    return [...(packaging?[{provider:'emballage',display_name:'Emballage Indberetning'}]:[]),...(accounting?[{provider:'dinero',display_name:accounting.organization_id}]:[]),...(webshop?[{provider:'shopify',display_name:webshop.shop_domain}]:[]),...payments.map(p=>({provider:p.provider,display_name:p.provider}))];
+    return [...shipping.map(p=>({provider:p.provider,display_name:'Shipmondo'})),...(packaging?[{provider:'emballage',display_name:'Emballage Indberetning'}]:[]),...(accounting?[{provider:'dinero',display_name:accounting.organization_id}]:[]),...(webshop?[{provider:'shopify',display_name:webshop.shop_domain}]:[]),...payments.map(p=>({provider:p.provider,display_name:p.provider}))];
   };
   if(path==='/integrations/selection'){
     if(request.method==='POST'){
@@ -29,6 +30,7 @@ export async function handleTier1Connections(request:Request,env:PlatformEnv,act
       if(!optionalIntegrations.includes(String(b.provider)) || !['add','remove'].includes(String(b.action)))throw new HttpError(400,'Vælg en tilgængelig integration. Shopify og Dinero er altid tilgængelige.');
       if(b.action==='remove' && await db.prepare('SELECT 1 AS found FROM payment_connections WHERE company_id=? AND provider=? LIMIT 1').bind(company,b.provider).first())throw new HttpError(409,'Integrationen har en gemt forbindelse og kan ikke fjernes.');
       if(b.action==='remove' && b.provider==='emballage' && await db.prepare('SELECT 1 FROM emballage_connections WHERE company_id=? LIMIT 1').bind(company).first())throw new HttpError(409,'Integrationen har en gemt forbindelse.');
+      if(b.action==='remove' && b.provider==='shipmondo' && await db.prepare('SELECT 1 FROM shipping_connections WHERE company_id=? LIMIT 1').bind(company).first())throw new HttpError(409,'Afbryd Shipmondo på virksomhedens webshops først.');
       await db.batch([db.prepare(b.action==='add'?'INSERT OR IGNORE INTO company_integrations(company_id,integration_id) VALUES(?,?)':'DELETE FROM company_integrations WHERE company_id=? AND integration_id=?').bind(company,b.provider),audit('integration.'+b.action,String(b.provider))]);
     }else if(request.method!=='GET')throw new HttpError(405,'Ugyldig handling.');
     const rows=await db.prepare('SELECT integration_id FROM company_integrations WHERE company_id=?').bind(company).all<{integration_id:string}>();
