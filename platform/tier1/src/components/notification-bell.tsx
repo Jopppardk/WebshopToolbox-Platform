@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 type Notice = {id:string;title:string;message:string;createdAt:string};
 type Failure = {id:string;source:string;message:string;created_at:string;seen:boolean};
 type Payload = {notifications:Notice[];incidents?:{warnings:number;alarms:number};errors?:Failure[];error?:string};
-const sources:Record<string,string>={orders:'Salg',payments:'Betalinger',refunds:'Tilbagebetalinger',payouts:'Udbetalinger',inventory:'Lager',packaging:'Emballage',reports:'Udbetalingsrapporter',markets:'Land og valuta'};
+const sources:Record<string,string>={orders:'Salg',payments:'Betalinger',refunds:'Tilbagebetalinger',payouts:'Udbetalinger',inventory:'Lager',packaging:'Emballage',reports:'Udbetalingsrapporter',markets:'Land og valuta',sales:'Salg og bogføring',invoice:'Fakturamail',credit:'Kreditnotamail',order_refunds:'Tilbagebetalinger',queue:'kø'};
 function sourceLabel(source:string){
   const parts=source.replace(/^auto\.(import\.)?/,'').split('.');
   const name=parts.map(p=>sources[p]||({flatpay:'Flatpay',viabill:'ViaBill',history:'historik',payment:'betalinger',payout:'udbetalinger',settlements:'afregninger',transactions:'transaktioner'} as Record<string,string>)[p]||p).join(' · ');

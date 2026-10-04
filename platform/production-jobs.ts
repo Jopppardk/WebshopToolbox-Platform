@@ -12,7 +12,10 @@ import {legacyRefundSql,saleBookedSql,syncOrderRefunds} from './order-refunds';
 import {sendCreditNote} from './credit-notes';
 import {productionWrites,bookingDate} from './production-policy';
 import {dataStartDate,historyPolicy,providerStart} from './tier1-history';
+import {InvoiceCheckError} from './order-check';
 import {HttpError,type Actor,type PlatformEnv} from './types';
+// The reason shown in the bell: our own explanations (also the invoice check's), never raw internal errors.
+const reason=(error:unknown)=>error instanceof HttpError||error instanceof InvoiceCheckError?error.message:'Integrationen kunne ikke behandles. Kontrollér forbindelse og postens detaljer.';
 const request=(body:unknown)=>new Request('https://portal.webshoptoolbox.dk/internal-job',{method:'POST',headers:{origin:'https://portal.webshoptoolbox.dk','content-type':'application/json'},body:JSON.stringify(body)});
 const plusDay=(value:string,days:number)=>new Date(Date.parse(value+'T12:00:00Z')+days*86400000).toISOString().slice(0,10);
 // On the payout date Shopify may report a payout as PAID before all its transactions are linked, and
@@ -65,7 +68,7 @@ async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promi
   const run=async(name:string,work:()=>Promise<unknown>)=>{
    const runId=crypto.randomUUID();await db.prepare("INSERT INTO operation_runs(id,company_id,webshop_id,module,status) VALUES(?,?,?,?,'running')").bind(runId,company,id,name).run();
    try{await owns();await work();await db.prepare("UPDATE operation_runs SET status='success',finished_at=CURRENT_TIMESTAMP WHERE id=?").bind(runId).run();}
-   catch(error){const message=error instanceof HttpError?error.message:'Integrationen kunne ikke behandles. Kontrollér forbindelse og postens detaljer.';await db.prepare("UPDATE operation_runs SET status='failed',message=?,finished_at=CURRENT_TIMESTAMP WHERE id=?").bind(message.slice(0,600),runId).run();}
+   catch(error){const message=reason(error);await db.prepare("UPDATE operation_runs SET status='failed',message=?,finished_at=CURRENT_TIMESTAMP WHERE id=?").bind(message.slice(0,600),runId).run();}
   };
   const cursor=async(job:string)=>{const row=await db.prepare('SELECT cursor_json FROM production_jobs WHERE company_id=? AND webshop_id=? AND job=?').bind(company,id,job).first<{cursor_json:string}>();return row?JSON.parse(row.cursor_json):{};};
   const saveCursor=async(job:string,value:unknown)=>{await owns();await db.prepare('INSERT INTO production_jobs(company_id,webshop_id,job,cursor_json) VALUES(?,?,?,?) ON CONFLICT(company_id,webshop_id,job) DO UPDATE SET cursor_json=excluded.cursor_json').bind(company,id,job,JSON.stringify(value)).run();};
@@ -172,13 +175,16 @@ async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promi
      // credit notes are only mailed for refunds from the last 14 days, so customers never get an old one out of the blue.
      :module==='order_refunds'?" AND "+domesticOrderOfSql('s.order_id')+" AND NOT "+legacyRefundSql+" AND json_extract(s.payload_json,'$.problem') IS NULL"+(job==='order_refunds'?" AND "+saleBookedSql:'')+(job==='credit'?" AND s.occurred_at>=strftime('%Y-%m-%dT%H:%M:%SZ','now','-14 days')":'')
      :module==='payouts'?" AND json_extract(s.payload_json,'$.status')='PAID'":provider==='flatpay'&&module==='payments'?" AND json_extract(s.payload_json,'$.paidDate') IS NOT NULL":'';
-    const rows=(await db.prepare(`SELECT s.external_id,s.occurred_at FROM ${table} s
+    const rows=(await db.prepare(`SELECT s.external_id,s.occurred_at,json_extract(s.payload_json,'$.name') name,json_extract(s.payload_json,'$.orderName') order_name FROM ${table} s
  LEFT JOIN production_attempts a ON a.company_id=s.company_id AND a.webshop_id=s.webshop_id AND a.job=? AND a.external_id=s.external_id
  WHERE s.company_id=? AND s.webshop_id=? AND ${filter}${eligible} AND substr(s.occurred_at,1,10)>=? AND COALESCE(a.next_attempt_at,0)<=?
  ORDER BY COALESCE(a.attempted_at,0),s.occurred_at,s.external_id LIMIT 10`).bind(job,company,id,...(provider==='shopify'?[module]:[module,provider]),...(module==='orders'?[plusDay(boundary,-1)]:[]),module==='orders'?'1970-01-01':plusDay(boundary,-1),Date.now()).all<any>()).results;
     for(const row of rows){await owns();const externalId=row.external_id;result.rows++;
+     // Which post failed, so the bell says e.g. "Ordre #2701" instead of only the job.
+     const short=String(externalId).split(/[/:]/).pop();
+     const item=module==='orders'?'Ordre '+(row.name||short):module==='order_refunds'?'Tilbagebetaling på ordre '+(row.order_name||short):provider==='flatpay'?'Flatpay-udbetaling '+short:'Udbetaling '+short;
      await run('auto.'+job,async()=>{
-      let succeeded=false;const waiting=(job==='payouts'||job==='flatpay')&&payoutNotReady(row.occurred_at);let notReady=false;
+      let succeeded=false,recorded=false;const waiting=(job==='payouts'||job==='flatpay')&&payoutNotReady(row.occurred_at);let notReady=false;
       try{
        if(kind==='sale'||email){const checked=await responseValue(await handleInvoices(request({webshopId:id,externalId}),env,actor,company,'check'));const day=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Copenhagen',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(checked.invoice.date));if(day<boundary){succeeded=true;return;}await bookingDate(env,company,id,provider,checked.invoice.date);}
        else await bookingDate(env,company,id,provider,row.occurred_at);
@@ -195,10 +201,14 @@ async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promi
        if(waiting){notReady=true;return;}
        result.failed++;
        try{await recordFailure(env,company,id,provider,module,externalId,'Automatisk behandling: '+job,error);}catch{/* Keep original error and durable claims. */}
-       throw error;
+       // A post that keeps failing is retried after 15 minutes, then 1, 4 and 16 hours and at most daily, and is
+       // reported in the bell once, with its reason, until it succeeds. Repeats stay in the post's own log.
+       const attempt=await db.prepare('INSERT INTO production_attempts(company_id,webshop_id,job,external_id,attempted_at,next_attempt_at,failures) VALUES(?,?,?,?,?,?,1) ON CONFLICT(company_id,webshop_id,job,external_id) DO UPDATE SET attempted_at=excluded.attempted_at,next_attempt_at=excluded.attempted_at+min(86400000,900000*(1<<min(8,2*production_attempts.failures))),failures=production_attempts.failures+1 RETURNING failures').bind(company,id,job,externalId,Date.now(),Date.now()+900000).first<{failures:number}>();
+       recorded=true;
+       if((attempt?.failures??1)===1)throw new HttpError(409,item+': '+reason(error));
       }finally{
        // Failed sources get a bounded cooldown instead of starving later orders.
-       await db.prepare('INSERT INTO production_attempts(company_id,webshop_id,job,external_id,attempted_at,next_attempt_at,failures) VALUES(?,?,?,?,?,?,?) ON CONFLICT(company_id,webshop_id,job,external_id) DO UPDATE SET attempted_at=excluded.attempted_at,next_attempt_at=excluded.next_attempt_at,failures=CASE WHEN excluded.failures=0 THEN 0 ELSE production_attempts.failures+1 END').bind(company,id,job,externalId,Date.now(),Date.now()+(succeeded?86400000:notReady?notReadyRetryMs:900000),succeeded||notReady?0:1).run();
+       if(!recorded)await db.prepare('INSERT INTO production_attempts(company_id,webshop_id,job,external_id,attempted_at,next_attempt_at,failures) VALUES(?,?,?,?,?,?,?) ON CONFLICT(company_id,webshop_id,job,external_id) DO UPDATE SET attempted_at=excluded.attempted_at,next_attempt_at=excluded.next_attempt_at,failures=CASE WHEN excluded.failures=0 THEN 0 ELSE production_attempts.failures+1 END').bind(company,id,job,externalId,Date.now(),Date.now()+(succeeded?86400000:notReady?notReadyRetryMs:900000),succeeded||notReady?0:1).run();
       }
      });
     }
