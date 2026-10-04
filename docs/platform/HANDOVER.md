@@ -1,6 +1,6 @@
 # Overlevering
 
-> 4. oktober 2026 – Fælles tracking via offentlige Shipmondo-links: implementeret; udgivelse afventer CI/release. Ingen API-nøgle eller webhook kræves. DAO/GLS/PostNord/Bring og gyldige eksisterende Shipmondo-links bruger samme parser; flere pakkenumre vises separat. Scoped cache med fejltolerant snapshot, timeinterval og baggrundsopdatering af registrerede pakker i prod. Migration 0040. Se [PUBLIC-TRACKING.md](PUBLIC-TRACKING.md).
+> 4. oktober 2026 – Fælles tracking via offentlige Shipmondo-links: implementeret via PR #90/#91, 451 tests og obligatorisk CI bestået. Migration 0040 anvendt på dev/prod. Driftsstatus og HTTP-gates: [release 37202026243](https://github.com/Jopppardk/WebshopToolbox-Platform/actions/runs/37202026243). Ingen API-nøgle eller webhook kræves. DAO/GLS/PostNord/Bring og gyldige eksisterende Shipmondo-links bruger samme parser; flere pakkenumre vises separat. Scoped cache med fejltolerant snapshot, timeinterval og baggrundsopdatering af registrerede pakker i prod. Migration 0040. Se [PUBLIC-TRACKING.md](PUBLIC-TRACKING.md).
 
 
 > 4. oktober 2026 – Shipmondo-forbindelsesrettelse: Cloudflare/workerd afviste `redirect:error` før netværkskaldet. Reproduceret lokalt i workerd. Kaldet bruger nu `manual`; 3xx afvises fortsat uden videresendelse af API-nøgler. Regressionstest kontrollerer bevarelse af eksisterende forbindelse ved redirect. Udgivelsesstatus følger PR/releasekørsel.
