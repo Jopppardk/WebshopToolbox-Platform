@@ -3,9 +3,10 @@ type Accounts = Record<string,string>;
 export type PreviewAccount = { number: string; name: string; vatCode: string; kind: 'entry' | 'deposit'; hidden: boolean };
 export type SalesDraft = { ready: boolean; blockers: string[]; lines: { title: string; account: string | null; vatCode: string | null; net: number; tax: number; gross: number }[]; clearing: string | null; debit: number; credit: number; inventory?: { account: string; adjustmentAccount: string; cost: number } };
 
-export function salesDraft(invoice: CheckedInvoice, settings: Partial<Accounts>, chart: PreviewAccount[], inventoryEnabled = false): SalesDraft {
+/** markets: countries of the markets enabled under Indstillinger → Markeder; their orders are booked in DKK like Danish ones. */
+export function salesDraft(invoice: CheckedInvoice, settings: Partial<Accounts>, chart: PreviewAccount[], inventoryEnabled = false, markets: string[] = []): SalesDraft {
   const blockers: string[] = [];
-  if (invoice.currency !== 'DKK' || invoice.countryCode !== 'DK') blockers.push('Første bogføringsforhåndsvisning understøtter kun danske ordrer i DKK. Udenlandsk salg skal afklares særskilt.');
+  if (invoice.currency !== 'DKK' || !['DK', ...markets].includes(invoice.countryCode || '')) blockers.push('Første bogføringsforhåndsvisning understøtter kun danske ordrer i DKK. Udenlandsk salg skal afklares særskilt.');
   const account = (value: string | undefined) => { const number = value?.match(/^(\d+)(?:\s*-|$)/)?.[1]; return chart.find(a => a.number === number && !a.hidden); };
   const clearing = account(settings.clearing);
   if (!clearing) blockers.push('Vælg en eksisterende, aktiv mellemregningskonto under Administration.');

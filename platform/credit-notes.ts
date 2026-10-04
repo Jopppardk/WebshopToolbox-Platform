@@ -8,6 +8,18 @@ import { HttpError, type Actor, type PlatformEnv } from './types';
 
 type Note = { id: string; number: string; r2_key: string; status: string; created_at: string };
 const stuckMs = 10 * 60000;
+type Locale = 'da' | 'sv' | 'en';
+// The language and currency of the invoice the credit note belongs to, for its mail.
+function documentFacts(invoice: { source_json: string; issuer_json: string }, refund: OrderRefund) {
+  const issuer = JSON.parse(invoice.issuer_json), order = JSON.parse(invoice.source_json), currency = String(order.currentTotalPriceSet?.shopMoney?.currencyCode || refund.currency);
+  const gross = currency === refund.currency ? refund.gross : refund.presentment?.currency === currency ? refund.presentment.gross : refund.gross;
+  return { locale: (['sv', 'en'].includes(issuer.locale) ? issuer.locale : 'da') as Locale, currency: currency === refund.currency || refund.presentment?.currency === currency ? currency : refund.currency, gross, store: String(issuer.soldVia || issuer.name || '') };
+}
+const creditMail: Record<Locale, (a: { amount: string; order: string; number: string; name: string; store: string }) => { subject: string; text: string }> = {
+  da: a => ({ subject: `Kreditnota ${a.number} fra ${a.name}`, text: `Hej\n\nVi har tilbagebetalt ${a.amount} for ordre ${a.order}.\n\nVedhæftet finder du kreditnota ${a.number}.\n\nVenlig hilsen\n${a.name}` }),
+  sv: a => ({ subject: `Kreditfaktura ${a.number} från ${a.store}`, text: `Hej\n\nVi har återbetalat ${a.amount} för order ${a.order}.\n\nBifogat finner du kreditfaktura ${a.number}.\n\nVänliga hälsningar\n${a.name}` }),
+  en: a => ({ subject: `Credit note ${a.number} from ${a.store}`, text: `Hi\n\nWe have refunded ${a.amount} for order ${a.order}.\n\nPlease find attached credit note ${a.number}.\n\nKind regards\n${a.name}` }),
+};
 
 export const creditNoteNumber = (orderName: string, sequence: number) => `${orderName.replace(/^#/, '')}-K${sequence}`;
 
@@ -20,7 +32,7 @@ export async function ensureCreditNote(env: PlatformEnv, company: string, shop: 
   if (saved?.status === 'generated') {
     const file = await env.PLATFORM_DOCUMENTS.get(saved.r2_key);
     if (!file) throw new HttpError(409, 'Den gemte kreditnota mangler. Den genoprettes ikke automatisk.');
-    return { id: saved.id, number: saved.number, key: saved.r2_key, file, email: String(JSON.parse(invoice.source_json).email || '') };
+    return { id: saved.id, number: saved.number, key: saved.r2_key, file, email: String(JSON.parse(invoice.source_json).email || ''), ...documentFacts(invoice, refund) };
   }
   // A generation that stopped halfway (e.g. a timeout) is cleared after 10 minutes and made again.
   if (saved) {
@@ -32,7 +44,11 @@ export async function ensureCreditNote(env: PlatformEnv, company: string, shop: 
   let logo: ArrayBuffer | undefined;
   if (typeof issuer.logo_key === 'string') { const file = await env.PLATFORM_DOCUMENTS.get(issuer.logo_key); if (file) logo = await file.arrayBuffer(); }
   const invoiceNumber = String(order.name).replace(/^#/, ''), number = creditNoteNumber(String(order.name), refund.sequence);
-  const bytes = await buildInvoicePdf(order, issuer, logo, { number, date: refund.processedAt, invoiceNumber, currency: refund.currency, lines: refund.lines });
+  // The credit note is in the invoice's currency: the customer's (e.g. SEK) for an order from another market.
+  const invoiceCurrency = order.currentTotalPriceSet?.shopMoney?.currencyCode;
+  const credited = invoiceCurrency === refund.currency ? { currency: refund.currency, lines: refund.lines } : refund.presentment?.currency === invoiceCurrency ? refund.presentment : null;
+  if (!credited) throw new HttpError(409, 'Tilbagebetalingen kan ikke opgøres i fakturaens valuta. Kreditnotaen dannes ikke automatisk.');
+  const bytes = await buildInvoicePdf(order, issuer, logo, { number, date: refund.processedAt, invoiceNumber, currency: credited.currency, lines: credited.lines });
   const id = crypto.randomUUID(), key = `companies/${company}/webshops/${shop}/credit-notes/${id}.pdf`;
   const claim = await db.prepare("INSERT INTO platform_credit_notes(company_id,webshop_id,external_id,id,order_id,number,status,r2_key,source_json) VALUES(?,?,?,?,?,?,'generating',?,?) ON CONFLICT DO NOTHING")
     .bind(company, shop, refund.id, id, refund.orderId, number, key, JSON.stringify(refund)).run();
@@ -44,7 +60,7 @@ export async function ensureCreditNote(env: PlatformEnv, company: string, shop: 
   ]);
   const file = await env.PLATFORM_DOCUMENTS.get(key);
   if (!file) throw new HttpError(409, 'Kreditnotaen kunne ikke gemmes.');
-  return { id, number, key, file, email: String(order.email || '') };
+  return { id, number, key, file, email: String(order.email || ''), ...documentFacts(invoice, refund) };
 }
 
 /** Mails the credit note of a refund to the customer, once. Nothing is sent for orders without a platform invoice. */
@@ -56,11 +72,12 @@ export async function sendCreditNote(env: PlatformEnv, actor: Actor, company: st
   if (!note.email) throw new HttpError(409, 'Ordren har ingen kundemail, så kreditnotaen kan ikke sendes.');
   const settings = await env.PLATFORM_DB.prepare('SELECT name FROM invoice_settings WHERE company_id=?').bind(company).first<{ name: string }>();
   const name = settings?.name || (await env.PLATFORM_DB.prepare('SELECT name FROM companies WHERE id=?').bind(company).first<{ name: string }>())!.name;
-  const amount = new Intl.NumberFormat('da-DK', { style: 'currency', currency: refund.currency }).format(refund.gross / 10 ** new Intl.NumberFormat('en', { style: 'currency', currency: refund.currency }).resolvedOptions().maximumFractionDigits!);
-  const text = `Hej\n\nVi har tilbagebetalt ${amount} for ordre ${refund.orderName}.\n\nVedhæftet finder du kreditnota ${note.number}.\n\nVenlig hilsen\n${name}`;
+  const intl = { da: 'da-DK', sv: 'sv-SE', en: 'en-GB' }[note.locale];
+  const amount = new Intl.NumberFormat(intl, { style: 'currency', currency: note.currency }).format(note.gross / 10 ** new Intl.NumberFormat('en', { style: 'currency', currency: note.currency }).resolvedOptions().maximumFractionDigits!);
+  const mail = creditMail[note.locale]({ amount, order: refund.orderName, number: note.number, name, store: note.store || name });
   const content = await note.file.arrayBuffer();
   if (content.byteLength > 3500000) throw new HttpError(413, 'Kreditnotaen er for stor til mail.');
-  const response = await sendCustomerInvoice(env, actor, company, shop, note.id, note.email, `Kreditnota ${note.number} fra ${name}`, text, { content, filename: `kreditnota-${note.number}.pdf`, type: 'application/pdf', disposition: 'attachment' }, 'credit');
+  const response = await sendCustomerInvoice(env, actor, company, shop, note.id, note.email, mail.subject, mail.text, { content, filename: `${note.locale === 'sv' ? 'kreditfaktura' : note.locale === 'en' ? 'credit-note' : 'kreditnota'}-${note.number}.pdf`, type: 'application/pdf', disposition: 'attachment' }, 'credit');
   if (!response.ok) throw new HttpError(response.status, ((await response.json()) as { error?: string }).error || 'Kreditnotaen kunne ikke sendes.');
   return { sent: true };
 }

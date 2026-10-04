@@ -45,17 +45,32 @@ export async function fillOrderMarkets(env: PlatformEnv, company: string, shop: 
   return stored;
 }
 
-// Temporary hold until markets can be set up per webshop: the platform books in DKK with Danish VAT in
-// Dinero, so orders to another country or paid in another currency than the shop's are not invoiced,
-// mailed or booked automatically or manually. This is the platform's home market, not a shop setting.
+// Orders are invoiced, mailed and booked in the home market (Denmark, in the shop's currency) and in the
+// markets set up and enabled under Indstillinger → Markeder (in the market's currency). Orders to any other
+// country or currency stay on hold. The platform books in DKK with Danish VAT in Dinero.
 export const HOME_COUNTRY = 'DK';
-export const foreignHold = 'Ordren går til et andet land eller er betalt i en anden valuta. Fakturering og bogføring af udenlandske ordrer er spærret, indtil markedsopsætningen er klar.';
-/** SQL condition on an operation_snapshots row aliased s: the order's market is known and domestic. */
-export const domesticOrderSql = "EXISTS(SELECT 1 FROM order_markets m WHERE m.company_id=s.company_id AND m.webshop_id=s.webshop_id AND m.external_id=s.external_id AND (m.country IS NULL OR m.country='" + HOME_COUNTRY + "') AND (m.currency IS NULL OR json_extract(s.payload_json,'$.currentTotalPriceSet.shopMoney.currencyCode') IS NULL OR m.currency=json_extract(s.payload_json,'$.currentTotalPriceSet.shopMoney.currencyCode')))";
+export const foreignHold = 'Ordren går til et marked, der ikke er sat op til fakturering og bogføring. Slå markedet til under Indstillinger → Markeder.';
+// The home market: Denmark (or no known country) in the shop's currency (or no known currency).
+const homeSql = (shopCurrency: string) => "(m.country IS NULL OR m.country='" + HOME_COUNTRY + "') AND (m.currency IS NULL OR " + shopCurrency + " IS NULL OR m.currency=" + shopCurrency + ")";
+// An enabled market that sells to the order's country in the order's currency.
+const marketSql = "(m.country IS NOT NULL AND m.country<>'" + HOME_COUNTRY + "' AND m.currency IS NOT NULL AND EXISTS(SELECT 1 FROM webshop_markets wm,json_each(wm.countries_json) c WHERE wm.company_id=m.company_id AND wm.webshop_id=m.webshop_id AND wm.enabled=1 AND c.value=m.country AND wm.currency=m.currency))";
+/** SQL condition on an operation_snapshots row aliased s: the order's market is known and is home or an enabled market. */
+export const domesticOrderSql = "EXISTS(SELECT 1 FROM order_markets m WHERE m.company_id=s.company_id AND m.webshop_id=s.webshop_id AND m.external_id=s.external_id AND ((" + homeSql("json_extract(s.payload_json,'$.currentTotalPriceSet.shopMoney.currencyCode')") + ") OR " + marketSql + "))";
 /** The same condition for a row aliased s that belongs to an order (e.g. a refund), given the SQL of its order ID. */
-export const domesticOrderOfSql = (orderId: string) => "EXISTS(SELECT 1 FROM order_markets m LEFT JOIN operation_snapshots o ON o.company_id=m.company_id AND o.webshop_id=m.webshop_id AND o.module='orders' AND o.external_id=m.external_id WHERE m.company_id=s.company_id AND m.webshop_id=s.webshop_id AND m.external_id=" + orderId + " AND (m.country IS NULL OR m.country='" + HOME_COUNTRY + "') AND (m.currency IS NULL OR json_extract(o.payload_json,'$.currentTotalPriceSet.shopMoney.currencyCode') IS NULL OR m.currency=json_extract(o.payload_json,'$.currentTotalPriceSet.shopMoney.currencyCode')))";
+export const domesticOrderOfSql = (orderId: string) => "EXISTS(SELECT 1 FROM order_markets m LEFT JOIN operation_snapshots o ON o.company_id=m.company_id AND o.webshop_id=m.webshop_id AND o.module='orders' AND o.external_id=m.external_id WHERE m.company_id=s.company_id AND m.webshop_id=s.webshop_id AND m.external_id=" + orderId + " AND ((" + homeSql("json_extract(o.payload_json,'$.currentTotalPriceSet.shopMoney.currencyCode')") + ") OR " + marketSql + "))";
+/** Whether an order is held: its market is known and is neither home nor an enabled market. */
 export async function isForeignOrder(db: D1Database, company: string, shop: string, externalId: string) {
-  const row = await db.prepare("SELECT m.country,m.currency,json_extract(s.payload_json,'$.currentTotalPriceSet.shopMoney.currencyCode') shop_currency FROM order_markets m LEFT JOIN operation_snapshots s ON s.company_id=m.company_id AND s.webshop_id=m.webshop_id AND s.external_id=m.external_id AND s.module='orders' WHERE m.company_id=? AND m.webshop_id=? AND m.external_id=?")
-    .bind(company, shop, externalId).first<{ country: string | null; currency: string | null; shop_currency: string | null }>();
-  return !!row && (!!row.country && row.country !== HOME_COUNTRY || !!row.currency && !!row.shop_currency && row.currency !== row.shop_currency);
+  const row = await db.prepare("SELECT 1 FROM order_markets m LEFT JOIN operation_snapshots s ON s.company_id=m.company_id AND s.webshop_id=m.webshop_id AND s.external_id=m.external_id AND s.module='orders' WHERE m.company_id=? AND m.webshop_id=? AND m.external_id=?")
+    .bind(company, shop, externalId).first();
+  if (!row) return false;
+  const allowed = await db.prepare("SELECT 1 FROM order_markets m LEFT JOIN operation_snapshots s ON s.company_id=m.company_id AND s.webshop_id=m.webshop_id AND s.external_id=m.external_id AND s.module='orders' WHERE m.company_id=? AND m.webshop_id=? AND m.external_id=? AND ((" + homeSql("json_extract(s.payload_json,'$.currentTotalPriceSet.shopMoney.currencyCode')") + ") OR " + marketSql + ")")
+    .bind(company, shop, externalId).first();
+  return !allowed;
+}
+export type WebshopMarket = { market_id: string; name: string; countries: string[]; currency: string; locale: 'da' | 'sv' | 'en'; store_name: string; invoice_subject: string; invoice_body: string };
+/** The enabled market an order belongs to (outside the home market), or null for home-market orders. */
+export async function orderMarketSettings(db: D1Database, company: string, shop: string, orderId: string): Promise<WebshopMarket | null> {
+  const row = await db.prepare("SELECT wm.* FROM order_markets m JOIN webshop_markets wm ON wm.company_id=m.company_id AND wm.webshop_id=m.webshop_id AND wm.enabled=1 AND wm.currency=m.currency AND EXISTS(SELECT 1 FROM json_each(wm.countries_json) c WHERE c.value=m.country) WHERE m.company_id=? AND m.webshop_id=? AND m.external_id=? AND m.country<>'" + HOME_COUNTRY + "'")
+    .bind(company, shop, orderId).first<Omit<WebshopMarket, 'countries'> & { countries_json: string }>();
+  return row ? { ...row, countries: JSON.parse(row.countries_json) } : null;
 }

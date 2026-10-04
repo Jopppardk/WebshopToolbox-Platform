@@ -3,17 +3,18 @@ import { unseal } from './connections';
 import { HttpError, type PlatformEnv } from './types';
 
 import type { InvoiceSource, Connection } from '../lib/invoice-check';
-const money = '{ shopMoney { amount currencyCode } }';
+// Presentment amounts are what the customer paid in their own currency (e.g. SEK); invoices for other markets use them.
+const money = '{ shopMoney { amount currencyCode } presentmentMoney { amount currencyCode } }';
 const taxes = `taxLines { rate channelLiable priceSet ${money} } discountAllocations { allocatedAmountSet ${money} }`;
 const itemFields = `id name quantity currentQuantity requiresShipping isGiftCard variant { inventoryItem { id unitCost { amount currencyCode } } } originalUnitPriceSet ${money} priceAfterAllDiscountsBeforeTaxesSet ${money} originalTotalSet ${money} discountedTotalSet ${money} ${taxes}`;
 const shippingFields = `id title isRemoved originalPriceSet ${money} discountedPriceSet ${money} ${taxes}`;
 const page = 'pageInfo { hasNextPage endCursor }';
-export const orderFields = `id name email createdAt updatedAt processedAt test edited cancelledAt taxesIncluded paymentGatewayNames displayFinancialStatus displayFulfillmentStatus
+export const orderFields = `id name email createdAt updatedAt processedAt test edited cancelledAt taxesIncluded presentmentCurrencyCode paymentGatewayNames displayFinancialStatus displayFulfillmentStatus
   fulfillments { createdAt status }
   customer { displayName firstName lastName }
   billingAddress { name address1 address2 zip city country countryCodeV2 }
   shippingAddress { name address1 address2 zip city country countryCodeV2 }
-  currentTotalPriceSet ${money} currentSubtotalPriceSet ${money} currentTotalTaxSet ${money} totalRefundedSet ${money} totalPriceSet ${money} totalTaxSet ${money}
+  currentTotalPriceSet ${money} currentSubtotalPriceSet ${money} currentTotalTaxSet ${money} totalRefundedSet ${money} totalPriceSet ${money} totalTaxSet ${money} subtotalPriceSet ${money}
   lineItems(first:100) { nodes { ${itemFields} } ${page} }
   shippingLines(first:25) { nodes { ${shippingFields} } ${page} }`;
 type Access={shop:string;accessToken:string};

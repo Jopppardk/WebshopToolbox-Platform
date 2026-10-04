@@ -2,8 +2,24 @@ import {checkInvoice as originalCheck,InvoiceCheckError,units,type InvoiceSource
 export {InvoiceCheckError,invoiceFingerprint} from '../lib/invoice-check';
 export type {InvoiceSource} from '../lib/invoice-check';
 
+/** An order refunded (not edited) after purchase as it was sold: the invoice is for the original order and each
+ * refund gets its own credit note. Shopify keeps the original amounts in totalPriceSet/subtotalPriceSet. */
+export function originalOrder(source:InvoiceSource):InvoiceSource|null{
+ const currency=source?.currentTotalPriceSet?.shopMoney?.currencyCode;
+ if(!source||source.edited||!currency||!source.subtotalPriceSet)return null;
+ if(units(source.totalRefundedSet,currency)===0&&!['REFUNDED','PARTIALLY_REFUNDED'].includes(source.displayFinancialStatus||''))return null;
+ if(!Array.isArray(source.lineItems?.nodes))return null;
+ const order=structuredClone(source),zero={...structuredClone(source.totalRefundedSet),shopMoney:{amount:'0.00',currencyCode:currency}};
+ if((zero as any).presentmentMoney)(zero as any).presentmentMoney={amount:'0.00',currencyCode:(zero as any).presentmentMoney.currencyCode};
+ order.lineItems.nodes=order.lineItems.nodes.map(item=>({...item,currentQuantity:item.quantity}));
+ order.currentTotalPriceSet=order.totalPriceSet;order.currentTotalTaxSet=order.totalTaxSet;order.currentSubtotalPriceSet=order.subtotalPriceSet!;
+ order.totalRefundedSet=zero;order.displayFinancialStatus='PAID';
+ return order;
+}
 // Platform-only current-order validation. The legacy/Sablen validator is unchanged.
 export function checkInvoice(source:InvoiceSource){
+ const original=originalOrder(source);
+ if(original)return originalCheck(original);
  if(!source?.edited)return originalCheck(source);
  const order=structuredClone(source),currency=order.currentTotalPriceSet?.shopMoney?.currencyCode;
  if(!currency)return originalCheck(source);
@@ -48,4 +64,20 @@ export function checkInvoice(source:InvoiceSource){
  order.totalPriceSet=order.currentTotalPriceSet;order.totalTaxSet=order.currentTotalTaxSet;
  const checked=originalCheck(order);
  return {...checked,taxesIncluded:source.taxesIncluded};
+}
+
+/** The order in the customer's currency (presentment money), e.g. SEK for a Swedish order: every amount is
+ * replaced by the amount the customer paid. Booking keeps using the shop currency. */
+export function inPresentment(source:InvoiceSource):InvoiceSource{
+ const swap=(value:unknown):unknown=>{
+  if(Array.isArray(value))return value.map(swap);
+  if(!value||typeof value!=='object')return value;
+  const o=value as Record<string,unknown>;
+  if('shopMoney' in o&&'presentmentMoney' in o){
+   if(!o.presentmentMoney)throw new InvoiceCheckError('Shopify mangler beløb i kundens valuta.');
+   return {shopMoney:o.presentmentMoney};
+  }
+  return Object.fromEntries(Object.entries(o).map(([k,v])=>[k,swap(v)]));
+ };
+ return swap(source) as InvoiceSource;
 }
