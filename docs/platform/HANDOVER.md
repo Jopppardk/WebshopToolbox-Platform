@@ -1,6 +1,6 @@
 # Overlevering
 
-> 3. oktober 2026 – Forsendelser (Tools) er implementeret og lokalt testet. Siden viser track & trace fra Shopifys afsendelser med trin, fragtfirma og returvarsel for pakkeshoppakker. Den læser kun og kræver ingen migration. Den er ikke udgivet, og der er ingen kontrol mod en rigtig butik endnu. Se [SHIPMENTS.md](SHIPMENTS.md).
+> 4. oktober 2026 – Forsendelser (Tools) er udgivet på Dev og Prod fra main `57ed4c9` i run `37179658591`. Tests, builds og begge HTTP-gates er bestået. Samme udgivelse indeholder #84: emballagens periode og historikkens startdato valideres mod dansk dato. Siden læser kun data og kræver ingen migration. Kontrol mod en rigtig butik med fragtapp mangler. Se [SHIPMENTS.md](SHIPMENTS.md).
 
 > 3. oktober 2026 – Synkroniseringsinterval: Indstillinger, status (`/admin/sync-status`) og den automatiske kørsel bruger nu samme regel, `normalizeSyncInterval`: 5, 15, 30 eller 60 minutter, alt andet bliver til 15. Siden #50 tillod indstillingerne og den automatiske kørsel 5 minutter, mens status rundede op til mindst 15. Derfor stod "Ændringen er ikke gemt endnu" permanent ved et gemt 5-minutters interval. En kørsel med 5 minutter er uændret; ældre ugyldige værdier (fx 7 eller 10) kører nu med 15. Implementeret og testet i PR #81; driftsstatus fremgår af udgivelseskørslen.
 
