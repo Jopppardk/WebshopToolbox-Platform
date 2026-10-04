@@ -1,6 +1,6 @@
 # Shipmondo – tracking
 
-4. oktober 2026. Implementeret på `platform/shipmondo-tracking`, ikke udgivet.
+4. oktober 2026. Udgivet til dev og prod fra PR #86, SHA `1a509aad68f8bc2a96e3cb554820c6d1e0a53ac5`.
 
 ## Leverance
 
@@ -54,11 +54,21 @@ trackingnumre, fejlede API-oplysninger, revisionskontrol, JWT-signatur/algoritme
 ugyldige datoer, dubletter, tvetydige trackingnumre, ukendt status og tilbagekaldt webhook.
 Verificeret lokalt: 445/445 tests, begge typechecks, Tier 1- og hovedbuild,
 konfigurationskontroller samt de tre obligatoriske deployment-dry-runs er bestået.
-GitHub CI er ikke startet. Ingen rigtige Shipmondo-nøgler eller
-forsendelser er brugt. Ingen remote migration eller deployment udført.
+GitHub CI og releasekørsel [37185020870](https://github.com/Jopppardk/WebshopToolbox-Platform/actions/runs/37185020870) er bestået, inklusive begge HTTP-gates. Ingen rigtige Shipmondo-nøgler eller forsendelser er brugt.
 
-Før live-godkendelse: gennemfør migrationens backup/kopiprøve, udgiv til dev, tilslut
-en separat testkonto og opret webhook. Kontrollér Shipmondos faktiske webhook-format,
+Migration 0039 er anvendt på begge D1-databaser efter syntetisk kopiprøve med alle 57 eksisterende tabeller bevaret og ingen FK-fejl. Remote FK-kontrol var også uden fejl. Gendannelsesbogmærker før migration:
+
+- Dev: `00000083-00000002-000050fa-f54e35656fa03b3bf1769c385ad367a7`
+- Prod: `0000066d-0000003a-000050fa-f1778b4ac2f4edee0800836b96735f01`
+
+Worker-versioner:
+
+- Dev: `b4758d8a-c29e-4aa9-a5b7-e9adddf3c1a7`
+- Prod: `b50ff209-c4a1-45b6-a6d5-ee2dc2a58857`
+
+Efterkontrol: healthz og login 200, ordre-API 401 anonymt og admin viderestillet til Access. Dev har fortsat blokeret bogføring/kundemail; prod bevarer eksisterende aktivering. Ingen økonomiske testwrites.
+
+Før godkendelse af faktisk tracking: tilslut en separat testkonto på dev og opret webhook. Kontrollér Shipmondos faktiske webhook-format,
 testlevering og svartid under tre sekunder. Kontoens trackingabonnement og transportørens
 dækning skal kontrolleres med en faktisk pakke. End-to-end live og visuel kontrol udestår.
 
