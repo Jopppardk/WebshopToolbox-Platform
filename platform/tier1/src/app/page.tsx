@@ -8,6 +8,7 @@ import { IntegrationLibrary, RemoveIntegration, useIntegrationLibrary } from '@/
 import { IntegrationCard } from '@/components/integration-card';
 import { FlatpayConnection } from '@/components/flatpay-connection';
 import { EmballageConnection } from '@/components/emballage-connection';
+import { ShipmondoConnection } from '@/components/shipmondo-connection';
 import { ViaBillConnection } from '@/components/viabill-connection';
 import { PensopayConnection } from '@/components/pensopay-connection';
 import { HistorySettings } from '@/components/history-settings';
@@ -774,6 +775,7 @@ function Settings({
   const [connectionMessage, setConnectionMessage] = useState('');
   const [connecting, setConnecting] = useState<'shopify' | 'dinero' | null>(null);
   const library = useIntegrationLibrary();
+  const [expandedShipmondo,setExpandedShipmondo]=useState(false);
   const [expandedEmballage, setExpandedEmballage] = useState(initialIntegration==='emballage');
   const [expandedFlatpay,setExpandedFlatpay]=useState(false);
   const [expandedViaBill, setExpandedViaBill] = useState(false);
@@ -983,8 +985,9 @@ function Settings({
       </fieldset>}
       {mode === 'integrations' && <>
       <HistorySettings />
-      <IntegrationLibrary state={library} onAdded={id => { if(id==='flatpay')setExpandedFlatpay(true); else if (id === 'viabill') setExpandedViaBill(true); else if (id === 'pensopay') setExpandedPensopay(true); else if(id === 'emballage') setExpandedEmballage(true); else setExpandedIntegration(id); }} />
+      <IntegrationLibrary state={library} onAdded={id => { if(id==='shipmondo')setExpandedShipmondo(true); else if(id==='flatpay')setExpandedFlatpay(true); else if (id === 'viabill') setExpandedViaBill(true); else if (id === 'pensopay') setExpandedPensopay(true); else if(id === 'emballage') setExpandedEmballage(true); else setExpandedIntegration(id); }} />
       <div className="mb-8 grid items-start gap-3 md:grid-cols-2">
+        {library.selection?.selected.includes('shipmondo') && <ShipmondoConnection initialExpanded={expandedShipmondo} onConnected={()=>{void library.refresh();void onConnectionsChanged();}}/>}
         {integrations.map(({ name, provider, detail, icon: Icon, connected: isConnected }) => (
           <IntegrationCard key={name} name={name} description={detail} icon={Icon} connected={isConnected} expanded={expandedIntegration===provider} onToggle={()=>setExpandedIntegration(current=>current===provider?null:provider)} panelId={`${provider}-connection-panel`} >
                 <p className="mb-4 text-xs text-muted-foreground">{provider === 'shopify' ? 'Den installerede app udveksler automatisk oplysningerne til et kortlivet adgangstoken. Testen læser kun butikkens navn.' : 'Forbind Dinero for at hente økonomi og kontoplan samt overføre bilag.'}</p>

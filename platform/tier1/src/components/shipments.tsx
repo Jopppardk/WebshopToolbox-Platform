@@ -36,6 +36,7 @@ function StatusCell({ s, open, onToggle, today }: { s: Shipment; open: boolean; 
       <span className={done ? 'text-emerald-800' : ''}>{step.label}</span>
       <ChevronDown className={'ml-auto size-4 shrink-0 text-muted-foreground transition-transform ' + (open ? 'rotate-180' : '')}/>
     </span>
+    {s.shipmondo && <span className="text-xs text-muted-foreground">Shipmondo: {s.shipmondo.text || s.shipmondo.status}</span>}
     <span className="flex gap-1" aria-hidden>{s.steps.map((x, i) => <span key={x.key} className={'h-1.5 flex-1 rounded-full ' + (i <= index ? done ? 'bg-emerald-600' : 'bg-[#9a7440]' : 'bg-[#ece6dc]')}/>)}</span>
     {(warning || s.issue) && <span className={'flex items-center gap-1 text-[11px] font-medium ' + (warning?.tone === 'red' || (!warning && s.issue) ? 'text-red-700' : 'text-amber-700')}><AlertTriangle className="size-3.5 shrink-0"/>{warning?.text || s.issue}</span>}
   </button>;
@@ -44,6 +45,7 @@ function StatusCell({ s, open, onToggle, today }: { s: Shipment; open: boolean; 
 function Timeline({ s, today }: { s: Shipment; today: string }) {
   const index = s.steps.findIndex(x => x.key === s.current), warning = returnWarning(s, today), deadline = pickupDeadline(s, today);
   return <div className="grid gap-4 px-4 py-4 sm:px-6">
+    {s.shipmondo && <p className="rounded-lg border p-3 text-xs"><strong>Shipmondo</strong> · {s.shipmondo.text || s.shipmondo.status} · {formatDateTime(s.shipmondo.at)} · Forsendelses-ID: {s.shipmondo.shipmentId}</p>}
     <ol className="grid gap-3 sm:grid-cols-[repeat(auto-fit,minmax(130px,1fr))] sm:gap-0">
       {s.steps.map((x, i) => <li key={x.key} className="relative flex items-start gap-3 sm:flex-col sm:items-center sm:text-center">
         {i > 0 && <span aria-hidden className={'absolute top-3 right-1/2 hidden h-0.5 w-full sm:block ' + (i <= index ? 'bg-[#9a7440]' : 'bg-[#ece6dc]')}/>}
@@ -148,6 +150,7 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
       <p className="flex items-center gap-2"><Info className="size-4 shrink-0"/>Webshop: {shopName}{data ? ` · Hentet ${formatDateTime(data.checkedAt)} · Ordrer fra ${formatDate(data.since)}` : ''}</p>
       <Button variant="link" className="h-auto p-0 text-xs" onClick={onIntegrations}>Se integrationer<ArrowUpRight className="size-3"/></Button>
     </div>
+    {data?.shipmondo && <p className="mb-4 text-xs text-muted-foreground">{data.shipmondo.lastEventAt ? `Shipmondo: seneste modtagelse ${formatDateTime(data.shipmondo.lastEventAt)}. ` : 'Shipmondo er forbundet, men afventer første trackinghændelse. '}Status opdateres normalt én gang dagligt hos Shipmondo. Pakker uden match viser Shopify-data.{data.shipmondo.limited?' Kun de seneste 5.000 trackinghændelser er medtaget.':''}</p>}
     <div className="mb-4 grid gap-3 sm:grid-cols-3">
       {([['moving', 'På vej', counts.moving, Truck, 'text-[#567da3]'], ['waiting', 'Venter i pakkeshop', counts.waiting, MapPin, 'text-[#9a7440]'], ['return', 'Returneres snart', counts.return, AlertTriangle, counts.return ? 'text-amber-700' : 'text-muted-foreground']] as const).map(([key, label, n, Icon, color]) =>
         <button type="button" key={key} onClick={() => setFilter(filter === key ? 'all' : key)} aria-pressed={filter === key} className={'flex items-center justify-between rounded-2xl border bg-white p-4 text-left shadow-sm transition ' + (filter === key ? 'border-[#9a7440] ring-2 ring-[#9a7440]/20' : 'hover:bg-[#fcfbf9]')}>

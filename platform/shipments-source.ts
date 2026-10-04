@@ -1,3 +1,4 @@
+import { enrichShipmondo } from './shipmondo';
 import { requireCompany, requireWebshop } from './auth';
 import { shopAccess, orderQuery } from './invoice-source';
 import { dataStartDate } from './tier1-history';
@@ -63,6 +64,7 @@ export async function handleShipments(request: Request, env: PlatformEnv, actor:
   if (!saved) throw new HttpError(409, 'Forbind webshoppen under Integrationer for at se forsendelser.');
   const start = await dataStartDate(env, company, shop, 'shopify');
   // Tracking changes during the day, so the list is reused for five minutes; Opdatér fetches again after a minute.
-  return reply(await cachedRead(env, company, cache, ['shopify', shop, days], [saved.shop_domain, saved.credentials_encrypted, start, danishDate()],
-    () => readShipments(env, company, shop, days, start), () => 5 * 60000, force));
+  const list = await cachedRead(env, company, cache, ['shopify', shop, days], [saved.shop_domain, saved.credentials_encrypted, start, danishDate()],
+    () => readShipments(env, company, shop, days, start), () => 5 * 60000, force);
+  return reply(await enrichShipmondo(env,company,shop,list));
 }
