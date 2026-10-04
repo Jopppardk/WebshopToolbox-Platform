@@ -33,19 +33,26 @@ function StatusCell({ s, open, onToggle, today }: { s: Shipment; open: boolean; 
   return <button type="button" onClick={onToggle} aria-expanded={open} className="group flex w-full min-w-48 flex-col gap-1.5 rounded-lg px-2 py-1.5 text-left hover:bg-[#faf8f5]">
     <span className="flex items-center gap-2 text-sm font-medium">
       {done ? <PackageCheck className="size-4 shrink-0 text-emerald-700"/> : s.current === 'ready' ? <Store className="size-4 shrink-0 text-[#9a7440]"/> : <Truck className="size-4 shrink-0 text-[#567da3]"/>}
-      <span className={done ? 'text-emerald-800' : ''}>{step.label}</span>
+      <span className={done ? 'text-emerald-800' : ''}>{s.publicTracking?.checkedAt ? s.publicTracking.text : step.label}</span>
       <ChevronDown className={'ml-auto size-4 shrink-0 text-muted-foreground transition-transform ' + (open ? 'rotate-180' : '')}/>
     </span>
+    {s.publicTracking && <span className="text-[11px] text-muted-foreground">{s.publicTracking.checkedAt ? `Tracking hentet ${formatDateTime(s.publicTracking.checkedAt)}` : s.publicTracking.text}{s.publicTracking.error ? ' · Opdatering fejlede' : ''}</span>}
     {s.shipmondo && <span className="text-xs text-muted-foreground">Shipmondo: {s.shipmondo.text || s.shipmondo.status}</span>}
     <span className="flex gap-1" aria-hidden>{s.steps.map((x, i) => <span key={x.key} className={'h-1.5 flex-1 rounded-full ' + (i <= index ? done ? 'bg-emerald-600' : 'bg-[#9a7440]' : 'bg-[#ece6dc]')}/>)}</span>
     {(warning || s.issue) && <span className={'flex items-center gap-1 text-[11px] font-medium ' + (warning?.tone === 'red' || (!warning && s.issue) ? 'text-red-700' : 'text-amber-700')}><AlertTriangle className="size-3.5 shrink-0"/>{warning?.text || s.issue}</span>}
   </button>;
 }
 
+function TrackingNotice({s}:{s:Shipment}) {
+  const t=s.publicTracking;if(!t)return null;
+  return <p className="rounded-lg border p-3 text-xs text-muted-foreground"><strong>Tracking via Shipmondo</strong> · {t.text}{t.checkedAt ? ` · Hentet ${formatDateTime(t.checkedAt)}` : ' · Shopify-oplysninger vises indtil videre.'}{t.shipmentId ? ` · Forsendelses-ID: ${t.shipmentId}` : ''}{t.error && <span className="mt-1 block text-amber-800">{t.error}</span>}</p>;
+}
+
 function Timeline({ s, today }: { s: Shipment; today: string }) {
   const index = s.steps.findIndex(x => x.key === s.current), warning = returnWarning(s, today), deadline = pickupDeadline(s, today);
   return <div className="grid gap-4 px-4 py-4 sm:px-6">
     {s.shipmondo && <p className="rounded-lg border p-3 text-xs"><strong>Shipmondo</strong> · {s.shipmondo.text || s.shipmondo.status} · {formatDateTime(s.shipmondo.at)} · Forsendelses-ID: {s.shipmondo.shipmentId}</p>}
+    <TrackingNotice s={s}/>
     <ol className="grid gap-3 sm:grid-cols-[repeat(auto-fit,minmax(130px,1fr))] sm:gap-0">
       {s.steps.map((x, i) => <li key={x.key} className="relative flex items-start gap-3 sm:flex-col sm:items-center sm:text-center">
         {i > 0 && <span aria-hidden className={'absolute top-3 right-1/2 hidden h-0.5 w-full sm:block ' + (i <= index ? 'bg-[#9a7440]' : 'bg-[#ece6dc]')}/>}
@@ -77,6 +84,7 @@ function TrackingDialog({ s, onClose, today }: { s: Shipment | null; onClose: ()
             {s.trackingNumber && <Button variant="outline" size="sm" onClick={() => { void navigator.clipboard?.writeText(s.trackingNumber!).then(() => setCopied(true)); }}>{copied ? <Check/> : <Copy/>}{copied ? 'Kopieret' : 'Kopiér'}</Button>}
           </div>
           {warning && <p className={'flex items-start gap-2 rounded-lg px-3 py-2 text-xs ' + (warning.tone === 'red' ? 'bg-red-50 text-red-800' : 'bg-amber-50 text-amber-900')}><AlertTriangle className="mt-0.5 size-3.5 shrink-0"/><span><b>{warning.text}.</b> {warning.detail}</span></p>}
+          <TrackingNotice s={s}/>
           <section aria-label="Hændelser">
             <h3 className="mb-2 text-xs font-semibold">Hændelser fra fragtfirmaet</h3>
             {s.events.length ? <ol className="relative grid gap-3 border-l border-[#ece6dc] pl-4">{[...s.events].reverse().map((e, i) => <li key={e.at + e.status + i} className="relative">
@@ -123,6 +131,7 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
     })();
     return () => controller.abort();
   }, [days, revision, webshopId]);
+  useEffect(() => { const timer=window.setInterval(()=>{if(document.visibilityState==='visible')setRevision(v=>v+1);},60000);return ()=>window.clearInterval(timer); },[]);
   const all = useMemo(() => data?.shipments || [], [data]);
   const counts = useMemo(() => ({
     moving: all.filter(s => s.current !== 'delivered' && s.current !== 'ready').length,
@@ -150,7 +159,7 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
       <p className="flex items-center gap-2"><Info className="size-4 shrink-0"/>Webshop: {shopName}{data ? ` · Hentet ${formatDateTime(data.checkedAt)} · Ordrer fra ${formatDate(data.since)}` : ''}</p>
       <Button variant="link" className="h-auto p-0 text-xs" onClick={onIntegrations}>Se integrationer<ArrowUpRight className="size-3"/></Button>
     </div>
-    {data?.shipmondo && <p className="mb-4 text-xs text-muted-foreground">{data.shipmondo.lastEventAt ? `Shipmondo: seneste modtagelse ${formatDateTime(data.shipmondo.lastEventAt)}. ` : 'Shipmondo er forbundet, men afventer første trackinghændelse. '}Status opdateres normalt én gang dagligt hos Shipmondo. Pakker uden match viser Shopify-data.{data.shipmondo.limited?' Kun de seneste 5.000 trackinghændelser er medtaget.':''}</p>}
+    <p className="mb-4 text-xs text-muted-foreground">Tracking hentes fra Shipmondos offentlige trackingside på tværs af fragtfirmaer. Ingen API-nøgle eller Pro-abonnement kræves. Aktive pakker kontrolleres højst én gang i timen; Opdatér tilsidesætter ikke intervallet.</p>
     <div className="mb-4 grid gap-3 sm:grid-cols-3">
       {([['moving', 'På vej', counts.moving, Truck, 'text-[#567da3]'], ['waiting', 'Venter i pakkeshop', counts.waiting, MapPin, 'text-[#9a7440]'], ['return', 'Returneres snart', counts.return, AlertTriangle, counts.return ? 'text-amber-700' : 'text-muted-foreground']] as const).map(([key, label, n, Icon, color]) =>
         <button type="button" key={key} onClick={() => setFilter(filter === key ? 'all' : key)} aria-pressed={filter === key} className={'flex items-center justify-between rounded-2xl border bg-white p-4 text-left shadow-sm transition ' + (filter === key ? 'border-[#9a7440] ring-2 ring-[#9a7440]/20' : 'hover:bg-[#fcfbf9]')}>
@@ -186,7 +195,7 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
         </table></div>}
       {data?.truncated && <p className="border-t border-[#f0ece6] bg-amber-50 px-5 py-3 text-xs text-amber-900">Der er flere end 300 afsendte ordrer i perioden. Vælg en kortere periode for at se alle.</p>}
     </section>
-    <p className="mt-6 text-xs leading-6 text-muted-foreground">Status og datoer er det, fragtfirmaet eller fragtappen har sendt til Shopify; trin uden oplysninger vises som “Dato ikke oplyst”. Fristen for afhentning er et skøn: dagen pakken blev klar i pakkeshoppen plus {carriers.postnord.holdDays} dages opbevaring. Fragtfirmaet kan have en anden frist for den enkelte pakke. Listen genbruges i op til 5 minutter.</p>
+    <p className="mt-6 text-xs leading-6 text-muted-foreground">Status og hændelser hentes fra Shipmondos trackingside. Hvis opslag mangler, vises Shopify-oplysninger med en tydelig markering. Trin uden tidspunkt vises som “Dato ikke oplyst”. Fristen for afhentning er et skøn: dagen pakken blev klar i pakkeshoppen plus {carriers.postnord.holdDays} dages opbevaring. Fragtfirmaet kan have en anden frist for den enkelte pakke. Listen genbruges i op til 5 minutter.</p>
     <TrackingDialog s={tracking} onClose={() => setTracking(null)} today={today}/>
   </div>;
 }

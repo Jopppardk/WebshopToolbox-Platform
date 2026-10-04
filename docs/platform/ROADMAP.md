@@ -1,5 +1,8 @@
 # Udviklingsplan
 
+> 4. oktober 2026 – Fælles tracking via offentlige Shipmondo-links: implementeret; udgivelse afventer CI/release. Ingen API-nøgle eller webhook kræves. DAO/GLS/PostNord/Bring og gyldige eksisterende Shipmondo-links bruger samme parser; flere pakkenumre vises separat. Scoped cache med fejltolerant snapshot, timeinterval og baggrundsopdatering af registrerede pakker i prod. Migration 0040. Se [PUBLIC-TRACKING.md](PUBLIC-TRACKING.md).
+
+
 
 > 4. oktober 2026 – Shipmondo-tracking er implementeret lokalt på platform/shipmondo-tracking: krypteret webshopforbindelse, signeret Shipment Monitor-webhook og berigelse af Forsendelser. Migration 0039. Ikke udgivet; rigtig API-/webhook- og browserkontrol udestår. Se [SHIPMONDO.md](SHIPMONDO.md).
 

@@ -1,5 +1,7 @@
 # Shipmondo – tracking
 
+> Opdatering 4. oktober 2026: Forsendelser bruger nu offentlig tracking uden webhook eller API-nøgle. Nedenstående beskriver den tidligere webhook-adapter. Se PUBLIC-TRACKING.md for den aktuelle kilde og udgivelsesstatus.
+
 4. oktober 2026. Implementeret på `platform/shipmondo-tracking`, ikke udgivet.
 
 ## Leverance
