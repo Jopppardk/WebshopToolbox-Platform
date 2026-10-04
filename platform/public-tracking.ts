@@ -36,7 +36,9 @@ export function trackingTarget(s:Pick<Shipment,'trackingNumber'|'trackingUrl'|'c
 
 // The Danish public page supplies wall-clock timestamps, without an offset. Convert explicitly (including DST).
 export function trackingTime(value:unknown):string {
- const m=typeof value==='string' && value.match(/^(\d{4})\/(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+ const european=typeof value==='string' && value.match(/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2}):(\d{2})$/);
+ const normalized=european ? `${european[3]}/${european[2]}-${european[1]} ${european[4]}:${european[5]}:${european[6]}` : value;
+ const m=typeof normalized==='string' && normalized.match(/^(\d{4})\/(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
  if(!m)throw Error('date');
  const target=`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`, base=Date.parse(target+'Z');
  if(!Number.isFinite(base))throw Error('date');
@@ -106,8 +108,8 @@ export function applyPublicTracking(s:Shipment,row:Row|null):Shipment {
  if(data.confirmedBy==='shopify')return {...s,delivered:true,deliveredAt:data.deliveredAt||null,current:'delivered',issue:null,events:data.events,steps:s.steps.map(step=>({...step,reached:true,at:step.key==='delivered'?data.deliveredAt||null:step.at})),publicTracking:{checkedAt:null,error:null,state:'ok',text:data.text}};
  const last=data.events.at(-1)!;
  // Only verified statuses are mapped. Unknown provider statuses remain visible as text.
- const mapped:Record<string,StepKey>=Object.assign(Object.create(null),{INFORMED:'printed',EN_ROUTE:'transit',READY_FOR_PICKUP:'ready',DELIVERED:'delivered'});
- const current=mapped[data.status]||'printed', ready=data.events.find(e=>e.status==='READY_FOR_PICKUP')?.at||null;
+ const mapped:Record<string,StepKey>=Object.assign(Object.create(null),{INFORMED:'printed',EN_ROUTE:'transit',READY_FOR_PICKUP:'ready',AVAILABLE_FOR_DELIVERY:'ready',DELIVERED:'delivered'});
+ const current=mapped[data.status]||'printed', ready=data.events.find(e=>mapped[e.status]==='ready')?.at||null;
  const pickup=s.pickupPoint||Boolean(ready),delivered=data.status==='DELIVERED';
  const keys:StepKey[]=pickup?['printed','dropped','transit','ready','delivered']:['printed','dropped','transit','delivered'];
  const labels:Record<StepKey,string>={manual:'Afsluttet – manuelt håndteret',untracked:'Afventer trackingnummer',printed:'Registreret',dropped:'Indleveret til fragtfirmaet',transit:'Under transport',ready:'Klar i pakkeshop',delivered:pickup?'Afhentet af kunden':'Leveret hos kunden'};
