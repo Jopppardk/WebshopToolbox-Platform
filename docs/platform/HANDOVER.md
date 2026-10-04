@@ -1,5 +1,7 @@
 # Overlevering
 
+> 4. oktober 2026 – Shipmondo-forbindelsesrettelse: Cloudflare/workerd afviste `redirect:error` før netværkskaldet. Reproduceret lokalt i workerd. Kaldet bruger nu `manual`; 3xx afvises fortsat uden videresendelse af API-nøgler. Regressionstest kontrollerer bevarelse af eksisterende forbindelse ved redirect. Udgivelsesstatus følger PR/releasekørsel.
+
 
 > 4. oktober 2026 – Shipmondo-tracking er implementeret lokalt på platform/shipmondo-tracking: krypteret webshopforbindelse, signeret Shipment Monitor-webhook og berigelse af Forsendelser. Migration 0039. Ikke udgivet; rigtig API-/webhook- og browserkontrol udestår. Se [SHIPMONDO.md](SHIPMONDO.md).
 

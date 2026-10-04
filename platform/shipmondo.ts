@@ -19,9 +19,10 @@ export async function verifyShipmondo(credentials: Credentials) {
   const base = credentials.sandbox ? 'https://sandbox.shipmondo.com' : 'https://app.shipmondo.com';
   let response: Response;
   try { response = await fetch(base + '/api/public/v3/shipments?per_page=1&page=1', {
-    method: 'GET', redirect: 'error', signal: AbortSignal.timeout(12000),
+    method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(12000),
     headers: { Authorization: 'Basic ' + btoa(credentials.apiUser + ':' + credentials.apiKey), Accept: 'application/json' },
   }); } catch { throw new HttpError(502, 'Shipmondo kunne ikke kontaktes. Den tidligere forbindelse er bevaret.'); }
+  // Workers supports manual/follow only. Never follow a redirect carrying API credentials.
   if (!response.ok) {
     await response.body?.cancel();
     throw new HttpError(response.status === 429 ? 429 : 409, [401,403].includes(response.status) ? 'Shipmondo afviste API-bruger eller API-nøgle.' : response.status === 429 ? 'Shipmondo begrænser antallet af kald. Vent et minut og prøv igen.' : 'Shipmondo kunne ikke kontrollere forbindelsen. Prøv igen senere.');
