@@ -1,8 +1,23 @@
 # Forsendelser (track & trace)
 
-Status 3. oktober 2026: implementeret og lokalt testet. Ikke udgivet. Ingen migration.
-Siden er kun afprøvet med syntetiske data og demodata. Den er ikke afprøvet mod en rigtig
-Shopify-butik med fragtapp.
+Status 4. oktober 2026: implementeret, testet og sat i drift på både dev og prod.
+PR [#83](https://github.com/Jopppardk/WebshopToolbox-Platform/pull/83) og
+[#84](https://github.com/Jopppardk/WebshopToolbox-Platform/pull/84) er flettet. Main
+`57ed4c9004e7709797183024afcf50957cf6ee1a` er udgivet i
+[run 37179658591](https://github.com/Jopppardk/WebshopToolbox-Platform/actions/runs/37179658591).
+Alle 443 tests, typechecks, builds og dry-runs er bestået. Dev blev udgivet og
+efterkontrolleret før prod, og begge HTTP-gates er bestået.
+
+- Dev-version: `0aa263d3-d69f-41eb-b11b-2d318b4e7523`.
+- Prod-version: `c83910d7-e59a-4028-bb02-858dce87a2cb`.
+
+Ingen migration. Siden er ikke afprøvet mod en rigtig Shopify-butik med fragtapp.
+Opbevaringstiderne er fortsat et skøn.
+
+Den første udgivelse ([run 37157854663](https://github.com/Jopppardk/WebshopToolbox-Platform/actions/runs/37157854663))
+stoppede i tests før deployment. Tre ældre tests og to valideringer brugte UTC-dato i
+stedet for dansk dato og fejlede mellem kl. 00 og 02 dansk tid. Det er rettet i #84:
+emballagens periode og historikkens startdato valideres nu mod den danske dato.
 
 ## Funktion
 
@@ -89,8 +104,7 @@ Demokontoen viser fiktive forsendelser og kalder ikke Shopify.
 
 ## Næste skridt
 
-1. CI og gennemgang.
-2. Udgivelse til dev og kontrol mod en rigtig butik med fragtapp:
+1. Kontrol mod en rigtig butik med fragtapp:
    - at hændelser og trackinglinks faktisk kommer igennem
    - at fragtmetodens navn genkendes som pakkeshop
-3. Bekræft opbevaringstiderne pr. fragtfirma.
+2. Bekræft opbevaringstiderne pr. fragtfirma.
