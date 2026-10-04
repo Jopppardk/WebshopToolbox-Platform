@@ -5,6 +5,7 @@ export type StepKey = 'printed' | 'dropped' | 'transit' | 'ready' | 'delivered';
 export type ShipmentStep = { key: StepKey; label: string; at: string | null; reached: boolean };
 export type ShipmentEvent = { status: string; label: string; at: string; message: string | null };
 export type Shipment = {
+  publicTracking?: {checkedAt:string|null;error:string|null;state:'ok'|'pending'|'error'|'unavailable';text:string;shipmentId?:string};
   shipmondo?: { shipmentId: string; status: string; text: string; at: string };
   id: string; orderId: string; orderName: string; test: boolean; customer: string; city: string; country: string | null;
   carrier: Carrier | null; carrierName: string | null; trackingNumber: string | null; trackingUrl: string | null;
@@ -108,7 +109,11 @@ export function buildShipment(order: RawOrder, f: RawFulfillment): Shipment {
 /** Successful fulfillments of an order, newest first. Cancelled orders and fulfillments are left out. */
 export function orderShipments(order: RawOrder): Shipment[] {
   if (order.cancelledAt) return [];
-  return (order.fulfillments || []).filter(f => f && f.status === 'SUCCESS' && validTime(f.createdAt)).map(f => buildShipment(order, f));
+  return (order.fulfillments || []).filter(f => f && f.status === 'SUCCESS' && validTime(f.createdAt)).flatMap(f => {
+    const parcels=(f.trackingInfo||[]).filter(t=>t.number||t.url);
+    if(parcels.length<=1)return [buildShipment(order,f)];
+    return parcels.map((t,i)=>buildShipment(order,{...f,id:f.id+':parcel:'+i,trackingInfo:[t]}));
+  });
 }
 
 const day = (value: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Copenhagen', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));

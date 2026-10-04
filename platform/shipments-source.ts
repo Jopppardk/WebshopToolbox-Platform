@@ -1,4 +1,4 @@
-import { enrichShipmondo } from './shipmondo';
+import { enrichPublicTracking } from './public-tracking';
 import { requireCompany, requireWebshop } from './auth';
 import { shopAccess, orderQuery } from './invoice-source';
 import { dataStartDate } from './tier1-history';
@@ -8,7 +8,7 @@ import { orderShipments, shipmentDays, type RawOrder, type Shipment, type Shipme
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 
 // Forsendelser is read-only: Shopify fulfillments and their tracking, never an order, booking or receipt write.
-const fulfillmentFields = (first: number) => `fulfillments(first:${first}){id createdAt status displayStatus inTransitAt deliveredAt trackingInfo(first:2){company number url} events(first:20,sortKey:HAPPENED_AT,reverse:true){nodes{status happenedAt message}}}`;
+const fulfillmentFields = (first: number) => `fulfillments(first:${first}){id createdAt status displayStatus inTransitAt deliveredAt trackingInfo(first:100){company number url} events(first:20,sortKey:HAPPENED_AT,reverse:true){nodes{status happenedAt message}}}`;
 const orderFields = 'id name test cancelledAt shippingAddress{name city countryCodeV2} billingAddress{name city} shippingLine{title code source carrierIdentifier}';
 // A shipment updates the order, so orders updated in the period include every order shipped in it, also orders created earlier.
 const query = `query ShipmentOrders($after:String,$query:String!){orders(first:10,after:$after,query:$query,sortKey:UPDATED_AT,reverse:true){nodes{${orderFields} ${fulfillmentFields(3)}} pageInfo{hasNextPage endCursor}}}`;
@@ -66,5 +66,5 @@ export async function handleShipments(request: Request, env: PlatformEnv, actor:
   // Tracking changes during the day, so the list is reused for five minutes; Opdatér fetches again after a minute.
   const list = await cachedRead(env, company, cache, ['shopify', shop, days], [saved.shop_domain, saved.credentials_encrypted, start, danishDate()],
     () => readShipments(env, company, shop, days, start), () => 5 * 60000, force);
-  return reply(await enrichShipmondo(env,company,shop,list));
+  return reply(await enrichPublicTracking(env,company,shop,list,JSON.stringify([saved.shop_domain,saved.credentials_encrypted])));
 }
