@@ -1,5 +1,7 @@
 # Overlevering
 
+> Trackingformat: DAO AVAILABLE_FOR_DELIVERY mappes nu til klar i pakkeshop, også for gemte snapshots. GLS/PostNord dd/MM/yyyy HH:mm:ss accepteres med samme strikte kalender-/Copenhagen-validering som DAO. Bekræftet på tre brugerautoriserede opslag; persondata gemmes ikke som fixtures. Implementeret; CI/release følger PR.
+
 > Forsendelser uden trackingnummer: succesfuld Shopify-fulfillment vises som Afsluttet – manuelt håndteret, ikke Udskrevet/Leveret. Ingen transporttrin, returvarsel, tracking-refresh eller På vej-optælling. Cacheversion hævet; senere tilføjet nummer behandles normalt. Implementeret; CI og udgivelse følger PR/workflow.
 
 > Manuel tracking: Hent ny status på hver ikke-leveret pakke. Ét minuts pause mellem forsøg, fælles lease med cron og kun serverfundne forsendelser i brugerens webshop/periode. Fejltekst skelnes fra afventer første opslag. Implementeret; udgivelsesbevis følger PR/workflow.
