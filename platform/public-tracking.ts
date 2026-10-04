@@ -3,7 +3,8 @@ import type { Shipment, ShipmentList, ShipmentEvent, StepKey } from './tier1/src
 
 const hour = 3600000;
 const host = 'https://track.shipmondo.com';
-const canonical = (carrier: string) => ({postnord:'pdk',post_nord:'pdk',gls_dk:'gls'} as Record<string,string>)[carrier] || carrier;
+const aliases = new Map([['postnord','pdk'],['post_nord','pdk'],['gls_dk','gls']]);
+const canonical = (carrier: string) => aliases.get(carrier) || carrier;
 export type TrackingTarget = {url:string;carrier:string;number:string};
 export type PublicTracking = {status:string;text:string;shipmentId:string;events:ShipmentEvent[]};
 type Row = {company_id:string;webshop_id:string;parcel_key:string;source_key:string;url:string;carrier:string;tracking_number:string;shipped_at:string;data_json:string|null;checked_at:string|null;attempted_at:string|null;error:string|null;next_check:number;terminal:number;expires_at:number};
@@ -101,7 +102,7 @@ export function applyPublicTracking(s:Shipment,row:Row|null):Shipment {
  const data=JSON.parse(row.data_json) as PublicTracking;
  const last=data.events.at(-1)!;
  // Only verified statuses are mapped. Unknown provider statuses remain visible as text.
- const mapped:Record<string,StepKey>={INFORMED:'printed',EN_ROUTE:'transit',READY_FOR_PICKUP:'ready',DELIVERED:'delivered'};
+ const mapped:Record<string,StepKey>=Object.assign(Object.create(null),{INFORMED:'printed',EN_ROUTE:'transit',READY_FOR_PICKUP:'ready',DELIVERED:'delivered'});
  const current=mapped[data.status]||'printed', ready=data.events.find(e=>e.status==='READY_FOR_PICKUP')?.at||null;
  const pickup=s.pickupPoint||Boolean(ready),delivered=data.status==='DELIVERED';
  const keys:StepKey[]=pickup?['printed','dropped','transit','ready','delivered']:['printed','dropped','transit','delivered'];
