@@ -169,16 +169,20 @@ async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promi
     const boundary=[sourceDate,dineroDate].sort()[1];
     const table=provider==='shopify'?(module==='order_refunds'?'order_refunds':'operation_snapshots'):'payment_records',filter=provider==='shopify'?'s.module=?':'s.kind=? AND s.provider=?';
     // Orders wait until their market is known, and only domestic ones are invoiced, mailed or booked (see order-markets.ts).
-    const eligible=module==='orders'?" AND "+domesticOrderSql+" AND COALESCE(json_extract(s.payload_json,'$.test'),0)=0 AND json_extract(s.payload_json,'$.cancelledAt') IS NULL AND json_extract(s.payload_json,'$.displayFulfillmentStatus')='FULFILLED' AND substr((SELECT max(json_extract(f.value,'$.createdAt')) FROM json_each(s.payload_json,'$.fulfillments') f WHERE json_extract(f.value,'$.status')='SUCCESS'),1,10)>=?"
+    // An order that is already finished for this job is not checked again: a later refund or edit makes the
+    // invoice check refuse it, although its invoice was sent and its sale booked before.
+    const finished=job==='sales'?" AND NOT EXISTS(SELECT 1 FROM production_receipts r WHERE r.company_id=s.company_id AND r.webshop_id=s.webshop_id AND r.provider='shopify' AND r.module='orders' AND r.external_id=s.external_id AND (r.phase='booked' OR (r.phase='draft' AND ?=0))) AND NOT EXISTS(SELECT 1 FROM accounting_reconciliations r WHERE r.company_id=s.company_id AND r.webshop_id=s.webshop_id AND r.provider='shopify' AND r.module='orders' AND r.external_id=s.external_id)"
+     :job==='invoice'?" AND NOT EXISTS(SELECT 1 FROM platform_invoices i JOIN production_receipts r ON r.company_id=i.company_id AND r.webshop_id=i.webshop_id AND r.provider='invoice' AND r.module='email' AND r.external_id=i.id AND r.phase='accepted' WHERE i.company_id=s.company_id AND i.webshop_id=s.webshop_id AND i.external_id=s.external_id)":'';
+    const eligible=(module==='orders'?finished:'')+(module==='orders'?" AND "+domesticOrderSql+" AND COALESCE(json_extract(s.payload_json,'$.test'),0)=0 AND json_extract(s.payload_json,'$.cancelledAt') IS NULL AND json_extract(s.payload_json,'$.displayFulfillmentStatus')='FULFILLED' AND substr((SELECT max(json_extract(f.value,'$.createdAt')) FROM json_each(s.payload_json,'$.fulfillments') f WHERE json_extract(f.value,'$.status')='SUCCESS'),1,10)>=?"
      // Payouts are only booked once paid out; upcoming ones are skipped instead of counted as failures.
      // Refunds of domestic orders that add up (others are shown for control), never one the earlier flow booked;
      // credit notes are only mailed for refunds from the last 14 days, so customers never get an old one out of the blue.
      :module==='order_refunds'?" AND "+domesticOrderOfSql('s.order_id')+" AND NOT "+legacyRefundSql+" AND json_extract(s.payload_json,'$.problem') IS NULL"+(job==='order_refunds'?" AND "+saleBookedSql:'')+(job==='credit'?" AND s.occurred_at>=strftime('%Y-%m-%dT%H:%M:%SZ','now','-14 days')":'')
-     :module==='payouts'?" AND json_extract(s.payload_json,'$.status')='PAID'":provider==='flatpay'&&module==='payments'?" AND json_extract(s.payload_json,'$.paidDate') IS NOT NULL":'';
+     :module==='payouts'?" AND json_extract(s.payload_json,'$.status')='PAID'":provider==='flatpay'&&module==='payments'?" AND json_extract(s.payload_json,'$.paidDate') IS NOT NULL":'');
     const rows=(await db.prepare(`SELECT s.external_id,s.occurred_at,json_extract(s.payload_json,'$.name') name,json_extract(s.payload_json,'$.orderName') order_name FROM ${table} s
  LEFT JOIN production_attempts a ON a.company_id=s.company_id AND a.webshop_id=s.webshop_id AND a.job=? AND a.external_id=s.external_id
  WHERE s.company_id=? AND s.webshop_id=? AND ${filter}${eligible} AND substr(s.occurred_at,1,10)>=? AND COALESCE(a.next_attempt_at,0)<=?
- ORDER BY COALESCE(a.attempted_at,0),s.occurred_at,s.external_id LIMIT 10`).bind(job,company,id,...(provider==='shopify'?[module]:[module,provider]),...(module==='orders'?[plusDay(boundary,-1)]:[]),module==='orders'?'1970-01-01':plusDay(boundary,-1),Date.now()).all<any>()).results;
+ ORDER BY COALESCE(a.attempted_at,0),s.occurred_at,s.external_id LIMIT 10`).bind(job,company,id,...(provider==='shopify'?[module]:[module,provider]),...(job==='sales'?[book?1:0]:[]),...(module==='orders'?[plusDay(boundary,-1)]:[]),module==='orders'?'1970-01-01':plusDay(boundary,-1),Date.now()).all<any>()).results;
     for(const row of rows){await owns();const externalId=row.external_id;result.rows++;
      // Which post failed, so the bell says e.g. "Ordre #2701" instead of only the job.
      const short=String(externalId).split(/[/:]/).pop();
