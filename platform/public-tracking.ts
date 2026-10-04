@@ -97,7 +97,7 @@ async function refreshRow(env:PlatformEnv,row:Row){
 export function applyPublicTracking(s:Shipment,row:Row|null):Shipment {
  const target=trackingTarget(s);
  if(!target)return {...s,publicTracking:{checkedAt:null,error:null,state:'unavailable',text:'Automatisk tracking er ikke tilgængelig for dette pakkenummer.'}};
- if(!row?.data_json)return {...s,trackingUrl:target.url,publicTracking:{checkedAt:null,error:row?.error||null,state:row?.error?'error':'pending',text:'Afventer tracking fra Shipmondo.'}};
+ if(!row?.data_json)return {...s,trackingUrl:s.trackingUrl||target.url,publicTracking:{checkedAt:null,error:row?.error||null,state:row?.error?'error':'pending',text:'Afventer tracking fra Shipmondo.'}};
  const data=JSON.parse(row.data_json) as PublicTracking;
  const last=data.events.at(-1)!;
  // Only verified statuses are mapped. Unknown provider statuses remain visible as text.
@@ -108,7 +108,7 @@ export function applyPublicTracking(s:Shipment,row:Row|null):Shipment {
  const labels:Record<StepKey,string>={printed:'Registreret',dropped:'Indleveret til fragtfirmaet',transit:'Under transport',ready:'Klar i pakkeshop',delivered:pickup?'Afhentet af kunden':'Leveret hos kunden'};
  const times:Partial<Record<StepKey,string>>={};for(const e of data.events){const key=mapped[e.status];if(key&&!times[key])times[key]=e.at;}
  const index=keys.indexOf(current);
- return {...s,trackingUrl:target.url,events:data.events,current,pickupPoint:pickup,readyAt:ready,delivered,deliveredAt:delivered?last.at:null,
+ return {...s,trackingUrl:s.trackingUrl||target.url,events:data.events,current,pickupPoint:pickup,readyAt:ready,delivered,deliveredAt:delivered?last.at:null,
   issue:mapped[data.status]?null:data.text||data.status,
   steps:keys.map((key,i)=>({key,label:labels[key],at:times[key]||null,reached:i<=index})),
   publicTracking:{checkedAt:row.checked_at,error:row.error,state:row.error?'error':'ok',text:data.text||data.status,shipmentId:data.shipmentId}};
