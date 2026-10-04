@@ -1,7 +1,7 @@
 # Overlevering
 
 
-> 4. oktober 2026 – Shipmondo-tracking er implementeret lokalt på platform/shipmondo-tracking: krypteret webshopforbindelse, signeret Shipment Monitor-webhook og berigelse af Forsendelser. Migration 0039. Ikke udgivet; rigtig API-/webhook- og browserkontrol udestår. Se [SHIPMONDO.md](SHIPMONDO.md).
+> 4. oktober 2026 – Shipmondo-tracking er udgivet til dev og prod via PR #86, SHA 1a509aad, grøn releasekørsel 37185020870. Migration 0039 er anvendt på begge efter gendannelsesbogmærker og kopiprøve. 445 tests og begge HTTP-gates bestået. Krypteret webshopforbindelse, signeret Shipment Monitor-webhook og berigelse af Forsendelser. Rigtig API-/webhook- og browserkontrol udestår; kunden skal forbinde konto og oprette webhook. Se [SHIPMONDO.md](SHIPMONDO.md).
 
 > 3. oktober 2026 – Forsendelser (Tools) er implementeret og lokalt testet. Siden viser track & trace fra Shopifys afsendelser med trin, fragtfirma og returvarsel for pakkeshoppakker. Den læser kun og kræver ingen migration. Den er ikke udgivet, og der er ingen kontrol mod en rigtig butik endnu. Se [SHIPMENTS.md](SHIPMENTS.md).
 
