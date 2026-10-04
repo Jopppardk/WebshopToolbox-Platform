@@ -1,5 +1,7 @@
 # Overlevering
 
+> Forsendelser uden trackingnummer: succesfuld Shopify-fulfillment vises som Afsluttet – manuelt håndteret, ikke Udskrevet/Leveret. Ingen transporttrin, returvarsel, tracking-refresh eller På vej-optælling. Cacheversion hævet; senere tilføjet nummer behandles normalt. Implementeret; CI og udgivelse følger PR/workflow.
+
 > Manuel tracking: Hent ny status på hver ikke-leveret pakke. Ét minuts pause mellem forsøg, fælles lease med cron og kun serverfundne forsendelser i brugerens webshop/periode. Fejltekst skelnes fra afventer første opslag. Implementeret; udgivelsesbevis følger PR/workflow.
 
 > Trackinginterval: seks timer mellem forsøg, også for tidligere cacheposter med kortere next_check. Leveringsbekræftelser fra Shipmondo og Shopify stopper opslag, bevares ved udskiftning af credentials og ryddes ikke af cacheoprydning. Implementeret; udgivelsesbevis følger PR/workflow.

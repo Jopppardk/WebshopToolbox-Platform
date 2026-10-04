@@ -1,7 +1,7 @@
 // Forsendelser: track & trace from Shopify's fulfillments. Shared by the server (reading) and the portal (display).
 // Shopify only knows what the shipping app or carrier has reported; missing steps are shown as unknown, never guessed.
 export type Carrier = 'dao' | 'gls' | 'postnord' | 'bring';
-export type StepKey = 'printed' | 'dropped' | 'transit' | 'ready' | 'delivered';
+export type StepKey = 'printed' | 'dropped' | 'transit' | 'ready' | 'delivered' | 'manual' | 'untracked';
 export type ShipmentStep = { key: StepKey; label: string; at: string | null; reached: boolean };
 export type ShipmentEvent = { status: string; label: string; at: string; message: string | null };
 export type Shipment = {
@@ -76,12 +76,14 @@ export function buildShipment(order: RawOrder, f: RawFulfillment): Shipment {
   const tracking = (f.trackingInfo || []).find(t => t?.number || t?.url) || f.trackingInfo?.[0] || null;
   const line = order.shippingLine, method = [...new Set([line?.title?.trim(), line?.code?.trim()].filter(Boolean))].join(' · ') || null;
   const trackingUrl = safeUrl(tracking?.url);
+  const trackingNumber = (tracking?.number || '').trim() || null;
+  const manual = !trackingNumber && f.status === 'SUCCESS';
   const carrier = detectCarrier(tracking?.company, trackingUrl, line?.carrierIdentifier, line?.source, line?.title, line?.code);
   const display = f.displayStatus || '';
   const readyAt = last(events, 'READY_FOR_PICKUP');
   const pickupPoint = Boolean(readyAt) || display === 'READY_FOR_PICKUP' || display === 'PICKED_UP' || isPickupPoint(method);
   const deliveredAt = (validTime(f.deliveredAt) ? f.deliveredAt : null) || first(events, 'DELIVERED');
-  const delivered = Boolean(deliveredAt) || display === 'DELIVERED' || display === 'PICKED_UP';
+  const delivered = !manual && (Boolean(deliveredAt) || display === 'DELIVERED' || display === 'PICKED_UP');
   const raw: Array<[StepKey, string, string | null, boolean]> = [
     ['printed', 'Udskrevet', first(events, 'LABEL_PRINTED', 'LABEL_PURCHASED') || f.createdAt, true],
     ['dropped', pickupPoint ? 'Indleveret i pakkeshop' : 'Indleveret til fragtfirmaet', first(events, 'CARRIER_PICKED_UP'), display === 'CARRIER_PICKED_UP'],
@@ -100,8 +102,10 @@ export function buildShipment(order: RawOrder, f: RawFulfillment): Shipment {
     id: f.id, orderId: order.id, orderName: order.name, test: Boolean(order.test),
     customer: (address?.name || billing?.name || '').trim() || 'Ukendt modtager', city: (address?.city || billing?.city || '').trim(), country: address?.countryCodeV2 || null,
     carrier, carrierName: carrier ? carriers[carrier].name : (tracking?.company || '').trim() || null,
-    trackingNumber: (tracking?.number || '').trim() || null, trackingUrl,
-    pickupPoint, steps, current: steps[reachedIndex].key, issue, readyAt, delivered, deliveredAt: delivered ? deliveredAt : null,
+    trackingNumber, trackingUrl,
+    pickupPoint: trackingNumber ? pickupPoint : false,
+    steps: trackingNumber ? steps : [{key: manual ? 'manual' : 'untracked', label: manual ? 'Afsluttet – manuelt håndteret' : 'Afventer trackingnummer', at: null, reached: manual}],
+    current: trackingNumber ? steps[reachedIndex].key : manual ? 'manual' : 'untracked', issue: trackingNumber ? issue : null, readyAt: trackingNumber ? readyAt : null, delivered, deliveredAt: delivered ? deliveredAt : null,
     events, shippedAt: f.createdAt, method,
   };
 }
