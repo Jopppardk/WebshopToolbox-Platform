@@ -45,7 +45,7 @@ function StatusCell({ s, open, onToggle, today }: { s: Shipment; open: boolean; 
 
 function TrackingNotice({s}:{s:Shipment}) {
   const t=s.publicTracking;if(!t)return null;
-  return <p className="rounded-lg border p-3 text-xs text-muted-foreground"><strong>Tracking via Shipmondo</strong> · {t.text}{t.checkedAt ? ` · Hentet ${formatDateTime(t.checkedAt)}` : ' · Shopify-oplysninger vises indtil videre.'}{t.shipmentId ? ` · Forsendelses-ID: ${t.shipmentId}` : ''}{t.error && <span className="mt-1 block text-amber-800">{t.error}</span>}</p>;
+  return <p className="rounded-lg border p-3 text-xs text-muted-foreground"><strong>Tracking via Shipmondo</strong> · {t.text}{t.checkedAt ? ` · Hentet ${formatDateTime(t.checkedAt)}` : s.delivered ? ' · Afsluttet – kontrolleres ikke igen.' : ' · Shopify-oplysninger vises indtil videre.'}{t.shipmentId ? ` · Forsendelses-ID: ${t.shipmentId}` : ''}{t.error && <span className="mt-1 block text-amber-800">{t.error}</span>}</p>;
 }
 
 function Timeline({ s, today }: { s: Shipment; today: string }) {
@@ -159,7 +159,7 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
       <p className="flex items-center gap-2"><Info className="size-4 shrink-0"/>Webshop: {shopName}{data ? ` · Hentet ${formatDateTime(data.checkedAt)} · Ordrer fra ${formatDate(data.since)}` : ''}</p>
       <Button variant="link" className="h-auto p-0 text-xs" onClick={onIntegrations}>Se integrationer<ArrowUpRight className="size-3"/></Button>
     </div>
-    <p className="mb-4 text-xs text-muted-foreground">Tracking hentes fra Shipmondos offentlige trackingside på tværs af fragtfirmaer. Ingen API-nøgle eller Pro-abonnement kræves. Aktive pakker kontrolleres højst én gang i timen; Opdatér tilsidesætter ikke intervallet.</p>
+    <p className="mb-4 text-xs text-muted-foreground">Tracking hentes fra Shipmondos offentlige trackingside på tværs af fragtfirmaer. Ingen API-nøgle eller Pro-abonnement kræves. Aktive pakker kontrolleres højst hver sjette time; Opdatér tilsidesætter ikke intervallet. Leverede pakker kontrolleres ikke igen.</p>
     <div className="mb-4 grid gap-3 sm:grid-cols-3">
       {([['moving', 'På vej', counts.moving, Truck, 'text-[#567da3]'], ['waiting', 'Venter i pakkeshop', counts.waiting, MapPin, 'text-[#9a7440]'], ['return', 'Returneres snart', counts.return, AlertTriangle, counts.return ? 'text-amber-700' : 'text-muted-foreground']] as const).map(([key, label, n, Icon, color]) =>
         <button type="button" key={key} onClick={() => setFilter(filter === key ? 'all' : key)} aria-pressed={filter === key} className={'flex items-center justify-between rounded-2xl border bg-white p-4 text-left shadow-sm transition ' + (filter === key ? 'border-[#9a7440] ring-2 ring-[#9a7440]/20' : 'hover:bg-[#fcfbf9]')}>
