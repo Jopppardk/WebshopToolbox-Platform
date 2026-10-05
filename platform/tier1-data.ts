@@ -27,6 +27,7 @@ import { formatDate } from './tier1/src/lib/format';
 import { HOME_COUNTRY } from './order-markets';
 import { legacyRefundSql, saleBookedSql, syncOrderRefunds, type OrderRefund } from './order-refunds';
 import { ensureCreditNote } from './credit-notes';
+import { ensureMarketRow } from './invoice-profiles';
 import { HttpError,reply,type Actor,type PlatformEnv } from './types';
 
 const forwarded=(request:Request,body:unknown,method='POST')=>new Request(request.url,{method,headers:request.headers,body:JSON.stringify(body)});
@@ -128,10 +129,19 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   for(const [key,[from,to]] of Object.entries(periods)){const next=new URL(request.url);next.searchParams.set('from',from);next.searchParams.set('to',to);const response=await handlePackaging(new Request(next,{headers:request.headers}),env,actor,company,shop);if(!response.ok)return response;const value=await response.json() as any;result[key]=value.period;prices=value.prices;lastSyncedAt=value.sync?.synced_at||null;}
   return reply({periods:result,pricePerKg:prices.household,commercialPricePerKg:prices.commercial,lastSyncedAt});
  }
- if(path==='/invoices/sender'||path==='/invoices/sender/test')return handleMail(request,env,actor,company,path.endsWith('/test')?'test':undefined);
- if(path==='/invoices/logo')return handleInvoices(request,env,actor,company,'logo');
+ // A market's tab (?marketId=) has its own sender, company details, design and logo; Danmark's tab has none.
+ const marketId=url.searchParams.get('marketId');
+ if(marketId&&!/^gid:\/\/shopify\/Market\/\d{1,30}$/.test(marketId))throw new HttpError(400,'Vælg et marked.');
+ const withShop=()=>{const next=new URL(request.url);next.searchParams.set('webshopId',shop);return new Request(next,request);};
+ if(path==='/invoices/sender'||path==='/invoices/sender/test'){
+  if(!marketId)return handleMail(request,env,actor,company,path.endsWith('/test')?'test':undefined);
+  if(shop==='none')throw new HttpError(409,'Forbind en webshop først.');
+  if(request.method!=='GET'&&!actor.support)await ensureMarketRow(env,company,shop,marketId);
+  return handleMail(request,env,actor,company,path.endsWith('/test')?'test':undefined,undefined,{shop,market:marketId});
+ }
+ if(path==='/invoices/logo')return handleInvoices(marketId?withShop():request,env,actor,company,'logo');
  if(path==='/invoices/preview'){if(shop==='none')throw new HttpError(409,'Opret en webshop for at se fakturaeksemplet.');const next=new URL(request.url);next.searchParams.set('webshopId',shop);return handleInvoices(new Request(next,request),env,actor,company,'preview');}
- if(path==='/invoices/settings')return handleInvoices(request,env,actor,company,'settings');
+ if(path==='/invoices/settings')return handleInvoices(marketId?withShop():request,env,actor,company,'settings');
  const dataPaths=['/shopify/orders','/shopify/orders/process','/shopify/refunds','/shopify/payouts','/shopify/payments','/refunds/overview','/payouts/overview','/sales/log','/payouts/log','/refunds/log','/sales/preview','/shopify/inventory','/documents','/invoices','/invoices/pdf','/invoices/email-test','/flatpay/records','/flatpay/sync','/flatpay/refunds','/viabill/records','/pensopay/records','/order-refunds','/order-refunds/sync','/order-refunds/credit-note'];
  if(!dataPaths.includes(path))return null;
  if(shop==='none')throw new HttpError(409,'Forbind en webshop først.');
@@ -234,7 +244,7 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   if(path==='/invoices/pdf'){const next=new URL(request.url);next.searchParams.set('webshopId',shop);return handleInvoices(new Request(next,request),env,actor,company,'pdf');}
   if(path==='/invoices/email-test'){
    if(request.method!=='POST')throw new HttpError(405,'Brug Send eksempelfaktura som test.');
-   const response=await handleInvoices(forwarded(request,{webshopId:shop,recipient:b.recipient,requestId:b.requestId}),env,actor,company,'example-test');if(!response.ok)return response;const result=await response.json() as any;
+   const response=await handleInvoices(forwarded(request,{webshopId:shop,recipient:b.recipient,requestId:b.requestId,...(typeof b.marketId==='string'?{marketId:b.marketId}:{})}),env,actor,company,'example-test');if(!response.ok)return response;const result=await response.json() as any;
    if(result.status!=='accepted')throw new HttpError(409,result.status==='preview'?'Lokal test: mailen er kun forhåndsvist, ikke sendt.':'Mailafsendelsen er usikker. Kontrollér status før nyt forsøg.');return reply({sent:true,recipient:result.recipient,invoiceNumber:'EKSEMPEL-001'});
   }
   let generated=0,hasMore=false,nextOffset=0;const warnings:string[]=[];

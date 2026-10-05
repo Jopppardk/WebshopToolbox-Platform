@@ -4,6 +4,8 @@
 import { buildInvoicePdf } from './invoice-pdf';
 import { sendCustomerInvoice } from './mail';
 import type { OrderRefund } from './order-refunds';
+import { danishSettings, fillTemplate, marketRow, profileOf } from './invoice-profiles';
+import { orderMarketSettings } from './order-markets';
 import { HttpError, type Actor, type PlatformEnv } from './types';
 
 type Note = { id: string; number: string; r2_key: string; status: string; created_at: string };
@@ -13,13 +15,9 @@ type Locale = 'da' | 'sv' | 'en';
 function documentFacts(invoice: { source_json: string; issuer_json: string }, refund: OrderRefund) {
   const issuer = JSON.parse(invoice.issuer_json), order = JSON.parse(invoice.source_json), currency = String(order.currentTotalPriceSet?.shopMoney?.currencyCode || refund.currency);
   const gross = currency === refund.currency ? refund.gross : refund.presentment?.currency === currency ? refund.presentment.gross : refund.gross;
-  return { locale: (['sv', 'en'].includes(issuer.locale) ? issuer.locale : 'da') as Locale, currency: currency === refund.currency || refund.presentment?.currency === currency ? currency : refund.currency, gross, store: String(issuer.soldVia || issuer.name || '') };
+  const customer = String(order.billingAddress?.name || order.shippingAddress?.name || order.customer?.displayName || '').trim();
+  return { locale: (['sv', 'en'].includes(issuer.locale) ? issuer.locale : 'da') as Locale, currency: currency === refund.currency || refund.presentment?.currency === currency ? currency : refund.currency, gross, store: String(issuer.soldVia || issuer.name || ''), customer, invoiceNumber: String(order.name || '').replace(/^#/, '') };
 }
-const creditMail: Record<Locale, (a: { amount: string; order: string; number: string; name: string; store: string }) => { subject: string; text: string }> = {
-  da: a => ({ subject: `Kreditnota ${a.number} fra ${a.name}`, text: `Hej\n\nVi har tilbagebetalt ${a.amount} for ordre ${a.order}.\n\nVedhæftet finder du kreditnota ${a.number}.\n\nVenlig hilsen\n${a.name}` }),
-  sv: a => ({ subject: `Kreditfaktura ${a.number} från ${a.store}`, text: `Hej\n\nVi har återbetalat ${a.amount} för order ${a.order}.\n\nBifogat finner du kreditfaktura ${a.number}.\n\nVänliga hälsningar\n${a.name}` }),
-  en: a => ({ subject: `Credit note ${a.number} from ${a.store}`, text: `Hi\n\nWe have refunded ${a.amount} for order ${a.order}.\n\nPlease find attached credit note ${a.number}.\n\nKind regards\n${a.name}` }),
-};
 
 export const creditNoteNumber = (orderName: string, sequence: number) => `${orderName.replace(/^#/, '')}-K${sequence}`;
 
@@ -70,14 +68,17 @@ export async function sendCreditNote(env: PlatformEnv, actor: Actor, company: st
   const refund = JSON.parse(row.payload_json) as OrderRefund, note = await ensureCreditNote(env, company, shop, refund);
   if (!note) return { sent: false };
   if (!note.email) throw new HttpError(409, 'Ordren har ingen kundemail, så kreditnotaen kan ikke sendes.');
-  const settings = await env.PLATFORM_DB.prepare('SELECT name FROM invoice_settings WHERE company_id=?').bind(company).first<{ name: string }>();
-  const name = settings?.name || (await env.PLATFORM_DB.prepare('SELECT name FROM companies WHERE id=?').bind(company).first<{ name: string }>())!.name;
+  // The credit-note mail text of Danmark or of the order's market (Indstillinger → Faktura-afsendelse), sent from its sender.
+  const market = await orderMarketSettings(env.PLATFORM_DB, company, shop, refund.orderId);
+  const profile = profileOf(await danishSettings(env, company), market ? await marketRow(env, company, shop, market.market_id) : null);
+  const name = profile.issuer.name || (await env.PLATFORM_DB.prepare('SELECT name FROM companies WHERE id=?').bind(company).first<{ name: string }>())!.name;
   const intl = { da: 'da-DK', sv: 'sv-SE', en: 'en-GB' }[note.locale];
   const amount = new Intl.NumberFormat(intl, { style: 'currency', currency: note.currency }).format(note.gross / 10 ** new Intl.NumberFormat('en', { style: 'currency', currency: note.currency }).resolvedOptions().maximumFractionDigits!);
-  const mail = creditMail[note.locale]({ amount, order: refund.orderName, number: note.number, name, store: note.store || name });
+  const values = { kundenavn: note.customer, kreditnotanummer: note.number, fakturanummer: note.invoiceNumber, ordrenummer: refund.orderName, 'beløb': amount, butik: profile.storeName ?? (note.store || name), virksomhedsnavn: name };
+  const mail = { subject: fillTemplate(profile.creditSubject, values), text: fillTemplate(profile.creditBody, values) };
   const content = await note.file.arrayBuffer();
   if (content.byteLength > 3500000) throw new HttpError(413, 'Kreditnotaen er for stor til mail.');
-  const response = await sendCustomerInvoice(env, actor, company, shop, note.id, note.email, mail.subject, mail.text, { content, filename: `${note.locale === 'sv' ? 'kreditfaktura' : note.locale === 'en' ? 'credit-note' : 'kreditnota'}-${note.number}.pdf`, type: 'application/pdf', disposition: 'attachment' }, 'credit');
+  const response = await sendCustomerInvoice(env, actor, company, shop, note.id, note.email, mail.subject, mail.text, { content, filename: `${note.locale === 'sv' ? 'kreditfaktura' : note.locale === 'en' ? 'credit-note' : 'kreditnota'}-${note.number}.pdf`, type: 'application/pdf', disposition: 'attachment' }, 'credit', market ? { shop, market: market.market_id } : undefined);
   if (!response.ok) throw new HttpError(response.status, ((await response.json()) as { error?: string }).error || 'Kreditnotaen kunne ikke sendes.');
   return { sent: true };
 }

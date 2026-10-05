@@ -2,7 +2,7 @@ export const accountKeys = ['vatCode', 'noVatCode', 'goodsVat', 'goodsNoVat', 's
 export type Accounts = Record<typeof accountKeys[number], string>;
 export const automationKeys = ['attachments', 'bookDinero', 'salesBookDinero', 'refundsBookDinero', 'payoutsBookDinero', 'inventoryBookDinero', 'sales', 'payments', 'refunds', 'payouts', 'invoiceEmails', 'inventory'] as const;
 export type Automation = Record<typeof automationKeys[number], boolean>;
-export type InvoiceEmailSettings = { subject: string; body: string };
+export type InvoiceEmailSettings = { subject: string; body: string; creditSubject: string; creditBody: string };
 export type AdminSettings = { accounts: Accounts; automation: Automation; invoiceEmail: InvoiceEmailSettings; syncIntervalMinutes: number };
 import { normalizeSyncInterval } from './sync-schedule';
 export const emptyAccounts = Object.fromEntries(accountKeys.map(key => [key, ''])) as Accounts;
@@ -10,6 +10,8 @@ export const defaultAutomation = { ...Object.fromEntries(automationKeys.map(key 
 export const defaultInvoiceEmail: InvoiceEmailSettings = {
   subject: 'Faktura {{fakturanummer}} fra WebshopToolbox',
   body: 'Hej {{kundenavn}}\n\nTak for din ordre hos WebshopToolbox.\n\nVedhæftet finder du faktura {{fakturanummer}} for ordre {{ordrenummer}}.\n\nVenlig hilsen\nWebshopToolbox',
+  creditSubject: 'Kreditnota {{kreditnotanummer}} fra {{virksomhedsnavn}}',
+  creditBody: 'Hej {{kundenavn}}\n\nVi har tilbagebetalt {{beløb}} for ordre {{ordrenummer}}.\n\nVedhæftet finder du kreditnota {{kreditnotanummer}}.\n\nVenlig hilsen\n{{virksomhedsnavn}}',
 };
 export function validateSettings(input: unknown): AdminSettings {
   if (!input || typeof input !== 'object') throw new Error('Ugyldige indstillinger');
@@ -36,10 +38,10 @@ export function validateSettings(input: unknown): AdminSettings {
     automation[key] = field;
   }
   const invoiceEmail = { ...defaultInvoiceEmail };
-  for (const key of ['subject', 'body'] as const) {
+  for (const key of ['subject', 'body', 'creditSubject', 'creditBody'] as const) {
     const field = value.invoiceEmail?.[key];
     if (field === undefined) continue;
-    if (typeof field !== 'string' || !field.trim() || field.length > (key === 'subject' ? 200 : 4000) || /\x00/.test(field)) throw new Error('Ugyldig mailskabelon');
+    if (typeof field !== 'string' || !field.trim() || field.length > (key.toLowerCase().endsWith('subject') ? 200 : 4000) || /\x00/.test(field)) throw new Error('Ugyldig mailskabelon');
     invoiceEmail[key] = field.trim();
   }
   const syncIntervalMinutes = normalizeSyncInterval(value.syncIntervalMinutes);
