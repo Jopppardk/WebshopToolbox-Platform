@@ -9,6 +9,7 @@ import { jsonBody } from './invitations';
 import { handleMail, sendCustomerInvoice } from './mail';
 import { buildInvoicePdf } from './invoice-pdf';
 import { shopAccess, listInvoiceOrders, loadCompleteOrder } from './invoice-source';
+import { danishSettings, ensureMarketRow, fillTemplate, marketRow, profileOf, type InvoiceProfile } from './invoice-profiles';
 import { checkInvoice, inPresentment, invoiceFingerprint, originalOrder, type InvoiceSource } from './order-check';
 
 type Settings={name:string;address:string;cvr:string;contact:string;subject:string;body:string;months:number;logo_key:string|null;design_json?:string;revision?:number};
@@ -21,6 +22,41 @@ function cutoff(s:Settings){const d=new Date();d.setUTCMonth(d.getUTCMonth()-s.m
 function ready(s:Settings){if(!s.address||!s.cvr||!s.contact)throw new HttpError(409,'Udfyld virksomhedens fakturaoplysninger under Indstillinger → Fakturaer først.');}
 // An order from another market is mailed with that market's text (e.g. Swedish); {{butik}} is its store name.
 export function invoiceText(s:Settings,order:InvoiceSource,market?:WebshopMarket|null){const i=checkInvoice(order),values:Record<string,string>={kundenavn:i.customer.name,fakturanummer:i.number.replace(/^#/,''),ordrenummer:i.number,virksomhedsnavn:s.name,butik:market?.store_name??s.name};const apply=(v:string)=>v.replace(/{{\s*([a-zæøå]+)\s*}}/gi,(all,k)=>values[k.toLowerCase()]??all);return {subject:apply(market?.invoice_subject??s.subject),text:apply(market?.invoice_body??s.body)};}
+/** The invoice mail of a profile (Danmark's or a market's). */
+export function profileText(profile:InvoiceProfile,company:string,order:InvoiceSource){
+ const i=checkInvoice(order),values={kundenavn:i.customer.name,fakturanummer:i.number.replace(/^#/,''),ordrenummer:i.number,virksomhedsnavn:profile.issuer.name||company,butik:profile.storeName??(profile.issuer.name||company)};
+ return {subject:fillTemplate(profile.invoiceSubject,values),text:fillTemplate(profile.invoiceBody,values)};
+}
+/** Company details, design and logo of a market's invoices: the same fields as Danmark's (as Danmark until changed). */
+async function marketInvoiceSettings(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string,marketId:string,action:string):Promise<Response>{
+ const db=env.PLATFORM_DB,url=new URL(request.url),dk=await danishSettings(env,company);
+ const saved=await marketRow(env,company,shop,marketId),profile=profileOf(dk,saved);
+ if(action==='settings'&&request.method==='GET')return reply({...profile.issuer,design:profile.design,hasLogo:!!profile.logoKey,ownLogo:profile.ownLogo,revision:saved?.revision||0});
+ if(action==='logo'&&request.method==='GET'){if(!profile.logoKey)throw new HttpError(404,'Intet logo gemt.');const file=await env.PLATFORM_DOCUMENTS.get(profile.logoKey);if(!file)throw new HttpError(404,'Logo mangler.');return new Response(file.body,{headers:{'Content-Type':'image/png','Cache-Control':'no-store'}});}
+ if(actor.support)throw new HttpError(403,'Afslut supportadgang før fakturaopsætning.');
+ const row=saved??await ensureMarketRow(env,company,shop,marketId);
+ const save=async(set:string,values:unknown[],event:string)=>{const result=await db.batch([db.prepare(`UPDATE webshop_markets SET ${set},revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE company_id=? AND webshop_id=? AND market_id=? AND revision=?`).bind(...values,company,shop,marketId,row.revision),audit(env,actor,company,event,marketId)]);if(result[0].meta.changes!==1)throw new HttpError(409,'Fakturaindstillingerne er ændret. Genindlæs.');return reply({ok:true});};
+ if(action==='settings'){
+  if(request.method!=='PUT')throw new HttpError(405,'Brug Gem.');
+  const b=await jsonBody(request,12000);
+  if(b.revision!==undefined&&b.revision!==(saved?.revision||0))throw new HttpError(409,'Fakturaindstillingerne er ændret. Genindlæs.');
+  const v={name:text(b.name,120),address:text(b.address,180),cvr:text(b.cvr,30),contact:text(b.contact,100)};
+  if(/[\r\n]/.test(v.name+v.address+v.cvr+v.contact))throw new HttpError(400,'Kontrollér fakturaoplysningerne.');
+  return save('issuer_json=?,design_json=?',[JSON.stringify(v),JSON.stringify(invoiceDesign(b.design??profile.design))],'invoice.market.settings.saved');
+ }
+ // '' is "no logo"; ?inherit=1 goes back to Danmark's logo.
+ if(request.method==='DELETE')return save('logo_key=?',[url.searchParams.get('inherit')==='1'?null:''],'invoice.market.logo.removed');
+ if(request.method!=='PUT'||request.headers.get('origin')!==url.origin||request.headers.get('content-type')!=='image/png')throw new HttpError(403,'Upload et PNG-logo fra fakturaindstillingerne.');
+ const key=await storeLogo(env,company,await request.arrayBuffer());
+ return save('logo_key=?',[key],'invoice.market.logo.saved');
+}
+async function storeLogo(env:PlatformEnv,company:string,bytes:ArrayBuffer){
+ if(bytes.byteLength>300000||bytes.byteLength<24||Array.from(new Uint8Array(bytes).slice(0,8)).join(',')!=='137,80,78,71,13,10,26,10')throw new HttpError(400,'Logoet skal være en PNG-fil på højst 300 KB.');
+ const view=new DataView(bytes);if(view.getUint32(16)<1||view.getUint32(20)<1||view.getUint32(16)>2048||view.getUint32(20)>2048)throw new HttpError(400,'Logoet må højst være 2048 × 2048 pixels.');
+ try{const document=await PDFDocument.create();await document.embedPng(bytes);}catch{throw new HttpError(400,'Filen er ikke et gyldigt PNG-billede.');}
+ const key=`companies/${company}/invoice-logos/${crypto.randomUUID()}.png`;await env.PLATFORM_DOCUMENTS.put(key,bytes,{httpMetadata:{contentType:'image/png'}});
+ return key;
+}
 /** The order as invoiced: the original order when it was refunded later, in the customer's currency for another market. */
 export function invoicedOrder(order:InvoiceSource,market:WebshopMarket|null){
  const base=originalOrder(order)??order;if(!market)return base;
@@ -41,24 +77,31 @@ async function invoices(request:Request,env:PlatformEnv,actor:Actor,company:stri
   return handleInvoices(new Request(request.url,{method:'POST',headers:request.headers,body:JSON.stringify({requestId:b.requestId,mode:b.mode,webshopId:latest.webshop_id,externalId:latest.external_id})}),env,actor,company,'test');
  }
 
+ // Another market's tab: the same company details, design and logo settings, stored for that market.
+ const marketId=url.searchParams.get('marketId');
+ if(marketId&&(action==='settings'||action==='logo')){
+  const shop=String(url.searchParams.get('webshopId')||'');await requireWebshop(db,actor,company,shop);
+  if(!/^gid:\/\/shopify\/Market\/\d{1,30}$/.test(marketId))throw new HttpError(400,'Vælg et marked.');
+  return marketInvoiceSettings(request,env,actor,company,shop,marketId,action);
+ }
  if(action==='preview'&&request.method==='GET'||action==='example-test'&&request.method==='POST'){
   const input=action==='example-test'?await jsonBody(request):{};
   if(action==='example-test'&&actor.support)throw new HttpError(403,'Afslut supportadgang før testmail.');
   const shop=String(input.webshopId||url.searchParams.get('webshopId')||'');await requireWebshop(db,actor,company,shop);
   const webshop=await db.prepare('SELECT name FROM webshops WHERE company_id=? AND id=?').bind(company,shop).first<{name:string}>();
-  let logo:ArrayBuffer|undefined;if(s.logo_key){const f=await env.PLATFORM_DOCUMENTS.get(s.logo_key);if(!f)throw new HttpError(409,'Logoet mangler. Upload det igen.');logo=await f.arrayBuffer();}
-  // Preview for another market: its saved language, store, contact and footer, with the amounts in its currency.
-  const marketId=url.searchParams.get('marketId');
-  const market=marketId?await db.prepare('SELECT * FROM webshop_markets WHERE company_id=? AND webshop_id=? AND market_id=?').bind(company,shop,marketId).first<WebshopMarket&{countries_json:string}>():null;
-  if(marketId&&!market)throw new HttpError(404,'Gem markedets indstillinger først for at se eksemplet.');
-  const design=invoiceDesign(JSON.parse(s.design_json||'{}'));
+  // A market's example uses its own settings (as Danmark where it has none), with the amounts in its currency.
+  const exampleMarket=String(input.marketId||marketId||'')||null;
+  const market=exampleMarket?await marketRow(env,company,shop,exampleMarket):null;
+  const profile=profileOf(await danishSettings(env,company),market);
+  let logo:ArrayBuffer|undefined;if(profile.logoKey){const f=await env.PLATFORM_DOCUMENTS.get(profile.logoKey);if(!f)throw new HttpError(409,'Logoet mangler. Upload det igen.');logo=await f.arrayBuffer();}
   const example=market?JSON.parse(JSON.stringify(exampleInvoice()).replaceAll('"currencyCode":"DKK"','"currencyCode":"'+market.currency+'"')):exampleInvoice();
-  const bytes=await buildInvoicePdf(example,{...s,address:s.address||'Eksempelvej 1, 1000 København',cvr:s.cvr||'00000000',contact:(market?.contact||s.contact)||'faktura@example.dk',webshopName:market?.store_name??webshop!.name,design:market?.footer?{...design,footer:market.footer}:design,example:true,...(market?{locale:market.locale,soldVia:market.store_name}:{})},logo);
+  const bytes=await buildInvoicePdf(example,{...profile.issuer,address:profile.issuer.address||'Eksempelvej 1, 1000 København',cvr:profile.issuer.cvr||'00000000',contact:profile.issuer.contact||'faktura@example.dk',webshopName:market?.store_name??webshop!.name,design:profile.design,example:true,...(market?{locale:market.locale,soldVia:market.store_name}:{})},logo);
   if(action==='example-test'){
-   const sender=await db.prepare('SELECT custom_from,revision,verified_revision FROM company_mail WHERE company_id=?').bind(company).first<{custom_from:string;revision:string;verified_revision:string|null}>();
-   const rendered=invoiceText(s,exampleInvoice());
+   const scope=market?{shop,market:market.market_id}:undefined;
+   const sender=scope?await db.prepare('SELECT custom_from FROM market_mail WHERE company_id=? AND webshop_id=? AND market_id=?').bind(company,shop,scope.market).first<{custom_from:string}>()??await db.prepare('SELECT custom_from FROM company_mail WHERE company_id=?').bind(company).first<{custom_from:string}>():await db.prepare('SELECT custom_from FROM company_mail WHERE company_id=?').bind(company).first<{custom_from:string}>();
+   const rendered=profileText(profile,s.name,exampleInvoice());
    const mailRequest=new Request(request.url,{method:'POST',headers:request.headers,body:JSON.stringify({recipient:input.recipient,requestId:input.requestId,mode:sender?.custom_from?'custom':'standard'})});
-   return handleMail(mailRequest,env,actor,company,'test',{subject:'[TEST · DEMO] '+rendered.subject,text:rendered.text+'\n\nDEMO – Eksempelfaktura med fiktive data. Ingen rigtig ordre, faktura eller bogføring er oprettet.',allowAnyRecipient:true,attachment:{content:bytes.slice().buffer as ArrayBuffer,filename:'eksempelfaktura.pdf',type:'application/pdf',disposition:'attachment'}});
+   return handleMail(mailRequest,env,actor,company,'test',{subject:'[TEST · DEMO] '+rendered.subject,text:rendered.text+'\n\nDEMO – Eksempelfaktura med fiktive data. Ingen rigtig ordre, faktura eller bogføring er oprettet.',allowAnyRecipient:true,attachment:{content:bytes.slice().buffer as ArrayBuffer,filename:'eksempelfaktura.pdf',type:'application/pdf',disposition:'attachment'}},scope);
   }
   return new Response(bytes.slice().buffer as ArrayBuffer,{headers:{'Content-Type':'application/pdf','Content-Disposition':'inline; filename="eksempelfaktura.pdf"','Cache-Control':'no-store'}});
  }
@@ -121,12 +164,15 @@ async function invoices(request:Request,env:PlatformEnv,actor:Actor,company:stri
  if(action==='generate'){
   if(saved){if(saved.status!=='generated')throw new HttpError(409,'Genereringen er i gang eller kræver kontrol. Den genstartes ikke automatisk.');return reply({id:saved.id,existing:true});}
   ready(s);let logo:ArrayBuffer|undefined;
-  if(s.logo_key){const file=await env.PLATFORM_DOCUMENTS.get(s.logo_key);if(!file)throw new HttpError(409,'Virksomhedens logo mangler.');logo=await file.arrayBuffer();}
-  const webshop=await db.prepare('SELECT name FROM webshops WHERE company_id=? AND id=?').bind(company,shop).first<{name:string}>();
-  // Orders from another market: invoice in the market's language and currency, from its store (e.g. Sabeln.se).
+  // Orders from another market: invoice with the market's settings (company details, design, logo), in its
+  // language and currency, from its store (e.g. Sabeln.se). Danish orders use the company's settings as before.
   const market=await orderMarketSettings(db,company,shop,id),source=invoicedOrder(order,market);
-  const design=invoiceDesign(JSON.parse(s.design_json||'{}'));
-  const issuer={...s,webshopName:market?.store_name??webshop!.name,design:market?.footer?{...design,footer:market.footer}:design,...(market?{locale:market.locale,soldVia:market.store_name,contact:market.contact||s.contact}:{})};
+  const profile=market?profileOf(await danishSettings(env,company),await marketRow(env,company,shop,market.market_id)):null;
+  const logoKey=profile?profile.logoKey:s.logo_key;
+  if(logoKey){const file=await env.PLATFORM_DOCUMENTS.get(logoKey);if(!file)throw new HttpError(409,'Virksomhedens logo mangler.');logo=await file.arrayBuffer();}
+  const webshop=await db.prepare('SELECT name FROM webshops WHERE company_id=? AND id=?').bind(company,shop).first<{name:string}>();
+  const issuer=profile&&market?{...s,...profile.issuer,logo_key:profile.logoKey,webshopName:market.store_name,design:profile.design,locale:market.locale,soldVia:market.store_name}
+   :{...s,webshopName:webshop!.name,design:invoiceDesign(JSON.parse(s.design_json||'{}'))};
   const bytes=await buildInvoicePdf(source,issuer,logo),doc=crypto.randomUUID(),key=`companies/${company}/webshops/${shop}/invoices/${doc}.pdf`;
   const claim=await db.prepare(`INSERT INTO platform_invoices(company_id,webshop_id,external_id,id,fingerprint,status,r2_key,issuer_json,source_json) VALUES(?,?,?,?,?,'generating',?,?,?) ON CONFLICT DO NOTHING`).bind(company,shop,id,doc,fingerprint,key,JSON.stringify(issuer),JSON.stringify(source)).run();
   if(!claim.meta.changes)throw new HttpError(409,'Fakturaen er allerede genereret eller under generering.');
@@ -137,8 +183,9 @@ async function invoices(request:Request,env:PlatformEnv,actor:Actor,company:stri
  if(saved?.status!=='generated')throw new HttpError(409,'Generér PDF-fakturaen først.');
  const file=await env.PLATFORM_DOCUMENTS.get(saved.r2_key);if(!file)throw new HttpError(409,'PDF-fakturaen mangler.');
  const bytes=await file.arrayBuffer();if(bytes.byteLength>3500000)throw new HttpError(413,'PDF er for stor til testmail.');
- const rendered=invoiceText(s,order,await orderMarketSettings(db,company,shop,id));
- if(action==='send')return sendCustomerInvoice(env,actor,company,shop,saved.id,order.email||'',rendered.subject,rendered.text,{content:bytes,filename:'faktura-'+id.split('/').pop()+'.pdf',type:'application/pdf',disposition:'attachment'});
+ const market=await orderMarketSettings(db,company,shop,id);
+ const rendered=market?profileText(profileOf(await danishSettings(env,company),await marketRow(env,company,shop,market.market_id)),s.name,order):invoiceText(s,order);
+ if(action==='send')return sendCustomerInvoice(env,actor,company,shop,saved.id,order.email||'',rendered.subject,rendered.text,{content:bytes,filename:'faktura-'+id.split('/').pop()+'.pdf',type:'application/pdf',disposition:'attachment'},'invoice',market?{shop,market:market.market_id}:undefined);
  const mailRequest=new Request(request.url,{method:'POST',headers:request.headers,body:JSON.stringify({requestId:input.requestId,mode:input.mode})});
  return handleMail(mailRequest,env,actor,company,'test',{subject:'[TEST] '+rendered.subject,text:rendered.text+'\n\nTESTMAIL – sendt til din loginadresse, ikke til kunden.',attachment:{content:bytes,filename:'faktura-'+id.split('/').pop()+'.pdf',type:'application/pdf',disposition:'attachment'}});
 }

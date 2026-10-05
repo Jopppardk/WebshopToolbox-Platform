@@ -11,7 +11,7 @@ import { COMPANY_NAME, DEMO_COMPANY, DEMO_EMAIL, DEMO_SHOP, DEMO_USER, ORGANIZAT
 import type { PlatformEnv } from './types';
 
 // Children before parents, so foreign keys hold. The company, user and webshop rows are kept.
-export const demoTables = ['webshop_markets', 'shipment_tracking_cache', 'shipping_events', 'shipping_connections', 'order_refunds', 'order_refund_checks', 'platform_credit_notes', 'order_markets', 'operation_acknowledgements', 'record_events', 'payment_records', 'payment_connections', 'operation_runs', 'operation_snapshots', 'invoice_orders', 'platform_invoices',
+export const demoTables = ['market_mail', 'webshop_markets', 'shipment_tracking_cache', 'shipping_events', 'shipping_connections', 'order_refunds', 'order_refund_checks', 'platform_credit_notes', 'order_markets', 'operation_acknowledgements', 'record_events', 'payment_records', 'payment_connections', 'operation_runs', 'operation_snapshots', 'invoice_orders', 'platform_invoices',
   'platform_payout_documents', 'production_receipts', 'production_jobs', 'production_attempts', 'booking_start_dates', 'tier1_preferences', 'product_feeds', 'feed_folders', 'emballage_connections',
   'packaging_snapshots', 'packaging_sync', 'platform_packaging', 'platform_packaging_prices', 'stocktakes', 'accounting_reconciliations', 'source_records', 'webshop_connections', 'accounting_connections',
   'accounting_mapping', 'company_accounting', 'company_integrations', 'integration_history', 'invoice_settings', 'company_mail', 'mail_test_deliveries', 'finance_ledger', 'support_ticket_messages',

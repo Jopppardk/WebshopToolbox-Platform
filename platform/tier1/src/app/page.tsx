@@ -972,6 +972,10 @@ function Settings({
             <label><span className="text-xs font-medium text-muted-foreground">Emne</span><Input className="mt-1.5" value={invoiceEmail.subject} onChange={event => setInvoiceEmail(current => ({ ...current, subject: event.target.value }))} /></label>
             <label><span className="text-xs font-medium text-muted-foreground">Mailtekst</span><Textarea className="mt-1.5 min-h-40" value={invoiceEmail.body} onChange={event => setInvoiceEmail(current => ({ ...current, body: event.target.value }))} /></label>
             <p className="text-xs text-muted-foreground">Du kan bruge: {'{{kundenavn}}'}, {'{{fakturanummer}}'} og {'{{ordrenummer}}'}.</p>
+            <div className="border-t pt-4"><h3 className="text-sm font-semibold">Kreditnota</h3><p className="mt-1 text-xs text-muted-foreground">Sendes sammen med kreditnotaen, når en ordre tilbagebetales.</p></div>
+            <label><span className="text-xs font-medium text-muted-foreground">Emne</span><Input className="mt-1.5" value={invoiceEmail.creditSubject} onChange={event => setInvoiceEmail(current => ({ ...current, creditSubject: event.target.value }))} /></label>
+            <label><span className="text-xs font-medium text-muted-foreground">Mailtekst</span><Textarea className="mt-1.5 min-h-40" value={invoiceEmail.creditBody} onChange={event => setInvoiceEmail(current => ({ ...current, creditBody: event.target.value }))} /></label>
+            <p className="text-xs text-muted-foreground">Du kan bruge: {'{{kundenavn}}'}, {'{{kreditnotanummer}}'}, {'{{fakturanummer}}'}, {'{{ordrenummer}}'}, {'{{beløb}}'} og {'{{virksomhedsnavn}}'}.</p>
 
           </div>
           <div className="flex justify-end border-t p-4"><Button className="h-10 rounded-xl px-4" onClick={onSave}><Save />{saving ? 'Gemmer…' : 'Gem indstillinger'}</Button></div>

@@ -15,7 +15,18 @@ function senderName(value:unknown){
  if(typeof value!=='string'||!value.trim()||value.length>120||/[\x00-\x1f<>]/.test(value))throw new HttpError(400,'Angiv et gyldigt afsendernavn.');
  return value.trim();
 }
-async function row(env:PlatformEnv,company:string){return env.PLATFORM_DB.prepare('SELECT * FROM company_mail WHERE company_id=?').bind(company).first<MailRow>();}
+/** A market's own sender (Indstillinger → Faktura-afsendelse, the market's tab); without one it sends as Danmark. */
+export type MailScope={shop:string;market:string}|undefined;
+async function row(env:PlatformEnv,company:string,scope?:MailScope){
+ return scope?env.PLATFORM_DB.prepare('SELECT * FROM market_mail WHERE company_id=? AND webshop_id=? AND market_id=?').bind(company,scope.shop,scope.market).first<MailRow>()
+  :env.PLATFORM_DB.prepare('SELECT * FROM company_mail WHERE company_id=?').bind(company).first<MailRow>();
+}
+async function sendingRow(env:PlatformEnv,company:string,scope?:MailScope){return (scope?await row(env,company,scope):null)??await row(env,company);}
+// The table holding the sender that was used: the market's own, or Danmark's.
+async function ownScope(env:PlatformEnv,company:string,scope?:MailScope):Promise<MailScope>{return scope&&await row(env,company,scope)?scope:undefined;}
+const mailTable=(scope:MailScope)=>scope?'market_mail':'company_mail';
+const mailWhere=(scope:MailScope)=>scope?'company_id=? AND webshop_id=? AND market_id=?':'company_id=?';
+const mailKeys=(company:string,scope:MailScope)=>scope?[company,scope.shop,scope.market]:[company];
 function standardFrom(env:PlatformEnv){return mailAddress(env.PLATFORM_MAIL_FROM || 'faktura@webshoptoolbox.dk');}
 export function effectiveSender(settings:MailRow|null,standard:string){
  return settings?.custom_from && settings.credentials_encrypted && settings.verified_revision===settings.revision?settings.custom_from:standard;
@@ -24,25 +35,27 @@ async function defaultSenderName(env:PlatformEnv,company:string){
  const value=await env.PLATFORM_DB.prepare(`SELECT COALESCE(NULLIF(i.name,''),c.name) AS name FROM companies c LEFT JOIN invoice_settings i ON i.company_id=c.id WHERE c.id=?`).bind(company).first<{name:string}>();
  return value!.name;
 }
-async function info(env:PlatformEnv,company:string,actor:Actor){
- const settings=await row(env,company);
+async function info(env:PlatformEnv,company:string,actor:Actor,scope?:MailScope){
+ const own=await row(env,company,scope),settings=own??(scope?await row(env,company):null);
  const fallbackName=await defaultSenderName(env,company);
  const from=standardFrom(env);
  const allowed=(env.PLATFORM_MAIL_TEST_RECIPIENTS||'').split(',').includes(actor.email.toLowerCase());
  return {senderName:settings?.sender_name||fallbackName,replyTo:settings?.reply_to||'',customFrom:settings?.custom_from||'',accountId:settings?.account_id||'',credentialsSaved:!!settings?.credentials_encrypted,
   status:!settings?.custom_from?'standard':settings.verified_revision===settings.revision?'verified':'pending',standardFrom:from,effectiveFrom:effectiveSender(settings,from),
-  testRecipient:actor.email,testEnabled:!actor.support&&(env.PLATFORM_ENV==='local-test'||allowed),localPreview:env.PLATFORM_ENV==='local-test'};
+  testRecipient:actor.email,testEnabled:!actor.support&&(env.PLATFORM_ENV==='local-test'||allowed),localPreview:env.PLATFORM_ENV==='local-test',
+  // A market without its own sender shows (and sends with) Danmark's until its own is saved.
+  ...(scope?{inherited:!own}:{})};
 }
 function audit(env:PlatformEnv,company:string,actor:Actor,action:string,details:Record<string,unknown>){
  return env.PLATFORM_DB.prepare('INSERT INTO audit_events(id,company_id,actor_id,action,resource_id,details_json) VALUES(?,?,?,?,?,?)').bind(crypto.randomUUID(),company,actor.id,action,company,JSON.stringify(details));
 }
-export async function handleMail(request:Request,env:PlatformEnv,actor:Actor,company:string,action?:string,invoice?:{subject:string;text:string;allowAnyRecipient?:boolean;attachment:{content:ArrayBuffer;filename:string;type:string;disposition:"attachment"}}){
+export async function handleMail(request:Request,env:PlatformEnv,actor:Actor,company:string,action?:string,invoice?:{subject:string;text:string;allowAnyRecipient?:boolean;attachment:{content:ArrayBuffer;filename:string;type:string;disposition:"attachment"}},scope?:MailScope){
  await requireCompany(env.PLATFORM_DB,actor,company,request.method!=='GET');
- if(request.method==='GET'&&!action)return reply(await info(env,company,actor));
+ if(request.method==='GET'&&!action)return reply(await info(env,company,actor,scope));
  if(actor.support)throw new HttpError(403,'Afslut impersonering før mailopsætning eller testmail.');
  const input=await jsonBody(request);
  if(request.method==='PUT'&&!action){
-  const current=await row(env,company),name=senderName(input.senderName),replyTo=mailAddress(input.replyTo,true),custom=mailAddress(input.customFrom,true);
+  const current=await row(env,company,scope),name=senderName(input.senderName),replyTo=mailAddress(input.replyTo,true),custom=mailAddress(input.customFrom,true);
   const account=custom&&typeof input.accountId==='string'?input.accountId.trim():'';
   if(custom&&!/^[a-f0-9]{32}$/.test(account))throw new HttpError(400,'Angiv Cloudflare Account ID (32 tegn).');
   const token=typeof input.apiToken==='string'?input.apiToken.trim():'';
@@ -57,11 +70,13 @@ export async function handleMail(request:Request,env:PlatformEnv,actor:Actor,com
   const revision=crypto.randomUUID();
   const verified=custom&&current?.custom_from===custom&&current.account_id===account&&!token&&current.verified_revision===current.revision?revision:null;
   await env.PLATFORM_DB.batch([
+   scope?env.PLATFORM_DB.prepare(`INSERT INTO market_mail(company_id,webshop_id,market_id,sender_name,reply_to,custom_from,account_id,credentials_encrypted,revision,verified_revision) VALUES(?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(company_id,webshop_id,market_id) DO UPDATE SET sender_name=excluded.sender_name,reply_to=excluded.reply_to,custom_from=excluded.custom_from,account_id=excluded.account_id,credentials_encrypted=excluded.credentials_encrypted,revision=excluded.revision,verified_revision=excluded.verified_revision,updated_at=CURRENT_TIMESTAMP`).bind(company,scope.shop,scope.market,name,replyTo,custom,account,credentials,revision,verified):
    env.PLATFORM_DB.prepare(`INSERT INTO company_mail(company_id,sender_name,reply_to,custom_from,account_id,credentials_encrypted,revision,verified_revision) VALUES(?,?,?,?,?,?,?,?)
     ON CONFLICT(company_id) DO UPDATE SET sender_name=excluded.sender_name,reply_to=excluded.reply_to,custom_from=excluded.custom_from,account_id=excluded.account_id,credentials_encrypted=excluded.credentials_encrypted,revision=excluded.revision,verified_revision=excluded.verified_revision,updated_at=CURRENT_TIMESTAMP`).bind(company,name,replyTo,custom,account,credentials,revision,verified),
    audit(env,company,actor,'mail.settings.saved',{mode:custom?'custom':'standard'})
   ]);
-  return reply(await info(env,company,actor));
+  return reply(await info(env,company,actor,scope));
  }
  if(request.method!=='POST'||action!=='test')throw new HttpError(404,'Mailfunktionen findes ikke.');
  // Sender checks stay self-only. The invoice demo may use an explicit, validated recipient,
@@ -76,7 +91,7 @@ export async function handleMail(request:Request,env:PlatformEnv,actor:Actor,com
  if(!local && (!env.PLATFORM_MAIL_TEST||(!allowAnyRecipient&&!selfAllowed)))throw new HttpError(403,'Denne adresse er ikke godkendt til afsendertest.');
  const previous=await env.PLATFORM_DB.prepare('SELECT actor_id,status,recipient,sender FROM mail_test_deliveries WHERE company_id=? AND request_id=?').bind(company,id).first<{actor_id:string;status:string;recipient:string;sender:string}>();
  if(previous){if(previous.actor_id!==actor.id)throw new HttpError(409,'Testmailen tilhører en anden session.');return reply(previous);}
- const settings=await row(env,company),custom=input.mode==='custom';
+ const settings=await sendingRow(env,company,scope),custom=input.mode==='custom',own=await ownScope(env,company,scope);
  if(custom&&(!settings?.custom_from||!settings.credentials_encrypted))throw new HttpError(400,'Gem din egen afsender og Cloudflare-oplysninger først.');
  const from=custom?settings!.custom_from:standardFrom(env);
  const name=settings?.sender_name||await defaultSenderName(env,company);
@@ -108,27 +123,27 @@ export async function handleMail(request:Request,env:PlatformEnv,actor:Actor,com
   }
   await env.PLATFORM_DB.batch([
    env.PLATFORM_DB.prepare("UPDATE mail_test_deliveries SET status='accepted',receipt=? WHERE company_id=? AND request_id=?").bind(receipt,company,id),
-   ...(custom?[env.PLATFORM_DB.prepare('UPDATE company_mail SET verified_revision=revision WHERE company_id=? AND revision=?').bind(company,settings!.revision)]:[]),
+   ...(custom?[env.PLATFORM_DB.prepare(`UPDATE ${mailTable(own)} SET verified_revision=revision WHERE ${mailWhere(own)} AND revision=?`).bind(...mailKeys(company,own),settings!.revision)]:[]),
    audit(env,company,actor,'mail.test.accepted',{requestId:id,mode:input.mode,recipient})
   ]);
   return reply({status:'accepted',recipient,sender:from});
  }catch{
   // Any send may have been accepted. Keep the durable claim and invalidate custom selection until an explicit new test succeeds.
-  if(custom)await env.PLATFORM_DB.prepare('UPDATE company_mail SET verified_revision=NULL WHERE company_id=? AND revision=?').bind(company,settings!.revision).run();
+  if(custom)await env.PLATFORM_DB.prepare(`UPDATE ${mailTable(own)} SET verified_revision=NULL WHERE ${mailWhere(own)} AND revision=?`).bind(...mailKeys(company,own),settings!.revision).run();
   return reply({status:'uncertain',recipient,sender:from});
  }
 }
 
 // Ordinary invoice delivery is separate from the demo endpoint and can only use
 // the Shopify-derived recipient and a persisted invoice selected by the server.
-export async function sendCustomerInvoice(env:PlatformEnv,actor:Actor,company:string,shop:string,invoiceId:string,recipientValue:string,subject:string,text:string,attachment:{content:ArrayBuffer;filename:string;type:string;disposition:"attachment"},kind:'invoice'|'credit'='invoice'){
+export async function sendCustomerInvoice(env:PlatformEnv,actor:Actor,company:string,shop:string,invoiceId:string,recipientValue:string,subject:string,text:string,attachment:{content:ArrayBuffer;filename:string;type:string;disposition:"attachment"},kind:'invoice'|'credit'='invoice',scope?:MailScope){
  await requireCompany(env.PLATFORM_DB,actor,company,true);
  if(actor.support||actor.platformAdmin||env.PLATFORM_ENV!=='production'||String(env.PLATFORM_CUSTOMER_EMAIL)!=='enabled')throw new HttpError(403,'Kundeafsendelse er ikke aktiveret her.');
  await requireWebshop(env.PLATFORM_DB,actor,company,shop);
  // A credit note is sent like an invoice, with its own receipt so each document is mailed at most once.
  const invoice=await env.PLATFORM_DB.prepare(`SELECT id FROM ${kind==='credit'?'platform_credit_notes':'platform_invoices'} WHERE company_id=? AND webshop_id=? AND id=? AND status='generated'`).bind(company,shop,invoiceId).first();
  if(!invoice)throw new HttpError(404,kind==='credit'?'Den genererede kreditnota findes ikke i webshoppen.':'Den genererede faktura findes ikke i webshoppen.');
- const recipient=mailAddress(recipientValue),settings=await row(env,company),from=effectiveSender(settings,standardFrom(env));
+ const recipient=mailAddress(recipientValue),settings=await sendingRow(env,company,scope),from=effectiveSender(settings,standardFrom(env));
  const name=settings?.sender_name||await defaultSenderName(env,company);
  const key:ReceiptKey={company,shop,provider:'invoice',module:kind==='credit'?'credit_email':'email',externalId:invoiceId,destination:'customer'};
  let current=await readReceipt(env,key);

@@ -4,18 +4,20 @@ import {tier1Fetch as fetch} from '@/platform/transport';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from '@/components/ui/dialog';
-type Sender={senderName:string;replyTo:string;customFrom:string;accountId:string;credentialsSaved:boolean;status:string;standardFrom:string;effectiveFrom:string;testRecipient:string;testEnabled:boolean;localPreview:boolean};
-export function InvoiceSender(){
+type Sender={senderName:string;replyTo:string;customFrom:string;accountId:string;credentialsSaved:boolean;status:string;standardFrom:string;effectiveFrom:string;testRecipient:string;testEnabled:boolean;localPreview:boolean;inherited?:boolean};
+// Danmark's sender, or a market's own (marketId); a market without its own sends as Danmark.
+export function InvoiceSender({marketId}:{marketId?:string}={}){
+ const withQ=(path:string)=>marketId?path+'?marketId='+encodeURIComponent(marketId):path;
  const [saved,setSaved]=useState<Sender|null>(null),[form,setForm]=useState<Sender|null>(null),[custom,setCustom]=useState(false),[token,setToken]=useState(''),[guide,setGuide]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[dirty,setDirty]=useState(false);
  const [recipient,setRecipient]=useState(''),[testMessage,setTestMessage]=useState('');
- async function load(){const r=await fetch('/api/invoices/sender');const d=await r.json() as Sender & {error?:string};if(!r.ok)throw Error(d.error);setSaved(d);setForm(d);setCustom(!!d.customFrom);setDirty(false);}
+ async function load(){const r=await fetch(withQ('/api/invoices/sender'));const d=await r.json() as Sender & {error?:string};if(!r.ok)throw Error(d.error);setSaved(d);setForm(d);setCustom(!!d.customFrom);setDirty(false);}
  useEffect(()=>{void load().catch(e=>setMessage(e.message));},[]);
  const change=(patch:Partial<Sender>)=>{setForm(v=>v?{...v,...patch}:v);setDirty(true);setMessage('');};
- async function save(){setBusy(true);setMessage('');try{const r=await fetch('/api/invoices/sender',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({senderName:form?.senderName,replyTo:form?.replyTo,customFrom:custom?form?.customFrom:'',accountId:custom?form?.accountId:'',apiToken:custom?token:''})});const d=await r.json() as Sender & {error?:string};if(!r.ok)throw Error(d.error);setToken('');await load();setMessage(custom?'Gemt. Send testmailen nedenfor for at kontrollere din egen adresse.':'Standardafsender valgt.');}catch(e){setMessage(e instanceof Error?e.message:'Kunne ikke gemmes.');}finally{setBusy(false);}}
+ async function save(){setBusy(true);setMessage('');try{const r=await fetch(withQ('/api/invoices/sender'),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({senderName:form?.senderName,replyTo:form?.replyTo,customFrom:custom?form?.customFrom:'',accountId:custom?form?.accountId:'',apiToken:custom?token:''})});const d=await r.json() as Sender & {error?:string};if(!r.ok)throw Error(d.error);setToken('');await load();setMessage(custom?'Gemt. Send testmailen nedenfor for at kontrollere din egen adresse.':'Standardafsender valgt.');}catch(e){setMessage(e instanceof Error?e.message:'Kunne ikke gemmes.');}finally{setBusy(false);}}
  async function test(){
   setBusy(true);setTestMessage('');
   try{
-   const r=await fetch('/api/invoices/email-test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({recipient,requestId:crypto.randomUUID()})});
+   const r=await fetch('/api/invoices/email-test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({recipient,requestId:crypto.randomUUID(),...(marketId?{marketId}:{})})});
    const d=await r.json() as {recipient?:string;error?:string};
    if(!r.ok)throw Error(d.error||'Testmailen kunne ikke bekræftes.');
    setTestMessage(`Mailtjenesten har accepteret eksempelfakturaen til ${d.recipient}. Kontrollér indbakke og uønsket mail; accept er ikke en garanti for levering i indbakken.`);
@@ -26,7 +28,7 @@ export function InvoiceSender(){
  return <section className="mb-6 rounded-2xl border bg-white p-5 sm:p-6">
  <h2 className="text-lg font-semibold">3. Afsender og testmail</h2>
  <p className="mt-2 text-sm text-muted-foreground">Vælg, hvem kunden ser som afsender, og prøv den færdige mail med en eksempelfaktura.</p>
- {saved&&<p className="my-4 rounded-xl bg-muted/40 p-4 text-sm">Aktiv afsender: <strong>{saved.effectiveFrom}</strong></p>}
+ {saved&&<p className="my-4 rounded-xl bg-muted/40 p-4 text-sm">Aktiv afsender: <strong>{saved.effectiveFrom}</strong>{saved.inherited&&<span className="mt-1 block text-xs text-muted-foreground">Bruger afsenderen fra Danmark, indtil du gemmer en særskilt afsender her, fx med jeres svenske domæne.</span>}</p>}
  <fieldset disabled={!form||busy} className="mt-4 space-y-4">
  <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm">Afsendernavn<Input value={form?.senderName||''} onChange={e=>change({senderName:e.target.value})}/></label><label className="text-sm">Svaradresse (valgfri)<Input type="email" value={form?.replyTo||''} placeholder="faktura@ditfirma.dk" onChange={e=>change({replyTo:e.target.value})}/></label></div>
  <details className="group rounded-xl border">
