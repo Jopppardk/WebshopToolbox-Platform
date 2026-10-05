@@ -1,40 +1,26 @@
-import { orderPaymentIntegration, paymentProviders } from './catalog';
-import {recordHistory} from './record-history';
-import { payoutStatusLabel } from './tier1/src/lib/payout-status';
 import { normalizeSyncInterval } from './tier1/src/lib/sync-schedule';
-import {handleProductionSale} from './production-sales';
-import {handleProductionOther} from './production-proposals';
-import {productionWrites} from './production-policy';
+import { handleProductionSale } from './production-sales';
+import { handleProductionOther } from './production-proposals';
+import { productionWrites } from './production-policy';
 import { bookingStatuses } from './booking-onboarding';
-import { bookingStatusLabel } from './tier1/src/lib/booking-status';
-import {handleMail} from './mail';
-import { flatpayRefund } from './flatpay-refunds';
+import { handleMail } from './mail';
 import { requireCompany } from './auth';
 import { jsonBody } from './invitations';
 import { unseal } from './connections';
-import { readDineroAccounts,readDineroSuppliers } from './dinero-read';
-import { handleOperations } from './operations';
-import { runSalesNow } from './production-jobs';
+import { readDineroAccounts, readDineroSuppliers } from './dinero-read';
 import { handleStocktake } from './stocktake';
 import { handleInvoices } from './invoices';
-import { handleDocuments } from './documents';
 import { handlePackaging } from './packaging';
-import { handlePayments } from './payments';
 import { financeService } from './finance-source';
-import { dataCutoff,dataStartDate } from './tier1-history';
-import { orderPeriodWindow } from './tier1/src/lib/order-period';
-import { formatDate } from './tier1/src/lib/format';
-import { HOME_COUNTRY, marketHold } from './order-markets';
-import { legacyRefundSql, saleBookedSql, syncOrderRefunds, type OrderRefund } from './order-refunds';
-import { ensureCreditNote } from './credit-notes';
-import { orderDetail } from './order-detail';
-import { labelsEnabled } from './shipmondo-labels';
+import { dataStartDate } from './tier1-history';
 import { ensureMarketRow } from './invoice-profiles';
-import { HttpError,reply,type Actor,type PlatformEnv } from './types';
+import { HttpError, reply, type Actor, type PlatformEnv } from './types';
+import { forwarded, minor, pageNumber } from './tier1-data-shared';
+import { orderData } from './tier1-orders';
+import { orderRefundData } from './tier1-order-refunds';
+import { documentData } from './tier1-documents';
+import { providerRecordData } from './tier1-provider-records';
 
-const forwarded=(request:Request,body:unknown,method='POST')=>new Request(request.url,{method,headers:request.headers,body:JSON.stringify(body)});
-function minor(amount:string,currency:string){const digits=new Intl.NumberFormat('en',{style:'currency',currency}).resolvedOptions().maximumFractionDigits!;const match=/^(-?)(\d+)(?:\.(\d+))?$/.exec(amount);if(!match||/[1-9]/.test((match[3]||'').slice(digits)))throw new HttpError(409,'Ugyldigt beløb.');const n=Number(match[2])*10**digits+Number((match[3]||'').padEnd(digits,'0').slice(0,digits));if(!Number.isSafeInteger(n))throw new HttpError(409,'Beløbet er for stort.');return match[1]?-n:n;}
-function pageNumber(value:string|null,fallback:number,max=100000){const n=value===null?fallback:Number(value);if(!Number.isSafeInteger(n)||n<0||n>max)throw new HttpError(400,'Ugyldigt sidetal.');return n;}
 export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string,path:string):Promise<Response|null>{
  const db=env.PLATFORM_DB,url=new URL(request.url),get=request.method==='GET';
  if(path==='/runtime'&&get)return reply({production:env.PLATFORM_ENV==='production',bookkeeping:productionWrites(env),customerEmail:env.PLATFORM_ENV==='production'&&env.PLATFORM_CUSTOMER_EMAIL==='enabled'});
@@ -144,150 +130,6 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   const b=await jsonBody(request,40000);const response=await handleStocktake(forwarded(request,b),env,actor,company,shop);
   if(['prepare','prepare-reconcile'].includes(String(b.action))&&response.ok){const d=await response.json() as any;return reply({...d,operationId:d.id});}return response;
  }
- if(path==='/orders/detail'){if(!get)throw new HttpError(405,'Brug Hent.');return orderDetail(env,company,shop,url);}
- // Tilbagebetalinger: every refund of an order, whatever the gateway, with its credit note and booking.
- if(path==='/order-refunds/sync'){
-  if(request.method!=='POST')throw new HttpError(405,'Brug Hent tilbagebetalinger.');
-  const result=await syncOrderRefunds(env,company,shop,25);
-  return reply({synced:result.refunds,orders:result.orders,more:result.orders===25});
- }
- if(path==='/order-refunds/credit-note'){
-  if(!get)throw new HttpError(405,'Brug Hent.');
-  const id=url.searchParams.get('externalId')||'';if(!/^gid:\/\/shopify\/Refund\/\d{1,30}$/.test(id))throw new HttpError(400,'Vælg en tilbagebetaling.');
-  let note=await db.prepare("SELECT number,r2_key FROM platform_credit_notes WHERE company_id=? AND webshop_id=? AND external_id=? AND status='generated'").bind(company,shop,id).first<{number:string;r2_key:string}>();
-  if(!note&&!actor.support){
-   // Made on first view when the order was invoiced here, exactly as booking or mailing would make it.
-   const row=await db.prepare('SELECT payload_json FROM order_refunds WHERE company_id=? AND webshop_id=? AND external_id=?').bind(company,shop,id).first<{payload_json:string}>();
-   const made=row?await ensureCreditNote(env,company,shop,JSON.parse(row.payload_json)):null;
-   if(made)note={number:made.number,r2_key:made.key};
-  }
-  if(!note)throw new HttpError(404,'Der findes ingen kreditnota. Ordren er ikke faktureret i WebshopToolbox.');
-  const file=await env.PLATFORM_DOCUMENTS.get(note.r2_key);if(!file)throw new HttpError(404,'Den gemte kreditnota mangler.');
-  return new Response(file.body,{headers:{'Content-Type':'application/pdf','Content-Disposition':'inline; filename="kreditnota-'+note.number+'.pdf"','Cache-Control':'no-store'}});
- }
- if(path==='/order-refunds'){
-  if(!get)throw new HttpError(405,'Brug Hent.');
-  const from=await dataCutoff(env,company,shop),status=await bookingStatuses(env,company,shop),held=await marketHold(db,company,shop);
-  const connected=new Set((await db.prepare('SELECT provider FROM payment_connections WHERE company_id=? AND webshop_id=?').bind(company,shop).all<{provider:string}>()).results.map(r=>r.provider));
-  const rows=(await db.prepare(`SELECT s.external_id,s.occurred_at,s.payload_json,c.number credit_number,m.country,m.currency market_currency,
- EXISTS(SELECT 1 FROM platform_invoices i WHERE i.company_id=s.company_id AND i.webshop_id=s.webshop_id AND i.external_id=s.order_id AND i.status='generated') invoiced,${legacyRefundSql} legacy,${saleBookedSql} sale_booked,
- (SELECT r.phase FROM production_receipts r WHERE r.company_id=s.company_id AND r.webshop_id=s.webshop_id AND r.provider='invoice' AND r.module='credit_email' AND r.external_id=c.id) mail
- FROM order_refunds s LEFT JOIN platform_credit_notes c ON c.company_id=s.company_id AND c.webshop_id=s.webshop_id AND c.external_id=s.external_id AND c.status='generated'
- LEFT JOIN order_markets m ON m.company_id=s.company_id AND m.webshop_id=s.webshop_id AND m.external_id=s.order_id
- WHERE s.company_id=? AND s.webshop_id=? AND s.occurred_at>=? ORDER BY s.occurred_at DESC,s.external_id LIMIT 5001`).bind(company,shop,from).all<any>()).results;
-  if(rows.length>5000)throw new HttpError(409,'Vælg en kortere historik.');
-  const fromDay=url.searchParams.get('from')||'',toDay=url.searchParams.get('to')||'',search=(url.searchParams.get('search')||'').trim().toLowerCase();
-  const offset=pageNumber(url.searchParams.get('offset'),0),limit=pageNumber(url.searchParams.get('limit'),25,100)||25;
-  const list=rows.map(row=>{
-   const r=JSON.parse(row.payload_json) as OrderRefund,digits=new Intl.NumberFormat('en',{style:'currency',currency:r.currency}).resolvedOptions().maximumFractionDigits!;
-   const foreign=held(row.country??null,row.market_currency??null,r.currency);
-   const booking=row.legacy?'booked':status('shopify','order_refunds',r.id,r.processedAt,row.payload_json);
-   return {id:r.id,orderId:r.orderId,orderName:r.orderName,date:r.processedAt,currency:r.currency,amount:r.gross/10**digits,full:r.full,
-    gateways:r.gateways.map(g=>{const label=orderPaymentIntegration([g.gateway],connected);return label==='Uden integration'?g.name||label:label;}),
-    lines:r.lines.map(l=>({kind:l.kind,title:l.title,quantity:l.quantity,amount:(l.net+l.tax)/10**digits})),note:r.note,problem:r.problem,
-    creditNote:row.credit_number||null,invoiced:!!row.invoiced,mailed:row.mail==='accepted',legacy:!!row.legacy,foreign,booking:row.legacy||['booked','draft','booked_changed','failed_manual','failed_retry','historical','setup_required'].includes(booking)?booking:foreign?'foreign':!row.sale_booked?'sale_pending':booking};
-  }).filter(r=>(!fromDay||r.date.slice(0,10)>=fromDay)&&(!toDay||r.date.slice(0,10)<=toDay)&&(!search||[r.orderName,r.id,r.creditNote||'',...r.gateways].join(' ').toLowerCase().includes(search)));
-  const totals:Record<string,{currency:string;count:number;amount:number}>={};
-  for(const r of list){const t=totals[r.currency]??={currency:r.currency,count:0,amount:0};t.count++;t.amount=Math.round((t.amount+r.amount)*100)/100;}
-  return reply({total:list.length,refunds:list.slice(offset,offset+limit),totals:Object.values(totals)});
- }
- if(path==='/sales/preview'){
-  const response=await handleOperations(request,env,actor,company,shop,'sales-preview');if(!response.ok)return response;const data=await response.json() as any;return reply({...data,notes:['Kontrollen opretter ingen bogføring.'],checkedAt:new Date().toISOString()});
- }
- // After Synkronisér nu: invoice, send and book fulfilled orders right away, as far as the automation switches allow.
- if(path==='/shopify/orders/process'){if(get)throw new HttpError(405,'Brug Synkronisér nu.');await requireCompany(env.PLATFORM_DB,actor,company,true);return reply(await runSalesNow(env,company,shop));}
- if(path==='/shopify/orders'){
-  if(!get){const response=await handleOperations(request,env,actor,company,shop,'orders');if(!response.ok)return response;const data=await response.json() as any;return reply({...data,synced:data.count,invoicesCreated:0,orders:[]});}
-  const offset=pageNumber(url.searchParams.get('offset'),0),limit=pageNumber(url.searchParams.get('limit'),50,100)||50;
-  let period;try{period=orderPeriodWindow(url.searchParams.get('period')||'all',await dataCutoff(env,company,shop));}catch{throw new HttpError(400,'Vælg en gyldig periode.');}
-  const countryFilter=url.searchParams.get('country')||'';
-  if(countryFilter&&countryFilter!=='unknown'&&!/^[A-Z]{2}$/.test(countryFilter))throw new HttpError(400,'Vælg et gyldigt land.');
-  const markets="FROM operation_snapshots s LEFT JOIN order_markets m ON m.company_id=s.company_id AND m.webshop_id=s.webshop_id AND m.external_id=s.external_id WHERE s.company_id=? AND s.webshop_id=? AND s.module='orders' AND s.occurred_at>=? AND s.occurred_at<? AND (?='' OR (?='unknown' AND m.country IS NULL) OR m.country=?)";
-  const total=await db.prepare('SELECT count(*) AS n '+markets).bind(company,shop,period.from,period.until,countryFilter,countryFilter,countryFilter).first<{n:number}>();
-  const countries=(await db.prepare("SELECT m.country,count(*) n FROM operation_snapshots s JOIN order_markets m ON m.company_id=s.company_id AND m.webshop_id=s.webshop_id AND m.external_id=s.external_id WHERE s.company_id=? AND s.webshop_id=? AND s.module='orders' AND m.country IS NOT NULL GROUP BY m.country ORDER BY n DESC").bind(company,shop).all<{country:string;n:number}>()).results;
-  const rows=(await db.prepare('SELECT s.payload_json,m.country,m.currency market_currency,m.presentment_total,m.order_total,m.net_payment,(SELECT json_object(\'phase\',l.phase,\'printedAt\',l.printed_at,\'printCount\',l.print_count,\'message\',l.message) FROM shipping_labels l WHERE l.company_id=s.company_id AND l.webshop_id=s.webshop_id AND l.order_id=s.external_id) label '+markets+' ORDER BY s.occurred_at DESC,s.external_id LIMIT ? OFFSET ?').bind(company,shop,period.from,period.until,countryFilter,countryFilter,countryFilter,limit,offset).all<{payload_json:string;country:string|null;market_currency:string|null;presentment_total:string|null;order_total:string|null;net_payment:string|null;label:string|null}>()).results;
-  const bookingStatus=await bookingStatuses(env,company,shop);
-  const held=await marketHold(db,company,shop);
-  const connectedPayments=new Set((await db.prepare('SELECT provider FROM payment_connections WHERE company_id=? AND webshop_id=?').bind(company,shop).all<{provider:string}>()).results.map(r=>r.provider));
-  const money=(amount:string,currency:string)=>new Intl.NumberFormat('da-DK',{style:'currency',currency}).format(Number(amount));
-  const todayWindow=orderPeriodWindow('today',await dataCutoff(env,company,shop));
-  const today=await db.prepare("SELECT count(*) AS n FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module='orders' AND occurred_at>=? AND occurred_at<?").bind(company,shop,todayWindow.from,todayWindow.until).first<{n:number}>();
-  return reply({labels:await labelsEnabled(env,company,shop),total:total?.n||0,today:today?.n||0,countries:countries.map(c=>c.country),orders:rows.map(row=>{const o=JSON.parse(row.payload_json),m=o.currentTotalPriceSet.shopMoney;return {label:row.label?JSON.parse(row.label):null,country:row.country??null,customerCurrency:row.market_currency??null,customerTotal:row.presentment_total&&row.market_currency&&row.market_currency!==m.currencyCode?money(row.presentment_total,row.market_currency):null,id:o.name+(o.test?' (test)':''),externalId:o.id,date:formatDate(o.createdAt),createdAt:o.createdAt,shipped:o.cancelledAt?'Annulleret':o.displayFulfillmentStatus==='FULFILLED'?'Afsendt':'Ikke afsendt',amount:money(row.order_total??m.amount,m.currencyCode),realized:money(row.net_payment??String(Math.max(0,Number(m.amount)-Number(o.totalRefundedSet?.shopMoney.amount||0))),m.currencyCode),status:held(row.country??null,row.market_currency??null,m.currencyCode)?'Afventer · marked ikke sat op':bookingStatusLabel(bookingStatus('shopify','orders',o.id,o.createdAt,row.payload_json)),currency:m.currencyCode,total:m.amount,paymentStatus:o.displayFinancialStatus,paymentProvider:orderPaymentIntegration(o.paymentGatewayNames,connectedPayments)};})});
- }
- if(['/sales/log','/payouts/log','/refunds/log'].includes(path)){
-  if(!get)throw new HttpError(405,'Brug Hent log.');
-  const provider=url.searchParams.get('provider')||'shopify',normalized=provider==='shopify_payments'?'shopify':provider;
-  if(!['shopify',...paymentProviders].includes(normalized)||path==='/sales/log'&&normalized!=='shopify')throw new HttpError(400,'Vælg en gyldig udbyder.');
-  const module=path==='/sales/log'?'orders':path==='/refunds/log'?(normalized==='flatpay'?'transactions':(url.searchParams.get('externalId')||'').startsWith('gid://shopify/Refund/')?'order_refunds':'refunds'):normalized==='flatpay'?'payments':normalized==='viabill'?'payout':normalized==='pensopay'?'settlements':'payouts';
-  return recordHistory(env,company,shop,normalized,module,url.searchParams.get('externalId')||'',pageNumber(url.searchParams.get('offset'),0));
- }
- if(path==='/documents'){
-  if(!get)return handleDocuments(request,env,actor,company,shop);
-  const id=url.searchParams.get('externalId');
-  if(id){const doc=await db.prepare('SELECT id FROM platform_payout_documents WHERE company_id=? AND webshop_id=? AND external_id=?').bind(company,shop,id).first<{id:string}>();if(!doc)throw new HttpError(404,'Generér rapporten først.');const next=new URL(request.url);next.searchParams.set('id',doc.id);return handleDocuments(new Request(next,request),env,actor,company,shop);}
-  const rows=(await db.prepare("SELECT s.external_id,s.payload_json,d.status FROM operation_snapshots s LEFT JOIN platform_payout_documents d ON d.company_id=s.company_id AND d.webshop_id=s.webshop_id AND d.external_id=s.external_id WHERE s.company_id=? AND s.webshop_id=? AND s.module='payouts' ORDER BY occurred_at DESC LIMIT 1000").bind(company,shop).all<any>()).results;
-  const flatpay=(await db.prepare("SELECT p.external_id,p.payload_json,d.status FROM payment_records p LEFT JOIN platform_payout_documents d ON d.company_id=p.company_id AND d.webshop_id=p.webshop_id AND d.external_id='flatpay:'||p.external_id WHERE p.company_id=? AND p.webshop_id=? AND p.provider='flatpay' AND p.kind='payments' AND (p.paid=1 OR p.external_id LIKE 'upcoming:%') ORDER BY p.occurred_at DESC LIMIT 1000").bind(company,shop).all<any>()).results;
-  const failed=new Set((await db.prepare("SELECT external_id FROM production_attempts WHERE company_id=? AND webshop_id=? AND job='reports' AND failures>0").bind(company,shop).all<{external_id:string}>()).results.map(r=>r.external_id));
-  const documents=[...rows.map(r=>{const p=JSON.parse(r.payload_json);return {externalId:r.external_id,date:p.issuedAt,provider:'shopify',amount:p.net,filename:r.external_id.split('/').pop()+'.pdf',ready:r.status==='generated',status:p.status,failed:r.status!=='generated'&&failed.has(r.external_id)};}),
-   // Upcoming Flatpay settlements are listed like Shopify's scheduled payouts; their report follows the payout.
-   ...flatpay.map(r=>{const p=JSON.parse(r.payload_json),upcoming=r.external_id.startsWith('upcoming:');return {externalId:'flatpay:'+r.external_id,date:upcoming?p.scheduledDate:p.paidDate,provider:'flatpay',amount:{amount:String(p.payoutAmount),currencyCode:p.currency},filename:upcoming?'Afregning '+p.settlementNumber:'flatpay-'+r.external_id+'.pdf',ready:r.status==='generated',status:upcoming?'SCHEDULED':'PAID',failed:r.status!=='generated'&&failed.has('flatpay:'+r.external_id)};})];
-  documents.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
-  return reply({documents});
- }
- if(path.startsWith('/invoices')){
-  const b:any=get?Object.fromEntries(url.searchParams):await jsonBody(request);
-  if(path==='/invoices/pdf'){const next=new URL(request.url);next.searchParams.set('webshopId',shop);return handleInvoices(new Request(next,request),env,actor,company,'pdf');}
-  if(path==='/invoices/email-test'){
-   if(request.method!=='POST')throw new HttpError(405,'Brug Send eksempelfaktura som test.');
-   const response=await handleInvoices(forwarded(request,{webshopId:shop,recipient:b.recipient,requestId:b.requestId,...(typeof b.marketId==='string'?{marketId:b.marketId}:{})}),env,actor,company,'example-test');if(!response.ok)return response;const result=await response.json() as any;
-   if(result.status!=='accepted')throw new HttpError(409,result.status==='preview'?'Lokal test: mailen er kun forhåndsvist, ikke sendt.':'Mailafsendelsen er usikker. Kontrollér status før nyt forsøg.');return reply({sent:true,recipient:result.recipient,invoiceNumber:'EKSEMPEL-001'});
-  }
-  let generated=0,hasMore=false,nextOffset=0;const warnings:string[]=[];
-  if(!get){
-   const cutoff=await dataCutoff(env,company,shop);
-   const offset=Number(b.offset||0);if(!Number.isSafeInteger(offset)||offset<0)throw new HttpError(400,'Ugyldig side.');
-   const ids=b.all?(await db.prepare('SELECT external_id FROM invoice_orders WHERE company_id=? AND webshop_id=? AND created_at>=? ORDER BY created_at DESC,external_id LIMIT 6 OFFSET ?').bind(company,shop,cutoff,offset).all<{external_id:string}>()).results:[{external_id:b.externalId}];
-   hasMore=ids.length>5;nextOffset=offset+5;
-   for(const item of ids.slice(0,5)){
-    if(!await db.prepare('SELECT 1 AS found FROM invoice_orders WHERE company_id=? AND webshop_id=? AND external_id=? AND created_at>=?').bind(company,shop,item.external_id,cutoff).first())throw new HttpError(404,'Ordren findes ikke i den valgte historik.');
-    try{const response=await handleInvoices(forwarded(request,{externalId:item.external_id,webshopId:shop}),env,actor,company,'generate');if(!response.ok)return response;generated++;}catch(e){if(!b.all)throw e;warnings.push(e instanceof HttpError?e.message:'Fakturaen kræver kontrol.');}
-   }
-  }
-  const rows=(await db.prepare('SELECT external_id,id,status,created_at FROM platform_invoices WHERE company_id=? AND webshop_id=? ORDER BY created_at DESC').bind(company,shop).all()).results;return reply({statuses:Object.fromEntries(rows.map((r:any)=>[r.external_id,r.status==='generated'?'Genereret':'Kræver kontrol'])),versions:Object.fromEntries(rows.map((r:any)=>[r.external_id,r.id])),generated,hasMore,nextOffset,warnings});
- }
- if(path==='/flatpay/records'||path==='/flatpay/sync'||path==='/flatpay/refunds'||path==='/viabill/records'||path==='/pensopay/records'){
-  const provider=path.includes('flatpay')?'flatpay':path.includes('pensopay')?'pensopay':'viabill';
-  const paymentRows=async()=>{const next=new URL(request.url);next.searchParams.set('from',[next.searchParams.get('from')||'',await dataStartDate(env,company,shop,provider)].sort().at(-1)!);const response=await handlePayments(new Request(next,{headers:request.headers}),env,actor,company,shop,provider,'records');if(!response.ok)return response;const d=await response.json() as any;const totals:Record<string,any>={};for(const r of d.rows){const t=totals[r.currency]??={currency:r.currency,count:0,amountMinor:0};t.count++;t.amountMinor+=r.amountMinor||0;}return reply({records:d.rows,totals:Object.values(totals),hasMore:d.hasMore});};
-  if(get){if(provider==='viabill'&&url.searchParams.has('id')){const row=await db.prepare("SELECT payload_json FROM payment_records WHERE company_id=? AND webshop_id=? AND provider='viabill' AND kind=? AND json_extract(payload_json,'$.id')=?").bind(company,shop,url.searchParams.get('kind')||'payout',url.searchParams.get('id')).first<{payload_json:string}>();if(!row)throw new HttpError(404,'Posten findes ikke.');return reply({record:JSON.parse(row.payload_json)});}return paymentRows();}
-  const b=await jsonBody(request),cutoff=await dataStartDate(env,company,shop,provider);
-  const saved=await db.prepare('SELECT start_date FROM payment_connections WHERE company_id=? AND webshop_id=? AND provider=?').bind(company,shop,provider).first<{start_date:string}>();const start=[String((provider==='flatpay'&&path==='/flatpay/sync'?b.next:undefined)||b.from||b.start||cutoff),cutoff,saved?.start_date||''].sort().at(-1)!;
-  const end=String(b.to||b.end||new Date().toISOString().slice(0,10));
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||!Number.isFinite(Date.parse(start))||!/^\d{4}-\d{2}-\d{2}$/.test(end)||!Number.isFinite(Date.parse(end)))throw new HttpError(400,'Vælg en gyldig periode.');
-  const boundedEnd=provider==='flatpay'&&path==='/flatpay/sync'?[end,new Date(Date.parse(start)+30*86400000).toISOString().slice(0,10)].sort()[0]:end;
-  const response=await handlePayments(forwarded(request,{...b,start,end:boundedEnd,kind:b.kind||(path==='/flatpay/refunds'?'transactions':provider==='flatpay'?'payments':provider==='pensopay'?'settlements':'payout'),cursor:b.next||b.cursor}),env,actor,company,shop,provider,'records');if(!response.ok)return response;const data=await response.json() as any;
-  if(path==='/flatpay/records'){const next=new URL(request.url);next.searchParams.set('kind',String(b.kind||'transactions'));next.searchParams.set('from',start);next.searchParams.set('to',end);const records:unknown[]=[];for(let offset=0;offset<=1000;offset+=50){next.searchParams.set('offset',String(offset));const response=await handlePayments(new Request(next,{headers:request.headers}),env,actor,company,shop,provider,'records');if(!response.ok)return response;const value=await response.json() as any;records.push(...value.rows);if(!value.hasMore)return reply({records});}throw new HttpError(409,'Vælg en kortere periode med højst 1000 poster.');}
-  return reply({...data,...(path==='/flatpay/sync'?{next:boundedEnd<end?new Date(Date.parse(boundedEnd)+86400000).toISOString().slice(0,10):null}:{}),synced:data.count,skipped:0,mismatches:0,message:'Poster hentet. Ingen bogføring udført.'});
- }
- if(!get){const module=path.includes('payout')?'payouts':path.includes('refund')?'refunds':'payments';const response=await handleOperations(request,env,actor,company,shop,module);if(!response.ok)return response;const data=await response.json() as any;return reply({...data,synced:data.count});}
- const module=path.includes('payout')?'payouts':path.includes('refund')?'refunds':'payments';
- const bookingStatus=await bookingStatuses(env,company,shop);
- const from=await dataCutoff(env,company,shop),offset=pageNumber(url.searchParams.get('offset'),0),limit=pageNumber(url.searchParams.get('limit'),50,100)||50;
- const rows=(await db.prepare('SELECT payload_json FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module=? AND occurred_at>=? ORDER BY occurred_at DESC,external_id LIMIT 10001').bind(company,shop,module,from).all<{payload_json:string}>()).results.map(r=>JSON.parse(r.payload_json));
- if(rows.length>10000)throw new HttpError(409,'Vælg en kortere historik.');
- if(module==='payouts'){
-  // Each provider stores its payouts under its own kind; Pensopay 'payments' are card payments, not payouts.
-  const payments=(await db.prepare("SELECT provider,kind,payload_json,occurred_at,external_id FROM payment_records WHERE company_id=? AND webshop_id=? AND ((provider='flatpay' AND kind='payments') OR (provider='viabill' AND kind='payout') OR (provider='pensopay' AND kind='settlements')) AND occurred_at>=? ORDER BY occurred_at DESC LIMIT 10001").bind(company,shop,from).all<any>()).results;
-  const list=rows.map(p=>({id:p.id,provider:'shopify_payments',label:'Shopify Payments',date:p.issuedAt,amount:Number(p.net.amount),currency:p.net.currencyCode,status:payoutStatusLabel(p.status),booking:bookingStatus('shopify','payouts',p.id,p.issuedAt,JSON.stringify(p),p.status!=='PAID'&&!['FAILED','CANCELED','CANCELLED'].includes(p.status)),canBook:false,detail:{}}));
-  for(const row of payments){const p=JSON.parse(row.payload_json);if(row.provider==='pensopay'){list.push({id:row.external_id,provider:'pensopay',label:'Pensopay',date:p.payoutDate||p.date,amount:p.amountMinor/100,currency:p.currency,status:p.cancelled?'Annulleret':p.paidDate?'Udbetalt':'Kommende',booking:'not_enabled',canBook:false,detail:p});continue;}list.push({id:row.external_id,provider:row.provider,label:row.provider==='flatpay'?'Flatpay':'ViaBill',date:row.occurred_at,amount:row.provider==='flatpay'?p.payoutAmount:p.amountMinor/10**new Intl.NumberFormat('en',{style:'currency',currency:p.currency}).resolvedOptions().maximumFractionDigits!,currency:p.currency,status:row.provider==='flatpay'?(p.paidDate?'Udbetalt':'Kommende'):'Udbetalt',booking:bookingStatus(row.provider,row.kind,row.external_id,row.occurred_at,row.payload_json,row.provider==='flatpay'&&!p.paidDate),canBook:false,detail:p});}
-  list.sort((a,b)=>b.date.localeCompare(a.date));return reply({total:list.length,payouts:list.slice(offset,offset+limit)});
- }
- const refundSources=new Map<string,{externalId:string;json:string}>();
- if(module==='refunds'){
-  const saved=await db.prepare("SELECT metadata_json FROM payment_connections WHERE company_id=? AND webshop_id=? AND provider='flatpay'").bind(company,shop).first<{metadata_json:string}>();
-  if(saved){const metadata=JSON.parse(saved.metadata_json),cutoff=await dataStartDate(env,company,shop,'flatpay');const records=(await db.prepare("SELECT external_id,payload_json FROM payment_records WHERE company_id=? AND webshop_id=? AND provider='flatpay' AND kind='transactions' AND occurred_at>=? LIMIT 10001").bind(company,shop,cutoff).all<{external_id:string;payload_json:string}>()).results;if(records.length>10000)throw new HttpError(409,'Vælg en kortere historik.');for(const r of records){try{const p=flatpayRefund(JSON.parse(r.payload_json),metadata.merchantID,metadata.agreementId);if(p){rows.push(p);refundSources.set(p.id,{externalId:r.external_id,json:r.payload_json});}}catch{throw new HttpError(409,'Flatpay-refunderingen kræver kontrol af beløbsgrundlaget.');}}}
-  rows.sort((a,b)=>b.transactionDate.localeCompare(a.transactionDate));
- }
- const filtered=rows.filter(p=>(!url.searchParams.get('from')||p.transactionDate.slice(0,10)>=url.searchParams.get('from')!)&&(!url.searchParams.get('to')||p.transactionDate.slice(0,10)<=url.searchParams.get('to')!)&&(!url.searchParams.get('search')||JSON.stringify(p).toLowerCase().includes(url.searchParams.get('search')!.toLowerCase())));
- const summary:Record<string,any>={};for(const p of filtered){const c=p.amount.currencyCode;const s=summary[c]??={currency:c,count:0,gross:0,fees:0,net:0};s.count++;s.gross+=minor(p.amount.amount,c);s.fees+=minor(p.fee.amount,c);s.net+=minor(p.net.amount,c);}
- return reply({payments:filtered.slice(offset,offset+limit).map(p=>({...p,logExternalId:refundSources.get(p.id)?.externalId||p.id,bookingStatus:module==='payments'?'not_enabled':bookingStatus(p.provider==='flatpay'?'flatpay':'shopify',p.provider==='flatpay'?'transactions':'refunds',refundSources.get(p.id)?.externalId||p.id,p.transactionDate,refundSources.get(p.id)?.json||JSON.stringify(p))})),summary:Object.values(summary)});
+ const context={request,env,actor,company,shop,path,db,url,get};
+ return await orderData(context)??await orderRefundData(context)??await documentData(context)??await providerRecordData(context);
 }

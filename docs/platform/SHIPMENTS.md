@@ -80,7 +80,7 @@ Demokontoen viser fiktive forsendelser og kalder ikke Shopify.
 
 - `lib/platform-shipments.test.mjs`: genkendelse af fragtfirma og pakkeshop, trin og datoer,
   annullerede afsendelser, usikre links og fristberegning.
-- `lib/platform-admin.test.mjs`:
+- `lib/platform-operations.test.mjs`:
   - adgang mellem to virksomheder og to webshops med samme Shopify-ordre-ID
   - læserbegrænsning, cache og 400/405/409-svar
   - at der ikke skrives ordrer eller kvitteringer
