@@ -27,3 +27,16 @@ jobs:
       - run: node scripts/platform.mjs build
       - run: node scripts/platform-production.mjs build
       # Validation only; deployment is a separate manual workflow.
+  # The customer portal in a real browser against a local server with fixture data (npm run test:portal).
+  portal-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.23.2
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:portal
