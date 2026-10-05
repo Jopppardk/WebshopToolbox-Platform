@@ -41,3 +41,8 @@ next-env.d.ts
 
 # Reproducible Tier 1 browser bundle
 /platform/public/tier1-next/
+
+# Portal smoke test (npm run test:portal)
+.wrangler/portal-smoke-state/
+test-results/
+playwright-report/
