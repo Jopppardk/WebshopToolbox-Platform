@@ -74,3 +74,11 @@ export async function orderMarketSettings(db: D1Database, company: string, shop:
     .bind(company, shop, orderId).first<Omit<WebshopMarket, 'countries'> & { countries_json: string }>();
   return row ? { ...row, countries: JSON.parse(row.countries_json) } : null;
 }
+// Whether an order waits because its market is not set up: the same rule as order-markets.ts, for list views.
+export async function marketHold(db:D1Database,company:string,shop:string){
+ const enabled=(await db.prepare('SELECT countries_json,currency FROM webshop_markets WHERE company_id=? AND webshop_id=? AND enabled=1').bind(company,shop).all<{countries_json:string;currency:string}>()).results.map(r=>({countries:JSON.parse(r.countries_json) as string[],currency:r.currency}));
+ return (country:string|null,currency:string|null,shopCurrency:string|null)=>{
+  if(!country||country===HOME_COUNTRY)return !!currency&&!!shopCurrency&&currency!==shopCurrency;
+  return !currency||!enabled.some(m=>m.countries.includes(country)&&m.currency===currency);
+ };
+}
