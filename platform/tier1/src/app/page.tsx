@@ -14,6 +14,7 @@ import { PensopayConnection } from '@/components/pensopay-connection';
 import { HistorySettings } from '@/components/history-settings';
 import { OrderLog } from '@/components/order-log';
 import { OrderDetail } from '@/components/order-detail';
+import { LabelPrint, type LabelState } from '@/components/label-print';
 import { SalesPreview } from '@/components/sales-preview';
 import { ManualBookingAction } from '@/components/manual-booking-action';
 import { InvoiceSender } from '@/components/invoice-sender';
@@ -96,6 +97,7 @@ type OrderView = {
   shippingLines?: Array<{ title: string; discountedPriceSet: { shopMoney: { amount: string; currencyCode: string } } }>;
   paymentProvider?: string; subtotal?: string; tax?: string; paymentStatus?: string | null;
   country?: string | null; customerCurrency?: string | null; customerTotal?: string | null;
+  label?: LabelState;
 };
 
 export default function Home() {
@@ -122,6 +124,8 @@ export default function Home() {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [orderOffset, setOrderOffset] = useState(0);
   const [orderTotal, setOrderTotal] = useState(0);
+  // The printer icon on Salg is shown when Shipmondo is connected with a printer chosen.
+  const [labelsEnabled, setLabelsEnabled] = useState(false);
   const [orderRevision, setOrderRevision] = useState(0);
   const [syncingOrders, setSyncingOrders] = useState(false);
   const [packagingEntry,setPackagingEntry]=useState({tab:'consumption' as 'consumption'|'reporting',key:0});
@@ -167,9 +171,9 @@ export default function Home() {
     const controller = new AbortController();
     setOrdersLoading(true);
     fetch(`/api/shopify/orders?offset=${orderOffset}&limit=${orderPageSize}&period=${activePeriod}${view === 'orders' && orderCountry ? '&country=' + orderCountry : ''}`, { signal: controller.signal, cache: 'no-store' })
-      .then(async response => { const data = await response.json() as { orders: OrderView[]; total: number; today?: number; countries?: string[]; error?: string }; if (!response.ok) throw new Error(data.error || 'Ordrer kunne ikke indlæses'); return data; })
+      .then(async response => { const data = await response.json() as { orders: OrderView[]; total: number; today?: number; countries?: string[]; labels?: boolean; error?: string }; if (!response.ok) throw new Error(data.error || 'Ordrer kunne ikke indlæses'); return data; })
       .then((data) => {
-        if (!controller.signal.aborted && Array.isArray(data.orders)) { if (orderOffset > 0 && orderOffset >= data.total) { setOrderOffset(Math.max(0, Math.ceil(data.total / orderPageSize) - 1) * orderPageSize); return; } setSalesOrders(data.orders); setOrderTotal(data.total || 0); setOrderCountries(data.countries || []); setOrdersToday(data.today ?? null); setOrderError(''); }
+        if (!controller.signal.aborted && Array.isArray(data.orders)) { if (orderOffset > 0 && orderOffset >= data.total) { setOrderOffset(Math.max(0, Math.ceil(data.total / orderPageSize) - 1) * orderPageSize); return; } setSalesOrders(data.orders); setLabelsEnabled(data.labels === true); setOrderTotal(data.total || 0); setOrderCountries(data.countries || []); setOrdersToday(data.today ?? null); setOrderError(''); }
       })
       .catch(error => { if (!controller.signal.aborted) setOrderError(error.message || 'Ordrer kunne ikke indlæses'); })
       .finally(() => { if (!controller.signal.aborted) setOrdersLoading(false); });
@@ -445,7 +449,7 @@ export default function Home() {
                 <TableBody>
                   {!filtered.length && <TableRow><TableCell colSpan={8} className="p-8 text-center">{orderError ? 'Ordrerne kunne ikke vises.' : 'Ingen ordrer i det valgte udsnit.'}</TableCell></TableRow>}
                   {filtered.map((order) => (
-                    <OrderRow key={order.id} order={order} onBooked={() => setOrderRevision(value => value + 1)} />
+                    <OrderRow key={order.id} order={order} labels={labelsEnabled} onBooked={() => setOrderRevision(value => value + 1)} />
                   ))}
                 </TableBody>
               </Table>
@@ -546,7 +550,7 @@ function Stat({
     </div>
   );
 }
-function OrderRow({ order, onBooked }: { order: OrderView; onBooked: () => void }) {
+function OrderRow({ order, labels, onBooked }: { order: OrderView; labels: boolean; onBooked: () => void }) {
   const state = order.status;
   const booked = state === 'Bogført';
   const handled = booked || state === 'Annulleret · håndteret';
@@ -584,7 +588,7 @@ function OrderRow({ order, onBooked }: { order: OrderView; onBooked: () => void 
         </Badge>
       </TableCell>
       <TableCell className="pr-5 text-right">
-        {order.externalId && <div className="flex flex-wrap justify-end gap-2">{order.shipped === 'Afsendt' && !handled && <SalesPreview externalId={order.externalId} />}<OrderLog externalId={order.externalId} />{order.shipped === 'Afsendt' && !handled && <ManualBookingAction kind="sale" externalId={order.externalId} onDone={onBooked} />}</div>}
+        {order.externalId && <div className="flex flex-wrap items-start justify-end gap-2">{labels && order.shipped !== 'Annulleret' && <div className="text-right"><LabelPrint externalId={order.externalId} orderName={order.id} label={order.label ?? null} onDone={onBooked} /></div>}{order.shipped === 'Afsendt' && !handled && <SalesPreview externalId={order.externalId} />}<OrderLog externalId={order.externalId} />{order.shipped === 'Afsendt' && !handled && <ManualBookingAction kind="sale" externalId={order.externalId} onDone={onBooked} />}</div>}
       </TableCell>
     </TableRow>
   );
