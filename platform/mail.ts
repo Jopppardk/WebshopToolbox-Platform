@@ -21,7 +21,8 @@ async function row(env:PlatformEnv,company:string,scope?:MailScope){
  return scope?env.PLATFORM_DB.prepare('SELECT * FROM market_mail WHERE company_id=? AND webshop_id=? AND market_id=?').bind(company,scope.shop,scope.market).first<MailRow>()
   :env.PLATFORM_DB.prepare('SELECT * FROM company_mail WHERE company_id=?').bind(company).first<MailRow>();
 }
-async function sendingRow(env:PlatformEnv,company:string,scope?:MailScope){return (scope?await row(env,company,scope):null)??await row(env,company);}
+// A market sends with its own sender only; until one is saved it uses the standard sender (never Danmark's own domain).
+async function sendingRow(env:PlatformEnv,company:string,scope?:MailScope){return scope?await row(env,company,scope):await row(env,company);}
 // The table holding the sender that was used: the market's own, or Danmark's.
 async function ownScope(env:PlatformEnv,company:string,scope?:MailScope):Promise<MailScope>{return scope&&await row(env,company,scope)?scope:undefined;}
 const mailTable=(scope:MailScope)=>scope?'market_mail':'company_mail';
@@ -36,14 +37,14 @@ async function defaultSenderName(env:PlatformEnv,company:string){
  return value!.name;
 }
 async function info(env:PlatformEnv,company:string,actor:Actor,scope?:MailScope){
- const own=await row(env,company,scope),settings=own??(scope?await row(env,company):null);
+ const own=await row(env,company,scope),settings=own;
  const fallbackName=await defaultSenderName(env,company);
  const from=standardFrom(env);
  const allowed=(env.PLATFORM_MAIL_TEST_RECIPIENTS||'').split(',').includes(actor.email.toLowerCase());
  return {senderName:settings?.sender_name||fallbackName,replyTo:settings?.reply_to||'',customFrom:settings?.custom_from||'',accountId:settings?.account_id||'',credentialsSaved:!!settings?.credentials_encrypted,
   status:!settings?.custom_from?'standard':settings.verified_revision===settings.revision?'verified':'pending',standardFrom:from,effectiveFrom:effectiveSender(settings,from),
   testRecipient:actor.email,testEnabled:!actor.support&&(env.PLATFORM_ENV==='local-test'||allowed),localPreview:env.PLATFORM_ENV==='local-test',
-  // A market without its own sender shows (and sends with) Danmark's until its own is saved.
+  // A market without its own sender sends from the standard sender until one is saved.
   ...(scope?{inherited:!own}:{})};
 }
 function audit(env:PlatformEnv,company:string,actor:Actor,action:string,details:Record<string,unknown>){
