@@ -24,13 +24,14 @@ export async function buildInvoicePdf(order: InvoiceSource, issuer:InvoiceIssuer
   const documentNumber = credit ? credit.number : order.name.replace(/^#/, '');
   const label = credit ? { title: t.credit, number: t.creditNumber, date: t.creditDate, to: t.creditTo, lines: t.creditLines, reference: `${t.invoiceRef} ${credit.invoiceNumber} · ${t.order} ${order.name}`, status: t.refunded, total: t.credited } : { title: t.invoice, number: t.invoiceNumber, date: t.invoiceDate, to: t.invoiceTo, lines: t.invoiceLines, reference: `${t.order} ${order.name}`, status: '', total: t.total };
   // An order from another market says which store it was sold from, e.g. "Order #2690 · Sabeln.se".
-  if (issuer.soldVia) label.reference += ' · ' + issuer.soldVia;
+  // (added below once the font is known; left out if it does not fit the box)
   const pdf = await PDFDocument.create();
   if(issuer.example){pdf.setCreationDate(new Date('2026-09-04T09:00:00Z'));pdf.setModificationDate(new Date('2026-09-04T09:00:00Z'));}
   const classic=design.layout==='classic';
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  if (regular.widthOfTextAtSize(label.reference, 8) > 160) throw new InvoiceCheckError('Butiksnavnet er for langt til fakturaen.');
+  if (issuer.soldVia && regular.widthOfTextAtSize(label.reference + ' · ' + issuer.soldVia, 8) <= 165) label.reference += ' · ' + issuer.soldVia;
+  if (regular.widthOfTextAtSize(label.reference, 8) > 165) throw new InvoiceCheckError('Fakturanummeret er for langt til PDF-layoutet.');
   if(bold.widthOfTextAtSize(issuer.name,7.5)+regular.widthOfTextAtSize(issuer.contact,7.5)>465 || regular.widthOfTextAtSize(issuer.address+' / CVR '+issuer.cvr,7.5)>487)throw new InvoiceCheckError('Fakturaoplysningerne er for lange til sidefoden.');
   if (bold.widthOfTextAtSize(`Fakturanr. ${documentNumber}`, 10) > 155) throw new InvoiceCheckError('Fakturanummeret er for langt til PDF-layoutet.');
   let logo: Awaited<ReturnType<typeof pdf.embedPng>> | undefined;

@@ -31,6 +31,14 @@ import { HttpError,reply,type Actor,type PlatformEnv } from './types';
 
 const forwarded=(request:Request,body:unknown,method='POST')=>new Request(request.url,{method,headers:request.headers,body:JSON.stringify(body)});
 function minor(amount:string,currency:string){const digits=new Intl.NumberFormat('en',{style:'currency',currency}).resolvedOptions().maximumFractionDigits!;const match=/^(-?)(\d+)(?:\.(\d+))?$/.exec(amount);if(!match||/[1-9]/.test((match[3]||'').slice(digits)))throw new HttpError(409,'Ugyldigt beløb.');const n=Number(match[2])*10**digits+Number((match[3]||'').padEnd(digits,'0').slice(0,digits));if(!Number.isSafeInteger(n))throw new HttpError(409,'Beløbet er for stort.');return match[1]?-n:n;}
+// Whether an order waits because its market is not set up: the same rule as order-markets.ts, for list views.
+async function marketHold(db:D1Database,company:string,shop:string){
+ const enabled=(await db.prepare('SELECT countries_json,currency FROM webshop_markets WHERE company_id=? AND webshop_id=? AND enabled=1').bind(company,shop).all<{countries_json:string;currency:string}>()).results.map(r=>({countries:JSON.parse(r.countries_json) as string[],currency:r.currency}));
+ return (country:string|null,currency:string|null,shopCurrency:string|null)=>{
+  if(!country||country===HOME_COUNTRY)return !!currency&&!!shopCurrency&&currency!==shopCurrency;
+  return !currency||!enabled.some(m=>m.countries.includes(country)&&m.currency===currency);
+ };
+}
 function pageNumber(value:string|null,fallback:number,max=100000){const n=value===null?fallback:Number(value);if(!Number.isSafeInteger(n)||n<0||n>max)throw new HttpError(400,'Ugyldigt sidetal.');return n;}
 export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string,path:string):Promise<Response|null>{
  const db=env.PLATFORM_DB,url=new URL(request.url),get=request.method==='GET';
@@ -154,7 +162,7 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
  }
  if(path==='/order-refunds'){
   if(!get)throw new HttpError(405,'Brug Hent.');
-  const from=await dataCutoff(env,company,shop),status=await bookingStatuses(env,company,shop);
+  const from=await dataCutoff(env,company,shop),status=await bookingStatuses(env,company,shop),held=await marketHold(db,company,shop);
   const connected=new Set((await db.prepare('SELECT provider FROM payment_connections WHERE company_id=? AND webshop_id=?').bind(company,shop).all<{provider:string}>()).results.map(r=>r.provider));
   const rows=(await db.prepare(`SELECT s.external_id,s.occurred_at,s.payload_json,c.number credit_number,m.country,m.currency market_currency,
  EXISTS(SELECT 1 FROM platform_invoices i WHERE i.company_id=s.company_id AND i.webshop_id=s.webshop_id AND i.external_id=s.order_id AND i.status='generated') invoiced,${legacyRefundSql} legacy,${saleBookedSql} sale_booked,
@@ -167,7 +175,7 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   const offset=pageNumber(url.searchParams.get('offset'),0),limit=pageNumber(url.searchParams.get('limit'),25,100)||25;
   const list=rows.map(row=>{
    const r=JSON.parse(row.payload_json) as OrderRefund,digits=new Intl.NumberFormat('en',{style:'currency',currency:r.currency}).resolvedOptions().maximumFractionDigits!;
-   const foreign=!!(row.country&&row.country!==HOME_COUNTRY)||!!(row.market_currency&&row.market_currency!==r.currency);
+   const foreign=held(row.country??null,row.market_currency??null,r.currency);
    const booking=row.legacy?'booked':status('shopify','order_refunds',r.id,r.processedAt,row.payload_json);
    return {id:r.id,orderId:r.orderId,orderName:r.orderName,date:r.processedAt,currency:r.currency,amount:r.gross/10**digits,full:r.full,
     gateways:r.gateways.map(g=>{const label=orderPaymentIntegration([g.gateway],connected);return label==='Uden integration'?g.name||label:label;}),
@@ -194,11 +202,12 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   const countries=(await db.prepare("SELECT m.country,count(*) n FROM operation_snapshots s JOIN order_markets m ON m.company_id=s.company_id AND m.webshop_id=s.webshop_id AND m.external_id=s.external_id WHERE s.company_id=? AND s.webshop_id=? AND s.module='orders' AND m.country IS NOT NULL GROUP BY m.country ORDER BY n DESC").bind(company,shop).all<{country:string;n:number}>()).results;
   const rows=(await db.prepare('SELECT s.payload_json,m.country,m.currency market_currency,m.presentment_total,m.order_total,m.net_payment '+markets+' ORDER BY s.occurred_at DESC,s.external_id LIMIT ? OFFSET ?').bind(company,shop,period.from,period.until,countryFilter,countryFilter,countryFilter,limit,offset).all<{payload_json:string;country:string|null;market_currency:string|null;presentment_total:string|null;order_total:string|null;net_payment:string|null}>()).results;
   const bookingStatus=await bookingStatuses(env,company,shop);
+  const held=await marketHold(db,company,shop);
   const connectedPayments=new Set((await db.prepare('SELECT provider FROM payment_connections WHERE company_id=? AND webshop_id=?').bind(company,shop).all<{provider:string}>()).results.map(r=>r.provider));
   const money=(amount:string,currency:string)=>new Intl.NumberFormat('da-DK',{style:'currency',currency}).format(Number(amount));
   const todayWindow=orderPeriodWindow('today',await dataCutoff(env,company,shop));
   const today=await db.prepare("SELECT count(*) AS n FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module='orders' AND occurred_at>=? AND occurred_at<?").bind(company,shop,todayWindow.from,todayWindow.until).first<{n:number}>();
-  return reply({total:total?.n||0,today:today?.n||0,countries:countries.map(c=>c.country),orders:rows.map(row=>{const o=JSON.parse(row.payload_json),m=o.currentTotalPriceSet.shopMoney;return {country:row.country??null,customerCurrency:row.market_currency??null,customerTotal:row.presentment_total&&row.market_currency&&row.market_currency!==m.currencyCode?money(row.presentment_total,row.market_currency):null,id:o.name+(o.test?' (test)':''),externalId:o.id,date:formatDate(o.createdAt),createdAt:o.createdAt,shipped:o.cancelledAt?'Annulleret':o.displayFulfillmentStatus==='FULFILLED'?'Afsendt':'Ikke afsendt',amount:money(row.order_total??m.amount,m.currencyCode),realized:money(row.net_payment??String(Math.max(0,Number(m.amount)-Number(o.totalRefundedSet?.shopMoney.amount||0))),m.currencyCode),status:(row.country&&row.country!==HOME_COUNTRY)||(row.market_currency&&row.market_currency!==m.currencyCode)?'Afventer · udenlandsk ordre':bookingStatusLabel(bookingStatus('shopify','orders',o.id,o.createdAt,row.payload_json)),currency:m.currencyCode,total:m.amount,paymentStatus:o.displayFinancialStatus,paymentProvider:orderPaymentIntegration(o.paymentGatewayNames,connectedPayments)};})});
+  return reply({total:total?.n||0,today:today?.n||0,countries:countries.map(c=>c.country),orders:rows.map(row=>{const o=JSON.parse(row.payload_json),m=o.currentTotalPriceSet.shopMoney;return {country:row.country??null,customerCurrency:row.market_currency??null,customerTotal:row.presentment_total&&row.market_currency&&row.market_currency!==m.currencyCode?money(row.presentment_total,row.market_currency):null,id:o.name+(o.test?' (test)':''),externalId:o.id,date:formatDate(o.createdAt),createdAt:o.createdAt,shipped:o.cancelledAt?'Annulleret':o.displayFulfillmentStatus==='FULFILLED'?'Afsendt':'Ikke afsendt',amount:money(row.order_total??m.amount,m.currencyCode),realized:money(row.net_payment??String(Math.max(0,Number(m.amount)-Number(o.totalRefundedSet?.shopMoney.amount||0))),m.currencyCode),status:held(row.country??null,row.market_currency??null,m.currencyCode)?'Afventer · marked ikke sat op':bookingStatusLabel(bookingStatus('shopify','orders',o.id,o.createdAt,row.payload_json)),currency:m.currencyCode,total:m.amount,paymentStatus:o.displayFinancialStatus,paymentProvider:orderPaymentIntegration(o.paymentGatewayNames,connectedPayments)};})});
  }
  if(['/sales/log','/payouts/log','/refunds/log'].includes(path)){
   if(!get)throw new HttpError(405,'Brug Hent log.');

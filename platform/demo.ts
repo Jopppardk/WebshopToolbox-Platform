@@ -216,8 +216,8 @@ export function demoFeed(config: { allProducts: boolean; collections: Array<{ id
 // Reads served straight from the demo company's own rows; everything else is simulated or refused.
 const databaseReads = new Set(['/runtime', '/admin/sync-status', '/notifications', '/dinero/accounts', '/dashboard/platform', '/shopify/packaging', '/invoices/sender', '/invoices/preview', '/invoices/settings', '/invoices/logo',
   '/shopify/orders', '/shopify/refunds', '/shopify/payouts', '/shopify/payments', '/refunds/overview', '/payouts/overview', '/sales/log', '/payouts/log', '/refunds/log', '/documents', '/invoices', '/invoices/pdf',
-  '/flatpay/records', '/viabill/records', '/pensopay/records', '/order-refunds', '/order-refunds/credit-note', '/integrations', '/integrations/selection', '/admin/history', '/integrations/start-date', '/admin/settings', '/feeds', '/feeds/file-name', '/admin/errors', '/admin/insights']);
-const databaseWrites: Array<[string, RegExp]> = [['POST', /^\/admin\/settings$/], ['PUT', /^\/invoices\/settings$/], ['POST', /^\/notifications$/], ['POST', /^\/integrations\/selection$/],
+  '/flatpay/records', '/viabill/records', '/pensopay/records', '/order-refunds', '/order-refunds/credit-note', '/markets/settings', '/integrations', '/integrations/selection', '/admin/history', '/integrations/start-date', '/admin/settings', '/feeds', '/feeds/file-name', '/admin/errors', '/admin/insights']);
+const databaseWrites: Array<[string, RegExp]> = [['POST', /^\/admin\/settings$/], ['PUT', /^\/markets\/settings$/], ['PUT', /^\/invoices\/settings$/], ['POST', /^\/notifications$/], ['POST', /^\/integrations\/selection$/],
   ['POST', /^\/feeds$/], ['PUT', /^\/feeds\/[a-f0-9-]{36}$/], ['DELETE', /^\/feeds\/[a-f0-9-]{36}$/], ['POST', /^\/feeds\/[a-f0-9-]{36}\/(refresh|rotate)$/]];
 /** The demo shop's Shopify markets: Denmark (primary) and Sweden. */
 export function demoMarkets() {

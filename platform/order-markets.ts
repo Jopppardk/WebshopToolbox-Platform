@@ -67,7 +67,7 @@ export async function isForeignOrder(db: D1Database, company: string, shop: stri
     .bind(company, shop, externalId).first();
   return !allowed;
 }
-export type WebshopMarket = { market_id: string; name: string; countries: string[]; currency: string; locale: 'da' | 'sv' | 'en'; store_name: string; invoice_subject: string; invoice_body: string };
+export type WebshopMarket = { market_id: string; name: string; countries: string[]; currency: string; locale: 'da' | 'sv' | 'en'; store_name: string; contact: string | null; footer: string | null; invoice_subject: string; invoice_body: string };
 /** The enabled market an order belongs to (outside the home market), or null for home-market orders. */
 export async function orderMarketSettings(db: D1Database, company: string, shop: string, orderId: string): Promise<WebshopMarket | null> {
   const row = await db.prepare("SELECT wm.* FROM order_markets m JOIN webshop_markets wm ON wm.company_id=m.company_id AND wm.webshop_id=m.webshop_id AND wm.enabled=1 AND wm.currency=m.currency AND EXISTS(SELECT 1 FROM json_each(wm.countries_json) c WHERE c.value=m.country) WHERE m.company_id=? AND m.webshop_id=? AND m.external_id=? AND m.country<>'" + HOME_COUNTRY + "'")

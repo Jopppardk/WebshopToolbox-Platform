@@ -73,7 +73,7 @@ export function inPresentment(source:InvoiceSource):InvoiceSource{
   if(Array.isArray(value))return value.map(swap);
   if(!value||typeof value!=='object')return value;
   const o=value as Record<string,unknown>;
-  if('shopMoney' in o&&'presentmentMoney' in o){
+  if('shopMoney' in o){
    if(!o.presentmentMoney)throw new InvoiceCheckError('Shopify mangler beløb i kundens valuta.');
    return {shopMoney:o.presentmentMoney};
   }

@@ -40,6 +40,7 @@ import { CountryFlag, countryName } from '@/components/country-flag';
 import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { OrderRefunds } from '@/components/order-refunds';
+import { InvoiceMarkets } from '@/components/invoice-markets';
 
 import { useEffect, useState } from 'react';
 import { Payments } from '@/components/payments';
@@ -956,8 +957,10 @@ function Settings({
       </section>
       </fieldset>
       </>}
-      {mode === 'invoice-email' && <InvoiceIssuer/>}
-      {mode === 'invoice-email' && <fieldset disabled={!ready || saving} className="min-w-0">
+      {/* One tab per country: Danmark is the company's invoice settings, other markets have their own. */}
+      {mode === 'invoice-email' && <InvoiceMarkets home={<>
+      <InvoiceIssuer/>
+      <fieldset disabled={!ready || saving} className="min-w-0">
         {!ready && !message && <p role="status" className="mb-4 text-sm">Indlæser fælles indstillinger…</p>}
         {message && <p role="status" className="mb-4 rounded-xl border p-4 text-sm">{message}</p>}
         <section className="mb-8 overflow-hidden rounded-2xl border bg-white">
@@ -973,8 +976,9 @@ function Settings({
           </div>
           <div className="flex justify-end border-t p-4"><Button className="h-10 rounded-xl px-4" onClick={onSave}><Save />{saving ? 'Gemmer…' : 'Gem indstillinger'}</Button></div>
         </section>
-      </fieldset>}
-      {mode === 'invoice-email' && <InvoiceSender/>}
+      </fieldset>
+      <InvoiceSender/>
+      </>}/>}
       {mode === 'inventory' && <fieldset disabled={!ready || saving} className="min-w-0">
         {message && <p role="status" className="mb-4 rounded-xl border p-4 text-sm">{message}</p>}
         <section className="overflow-hidden rounded-2xl border bg-white">
