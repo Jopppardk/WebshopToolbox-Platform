@@ -1,0 +1,12 @@
+# Every text file is stored and checked out with LF line endings, on every OS and for every tool
+# (Windows checkouts, Codex and Claude edits alike), so edits never mix CRLF and LF.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.zip binary
