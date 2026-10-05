@@ -13,6 +13,7 @@ import { ViaBillConnection } from '@/components/viabill-connection';
 import { PensopayConnection } from '@/components/pensopay-connection';
 import { HistorySettings } from '@/components/history-settings';
 import { OrderLog } from '@/components/order-log';
+import { OrderDetail } from '@/components/order-detail';
 import { SalesPreview } from '@/components/sales-preview';
 import { ManualBookingAction } from '@/components/manual-booking-action';
 import { InvoiceSender } from '@/components/invoice-sender';
@@ -552,7 +553,7 @@ function OrderRow({ order, onBooked }: { order: OrderView; onBooked: () => void 
   return (
     <TableRow className={state === 'Fejlet' ? 'bg-red-50/35' : ''}>
       <TableCell className="pl-5 font-semibold text-[#365f08]">
-        <span className="inline-flex items-center gap-2">{order.country ? <CountryFlag code={order.country} /> : <span className="inline-block w-5" aria-hidden="true" />}{order.id}</span>
+        <span className="inline-flex items-center gap-2">{order.country ? <CountryFlag code={order.country} /> : <span className="inline-block w-5" aria-hidden="true" />}{order.externalId ? <OrderDetail externalId={order.externalId} label={order.id} /> : order.id}</span>
       </TableCell>
       <TableCell className="text-muted-foreground">{order.date}</TableCell>
       <TableCell>{order.paymentProvider || 'Afventer opdatering'}</TableCell>

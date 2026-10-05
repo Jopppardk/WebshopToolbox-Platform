@@ -24,22 +24,15 @@ import { financeService } from './finance-source';
 import { dataCutoff,dataStartDate } from './tier1-history';
 import { orderPeriodWindow } from './tier1/src/lib/order-period';
 import { formatDate } from './tier1/src/lib/format';
-import { HOME_COUNTRY } from './order-markets';
+import { HOME_COUNTRY, marketHold } from './order-markets';
 import { legacyRefundSql, saleBookedSql, syncOrderRefunds, type OrderRefund } from './order-refunds';
 import { ensureCreditNote } from './credit-notes';
+import { orderDetail } from './order-detail';
 import { ensureMarketRow } from './invoice-profiles';
 import { HttpError,reply,type Actor,type PlatformEnv } from './types';
 
 const forwarded=(request:Request,body:unknown,method='POST')=>new Request(request.url,{method,headers:request.headers,body:JSON.stringify(body)});
 function minor(amount:string,currency:string){const digits=new Intl.NumberFormat('en',{style:'currency',currency}).resolvedOptions().maximumFractionDigits!;const match=/^(-?)(\d+)(?:\.(\d+))?$/.exec(amount);if(!match||/[1-9]/.test((match[3]||'').slice(digits)))throw new HttpError(409,'Ugyldigt beløb.');const n=Number(match[2])*10**digits+Number((match[3]||'').padEnd(digits,'0').slice(0,digits));if(!Number.isSafeInteger(n))throw new HttpError(409,'Beløbet er for stort.');return match[1]?-n:n;}
-// Whether an order waits because its market is not set up: the same rule as order-markets.ts, for list views.
-async function marketHold(db:D1Database,company:string,shop:string){
- const enabled=(await db.prepare('SELECT countries_json,currency FROM webshop_markets WHERE company_id=? AND webshop_id=? AND enabled=1').bind(company,shop).all<{countries_json:string;currency:string}>()).results.map(r=>({countries:JSON.parse(r.countries_json) as string[],currency:r.currency}));
- return (country:string|null,currency:string|null,shopCurrency:string|null)=>{
-  if(!country||country===HOME_COUNTRY)return !!currency&&!!shopCurrency&&currency!==shopCurrency;
-  return !currency||!enabled.some(m=>m.countries.includes(country)&&m.currency===currency);
- };
-}
 function pageNumber(value:string|null,fallback:number,max=100000){const n=value===null?fallback:Number(value);if(!Number.isSafeInteger(n)||n<0||n>max)throw new HttpError(400,'Ugyldigt sidetal.');return n;}
 export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string,path:string):Promise<Response|null>{
  const db=env.PLATFORM_DB,url=new URL(request.url),get=request.method==='GET';
@@ -142,7 +135,7 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
  if(path==='/invoices/logo')return handleInvoices(marketId?withShop():request,env,actor,company,'logo');
  if(path==='/invoices/preview'){if(shop==='none')throw new HttpError(409,'Opret en webshop for at se fakturaeksemplet.');const next=new URL(request.url);next.searchParams.set('webshopId',shop);return handleInvoices(new Request(next,request),env,actor,company,'preview');}
  if(path==='/invoices/settings')return handleInvoices(marketId?withShop():request,env,actor,company,'settings');
- const dataPaths=['/shopify/orders','/shopify/orders/process','/shopify/refunds','/shopify/payouts','/shopify/payments','/refunds/overview','/payouts/overview','/sales/log','/payouts/log','/refunds/log','/sales/preview','/shopify/inventory','/documents','/invoices','/invoices/pdf','/invoices/email-test','/flatpay/records','/flatpay/sync','/flatpay/refunds','/viabill/records','/pensopay/records','/order-refunds','/order-refunds/sync','/order-refunds/credit-note'];
+ const dataPaths=['/shopify/orders','/shopify/orders/process','/shopify/refunds','/shopify/payouts','/shopify/payments','/refunds/overview','/payouts/overview','/sales/log','/payouts/log','/refunds/log','/sales/preview','/shopify/inventory','/documents','/invoices','/invoices/pdf','/invoices/email-test','/flatpay/records','/flatpay/sync','/flatpay/refunds','/viabill/records','/pensopay/records','/order-refunds','/order-refunds/sync','/order-refunds/credit-note','/orders/detail'];
  if(!dataPaths.includes(path))return null;
  if(shop==='none')throw new HttpError(409,'Forbind en webshop først.');
  if(path==='/shopify/inventory'){
@@ -150,6 +143,7 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   const b=await jsonBody(request,40000);const response=await handleStocktake(forwarded(request,b),env,actor,company,shop);
   if(['prepare','prepare-reconcile'].includes(String(b.action))&&response.ok){const d=await response.json() as any;return reply({...d,operationId:d.id});}return response;
  }
+ if(path==='/orders/detail'){if(!get)throw new HttpError(405,'Brug Hent.');return orderDetail(env,company,shop,url);}
  // Tilbagebetalinger: every refund of an order, whatever the gateway, with its credit note and booking.
  if(path==='/order-refunds/sync'){
   if(request.method!=='POST')throw new HttpError(405,'Brug Hent tilbagebetalinger.');
