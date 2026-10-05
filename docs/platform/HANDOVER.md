@@ -1,5 +1,7 @@
 # Overlevering
 
+> 5. oktober 2026 – Markeder pr. land (Claude): Indstillinger → Faktura-afsendelse har en fane pr. land. Danmark er de eksisterende indstillinger; andre aktive Shopify-markeder (fx Sverige) har egen tilstand, sprog (da/sv/en), butik/domæne, kontaktlinje, bundtekst, moms (kun dansk; OSS senere) og mailtekst (migration 0041 `webshop_markets`, `platform/markets.ts`). Ordrer fra et slået-til marked frigives (`order-markets.ts`), faktureres og krediteres i kundens valuta (presentment) og sprog, og bogføres i DKK som danske ordrer. Ordrer refunderet før fakturering faktureres som den oprindelige ordre (`originalOrder` i `order-check.ts`) med kreditnota pr. refundering; fakturamail kun hvis afsendt inden for 14 dage. Shopify-ordreopslaget henter nu også presentmentMoney og subtotalPriceSet.
+
 > Trackingformat: DAO AVAILABLE_FOR_DELIVERY mappes nu til klar i pakkeshop, også for gemte snapshots. GLS/PostNord dd/MM/yyyy HH:mm:ss accepteres med samme strikte kalender-/Copenhagen-validering som DAO. Bekræftet på tre brugerautoriserede opslag; persondata gemmes ikke som fixtures. Implementeret; CI/release følger PR.
 
 > Forsendelser uden trackingnummer: succesfuld Shopify-fulfillment vises som Afsluttet – manuelt håndteret, ikke Udskrevet/Leveret. Ingen transporttrin, returvarsel, tracking-refresh eller På vej-optælling. Cacheversion hævet; senere tilføjet nummer behandles normalt. Implementeret; CI og udgivelse følger PR/workflow.

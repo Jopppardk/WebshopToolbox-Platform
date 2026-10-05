@@ -6,7 +6,7 @@ import {salesDraft} from './sales-preview';
 import {voucherFor} from '../lib/dinero-sale';
 import {handleProductionBooking,type BookingContext} from './production-booking';
 import {bookingDate} from './production-policy';
-import {foreignHold,isForeignOrder} from './order-markets';
+import {foreignHold,isForeignOrder,orderMarketSettings} from './order-markets';
 import {HttpError,type Actor,type PlatformEnv} from './types';
 export {bookingDate,productionWrites} from './production-policy';
 export async function handleProductionSale(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string){
@@ -18,7 +18,9 @@ async function prepareSale({env,company,shop,id,credentials,mapping,prefs}:Booki
  const order=await loadCompleteOrder(id,await shopAccess(env,company,shop),checkInvoice),invoice=checkInvoice(order);
  const date=await bookingDate(env,company,shop,'shopify',shipmentDate(order));
  const automation=JSON.parse(prefs.preferences_json).automation,book=automation?.salesBookDinero===true;
- const draft=salesDraft(invoice,JSON.parse(mapping.accounts_json),await readDineroAccounts(credentials),automation?.inventory===true);
+ // Orders from an enabled market are booked in DKK (Shopify's shop currency) with Danish VAT, like Danish orders.
+ const market=await orderMarketSettings(db,company,shop,id);
+ const draft=salesDraft(invoice,JSON.parse(mapping.accounts_json),await readDineroAccounts(credentials),automation?.inventory===true,market?.countries??[]);
  const proposal=voucherFor(invoice,draft,date);
  proposal.voucher.ExternalReference=`wtb:${shop}:sale:${id.split('/').pop()}`;
  const fingerprint=await invoiceFingerprint(invoice);

@@ -3,13 +3,13 @@ import {PDFDocument} from 'pdf-lib';
 import {invoiceDesign,exampleInvoice} from './invoice-design';
 import { historyPolicy } from './tier1-history';
 import { requireCompany, requireWebshop } from './auth';
-import { foreignHold, isForeignOrder } from './order-markets';
+import { foreignHold, isForeignOrder, orderMarketSettings, type WebshopMarket } from './order-markets';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 import { jsonBody } from './invitations';
 import { handleMail, sendCustomerInvoice } from './mail';
 import { buildInvoicePdf } from './invoice-pdf';
 import { shopAccess, listInvoiceOrders, loadCompleteOrder } from './invoice-source';
-import { checkInvoice, invoiceFingerprint, type InvoiceSource } from './order-check';
+import { checkInvoice, inPresentment, invoiceFingerprint, originalOrder, type InvoiceSource } from './order-check';
 
 type Settings={name:string;address:string;cvr:string;contact:string;subject:string;body:string;months:number;logo_key:string|null;design_json?:string;revision?:number};
 const template={subject:'Faktura {{fakturanummer}} fra {{virksomhedsnavn}}',body:'Hej {{kundenavn}}\n\nTak for din ordre hos {{virksomhedsnavn}}.\n\nVedhæftet finder du faktura {{fakturanummer}} for ordre {{ordrenummer}}.\n\nVenlig hilsen\n{{virksomhedsnavn}}'};
@@ -19,7 +19,15 @@ async function settings(env:PlatformEnv,company:string):Promise<Settings>{
 function text(value:unknown,max:number){if(typeof value!=='string'||!value.trim()||value.length>max||/[\x00-\x08\x0b-\x1f]/.test(value))throw new HttpError(400,'Udfyld fakturaoplysningerne korrekt.');return value.trim();}
 function cutoff(s:Settings){const d=new Date();d.setUTCMonth(d.getUTCMonth()-s.months);return d.toISOString();}
 function ready(s:Settings){if(!s.address||!s.cvr||!s.contact)throw new HttpError(409,'Udfyld virksomhedens fakturaoplysninger under Indstillinger → Fakturaer først.');}
-export function invoiceText(s:Settings,order:InvoiceSource){const i=checkInvoice(order),values:Record<string,string>={kundenavn:i.customer.name,fakturanummer:i.number.replace(/^#/,''),ordrenummer:i.number,virksomhedsnavn:s.name};const apply=(v:string)=>v.replace(/{{\s*([a-zæøå]+)\s*}}/gi,(all,k)=>values[k.toLowerCase()]??all);return {subject:apply(s.subject),text:apply(s.body)};}
+// An order from another market is mailed with that market's text (e.g. Swedish); {{butik}} is its store name.
+export function invoiceText(s:Settings,order:InvoiceSource,market?:WebshopMarket|null){const i=checkInvoice(order),values:Record<string,string>={kundenavn:i.customer.name,fakturanummer:i.number.replace(/^#/,''),ordrenummer:i.number,virksomhedsnavn:s.name,butik:market?.store_name??s.name};const apply=(v:string)=>v.replace(/{{\s*([a-zæøå]+)\s*}}/gi,(all,k)=>values[k.toLowerCase()]??all);return {subject:apply(market?.invoice_subject??s.subject),text:apply(market?.invoice_body??s.body)};}
+/** The order as invoiced: the original order when it was refunded later, in the customer's currency for another market. */
+export function invoicedOrder(order:InvoiceSource,market:WebshopMarket|null){
+ const base=originalOrder(order)??order;if(!market)return base;
+ const local=inPresentment(base);
+ if(local.currentTotalPriceSet?.shopMoney?.currencyCode!==market.currency)throw new HttpError(409,`Ordren er ikke betalt i markedets valuta (${market.currency}). Den faktureres ikke automatisk.`);
+ return local;
+}
 function audit(env:PlatformEnv,actor:Actor,company:string,action:string,id:string){return env.PLATFORM_DB.prepare('INSERT INTO audit_events(id,company_id,actor_id,action,resource_id,details_json) VALUES(?,?,?,?,?,?)').bind(crypto.randomUUID(),company,actor.support?.adminId||actor.id,action,id,JSON.stringify(actor.support?{impersonatedUser:actor.id,supportSession:actor.support.sessionId}:{}));}
 async function invoices(request:Request,env:PlatformEnv,actor:Actor,company:string,action=''):Promise<Response>{
  const url=new URL(request.url),db=env.PLATFORM_DB;
@@ -39,7 +47,13 @@ async function invoices(request:Request,env:PlatformEnv,actor:Actor,company:stri
   const shop=String(input.webshopId||url.searchParams.get('webshopId')||'');await requireWebshop(db,actor,company,shop);
   const webshop=await db.prepare('SELECT name FROM webshops WHERE company_id=? AND id=?').bind(company,shop).first<{name:string}>();
   let logo:ArrayBuffer|undefined;if(s.logo_key){const f=await env.PLATFORM_DOCUMENTS.get(s.logo_key);if(!f)throw new HttpError(409,'Logoet mangler. Upload det igen.');logo=await f.arrayBuffer();}
-  const bytes=await buildInvoicePdf(exampleInvoice(),{...s,address:s.address||'Eksempelvej 1, 1000 København',cvr:s.cvr||'00000000',contact:s.contact||'faktura@example.dk',webshopName:webshop!.name,design:invoiceDesign(JSON.parse(s.design_json||'{}')),example:true},logo);
+  // Preview for another market: its saved language, store, contact and footer, with the amounts in its currency.
+  const marketId=url.searchParams.get('marketId');
+  const market=marketId?await db.prepare('SELECT * FROM webshop_markets WHERE company_id=? AND webshop_id=? AND market_id=?').bind(company,shop,marketId).first<WebshopMarket&{countries_json:string}>():null;
+  if(marketId&&!market)throw new HttpError(404,'Gem markedets indstillinger først for at se eksemplet.');
+  const design=invoiceDesign(JSON.parse(s.design_json||'{}'));
+  const example=market?JSON.parse(JSON.stringify(exampleInvoice()).replaceAll('"currencyCode":"DKK"','"currencyCode":"'+market.currency+'"')):exampleInvoice();
+  const bytes=await buildInvoicePdf(example,{...s,address:s.address||'Eksempelvej 1, 1000 København',cvr:s.cvr||'00000000',contact:(market?.contact||s.contact)||'faktura@example.dk',webshopName:market?.store_name??webshop!.name,design:market?.footer?{...design,footer:market.footer}:design,example:true,...(market?{locale:market.locale,soldVia:market.store_name}:{})},logo);
   if(action==='example-test'){
    const sender=await db.prepare('SELECT custom_from,revision,verified_revision FROM company_mail WHERE company_id=?').bind(company).first<{custom_from:string;revision:string;verified_revision:string|null}>();
    const rendered=invoiceText(s,exampleInvoice());
@@ -109,9 +123,12 @@ async function invoices(request:Request,env:PlatformEnv,actor:Actor,company:stri
   ready(s);let logo:ArrayBuffer|undefined;
   if(s.logo_key){const file=await env.PLATFORM_DOCUMENTS.get(s.logo_key);if(!file)throw new HttpError(409,'Virksomhedens logo mangler.');logo=await file.arrayBuffer();}
   const webshop=await db.prepare('SELECT name FROM webshops WHERE company_id=? AND id=?').bind(company,shop).first<{name:string}>();
-  const issuer={...s,webshopName:webshop!.name,design:invoiceDesign(JSON.parse(s.design_json||'{}'))};
-  const bytes=await buildInvoicePdf(order,issuer,logo),doc=crypto.randomUUID(),key=`companies/${company}/webshops/${shop}/invoices/${doc}.pdf`;
-  const claim=await db.prepare(`INSERT INTO platform_invoices(company_id,webshop_id,external_id,id,fingerprint,status,r2_key,issuer_json,source_json) VALUES(?,?,?,?,?,'generating',?,?,?) ON CONFLICT DO NOTHING`).bind(company,shop,id,doc,fingerprint,key,JSON.stringify(issuer),JSON.stringify(order)).run();
+  // Orders from another market: invoice in the market's language and currency, from its store (e.g. Sabeln.se).
+  const market=await orderMarketSettings(db,company,shop,id),source=invoicedOrder(order,market);
+  const design=invoiceDesign(JSON.parse(s.design_json||'{}'));
+  const issuer={...s,webshopName:market?.store_name??webshop!.name,design:market?.footer?{...design,footer:market.footer}:design,...(market?{locale:market.locale,soldVia:market.store_name,contact:market.contact||s.contact}:{})};
+  const bytes=await buildInvoicePdf(source,issuer,logo),doc=crypto.randomUUID(),key=`companies/${company}/webshops/${shop}/invoices/${doc}.pdf`;
+  const claim=await db.prepare(`INSERT INTO platform_invoices(company_id,webshop_id,external_id,id,fingerprint,status,r2_key,issuer_json,source_json) VALUES(?,?,?,?,?,'generating',?,?,?) ON CONFLICT DO NOTHING`).bind(company,shop,id,doc,fingerprint,key,JSON.stringify(issuer),JSON.stringify(source)).run();
   if(!claim.meta.changes)throw new HttpError(409,'Fakturaen er allerede genereret eller under generering.');
   await env.PLATFORM_DOCUMENTS.put(key,bytes,{httpMetadata:{contentType:'application/pdf'}});
   await db.batch([db.prepare("UPDATE platform_invoices SET status='generated' WHERE id=? AND status='generating'").bind(doc),audit(env,actor,company,'invoice.generated',doc)]);
@@ -120,7 +137,7 @@ async function invoices(request:Request,env:PlatformEnv,actor:Actor,company:stri
  if(saved?.status!=='generated')throw new HttpError(409,'Generér PDF-fakturaen først.');
  const file=await env.PLATFORM_DOCUMENTS.get(saved.r2_key);if(!file)throw new HttpError(409,'PDF-fakturaen mangler.');
  const bytes=await file.arrayBuffer();if(bytes.byteLength>3500000)throw new HttpError(413,'PDF er for stor til testmail.');
- const rendered=invoiceText(s,order);
+ const rendered=invoiceText(s,order,await orderMarketSettings(db,company,shop,id));
  if(action==='send')return sendCustomerInvoice(env,actor,company,shop,saved.id,order.email||'',rendered.subject,rendered.text,{content:bytes,filename:'faktura-'+id.split('/').pop()+'.pdf',type:'application/pdf',disposition:'attachment'});
  const mailRequest=new Request(request.url,{method:'POST',headers:request.headers,body:JSON.stringify({requestId:input.requestId,mode:input.mode})});
  return handleMail(mailRequest,env,actor,company,'test',{subject:'[TEST] '+rendered.subject,text:rendered.text+'\n\nTESTMAIL – sendt til din loginadresse, ikke til kunden.',attachment:{content:bytes,filename:'faktura-'+id.split('/').pop()+'.pdf',type:'application/pdf',disposition:'attachment'}});

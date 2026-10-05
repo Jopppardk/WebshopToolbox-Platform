@@ -12,7 +12,7 @@ export type InvoiceSource = {
   fulfillments: { createdAt: string; status: string }[];
   customer?: { displayName?: string | null; firstName?: string | null; lastName?: string | null } | null;
   billingAddress: Address | null; shippingAddress: Address | null;
-  currentTotalPriceSet: MoneyBag; currentSubtotalPriceSet: MoneyBag; currentTotalTaxSet: MoneyBag;
+  currentTotalPriceSet: MoneyBag; currentSubtotalPriceSet: MoneyBag; currentTotalTaxSet: MoneyBag; subtotalPriceSet?: MoneyBag; presentmentCurrencyCode?: string;
   totalRefundedSet: MoneyBag; totalPriceSet: MoneyBag; totalTaxSet: MoneyBag;
   lineItems: Connection<SourceLine>; shippingLines: Connection<SourceShipping>;
 };

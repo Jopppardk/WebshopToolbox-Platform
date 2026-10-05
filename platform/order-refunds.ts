@@ -4,6 +4,7 @@
 // Read-only: refunds are stored in order_refunds and booked by the order_refund booking kind.
 import { orderQuery, shopAccess } from './invoice-source';
 import { minorUnits } from './money';
+import { inPresentment } from './order-check';
 import { HttpError, type PlatformEnv } from './types';
 
 type Access = { shop: string; accessToken: string };
@@ -17,10 +18,12 @@ export type OrderRefund = {
   lines: RefundLine[];
   /** Why the refund cannot be booked automatically (it is still listed). */
   problem: string | null;
+  /** The same refund in the customer's currency when it differs from the shop's (credit notes for other markets). */
+  presentment?: { currency: string; gross: number; lines: RefundLine[] } | null;
 };
 
-const money = '{shopMoney{amount currencyCode}}';
-const refundQuery = `query ToolboxOrderRefunds($id:ID!){order(id:$id){id name taxesIncluded totalPriceSet${money} refunds{id createdAt processedAt note
+const money = '{shopMoney{amount currencyCode} presentmentMoney{amount currencyCode}}';
+const refundQuery = `query ToolboxOrderRefunds($id:ID!){order(id:$id){id name taxesIncluded presentmentCurrencyCode totalPriceSet${money} refunds{id createdAt processedAt note
  refundLineItems(first:100){nodes{quantity lineItem{name} subtotalSet${money} totalTaxSet${money}} pageInfo{hasNextPage}}
  refundShippingLines(first:20){nodes{shippingLine{title} subtotalAmountSet${money} taxAmountSet${money}} pageInfo{hasNextPage}}
  orderAdjustments(first:20){nodes{reason amountSet${money} taxAmountSet${money}} pageInfo{hasNextPage}}
@@ -95,7 +98,18 @@ export async function readOrderRefunds(access: Access, orderId: string) {
   if (!data.order || data.order.id !== orderId || !Array.isArray(data.order.refunds)) throw new HttpError(409, 'Ordren kunne ikke findes i Shopify.');
   const sorted = [...data.order.refunds].sort((a, b) => String(a.processedAt || a.createdAt).localeCompare(String(b.processedAt || b.createdAt)) || String(a.id).localeCompare(String(b.id)));
   const refunds: OrderRefund[] = [];
-  for (const refund of sorted) { const value = normalizeRefund(data.order, refund, refunds.length + 1); if (value) refunds.push(value); }
+  const foreign = typeof data.order.presentmentCurrencyCode === 'string' && data.order.presentmentCurrencyCode !== data.order.totalPriceSet?.shopMoney?.currencyCode;
+  for (const refund of sorted) {
+    const value = normalizeRefund(data.order, refund, refunds.length + 1);
+    if (!value) continue;
+    // Paid in another currency: the credit note follows the invoice in the customer's currency; booking stays in the shop's.
+    if (foreign) {
+      let local: OrderRefund | null = null;
+      try { local = normalizeRefund(inPresentment(data.order), inPresentment(refund), value.sequence); } catch { local = null; }
+      value.presentment = local && !local.problem ? { currency: local.currency, gross: local.gross, lines: local.lines } : null;
+    }
+    refunds.push(value);
+  }
   return refunds;
 }
 

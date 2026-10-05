@@ -14,6 +14,7 @@ import { handleTier1Connections } from './tier1-connections';
 import { requireCompany, requireWebshop } from './auth';
 import { financeService } from './finance-source';
 import { handleTier1Settings } from './tier1-settings';
+import { handleMarkets } from './markets';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 
 // The customer portal is shared by local, dev and production deployments.
@@ -32,6 +33,7 @@ export async function handleTier1(request:Request, env:PlatformEnv, actor:Actor)
   if(shop!=='none') await requireWebshop(db,actor,company.company_id,shop);
   // Demokonto: only its own database rows are read or written; provider calls are simulated or refused.
   if(await isDemoCompany(env,company.company_id)){const demo=await demoTier1(request,path);if(demo)return demo;}
+  if(path==='/markets/settings')return handleMarkets(request,env,actor,company.company_id,shop);
   if(path==='/shipmondo/connection')return handleShipmondo(request,env,actor,company.company_id,shop);
   if(path.startsWith('/performance/'))return handlePerformance(request,env,actor,company.company_id,shop,path);
   if(path==='/shipments'||path==='/shipments/refresh')return handleShipments(request,env,actor,company.company_id,shop,path);
