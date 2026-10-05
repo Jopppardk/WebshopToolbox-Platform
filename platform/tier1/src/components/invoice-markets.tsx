@@ -26,7 +26,8 @@ const display = (m: { name: string; countries: string[] }) => m.countries.length
 function MarketTab({ market, data, onSaved }: { market: Market; data: Payload; onSaved: () => Promise<void> }) {
   const capabilities = useCapabilities();
   const [value, setValue] = useState<MarketSettings>(market.settings), [busy, setBusy] = useState(false), [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null), [dirty, setDirty] = useState(false);
-  useEffect(() => { setValue(market.settings); setDirty(false); }, [market]);
+  // After another section of this tab saved, the market's version moved on: take it, keeping unsaved text.
+  useEffect(() => { if (dirty) setValue(v => ({ ...v, revision: market.settings.revision })); else setValue(market.settings); }, [market]);
   const change = (patch: Partial<MarketSettings>) => { setValue(v => ({ ...v, ...patch })); setDirty(true); setMessage(null); };
   const name = display(market), language = languageName[value.locale];
   async function save() {
@@ -60,7 +61,7 @@ function MarketTab({ market, data, onSaved }: { market: Market; data: Payload; o
       <p className="px-5 pb-4 text-xs text-muted-foreground">Fakturaen laves i {market.currency} med de beløb, kunden betalte. Bogføringen i Dinero sker i DKK med Shopifys omregnede beløb, ligesom danske ordrer.</p>
       {saveRow(`Gem ${name}`)}
     </section>
-    <InvoiceIssuer key={'issuer-' + market.id} marketId={market.id} />
+    <InvoiceIssuer key={'issuer-' + market.id} marketId={market.id} onSaved={() => void onSaved()} />
     <section className="mb-6 overflow-hidden rounded-2xl border bg-white">
       <div className="border-b p-5"><h2 className="text-lg font-semibold">2. Mailtekst</h2><p className="mt-1 text-sm text-muted-foreground">Tilpas emne og besked til kunder fra {name}. {capabilities.customerEmail ? 'Automatisk afsendelse følger valget på fanen Danmark.' : 'Automatisk kundemail er deaktiveret i testmiljøet.'}</p></div>
       <div className="grid gap-4 p-5">
@@ -76,7 +77,7 @@ function MarketTab({ market, data, onSaved }: { market: Market; data: Payload; o
       </div>
       {saveRow('Gem mailtekst')}
     </section>
-    <InvoiceSender key={'sender-' + market.id} marketId={market.id} />
+    <InvoiceSender key={'sender-' + market.id} marketId={market.id} onSaved={() => void onSaved()} />
   </>;
 }
 

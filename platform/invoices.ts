@@ -39,7 +39,7 @@ async function marketInvoiceSettings(request:Request,env:PlatformEnv,actor:Actor
  if(action==='settings'){
   if(request.method!=='PUT')throw new HttpError(405,'Brug Gem.');
   const b=await jsonBody(request,12000);
-  if(b.revision!==undefined&&b.revision!==(saved?.revision||0))throw new HttpError(409,'Fakturaindstillingerne er ændret. Genindlæs.');
+  // Only the design fields change here; the tab's mail text and switch have their own version check (markets.ts).
   const v={name:text(b.name,120),address:text(b.address,180),cvr:text(b.cvr,30),contact:text(b.contact,100)};
   if(/[\r\n]/.test(v.name+v.address+v.cvr+v.contact))throw new HttpError(400,'Kontrollér fakturaoplysningerne.');
   return save('issuer_json=?,design_json=?',[JSON.stringify(v),JSON.stringify(invoiceDesign(b.design??profile.design))],'invoice.market.settings.saved');
@@ -98,7 +98,7 @@ async function invoices(request:Request,env:PlatformEnv,actor:Actor,company:stri
   const bytes=await buildInvoicePdf(example,{...profile.issuer,address:profile.issuer.address||'Eksempelvej 1, 1000 København',cvr:profile.issuer.cvr||'00000000',contact:profile.issuer.contact||'faktura@example.dk',webshopName:market?.store_name??webshop!.name,design:profile.design,example:true,...(market?{locale:market.locale,soldVia:market.store_name}:{})},logo);
   if(action==='example-test'){
    const scope=market?{shop,market:market.market_id}:undefined;
-   const sender=scope?await db.prepare('SELECT custom_from FROM market_mail WHERE company_id=? AND webshop_id=? AND market_id=?').bind(company,shop,scope.market).first<{custom_from:string}>()??await db.prepare('SELECT custom_from FROM company_mail WHERE company_id=?').bind(company).first<{custom_from:string}>():await db.prepare('SELECT custom_from FROM company_mail WHERE company_id=?').bind(company).first<{custom_from:string}>();
+   const sender=scope?await db.prepare('SELECT custom_from FROM market_mail WHERE company_id=? AND webshop_id=? AND market_id=?').bind(company,shop,scope.market).first<{custom_from:string}>():await db.prepare('SELECT custom_from FROM company_mail WHERE company_id=?').bind(company).first<{custom_from:string}>();
    const rendered=profileText(profile,s.name,exampleInvoice());
    const mailRequest=new Request(request.url,{method:'POST',headers:request.headers,body:JSON.stringify({recipient:input.recipient,requestId:input.requestId,mode:sender?.custom_from?'custom':'standard'})});
    return handleMail(mailRequest,env,actor,company,'test',{subject:'[TEST · DEMO] '+rendered.subject,text:rendered.text+'\n\nDEMO – Eksempelfaktura med fiktive data. Ingen rigtig ordre, faktura eller bogføring er oprettet.',allowAnyRecipient:true,attachment:{content:bytes.slice().buffer as ArrayBuffer,filename:'eksempelfaktura.pdf',type:'application/pdf',disposition:'attachment'}},scope);
