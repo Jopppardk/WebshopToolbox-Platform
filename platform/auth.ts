@@ -35,7 +35,11 @@ export async function identity(request: Request, env: PlatformEnv) {
           requiredClaims: ['sub', 'exp', 'iat'],
         },
       );
-      return { issuer: payload.iss!, subject: payload.sub!, email: typeof payload.email === 'string' ? payload.email : undefined };
+      return {
+        issuer: payload.iss!,
+        subject: payload.sub!,
+        email: typeof payload.email === 'string' ? payload.email : undefined,
+      };
     }
     if (
       env.PLATFORM_AUTH !== 'cloudflare-access' ||
@@ -67,7 +71,11 @@ export async function identity(request: Request, env: PlatformEnv) {
         requiredClaims: ['sub', 'exp', 'iat'],
       },
     );
-    return { issuer, subject: payload.sub!, email: typeof payload.email === 'string' ? payload.email : undefined };
+    return {
+      issuer,
+      subject: payload.sub!,
+      email: typeof payload.email === 'string' ? payload.email : undefined,
+    };
   } catch (error) {
     if (error instanceof HttpError) throw error;
     throw new HttpError(401, 'Log ind for at fortsætte.');
@@ -79,18 +87,26 @@ export async function authenticate(
   env: PlatformEnv,
 ): Promise<Actor> {
   const claim = await identity(request, env);
-  const user = await env.PLATFORM_DB.prepare(`SELECT u.id,u.email,u.full_name,u.phone,
+  const user =
+    await env.PLATFORM_DB.prepare(`SELECT u.id,u.email,u.full_name,u.phone,
     EXISTS(SELECT 1 FROM platform_admins a WHERE a.user_id=u.id) AS platform_admin
     FROM users u WHERE u.identity_issuer=? AND u.identity_subject=? AND u.status='active'`)
-    .bind(claim.issuer, claim.subject)
-    .first<{ id: string; email: string; platform_admin: number; full_name:string|null; phone:string|null }>();
+      .bind(claim.issuer, claim.subject)
+      .first<{
+        id: string;
+        email: string;
+        platform_admin: number;
+        full_name: string | null;
+        phone: string | null;
+      }>();
   if (!user)
     throw new HttpError(403, 'Brugeren er ikke oprettet eller er deaktiveret.');
   return {
     id: user.id,
     email: user.email,
     platformAdmin: !!user.platform_admin,
-    fullName:user.full_name, phone:user.phone,
+    fullName: user.full_name,
+    phone: user.phone,
   };
 }
 
@@ -118,8 +134,18 @@ export async function requireCompany(
     (manage && membership.role !== 'admin')
   )
     throw new HttpError(403, 'Ingen adgang til virksomheden.');
-  const trial = await db.prepare('SELECT trial_ends_at FROM public_signups WHERE company_id=?').bind(companyId).first<{trial_ends_at:number|null}>();
-  if(trial?.trial_ends_at && trial.trial_ends_at<=Math.floor(Date.now()/1000)) throw new HttpError(403,'Prøveperioden er udløbet. Kontakt info@webshoptoolbox.dk.');
+  const trial = await db
+    .prepare('SELECT trial_ends_at FROM public_signups WHERE company_id=?')
+    .bind(companyId)
+    .first<{ trial_ends_at: number | null }>();
+  if (
+    trial?.trial_ends_at &&
+    trial.trial_ends_at <= Math.floor(Date.now() / 1000)
+  )
+    throw new HttpError(
+      403,
+      'Prøveperioden er udløbet. Kontakt info@webshoptoolbox.dk.',
+    );
   return company;
 }
 

@@ -1,12 +1,129 @@
 'use client';
 import { tier1Fetch as fetch } from '@/platform/transport';
-import {useEffect,useState} from 'react';
+import { useEffect, useState } from 'react';
 import { Reconciliation } from './reconciliation';
-import {Input} from '@/components/ui/input';
-import {Button} from '@/components/ui/button';
-export function IntegrationStartDate({provider,onSaved}:{provider:'shopify'|'viabill'|'dinero'|'flatpay'|'pensopay';onSaved?:()=>Promise<void>}){
- const[bookingDate,setBookingDate]=useState(''),[date,setDate]=useState(''),[ready,setReady]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[source,setSource]=useState('');
- useEffect(()=>{let active=true;void fetch('/api/integrations/start-date?provider='+provider,{cache:'no-store'}).then(async r=>{const d=await r.json() as {startDate:string;bookingStartDate:string;source:string;error?:string};if(!r.ok)throw Error(d.error);if(active){setDate(d.startDate);setBookingDate(d.bookingStartDate);setSource(d.source);setReady(true);}}).catch(()=>{if(active)setMessage('Startdatoen kunne ikke hentes. Genindlæs siden.');});return()=>{active=false;};},[provider]);
- async function save(){setBusy(true);setMessage('');try{const r=await fetch('/api/integrations/start-date',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider,startDate:date,bookingStartDate:bookingDate})});const d=await r.json() as {startDate:string;bookingStartDate:string;source:string;error?:string};if(!r.ok)throw Error(d.error);await onSaved?.();setSource('Individuel startdato.');setMessage('Startdatoer gemt. Gælder fra næste hentning.');}catch(e){setMessage(e instanceof Error?e.message:'Kunne ikke gemmes.');}finally{setBusy(false);}}
- return <div className="my-4 space-y-3 rounded-xl border p-4"><label className="block text-sm font-medium">Hent historik fra<Input type="date" value={date} disabled={!ready||busy} onChange={e=>setDate(e.target.value)}/></label><label className="block text-sm font-medium">Bogfør fra og med<Input type="date" value={bookingDate} disabled={!ready||busy} onChange={e=>setBookingDate(e.target.value)}/></label><p className="text-xs text-muted-foreground">Bogføringsstart gælder den valgte webshop og aktiverer ikke automatisk bogføring. Tom dato blokerer bogføring. Både datakildens og Dineros bogføringsstart skal være sat; den seneste gælder. Ordrer, refunderinger og udbetalinger vurderes hver efter deres egen dato i dansk tid. Eksisterende bilag skal afstemmes separat.</p><p className="text-xs text-muted-foreground">{source}</p><p className="text-xs text-muted-foreground">{provider==='dinero'?'Afgrænser regnskabsposteringer til dashboardet. Tom dato bevarer den nuværende historik. Ufuldstændige perioder vises uden beløb. Kontoplan og bilagsoverførsel følger deres egne indstillinger.':'Tom dato følger fælles historik. Den seneste grænse af startdato og fælles historik gælder.'} {provider==='shopify'&&'Shopify-datoen gælder også Shopify Payments og emballageforbrug; lager er et aktuelt øjebliksbillede. '}En tidligere dato kan hente flere gamle poster; gemte bilag slettes ikke.</p><Button variant="outline" disabled={!ready||busy} onClick={()=>void save()}>{busy?'Gemmer…':'Gem startdatoer'}</Button>{message&&<p role="status" className="text-sm">{message}</p>}{provider==='dinero'&&<Reconciliation/>}</div>;
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+export function IntegrationStartDate({
+  provider,
+  onSaved,
+}: {
+  provider: 'shopify' | 'viabill' | 'dinero' | 'flatpay' | 'pensopay';
+  onSaved?: () => Promise<void>;
+}) {
+  const [bookingDate, setBookingDate] = useState(''),
+    [date, setDate] = useState(''),
+    [ready, setReady] = useState(false),
+    [busy, setBusy] = useState(false),
+    [message, setMessage] = useState(''),
+    [source, setSource] = useState('');
+  useEffect(() => {
+    let active = true;
+    void fetch('/api/integrations/start-date?provider=' + provider, {
+      cache: 'no-store',
+    })
+      .then(async (r) => {
+        const d = (await r.json()) as {
+          startDate: string;
+          bookingStartDate: string;
+          source: string;
+          error?: string;
+        };
+        if (!r.ok) throw Error(d.error);
+        if (active) {
+          setDate(d.startDate);
+          setBookingDate(d.bookingStartDate);
+          setSource(d.source);
+          setReady(true);
+        }
+      })
+      .catch(() => {
+        if (active)
+          setMessage('Startdatoen kunne ikke hentes. Genindlæs siden.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [provider]);
+  async function save() {
+    setBusy(true);
+    setMessage('');
+    try {
+      const r = await fetch('/api/integrations/start-date', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider,
+          startDate: date,
+          bookingStartDate: bookingDate,
+        }),
+      });
+      const d = (await r.json()) as {
+        startDate: string;
+        bookingStartDate: string;
+        source: string;
+        error?: string;
+      };
+      if (!r.ok) throw Error(d.error);
+      await onSaved?.();
+      setSource('Individuel startdato.');
+      setMessage('Startdatoer gemt. Gælder fra næste hentning.');
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Kunne ikke gemmes.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="my-4 space-y-3 rounded-xl border p-4">
+      <label className="block text-sm font-medium">
+        Hent historik fra
+        <Input
+          type="date"
+          value={date}
+          disabled={!ready || busy}
+          onChange={(e) => setDate(e.target.value)}
+        />
+      </label>
+      <label className="block text-sm font-medium">
+        Bogfør fra og med
+        <Input
+          type="date"
+          value={bookingDate}
+          disabled={!ready || busy}
+          onChange={(e) => setBookingDate(e.target.value)}
+        />
+      </label>
+      <p className="text-xs text-muted-foreground">
+        Bogføringsstart gælder den valgte webshop og aktiverer ikke automatisk
+        bogføring. Tom dato blokerer bogføring. Både datakildens og Dineros
+        bogføringsstart skal være sat; den seneste gælder. Ordrer, refunderinger
+        og udbetalinger vurderes hver efter deres egen dato i dansk tid.
+        Eksisterende bilag skal afstemmes separat.
+      </p>
+      <p className="text-xs text-muted-foreground">{source}</p>
+      <p className="text-xs text-muted-foreground">
+        {provider === 'dinero'
+          ? 'Afgrænser regnskabsposteringer til dashboardet. Tom dato bevarer den nuværende historik. Ufuldstændige perioder vises uden beløb. Kontoplan og bilagsoverførsel følger deres egne indstillinger.'
+          : 'Tom dato følger fælles historik. Den seneste grænse af startdato og fælles historik gælder.'}{' '}
+        {provider === 'shopify' &&
+          'Shopify-datoen gælder også Shopify Payments og emballageforbrug; lager er et aktuelt øjebliksbillede. '}
+        En tidligere dato kan hente flere gamle poster; gemte bilag slettes
+        ikke.
+      </p>
+      <Button
+        variant="outline"
+        disabled={!ready || busy}
+        onClick={() => void save()}
+      >
+        {busy ? 'Gemmer…' : 'Gem startdatoer'}
+      </Button>
+      {message && (
+        <p role="status" className="text-sm">
+          {message}
+        </p>
+      )}
+      {provider === 'dinero' && <Reconciliation />}
+    </div>
+  );
 }

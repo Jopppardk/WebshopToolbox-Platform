@@ -12,13 +12,40 @@ import { Badge } from '@/components/ui/badge';
 import { TableCell, TableRow } from '@/components/ui/table';
 
 export type OrderView = {
-  id: string; date: string; shipped: string; amount: string; realized: string; status: string;
-  externalId?: string; createdAt?: string; currency?: string; total?: string;
-  customer?: { name?: string | null; address1?: string | null; address2?: string | null; zip?: string | null; city?: string | null; country?: string | null } | null;
-  lines?: Array<{ name: string; quantity: number; discountedTotalSet: { shopMoney: { amount: string; currencyCode: string } } }>;
-  shippingLines?: Array<{ title: string; discountedPriceSet: { shopMoney: { amount: string; currencyCode: string } } }>;
-  paymentProvider?: string; subtotal?: string; tax?: string; paymentStatus?: string | null;
-  country?: string | null; customerCurrency?: string | null; customerTotal?: string | null;
+  id: string;
+  date: string;
+  shipped: string;
+  amount: string;
+  realized: string;
+  status: string;
+  externalId?: string;
+  createdAt?: string;
+  currency?: string;
+  total?: string;
+  customer?: {
+    name?: string | null;
+    address1?: string | null;
+    address2?: string | null;
+    zip?: string | null;
+    city?: string | null;
+    country?: string | null;
+  } | null;
+  lines?: Array<{
+    name: string;
+    quantity: number;
+    discountedTotalSet: { shopMoney: { amount: string; currencyCode: string } };
+  }>;
+  shippingLines?: Array<{
+    title: string;
+    discountedPriceSet: { shopMoney: { amount: string; currencyCode: string } };
+  }>;
+  paymentProvider?: string;
+  subtotal?: string;
+  tax?: string;
+  paymentStatus?: string | null;
+  country?: string | null;
+  customerCurrency?: string | null;
+  customerTotal?: string | null;
   label?: LabelState;
 };
 
@@ -53,14 +80,33 @@ export function Stat({
   );
 }
 
-export function OrderRow({ order, labels, onBooked }: { order: OrderView; labels: boolean; onBooked: () => void }) {
+export function OrderRow({
+  order,
+  labels,
+  onBooked,
+}: {
+  order: OrderView;
+  labels: boolean;
+  onBooked: () => void;
+}) {
   const state = order.status;
   const booked = state === 'Bogført';
   const handled = booked || state === 'Annulleret · håndteret';
   return (
     <TableRow className={state === 'Fejlet' ? 'bg-red-50/35' : ''}>
       <TableCell className="pl-5 font-semibold text-[#365f08]">
-        <span className="inline-flex items-center gap-2">{order.country ? <CountryFlag code={order.country} /> : <span className="inline-block w-5" aria-hidden="true" />}{order.externalId ? <OrderDetail externalId={order.externalId} label={order.id} /> : order.id}</span>
+        <span className="inline-flex items-center gap-2">
+          {order.country ? (
+            <CountryFlag code={order.country} />
+          ) : (
+            <span className="inline-block w-5" aria-hidden="true" />
+          )}
+          {order.externalId ? (
+            <OrderDetail externalId={order.externalId} label={order.id} />
+          ) : (
+            order.id
+          )}
+        </span>
       </TableCell>
       <TableCell className="text-muted-foreground">{order.date}</TableCell>
       <TableCell>{order.paymentProvider || 'Afventer opdatering'}</TableCell>
@@ -72,7 +118,11 @@ export function OrderRow({ order, labels, onBooked }: { order: OrderView; labels
       </TableCell>
       <TableCell className="text-right font-medium tabular-nums">
         {order.amount} {order.currency || 'DKK'}
-        {order.customerTotal && <span className="block text-xs font-normal text-muted-foreground">Kunden betalte {order.customerTotal}</span>}
+        {order.customerTotal && (
+          <span className="block text-xs font-normal text-muted-foreground">
+            Kunden betalte {order.customerTotal}
+          </span>
+        )}
       </TableCell>
       <TableCell className="text-muted-foreground">{order.realized}</TableCell>
       <TableCell>
@@ -91,7 +141,31 @@ export function OrderRow({ order, labels, onBooked }: { order: OrderView; labels
         </Badge>
       </TableCell>
       <TableCell className="pr-5 text-right">
-        {order.externalId && <div className="flex flex-wrap items-start justify-end gap-2">{labels && order.shipped !== 'Annulleret' && <div className="text-right"><LabelPrint externalId={order.externalId} orderName={order.id} label={order.label ?? null} onDone={onBooked} /></div>}{order.shipped === 'Afsendt' && !handled && <SalesPreview externalId={order.externalId} />}<OrderLog externalId={order.externalId} />{order.shipped === 'Afsendt' && !handled && <ManualBookingAction kind="sale" externalId={order.externalId} onDone={onBooked} />}</div>}
+        {order.externalId && (
+          <div className="flex flex-wrap items-start justify-end gap-2">
+            {labels && order.shipped !== 'Annulleret' && (
+              <div className="text-right">
+                <LabelPrint
+                  externalId={order.externalId}
+                  orderName={order.id}
+                  label={order.label ?? null}
+                  onDone={onBooked}
+                />
+              </div>
+            )}
+            {order.shipped === 'Afsendt' && !handled && (
+              <SalesPreview externalId={order.externalId} />
+            )}
+            <OrderLog externalId={order.externalId} />
+            {order.shipped === 'Afsendt' && !handled && (
+              <ManualBookingAction
+                kind="sale"
+                externalId={order.externalId}
+                onDone={onBooked}
+              />
+            )}
+          </div>
+        )}
       </TableCell>
     </TableRow>
   );
