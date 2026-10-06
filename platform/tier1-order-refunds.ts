@@ -32,7 +32,7 @@ export async function orderRefundData({ request, env, actor, company, shop, path
  }
  if(path==='/order-refunds'){
   if(!get)throw new HttpError(405,'Brug Hent.');
-  const from=await dataCutoff(env,company,shop),status=await bookingStatuses(env,company,shop),held=await marketHold(db,company,shop);
+  const from=await dataCutoff(env,company,shop),held=await marketHold(db,company,shop);
   const connected=new Set((await db.prepare('SELECT provider FROM payment_connections WHERE company_id=? AND webshop_id=?').bind(company,shop).all<{provider:string}>()).results.map(r=>r.provider));
   const rows=(await db.prepare(`SELECT s.external_id,s.occurred_at,s.payload_json,c.number credit_number,m.country,m.currency market_currency,
  EXISTS(SELECT 1 FROM platform_invoices i WHERE i.company_id=s.company_id AND i.webshop_id=s.webshop_id AND i.external_id=s.order_id AND i.status='generated') invoiced,${legacyRefundSql} legacy,${saleBookedSql} sale_booked,
@@ -41,6 +41,8 @@ export async function orderRefundData({ request, env, actor, company, shop, path
  LEFT JOIN order_markets m ON m.company_id=s.company_id AND m.webshop_id=s.webshop_id AND m.external_id=s.order_id
  WHERE s.company_id=? AND s.webshop_id=? AND s.occurred_at>=? ORDER BY s.occurred_at DESC,s.external_id LIMIT 5001`).bind(company,shop,from).all<any>()).results;
   if(rows.length>5000)throw new HttpError(409,'Vælg en kortere historik.');
+  // Statuses only for the refunds read here, not for every order of the webshop.
+  const status=await bookingStatuses(env,company,shop,rows.map(r=>r.external_id));
   const fromDay=url.searchParams.get('from')||'',toDay=url.searchParams.get('to')||'',search=(url.searchParams.get('search')||'').trim().toLowerCase();
   const offset=pageNumber(url.searchParams.get('offset'),0),limit=pageNumber(url.searchParams.get('limit'),25,100)||25;
   const list=rows.map(row=>{

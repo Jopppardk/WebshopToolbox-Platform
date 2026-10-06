@@ -24,11 +24,14 @@ export function onboardingStatus(date:string, sourceDate:string, dineroDate:stri
  return day<[sourceDate,dineroDate].sort()[1]?'historical':'reconciliation_required';
 }
 
-export async function bookingStatuses(env:PlatformEnv,company:string,shop:string){
+// ids: the posts a page shows. Without it every receipt of the webshop is read, which grows with each booked post.
+export async function bookingStatuses(env:PlatformEnv,company:string,shop:string,ids?:string[]){
+ const only=ids?' AND r.external_id IN (SELECT value FROM json_each(?))':'',scope=ids?[company,shop,JSON.stringify([...new Set(ids)])]:[company,shop];
  const dates=(await env.PLATFORM_DB.prepare('SELECT provider,start_date FROM booking_start_dates WHERE company_id=? AND webshop_id=?').bind(company,shop).all<{provider:string;start_date:string}>()).results;
- const receipts=(await env.PLATFORM_DB.prepare('SELECT r.* FROM accounting_reconciliations r JOIN accounting_connections c ON c.company_id=r.company_id AND c.organization_id=r.organization_id WHERE r.company_id=? AND r.webshop_id=?').bind(company,shop).all<any>()).results;
- const live=(await env.PLATFORM_DB.prepare('SELECT r.* FROM production_receipts r JOIN accounting_connections c ON c.company_id=r.company_id AND c.organization_id=r.destination WHERE r.company_id=? AND r.webshop_id=?').bind(company,shop).all<any>()).results;
- const attempts=(await env.PLATFORM_DB.prepare('SELECT job,external_id,failures FROM production_attempts WHERE company_id=? AND webshop_id=?').bind(company,shop).all<any>()).results;
+ const receipts=(await env.PLATFORM_DB.prepare('SELECT r.* FROM accounting_reconciliations r JOIN accounting_connections c ON c.company_id=r.company_id AND c.organization_id=r.organization_id WHERE r.company_id=? AND r.webshop_id=?'+only).bind(...scope).all<any>()).results;
+ // Only what the status needs: the phase and, for booked posts, the source they were booked from.
+ const live=(await env.PLATFORM_DB.prepare("SELECT r.provider,r.module,r.external_id,r.phase,CASE WHEN r.phase='booked' THEN json_extract(r.payload_json,'$.sourceJson') END AS source_json FROM production_receipts r JOIN accounting_connections c ON c.company_id=r.company_id AND c.organization_id=r.destination WHERE r.company_id=? AND r.webshop_id=?"+only).bind(...scope).all<any>()).results;
+ const attempts=(await env.PLATFORM_DB.prepare('SELECT job,external_id,failures FROM production_attempts r WHERE r.company_id=? AND r.webshop_id=?'+only).bind(...scope).all<any>()).results;
  const preferences=await env.PLATFORM_DB.prepare('SELECT preferences_json FROM tier1_preferences WHERE company_id=? AND webshop_id=?').bind(company,shop).first<{preferences_json:string}>();
  const automation=preferences?JSON.parse(preferences.preferences_json).automation||{}:{};
  return (provider:string,module:string,id:string,date:string,sourceJson:string,upcoming=false)=>{
@@ -37,7 +40,7 @@ export async function bookingStatuses(env:PlatformEnv,company:string,shop:string
   const job=provider==='shopify'?({orders:'sales',refunds:'refunds',order_refunds:'order_refunds',payouts:'payouts'} as Record<string,string>)[module]:provider==='flatpay'&&module==='payments'?'flatpay':undefined;
   const failed=job&&attempts.some(a=>a.job===job&&a.external_id===id&&a.failures>0);
   if(found){
-   if(found.phase==='booked')return !sameSource(JSON.parse(found.payload_json).sourceJson,sourceJson)?'booked_changed':'booked';
+   if(found.phase==='booked')return !sameSource(found.source_json,sourceJson)?'booked_changed':'booked';
    if(['uncertain','held'].includes(found.phase))return 'failed_manual';
    if(failed)return found.phase==='prepared'&&automation[job==='flatpay'?'payouts':job==='order_refunds'?'refunds':job!]?'failed_retry':'failed_manual';
    return found.phase;
