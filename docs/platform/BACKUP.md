@@ -40,6 +40,6 @@ Bogføringen i Dinero påvirkes ikke af en gendannelse. Kvitteringer i `producti
 
 ## Åbne punkter
 
-- Gennemfør en øvelse i at gendanne én kunde på **dev** én gang i kvartalet, og notér resultatet i HANDOVER.md.
+- Gennemfør en øvelse i at gendanne én kunde på **dev** én gang i kvartalet, og notér resultatet i CHANGELOG.md.
 - R2: overvej en natlig kopi af dokumentbucketten til en separat backup-bucket. Det kræver en ny bucket og et nyt workflow og aftales først.
 - Opsæt en ekstern overvågning af `/healthz/scheduler`. Det gøres af platformens ejer.
