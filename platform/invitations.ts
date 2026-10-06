@@ -61,7 +61,7 @@ async function deliver(request: Request, env: PlatformEnv, invitation: string, r
       from: env.PLATFORM_INVITATION_FROM!, to: recipient,
       subject: 'Du er inviteret til WebshopToolbox'+(env.PLATFORM_ENV==='production'?'':' (testmiljø)'),
       text: `Du er inviteret til WebshopToolbox. Åbn linket og log ind med denne mailadresse. Udfyld derefter dit navn. Linket gælder i 48 timer og kan kun bruges én gang.\n\n${link}${env.PLATFORM_ENV==='production'?'':'\n\nDette er en testinvitation.'}`,
-      ...(welcome||{}),
+      ...welcome,
     });
   } catch { return { delivery: 'uncertain' }; }
   await env.PLATFORM_DB.prepare("UPDATE invitations SET delivery='sent' WHERE id=?").bind(invitation).run();

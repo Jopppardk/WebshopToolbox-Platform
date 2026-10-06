@@ -1,5 +1,5 @@
-import {productionWrites} from './production-policy';
-import type {PlatformEnv} from './types';
+import { productionWrites } from './production-policy';
+import type { PlatformEnv } from './types';
 // Public contract: https://app.emballageindberetning.dk/docs/public-api (2026-09-09).
 export type EIReport = {
   id: number;
@@ -78,7 +78,17 @@ export async function eiRequest<T>(
   idempotencyKey?: string,
   env?: PlatformEnv,
 ): Promise<{ data: T; meta: { next_cursor?: string | null } }> {
-  if(method!=='GET' && !(method==='POST' && /^\/reports\/\d+\/submit$/.test(path) && idempotencyKey && env && productionWrites(env)))throw new Error('Indberetning er blokeret i dette miljø.');
+  if (
+    method !== 'GET' &&
+    !(
+      method === 'POST' &&
+      /^\/reports\/\d+\/submit$/.test(path) &&
+      idempotencyKey &&
+      env &&
+      productionWrites(env)
+    )
+  )
+    throw new Error('Indberetning er blokeret i dette miljø.');
   if (
     !/^\/(me|reports(?:\/\d+(?:\/(schema|data|submit))?)?)(?:\?.*)?$/.test(path)
   )
@@ -95,7 +105,9 @@ export async function eiRequest<T>(
           'X-Request-Id': crypto.randomUUID(),
           ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
         },
-        ...(method !== 'GET' && body !== undefined ? {body:JSON.stringify(body)} : {}),
+        ...(method !== 'GET' && body !== undefined
+          ? { body: JSON.stringify(body) }
+          : {}),
         signal: AbortSignal.timeout(15000),
         redirect: 'manual',
       },

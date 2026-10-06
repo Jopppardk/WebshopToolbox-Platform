@@ -27,4 +27,5 @@ Begge assistenter arbejder i samme repository. For at undgå konflikter og overr
 - **Skriv en note øverst i `HANDOVER.md`** for hver udgivet ændring: dato, hvem (Codex/Claude), hvad, filer/endpoints, migrering og hvad der ikke er verificeret.
 - **Linjeskift er altid LF** (`.gitattributes`). Skriv aldrig CRLF ind i filer.
 - **Tests**: kør `npm test` og begge typechecks før PR. Ny adfærd får en test i den fil, der passer til området (se `lib/`). Kør portal-røgtesten (`npm run test:portal`), når brugerfladen er ændret.
+- **Lint og formatering må kun blive bedre** (`npm run lint`, også i CI). Nye fund ud over `scripts/lint-baseline.json` afvises. Det samme gælder filer, der ikke er formateret med oxfmt, medmindre de står i `scripts/format-baseline.json`. Nye filer skal derfor altid formateres (`npx oxfmt <fil>`). Store, uformaterede filer formateres i en separat PR uden andre ændringer, når ingen anden arbejder i dem. Kør `npm run lint:update` efter at have rettet fund eller formateret filer.
 - **Udgivelse**: brug `scripts/platform-release.mjs` (dev, så prod) og meld resultatet tilbage til brugeren. Udgiv ikke andres uflettede eller uafsluttede arbejde.

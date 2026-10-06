@@ -9,7 +9,7 @@
     "test": "node --test lib/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "deploy:cloudflare": "node scripts/platform.mjs deploy",
-    "lint": "oxlint",
+    "lint": "node scripts/quality-ratchet.mjs",
     "format": "oxfmt",
     "platform:check": "node scripts/platform.mjs check",
     "platform:init": "node scripts/platform.mjs init-local",
@@ -21,7 +21,8 @@
     "platform:tier1:typecheck": "tsc --noEmit --project platform/tier1/tsconfig.json",
     "deploy:dev": "node scripts/platform.mjs deploy",
     "deploy:prod": "node scripts/platform-production.mjs deploy",
-    "test:portal": "npm run platform:tier1:build && playwright test --config playwright.config.mjs"
+    "test:portal": "npm run platform:tier1:build && playwright test --config playwright.config.mjs",
+    "lint:update": "node scripts/quality-ratchet.mjs --update"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

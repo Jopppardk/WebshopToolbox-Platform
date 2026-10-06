@@ -259,9 +259,7 @@
       "sha256": "d51584a7597ea37ffb377ee6741530b4ee617dcb797f4effbac7bc3a1553e11e"
     }
   ],
-  "excluded": [
-    "components/development-requests.tsx"
-  ],
+  "excluded": ["components/development-requests.tsx"],
   "changes": [
     "Company identity and WebshopToolbox branding",
     "Development replaced with Support",

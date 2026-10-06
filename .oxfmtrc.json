@@ -8,6 +8,11 @@
     "pnpm-lock.yaml",
     "yarn.lock",
     "bun.lock",
-    "bun.lockb"
+    "bun.lockb",
+    "**/*.md",
+    "platform/public/tier1-next/**",
+    "platform/migrations/**",
+    "scripts/lint-baseline.json",
+    "scripts/format-baseline.json"
   ]
 }

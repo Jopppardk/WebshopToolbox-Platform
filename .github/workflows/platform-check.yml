@@ -18,6 +18,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node scripts/platform.mjs check
+      # Lint and formatting may only improve (scripts/quality-ratchet.mjs).
+      - run: npm run lint
       - run: npm test
       - run: npm run platform:tier1:typecheck
       - run: npm run platform:tier1:build
