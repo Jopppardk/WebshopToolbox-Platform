@@ -1,0 +1,6 @@
+# Rent mekaniske formateringscommits, som git blame springer over:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# (GitHub læser filen automatisk.)
+
+# Formatér al kode med oxfmt (#118)
+95c8be6ac0723dfbfae36a9e4b876b461bfbcada
