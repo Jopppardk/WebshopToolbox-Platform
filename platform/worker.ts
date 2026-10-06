@@ -3,6 +3,7 @@ import { shipmondoWebhook } from './shipmondo';
 import {runProductionJobs} from './production-jobs';
 import { demoMessage, isDemoCompany, isDemoUser } from './demo';
 import { resetDemoIfDue } from './demo-reset';
+import { cleanupRuns } from './run-cleanup';
 import {productionWrites} from './production-policy';
 import { customerActor, customerLogin, customerLogout } from './customer-auth';
 import { publicSignup } from './signup';
@@ -226,6 +227,7 @@ export default {
     assertTestRuntime(env);
     // The demo is rebuilt once a night; a failure there never stops the real jobs.
     try{await resetDemoIfDue(env);}catch(error){console.error('Demokontoen kunne ikke nulstilles',error);}
+    try{await cleanupRuns(env);}catch(error){console.error('Kørselsloggen kunne ikke ryddes op',error);}
     if(productionWrites(env)){
       const [jobs]=await Promise.all([runProductionJobs(env),refreshPublicTracking(env).catch(()=>console.error('Tracking kunne ikke opdateres'))]);
       return jobs;

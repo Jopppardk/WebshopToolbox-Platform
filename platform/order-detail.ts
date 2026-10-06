@@ -33,7 +33,8 @@ export async function orderDetail(env: PlatformEnv, company: string, shop: strin
   const o = JSON.parse(row.payload_json), currency = o.currentTotalPriceSet?.shopMoney?.currencyCode || 'DKK';
   const connected = new Set((await db.prepare('SELECT provider FROM payment_connections WHERE company_id=? AND webshop_id=?').bind(company, shop).all<{ provider: string }>()).results.map(r => r.provider));
   const held = (await marketHold(db, company, shop))(row.country ?? null, row.market_currency ?? null, currency);
-  const status = await bookingStatuses(env, company, shop), market = await orderMarketSettings(db, company, shop, id);
+  const market = await orderMarketSettings(db, company, shop, id);
+  const status = await bookingStatuses(env, company, shop, [id, ...(await db.prepare('SELECT external_id FROM order_refunds WHERE company_id=? AND webshop_id=? AND order_id=?').bind(company, shop, id).all<{ external_id: string }>()).results.map(r => r.external_id)]);
   const invoice = await db.prepare("SELECT id,status,created_at,source_json FROM platform_invoices WHERE company_id=? AND webshop_id=? AND external_id=?").bind(company, shop, id).first<{ id: string; status: string; created_at: string; source_json: string }>();
   const refunds = (await db.prepare(`SELECT s.external_id,s.occurred_at,s.payload_json,c.id credit_id,c.number credit_number,${legacyRefundSql} legacy FROM order_refunds s
  LEFT JOIN platform_credit_notes c ON c.company_id=s.company_id AND c.webshop_id=s.webshop_id AND c.external_id=s.external_id AND c.status='generated'
