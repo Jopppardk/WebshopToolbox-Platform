@@ -25,6 +25,9 @@ jobs:
     if: github.repository == 'Jopppardk/WebshopToolbox-Platform' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: read
     steps:
       - name: Kontrollér godkendt version før checkout
         env:
@@ -48,10 +51,30 @@ jobs:
       - run: npm ci
       - run: node scripts/platform.mjs check
       - run: node scripts/platform-production.mjs check
-      - run: npm test
-      - run: npm run platform:tier1:typecheck
-      - run: npm run platform:tier1:build
-      - run: npm run typecheck
+      # The test workflow already ran on this exact main commit after the merge. If it passed (or passes while we
+      # wait for it), its result is reused instead of running the same tests again; otherwise everything runs here.
+      - name: Genbrug grøn testkørsel for samme commit
+        id: green
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          id=$(gh api "repos/$REPO/actions/workflows/platform-check.yml/runs?head_sha=$SHA&event=push&branch=main&per_page=5" --jq '[.workflow_runs[] | select(.head_sha == env.SHA and .path == ".github/workflows/platform-check.yml")][0].id // empty')
+          if [ -n "$id" ] && gh run watch "$id" --repo "$REPO" --interval 15 --exit-status > /dev/null; then
+            echo "Testkørsel $id for $SHA er grøn; den genbruges."
+            echo "reused=true" >> "$GITHUB_OUTPUT"
+          else
+            echo 'Ingen grøn testkørsel for denne commit; testene køres her.'
+          fi
+      - if: steps.green.outputs.reused != 'true'
+        run: npm test
+      - if: steps.green.outputs.reused != 'true'
+        run: npm run platform:tier1:typecheck
+      - if: steps.green.outputs.reused != 'true'
+        run: npm run platform:tier1:build
+      - if: steps.green.outputs.reused != 'true'
+        run: npm run typecheck
       - run: node scripts/platform.mjs build
       - run: node scripts/platform-production.mjs build
   dev:

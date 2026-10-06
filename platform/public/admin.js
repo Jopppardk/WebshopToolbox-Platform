@@ -582,10 +582,25 @@ async function ticketDetail(c,id){
 $('#tickets-tab').onclick=()=>ticketList().catch(showError);
 
 let insightsRevision=0;
+// Driftsoverblik: the scheduler's heartbeat, open alerts (also mailed to the platform admins) and every webshop's state.
+const danishTime=value=>value?new Date(value.includes('T')?value:value.replace(' ','T')+'Z').toLocaleString('da-DK',{dateStyle:'short',timeStyle:'short'}):'—';
+async function operationsPanel(revision,target){
+ const data=await api('/operations');if(revision!==insightsRevision)return;
+ const box=panel('Driftsoverblik',button('Opdatér',()=>operationsPanel(insightsRevision,target)));
+ const s=data.scheduler;
+ box.append(el('p',!s.enabled?'Automatiske kørsler er slået fra i dette miljø.':'Seneste gennemførte automatiske kørsel: '+danishTime(s.lastOkAt)+(s.lastError?' · Seneste fejl: '+s.lastError:''),'hint'));
+ if(data.alerts.length){box.append(el('h3','Åbne driftsproblemer'));table(box,['Webshop','Problem','Siden'],data.alerts.map(a=>[a.label,a.message,danishTime(a.firstAt)]));}
+ else box.append(el('p','Ingen åbne driftsproblemer.','hint'));
+ box.append(el('h3','Webshops'));table(box,['Webshop','Automatik','Seneste gennemførte','Fejl seneste døgn','Venter på nyt forsøg','Forsinkelse',''],data.shops.map(shop=>[
+  shop.label,shop.scheduled?'Kører':shop.reason,danishTime(shop.lastSuccessAt),String(shop.failed24h),String(shop.retrying),
+  shop.delayMinutes>0?shop.delayMinutes+' min.':'—',button('Kørselslog',()=>insightsView(shop.companyId,shop.webshopId)),
+ ]));
+ target.replaceChildren(box);
+}
 async function insightsView(companyId='',shopId='',status='',page=1){
  const revision=++insightsRevision;document.querySelectorAll('aside .nav.active').forEach(n=>n.classList.remove('active'));$('#insights-tab').classList.add('active');
- clear();heading('Indsigt','Automatiske jobs og kørselslog pr. virksomhed og webshop');$('#new-company').hidden=true;
- const box=panel('Kørselslog');content.replaceChildren(box);
+ clear();heading('Indsigt','Driftsoverblik på tværs af kunder og kørselslog pr. webshop');$('#new-company').hidden=true;
+ const ops=el('div'),box=panel('Kørselslog');content.replaceChildren(ops,box);operationsPanel(revision,ops).catch(showError);
  const companySelect=el('select'),shopSelect=el('select'),statusSelect=el('select');
  companySelect.setAttribute('aria-label','Virksomhed');shopSelect.setAttribute('aria-label','Webshop');statusSelect.setAttribute('aria-label','Status');
  const list=(await api('/companies')).companies;if(revision!==insightsRevision)return;

@@ -40,17 +40,21 @@ export async function runProductionJobs(env:PlatformEnv){
  return {status:'completed',processed};
 }
 
+// Which webshops the scheduler runs (w = webshops of active, non-demo companies): those with a live company
+// administrator to act as, and not on an ended trial. Shared with the operations overview (ops-monitor.ts).
+export const jobActorSql=`(SELECT m.user_id FROM company_memberships m JOIN users a ON a.id=m.user_id
+ WHERE m.company_id=w.company_id AND m.role='admin' AND a.status='active'
+ AND NOT EXISTS(SELECT 1 FROM platform_admins pa WHERE pa.user_id=a.id) ORDER BY m.user_id LIMIT 1)`;
+export const trialEndedSql=`EXISTS(SELECT 1 FROM public_signups ps WHERE ps.company_id=w.company_id AND ps.trial_ends_at<=unixepoch())`;
 // A live company administrator is selected server-side. No client supplied tenant
 // or identity is used, and all adapters recheck company and webshop permissions.
 async function shopRows(env:PlatformEnv,only?:{company:string;shop:string}){
  return (await env.PLATFORM_DB.prepare(`SELECT w.company_id,w.id,COALESCE(p.preferences_json,'{}') preferences_json,p.revision,u.id actor_id,u.email,EXISTS(SELECT 1 FROM webshop_connections k WHERE k.company_id=w.company_id AND k.webshop_id=w.id AND k.provider='shopify' AND k.verified_at IS NOT NULL) shopify
  FROM webshops w JOIN companies c ON c.id=w.company_id AND c.status='active' AND c.demo=0
  LEFT JOIN tier1_preferences p ON p.company_id=w.company_id AND p.webshop_id=w.id
- JOIN users u ON u.id=(SELECT m.user_id FROM company_memberships m JOIN users a ON a.id=m.user_id
- WHERE m.company_id=w.company_id AND m.role='admin' AND a.status='active'
- AND NOT EXISTS(SELECT 1 FROM platform_admins pa WHERE pa.user_id=a.id) ORDER BY m.user_id LIMIT 1)
+ JOIN users u ON u.id=${jobActorSql}
  LEFT JOIN production_jobs j ON j.company_id=w.company_id AND j.webshop_id=w.id AND j.job='runtime'
- WHERE w.status='active' AND (? IS NULL OR (w.company_id=? AND w.id=?)) AND NOT EXISTS(SELECT 1 FROM public_signups ps WHERE ps.company_id=w.company_id AND ps.trial_ends_at<=unixepoch()) ORDER BY COALESCE(j.next_run_at,0),w.id LIMIT 10`).bind(only?.company??null,only?.company??null,only?.shop??null).all<any>()).results;
+ WHERE w.status='active' AND (? IS NULL OR (w.company_id=? AND w.id=?)) AND NOT ${trialEndedSql} ORDER BY COALESCE(j.next_run_at,0),w.id LIMIT 10`).bind(only?.company??null,only?.company??null,only?.shop??null).all<any>()).results;
 }
 
 async function runShop(env:PlatformEnv,shop:any,deadline:number,mode:Mode):Promise<false|{sales?:QueueResult;invoices?:QueueResult}>{

@@ -4,6 +4,7 @@ import {runProductionJobs} from './production-jobs';
 import { demoMessage, isDemoCompany, isDemoUser } from './demo';
 import { resetDemoIfDue } from './demo-reset';
 import { cleanupRuns } from './run-cleanup';
+import { checkOperations, handleOperationsOverview, markTick, schedulerHealth } from './ops-monitor';
 import {productionWrites} from './production-policy';
 import { customerActor, customerLogin, customerLogout } from './customer-auth';
 import { publicSignup } from './signup';
@@ -35,6 +36,8 @@ function secure(response: Response, tier1 = false) {
   headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Referrer-Policy', 'no-referrer');
+  // Browsers only honour this over HTTPS, so local http development is unaffected.
+  headers.set('Strict-Transport-Security', 'max-age=31536000');
   // Product feeds are plain data. The page policy below would block the browser's own XML viewer,
   // which then shows the feed as one run of text instead of the element tree.
   if (headers.get('content-type')?.startsWith('application/xml')) return new Response(response.body, { status: response.status, headers });
@@ -93,6 +96,8 @@ export default {
         headers.append('Set-Cookie','platform_support=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'+(local?'':'; Secure'));
         return secure(new Response(null,{status:303,headers}));
       }
+      // For an external uptime monitor; says only whether the scheduler completes runs, no customer data.
+      if (path === '/healthz/scheduler' && request.method === 'GET') return secure(await schedulerHealth(env));
       if (path === '/healthz' && request.method === 'GET')
         return secure(
           reply({
@@ -188,6 +193,7 @@ export default {
         if(actor.platformAdmin||actor.support)throw new HttpError(403,'Åbn Tier 1 med en virksomhedsbruger.');
         return secure(await asset(path==='/tier1-next/'?new Request(new URL('/tier1-next/index.html',url)):request,env),true);
       }
+      if (path === '/api/platform/operations') return secure(await handleOperationsOverview(request, env, actor));
       if (path.startsWith('/api/platform/'))
         return secure(await handleAdmin(request, env.PLATFORM_DB, actor, env));
       if (
@@ -229,8 +235,18 @@ export default {
     try{await resetDemoIfDue(env);}catch(error){console.error('Demokontoen kunne ikke nulstilles',error);}
     try{await cleanupRuns(env);}catch(error){console.error('Kørselsloggen kunne ikke ryddes op',error);}
     if(productionWrites(env)){
-      const [jobs]=await Promise.all([runProductionJobs(env),refreshPublicTracking(env).catch(()=>console.error('Tracking kunne ikke opdateres'))]);
-      return jobs;
+      // A heartbeat around the jobs, then the operations check (alerts and the daily mail to the platform admins).
+      try{
+        await markTick(env,'start');
+        const [jobs]=await Promise.all([runProductionJobs(env),refreshPublicTracking(env).catch(()=>console.error('Tracking kunne ikke opdateres'))]);
+        await markTick(env,'ok');
+        return jobs;
+      }catch(error){
+        try{await markTick(env,'error',error);}catch{/* The original error is what matters. */}
+        throw error;
+      }finally{
+        try{await checkOperations(env);}catch(error){console.error('Driftsovervågningen fejlede',error);}
+      }
     }
     return scheduled();
   },
