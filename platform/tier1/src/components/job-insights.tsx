@@ -1,6 +1,6 @@
 'use client';
 import { formatDateTime } from '@/lib/format';
-import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
+import { tier1Fetch as fetch } from '@/platform/transport';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Activity, CheckCircle2, CircleDot, RefreshCw, SkipForward, TriangleAlert } from 'lucide-react';

@@ -1,8 +1,8 @@
 'use client';
 import { formatDate, formatDateTime, formatTime } from '@/lib/format';
-import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
+import { tier1Fetch as fetch } from '@/platform/transport';
 import { useEffect,useState,type ReactNode } from 'react';
-import { ArrowDownRight,ArrowUpRight,ArrowRight,BarChart3,Boxes,RefreshCw,Wallet,Package,Activity,Clock3,Link2,TriangleAlert,Landmark,ShoppingBag,CheckCircle2 } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, ArrowRight, BarChart3, Boxes, RefreshCw, Wallet, Package, Activity, Clock3, Link2, Landmark, ShoppingBag, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { danishDate } from '@/lib/history-policy';
 import { percentageChange,type calculateFinance } from '@/lib/dashboard-finance';

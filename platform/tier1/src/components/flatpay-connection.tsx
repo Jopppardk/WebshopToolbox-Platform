@@ -1,6 +1,6 @@
 'use client';
 import { supportedModules } from '@/lib/integration-visibility';
-import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
+import { tier1Fetch as fetch } from '@/platform/transport';
 import {IntegrationStartDate} from '@/components/integration-start-date';
 import {useEffect,useState,type ReactNode} from 'react';
 import {CreditCard} from 'lucide-react';

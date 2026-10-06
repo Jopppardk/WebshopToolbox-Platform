@@ -1,3 +1,4 @@
+import { asText } from './tier1/src/lib/format';
 import { identity, requireCompany } from './auth';
 import {welcomeTemplate,renderWelcome} from './signup';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
@@ -74,7 +75,7 @@ export async function invite(request: Request, env: PlatformEnv, actor: Actor, c
   const input = await jsonBody(request), recipient = email(input.email);
   const mode = deliveryConfig(request, env, recipient);
   const role = input.role || 'member';
-  if (!['admin','member'].includes(String(role))) throw new HttpError(400, 'Ugyldig rolle.');
+  if (!['admin','member'].includes(asText(role))) throw new HttpError(400, 'Ugyldig rolle.');
   const id = crypto.randomUUID(), invitation = crypto.randomUUID(), token = newToken();
   const db = env.PLATFORM_DB;
   await db.batch([

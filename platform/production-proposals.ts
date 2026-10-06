@@ -1,3 +1,4 @@
+import { asText } from './tier1/src/lib/format';
 import {handleProductionBooking,type BookingContext,type PreparedBooking} from './production-booking';
 import {bookingDate} from './production-policy';
 import {shopAccess,orderQuery} from './invoice-source';
@@ -16,7 +17,7 @@ import {ensureCreditNote} from './credit-notes';
 import {foreignHold,isForeignOrder} from './order-markets';
 import {HttpError,type Actor,type PlatformEnv} from './types';
 const fail=(message:string):never=>{throw new HttpError(409,message);};
-const num=(value:unknown)=>{const n=Number(String(value||'').match(/^\d+/)?.[0]);if(!Number.isSafeInteger(n)||n<=0)fail('Vælg gyldige konti i kontoplanen.');return n;};
+const num=(value:unknown)=>{const n=Number(asText(value||'').match(/^\d+/)?.[0]);if(!Number.isSafeInteger(n)||n<=0)fail('Vælg gyldige konti i kontoplanen.');return n;};
 async function chartFor(ctx:BookingContext,accounts:number[]){
  const chart=await readDineroAccounts(ctx.credentials);
  if(new Set(accounts).size!==accounts.length||accounts.some(n=>!chart.some(a=>Number(a.number)===n&&!a.hidden&&!a.vatCode)))fail('Kontiene skal være forskellige, aktive og uden moms i Dinero.');

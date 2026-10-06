@@ -1,6 +1,6 @@
 'use client';
 import { formatDate } from '@/lib/format';
-import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
+import { tier1Fetch as fetch } from '@/platform/transport';
 import { useEffect, useState } from 'react';
 import { CheckCircle2, Download, RefreshCw, Send, Plug } from 'lucide-react';
 import {

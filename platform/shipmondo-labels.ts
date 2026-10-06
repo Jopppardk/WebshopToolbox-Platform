@@ -5,6 +5,7 @@
 // A label costs freight, so it is never created twice: an order that already has a shipment in Shipmondo is only
 // printed again, every creation is claimed in shipping_labels first, and a creation with an uncertain outcome
 // (timeout, server error) is never retried automatically; it must be checked in Shipmondo.
+import { asText } from './tier1/src/lib/format';
 import { requireCompany, requireWebshop } from './auth';
 import { unseal } from './connections';
 import { jsonBody } from './invitations';
@@ -76,7 +77,7 @@ export async function handleLabel(request: Request, env: PlatformEnv, actor: Act
   await requireWebshop(db, actor, company, shop);
   if (actor.support || actor.platformAdmin) throw new HttpError(403, 'Labels udskrives af virksomhedens egne brugere.');
   if (request.method !== 'POST') throw new HttpError(405, 'Brug Udskriv label.');
-  const b = await jsonBody(request, 2000), id = String(b.externalId || '');
+  const b = await jsonBody(request, 2000), id = asText(b.externalId || '');
   if (!/^gid:\/\/shopify\/Order\/\d{1,30}$/.test(id)) throw new HttpError(400, 'Vælg en ordre.');
   const { credentials, printer } = await connection(env, company, shop);
   if (!printer) throw new HttpError(409, 'Vælg en printer under Shipmondo-integrationen først.');

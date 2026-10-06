@@ -1,3 +1,4 @@
+import { asText } from './tier1/src/lib/format';
 import { requireCompany } from './auth';
 import { jsonBody } from './invitations';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
@@ -38,7 +39,7 @@ export async function handleTickets(request:Request,env:PlatformEnv,actor:Actor,
  const b=await jsonBody(request,12000),message=b.message===undefined?'':field(b.message,6000);
  const status=b.status===undefined?(message?(actor.platformAdmin?'waiting_customer':'open'):t.status):b.status;
  const priority=b.priority===undefined?t.priority:b.priority;
- if(!['open','waiting_customer','resolved'].includes(String(status))||!['normal','high'].includes(String(priority))||(!actor.platformAdmin&&(status==='waiting_customer'||priority!==t.priority)))throw new HttpError(403,'Du kan svare, lukke eller genåbne din sag. Prioritet ændres af support.');
+ if(!['open','waiting_customer','resolved'].includes(asText(status))||!['normal','high'].includes(asText(priority))||(!actor.platformAdmin&&(status==='waiting_customer'||priority!==t.priority)))throw new HttpError(403,'Du kan svare, lukke eller genåbne din sag. Prioritet ændres af support.');
  if(b.version!==t.version)throw new HttpError(409,'Sagen er ændret. Genindlæs før du gemmer.');
  // Claim the version and append its reply in the same D1 transaction.
  const result=await db.batch([

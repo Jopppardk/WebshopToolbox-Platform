@@ -1,3 +1,4 @@
+import { asText } from './tier1/src/lib/format';
 import {productionEmballage} from './production-emballage';
 import {productionWrites} from './production-policy';
 import { requireCompany } from './auth';
@@ -6,7 +7,7 @@ import { eiConnectionError,eiRequest,eiReports,isSubmitted,type EIContext,type E
 import { jsonBody } from './invitations';
 import { handlePackaging } from './packaging';
 import { syncPackaging } from './packaging-source';
-import { dataCutoff,dataStartDate } from './tier1-history';
+import { dataStartDate } from './tier1-history';
 import { HttpError,reply,type Actor,type PlatformEnv } from './types';
 
 export async function handleTier1Emballage(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string,path:string){
@@ -39,7 +40,7 @@ export async function handleTier1Emballage(request:Request,env:PlatformEnv,actor
    config={startDate:input.startDate,responsibility:input.responsibility,mappings:config.mappings||{}};
    if(b.reportId){
     const reports=await eiReports(key);if(!reports.some(r=>r.id===b.reportId&&r.responsibility.code===config.responsibility))throw new HttpError(403,'Rapporten tilhører ikke dette producentansvar.');
-    const schema=(await eiRequest<EISchema>(key,`/reports/${b.reportId}/schema`)).data,mapping=b.mapping as any;
+    const schema=(await eiRequest<EISchema>(key,`/reports/${encodeURIComponent(asText(b.reportId))}/schema`)).data,mapping=b.mapping as any;
     if(!mapping||!schema.fields.some(f=>f.name===mapping.household)||!schema.fields.some(f=>f.name===mapping.commercial)||mapping.household===mapping.commercial)throw new HttpError(400,'Vælg to forskellige felter fra rapportens formular.');
     config.mappings[String(schema.form_version_id)]={household:mapping.household,commercial:mapping.commercial};
    }

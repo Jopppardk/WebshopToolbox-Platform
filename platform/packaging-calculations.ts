@@ -1,3 +1,4 @@
+import { asText } from './tier1/src/lib/format';
 type Audience='household'|'commercial'|'unknown';
 export type Reportable = 'yes' | 'no' | 'unknown';
 export type PackagingRow = { test?: boolean; audience?: Audience; eventId: string; fulfillmentId: string; fulfilledAt: string; date: string; orderId: string; orderName: string; productId: string | null; product: string; variantId: string | null; variant: string; quantity: number; weightGrams: number | null; reportable: Reportable; supplier: string; supplierCountry: string; supplierCvr: string; snapshottedAt: string; refreshedAt?: string };
@@ -5,7 +6,7 @@ export type ManualPackaging = { id: string; audience?: Audience; date: string; d
 export type PackagingPeriod = ReturnType<typeof packagingAudienceTotals> & { start: string; end: string; totalGrams: number; reportableGrams: number; productGrams: number; productReportableGrams: number; manualGrams: number; manualReportableGrams: number; unknownReportabilityGrams: number; unconfiguredProductLines: number; products: Array<{ productId: string | null; product: string; grams: number; reportableGrams: number; quantity: number; orders: PackagingRow[] }>; manualEntries: ManualPackaging[] };
 
 export const normalizeReportable = (value: unknown): Reportable => {
-  const text = String(value || '').trim().toLowerCase();
+  const text = asText(value || '').trim().toLowerCase();
   return ['ja', 'yes', 'true', '1'].includes(text) ? 'yes' : ['nej', 'no', 'false', '0'].includes(text) ? 'no' : 'unknown';
 };
 export function ignoredPackaging(row: PackagingRow | ManualPackaging) {
@@ -30,7 +31,7 @@ export function packagingPeriod(rows: PackagingRow[], manual: ManualPackaging[],
   return { ...packagingAudienceTotals(selectedRows,selectedManual), start, end, totalGrams: productGrams+manualGrams, reportableGrams: productReportableGrams+manualReportableGrams, productGrams, productReportableGrams, manualGrams, manualReportableGrams, unknownReportabilityGrams: unknown, unconfiguredProductLines: missing, products:list, manualEntries:selectedManual.sort((a,b)=>b.date.localeCompare(a.date)) };
 }
 export function validateManualPackaging(value: unknown): Omit<ManualPackaging,'id'|'updatedAt'> {
-  const row=value as Record<string,unknown>, date=String(row?.date||''), description=String(row?.description||'').trim(), supplier=String(row?.supplier||'').trim(), supplierCountry=String(row?.supplierCountry||'').trim().toUpperCase(), supplierCvr=String(row?.supplierCvr||'').trim(), weightGrams=Number(row?.weightGrams), reportable=String(row?.reportable||'') as Reportable;
+  const row=value as Record<string,unknown>, date=asText(row?.date||''), description=asText(row?.description||'').trim(), supplier=asText(row?.supplier||'').trim(), supplierCountry=asText(row?.supplierCountry||'').trim().toUpperCase(), supplierCvr=asText(row?.supplierCvr||'').trim(), weightGrams=Number(row?.weightGrams), reportable=asText(row?.reportable||'') as Reportable;
   const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Copenhagen'}).format(new Date());
   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>today||!description||description.length>200||supplier.length>200||supplierCountry.length>100||supplierCvr.length>50||!Number.isSafeInteger(weightGrams)||weightGrams<0||weightGrams>100_000_000||!['yes','no','unknown'].includes(reportable)) throw new Error('Den manuelle emballagepost er ugyldig.');
   const audience:Audience=row.audience==='commercial'?'commercial':'household';

@@ -1,3 +1,4 @@
+import { asText } from './tier1/src/lib/format';
 // Contract: Saga ExternalPanthroAPI v1, retrieved 2026-09-10.
 export type FlatpayAccess = { username: string; password: string };
 export type FlatpayAgreement = { id: string; agreementNumber: string; merchantID: string; currency: string; status: string };
@@ -50,7 +51,7 @@ export async function flatpayRead(access: FlatpayAccess, resource: typeof resour
 }
 export function safeAgreement(row: Record<string,unknown>): FlatpayAgreement {
   if (typeof row.id!=='string'||!row.id||typeof row.agreementNumber!=='string'||!row.agreementNumber||typeof row.merchantID!=='string'||!row.merchantID)throw Error('Flatpay-aftalen mangler ID eller aftalenummer.');
-  return {id:row.id,agreementNumber:row.agreementNumber,merchantID:row.merchantID,currency:String(row.currency||row.currencyCode||''),status:String(row.status||'')};
+  return {id:row.id,agreementNumber:row.agreementNumber,merchantID:row.merchantID,currency:asText(row.currency||row.currencyCode||''),status:asText(row.status||'')};
 }
 export function flatpayDateRange(start:string,end:string,startDate:string){
   const valid=(s:string)=>/^\d{4}-\d{2}-\d{2}$/.test(s)&&Number.isFinite(Date.parse(s))&&new Date(s).toISOString().slice(0,10)===s;

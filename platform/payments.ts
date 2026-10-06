@@ -74,7 +74,7 @@ export async function handlePayments(request:Request,env:PlatformEnv,actor:Actor
    if(!['transactions','settlements','payments'].includes(kind))throw new HttpError(400,'Vælg en Flatpay-datatype.');
    const resource=kind as 'transactions'|'settlements'|'payments',field=kind==='transactions'?'PurchaseDate':kind==='settlements'?'CreatedDate':'PaidDate';
    const data=await flatpayRead(credentials,resource,{[field+'From']:start+'T00:00:00Z',[field+'To']:end+'T23:59:59.999Z',...(kind==='settlements'?{AgreementNumber:metadata.agreementNumber}:{})});
-   const today=new Date().toISOString().slice(0,10),until=new Date(Date.now()+30*86400000).toISOString().slice(0,10),recent=new Date(Date.now()-14*86400000).toISOString().slice(0,10);
+   const until=new Date(Date.now()+30*86400000).toISOString().slice(0,10),recent=new Date(Date.now()-14*86400000).toISOString().slice(0,10);
    if(kind==='payments'&&b.includeUpcoming!==false)data.push(...(await flatpayRead(credentials,'payments',{ScheduledDateFrom:recent+'T00:00:00Z',ScheduledDateTo:until+'T23:59:59.999Z'})).filter(r=>r.paidDate==null));
    const unique=new Map<string,Row>();
    for(const r of data){

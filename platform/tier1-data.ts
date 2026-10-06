@@ -1,3 +1,4 @@
+import { asText } from './tier1/src/lib/format';
 import {connectedIntegrations,selectedIntegrations} from './tier1-connections';
 import { normalizeSyncInterval } from './tier1/src/lib/sync-schedule';
 import { handleProductionSale } from './production-sales';
@@ -16,7 +17,7 @@ import { financeService } from './finance-source';
 import { dataStartDate } from './tier1-history';
 import { ensureMarketRow } from './invoice-profiles';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
-import { forwarded, minor, pageNumber } from './tier1-data-shared';
+import { forwarded, pageNumber } from './tier1-data-shared';
 import { orderData } from './tier1-orders';
 import { orderRefundData } from './tier1-order-refunds';
 import { documentData } from './tier1-documents';
@@ -107,7 +108,7 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
     const deleted=await db.prepare('DELETE FROM platform_packaging WHERE company_id=? AND webshop_id=? AND id=? AND version=?').bind(company,shop,b.id,b.version).run();if(!deleted.meta.changes)throw new HttpError(409,'Posten er ændret. Genindlæs.');await db.prepare('INSERT INTO audit_events(id,company_id,actor_id,action,resource_id,details_json) VALUES(?,?,?,?,?,?)').bind(crypto.randomUUID(),company,actor.id,'packaging.deleted',shop,JSON.stringify({id:b.id,version:b.version})).run();return reply({ok:true});
    }
    const from=await dataStartDate(env,company,shop);
-   const input=b.action==='price'?{action:'prices',household:b.pricePerKg,commercial:b.commercialPricePerKg}:b.action==='upsert'?{...(b.entry as object),action:'save'}:b.action==='sync'?{action:'sync',start:[String(b.start||from),from].sort().at(-1),end:b.end||today}:b;
+   const input=b.action==='price'?{action:'prices',household:b.pricePerKg,commercial:b.commercialPricePerKg}:b.action==='upsert'?{...(b.entry as object),action:'save'}:b.action==='sync'?{action:'sync',start:[asText(b.start||from),from].sort().at(-1),end:b.end||today}:b;
    const response=await handlePackaging(forwarded(request,input),env,actor,company,shop);if(!response.ok)return response;
   }
   const result:Record<string,unknown>={};let prices:any={},lastSyncedAt=null;

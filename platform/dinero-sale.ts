@@ -1,3 +1,4 @@
+import { asText } from './tier1/src/lib/format';
 import type { CheckedInvoice } from './invoice-check';
 import type { SalesDraft } from './sales-preview';
 
@@ -55,8 +56,8 @@ export function verifyVoucher(raw: unknown, wanted: Voucher, expected: Expected)
   const minor = (value: unknown) => { if (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value * 100 - Math.round(value * 100)) > .000001) rejectTransfer('Dinero returnerede et ugyldigt beløb.'); return Math.round((value as number) * 100); };
   actual.Lines.forEach((line, i) => {
     const target = wanted.Lines[i], amounts = expected[i];
-    const vat = String(line.AccountVatCode || 'none').toLowerCase();
-    if (line.Description !== target.Description || line.AccountNumber !== target.AccountNumber || (line.BalancingAccountNumber ?? null) !== (target.BalancingAccountNumber ?? null) || vat !== target.AccountVatCode.toLowerCase() || String(line.BalancingAccountVatCode || 'none').toLowerCase() !== 'none' || (line.CurrencyKey && line.CurrencyKey !== 'DKK') || minor(line.AmountExclVatValue) !== amounts.net || minor(line.VatAmountValue) !== amounts.tax || minor(line.AmountInclVatValue) !== amounts.gross) rejectTransfer(`Dinero-linje ${i + 1} stemmer ikke med konto, moms og beløb. Kladden skal gennemgås.`);
+    const vat = asText(line.AccountVatCode || 'none').toLowerCase();
+    if (line.Description !== target.Description || line.AccountNumber !== target.AccountNumber || (line.BalancingAccountNumber ?? null) !== (target.BalancingAccountNumber ?? null) || vat !== target.AccountVatCode.toLowerCase() || asText(line.BalancingAccountVatCode || 'none').toLowerCase() !== 'none' || (line.CurrencyKey && line.CurrencyKey !== 'DKK') || minor(line.AmountExclVatValue) !== amounts.net || minor(line.VatAmountValue) !== amounts.tax || minor(line.AmountInclVatValue) !== amounts.gross) rejectTransfer(`Dinero-linje ${i + 1} stemmer ikke med konto, moms og beløb. Kladden skal gennemgås.`);
   });
   return actual;
 }
