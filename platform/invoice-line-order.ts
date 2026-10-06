@@ -1,4 +1,4 @@
-import type { CheckedLine } from '../lib/invoice-check';
+import type { CheckedLine } from './invoice-check';
 
 const engraving = (line: CheckedLine) => line.kind !== 'shipping' && /^(?:indgravering|gravering)\b/i.test(line.title);
 const engravingNumber = (line: CheckedLine) => Number(line.title.match(/\blinje\s+(\d+)\b/i)?.[1] ?? Infinity);

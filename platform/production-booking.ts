@@ -2,7 +2,7 @@ import {recordFailure} from './record-history';
 import {requireCompany,requireWebshop} from './auth';
 import {unseal} from './connections';
 import {jsonBody} from './invitations';
-import {verifyVoucher} from '../lib/dinero-sale';
+import {verifyVoucher} from './dinero-sale';
 import {dineroClient} from './dinero-write';
 import {readReceipt,saveReceipt,uncertainReceipt,type ReceiptKey} from './production-receipts';
 import {HttpError,reply,type Actor,type PlatformEnv} from './types';

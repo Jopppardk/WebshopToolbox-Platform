@@ -12,7 +12,7 @@ Læs [projektstatus](docs/platform/PROJECT.md), [overlevering](docs/platform/HAN
 
 Node.js 22.23.2 eller nyere. Kør `npm ci`, `npm run platform:init`, `npm run platform:seed` og `npm run platform:dev` til et separat lokalt testmiljø. Fixtures er syntetiske og må ikke indlæses i produktion.
 
-`npm test`, `npm run platform:tier1:typecheck`, `npm run build`, `npm run typecheck` og platformens build/dry-run kontrollerer løsningen.
+`npm test`, `npm run typecheck`, `npm run platform:tier1:typecheck`, `npm run platform:tier1:build`, `npm run test:portal` og platformens build kontrollerer løsningen.
 
 ## Udgivelse
 
@@ -22,4 +22,4 @@ Lokal, eksplicit udgivelse: `npm run deploy:dev` eller `npm run deploy:prod`. Be
 
 ## Forholdet til Sablen
 
-Git-historikken er bevaret fra platformbranchen i det oprindelige repository. Fælles biblioteker, regressionstests og ældre kildekode er bevaret, fordi platformen stadig bruger dele af dem. Historiske Sablen-driftsvejledninger og `wrangler.direct.jsonc` er reference/CI dry-run, ikke denne platforms udgivelsesvej. Sablens automatiske deployment-workflow er fjernet i dette repository. Det oprindelige repository og de kørende løsninger ændres ikke af adskillelsen.
+Git-historikken er bevaret fra platformbranchen i det oprindelige repository. Den gamle Sablen-app (Next/vinext under `app/`, `db/`, `components/` m.fl., `wrangler.direct.jsonc` og Sablens driftsvejledninger) blev fjernet 6. oktober 2026; den findes fortsat i git-historikken og i det oprindelige repository. De fem fælles moduler platformen brugte, ligger nu i `platform/`, og de gamle API-ruter er fastfrosset i `lib/legacy-routes.json`, så en test sikrer, at ingen af dem svarer her. Det oprindelige repository og de kørende løsninger ændres ikke.

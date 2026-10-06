@@ -9,7 +9,7 @@ import { customerActor, customerLogin, customerLogout } from './customer-auth';
 import { publicSignup } from './signup';
 import { publicFeed } from './feeds';
 import { handleTier1 } from './tier1-api';
-import { InvoiceCheckError } from '../lib/invoice-check';
+import { InvoiceCheckError } from './invoice-check';
 import { handleSupport, supportActor, supportToken } from './support';
 import { identity } from './auth';
 import { onboarding, saveProfile } from './invitations';

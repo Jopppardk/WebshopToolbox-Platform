@@ -51,9 +51,7 @@ jobs:
       - run: npm test
       - run: npm run platform:tier1:typecheck
       - run: npm run platform:tier1:build
-      - run: npm run build
       - run: npm run typecheck
-      - run: npx wrangler deploy --config wrangler.direct.jsonc --dry-run
       - run: node scripts/platform.mjs build
       - run: node scripts/platform-production.mjs build
   dev:
