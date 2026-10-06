@@ -11,19 +11,26 @@ import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 function forwarded(request:Request,body:unknown,method='PUT') {
   return new Request(request.url,{method,headers:request.headers,body:JSON.stringify(body)});
 }
+// The integrations connected for a webshop (company-wide ones such as Dinero included), as the Integrationer page shows them.
+export async function connectedIntegrations(db:D1Database,company:string,shop:string){
+  const shipping=shop==='none'?[]:(await db.prepare('SELECT provider FROM shipping_connections WHERE company_id=? AND webshop_id=?').bind(company,shop).all<{provider:string}>()).results;
+  const accounting=await db.prepare('SELECT organization_id FROM accounting_connections WHERE company_id=?').bind(company).first<{organization_id:string}>();
+  const webshop=shop==='none'?null:await db.prepare('SELECT shop_domain FROM webshop_connections WHERE company_id=? AND webshop_id=? AND verified_at IS NOT NULL').bind(company,shop).first<{shop_domain:string}>();
+  const payments=shop==='none'?[]:(await db.prepare('SELECT provider FROM payment_connections WHERE company_id=? AND webshop_id=?').bind(company,shop).all<{provider:string}>()).results;
+  const packaging=shop==='none'?null:await db.prepare('SELECT identity FROM emballage_connections WHERE company_id=? AND webshop_id=?').bind(company,shop).first();
+  return [...shipping.map(p=>({provider:p.provider,display_name:'Shipmondo'})),...(packaging?[{provider:'emballage',display_name:'Emballage Indberetning'}]:[]),...(accounting?[{provider:'dinero',display_name:accounting.organization_id}]:[]),...(webshop?[{provider:'shopify',display_name:webshop.shop_domain}]:[]),...payments.map(p=>({provider:p.provider,display_name:p.provider}))];
+}
+// Chosen on the Integrationer page: Shopify and Dinero always, the rest when the company added them.
+export async function selectedIntegrations(db:D1Database,company:string){
+  const rows=await db.prepare('SELECT integration_id FROM company_integrations WHERE company_id=?').bind(company).all<{integration_id:string}>();
+  return ['shopify','dinero',...rows.results.map(r=>r.integration_id)];
+}
 export async function handleTier1Connections(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string,path:string) {
   const db=env.PLATFORM_DB;
   const audit=(action:string,resource:string)=>db.prepare('INSERT INTO audit_events(id,company_id,actor_id,action,resource_id,details_json) VALUES(?,?,?,?,?,?)').bind(crypto.randomUUID(),company,actor.id,action,resource,'{}');
   // Reads are scoped by the gateway; only company administrators may change connections.
   if(request.method!=='GET')await requireCompany(db,actor,company,true);
-  const connected=async()=>{
-    const shipping=shop==='none'?[]:(await db.prepare('SELECT provider FROM shipping_connections WHERE company_id=? AND webshop_id=?').bind(company,shop).all<{provider:string}>()).results;
-    const accounting=await db.prepare('SELECT organization_id FROM accounting_connections WHERE company_id=?').bind(company).first<{organization_id:string}>();
-    const webshop=shop==='none'?null:await db.prepare('SELECT shop_domain FROM webshop_connections WHERE company_id=? AND webshop_id=? AND verified_at IS NOT NULL').bind(company,shop).first<{shop_domain:string}>();
-    const payments=shop==='none'?[]:(await db.prepare('SELECT provider FROM payment_connections WHERE company_id=? AND webshop_id=?').bind(company,shop).all<{provider:string}>()).results;
-    const packaging=shop==='none'?null:await db.prepare('SELECT identity FROM emballage_connections WHERE company_id=? AND webshop_id=?').bind(company,shop).first();
-    return [...shipping.map(p=>({provider:p.provider,display_name:'Shipmondo'})),...(packaging?[{provider:'emballage',display_name:'Emballage Indberetning'}]:[]),...(accounting?[{provider:'dinero',display_name:accounting.organization_id}]:[]),...(webshop?[{provider:'shopify',display_name:webshop.shop_domain}]:[]),...payments.map(p=>({provider:p.provider,display_name:p.provider}))];
-  };
+  const connected=()=>connectedIntegrations(db,company,shop);
   if(path==='/integrations/selection'){
     if(request.method==='POST'){
       const b=await jsonBody(request);
@@ -33,8 +40,7 @@ export async function handleTier1Connections(request:Request,env:PlatformEnv,act
       if(b.action==='remove' && b.provider==='shipmondo' && await db.prepare('SELECT 1 FROM shipping_connections WHERE company_id=? LIMIT 1').bind(company).first())throw new HttpError(409,'Afbryd Shipmondo på virksomhedens webshops først.');
       await db.batch([db.prepare(b.action==='add'?'INSERT OR IGNORE INTO company_integrations(company_id,integration_id) VALUES(?,?)':'DELETE FROM company_integrations WHERE company_id=? AND integration_id=?').bind(company,b.provider),audit('integration.'+b.action,String(b.provider))]);
     }else if(request.method!=='GET')throw new HttpError(405,'Ugyldig handling.');
-    const rows=await db.prepare('SELECT integration_id FROM company_integrations WHERE company_id=?').bind(company).all<{integration_id:string}>();
-    return reply({selected:['shopify','dinero',...rows.results.map(r=>r.integration_id)],connected:(await connected()).map(r=>r.provider)});
+    return reply({selected:await selectedIntegrations(db,company),connected:(await connected()).map(r=>r.provider)});
   }
   const payment=path.match(new RegExp(`^/(${paymentProviderPattern})/connection$`));
   if(payment){
