@@ -5,10 +5,13 @@ import type { PlatformEnv } from './types';
 
 export const runRetentionDays = 90;
 export async function cleanupRuns(env: PlatformEnv, batch = 500) {
-  const db = env.PLATFORM_DB, older = `datetime('now','-${runRetentionDays} days')`;
+  const db = env.PLATFORM_DB,
+    older = `datetime('now','-${runRetentionDays} days')`;
   const old = `SELECT id FROM operation_runs WHERE started_at<${older} ORDER BY started_at LIMIT ${batch}`;
   const [, deleted] = await db.batch([
-    db.prepare(`DELETE FROM operation_acknowledgements WHERE run_id IN (${old})`),
+    db.prepare(
+      `DELETE FROM operation_acknowledgements WHERE run_id IN (${old})`,
+    ),
     db.prepare(`DELETE FROM operation_runs WHERE id IN (${old})`),
   ]);
   return deleted.meta.changes ?? 0;

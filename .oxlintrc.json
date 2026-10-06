@@ -7,8 +7,7 @@
     "oxc",
     "react",
     "import",
-    "jsx-a11y",
-    "nextjs"
+    "jsx-a11y"
   ],
   "categories": {
     "correctness": "error"
@@ -23,13 +22,12 @@
     "typeCheck": true
   },
   "ignorePatterns": [
-    ".next/**",
-    ".vinext/**",
-    "out/**",
-    "build/**",
     "dist/**",
     "coverage/**",
-    "next-env.d.ts"
+    "test-results/**",
+    "playwright-report/**",
+    "platform/public/tier1-next/**",
+    "platform/public/vendor/**"
   ],
   "rules": {
     "no-array-constructor": "error",
@@ -52,5 +50,13 @@
     "typescript/no-require-imports": "error",
     "typescript/no-unnecessary-type-constraint": "error",
     "typescript/no-unsafe-function-type": "error"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["lib/**/*.test.mjs", "tests/**/*.mjs"],
+      "rules": {
+        "typescript/no-floating-promises": "off"
+      }
+    }
+  ]
 }

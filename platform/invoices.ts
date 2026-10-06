@@ -15,7 +15,7 @@ import { checkInvoice, inPresentment, invoiceFingerprint, originalOrder, type In
 type Settings={name:string;address:string;cvr:string;contact:string;subject:string;body:string;months:number;logo_key:string|null;design_json?:string;revision?:number};
 const template={subject:'Faktura {{fakturanummer}} fra {{virksomhedsnavn}}',body:'Hej {{kundenavn}}\n\nTak for din ordre hos {{virksomhedsnavn}}.\n\nVedhæftet finder du faktura {{fakturanummer}} for ordre {{ordrenummer}}.\n\nVenlig hilsen\n{{virksomhedsnavn}}'};
 async function settings(env:PlatformEnv,company:string):Promise<Settings>{
- return await env.PLATFORM_DB.prepare('SELECT * FROM invoice_settings WHERE company_id=?').bind(company).first<Settings>() || {name:(await env.PLATFORM_DB.prepare('SELECT name FROM companies WHERE id=?').bind(company).first<{name:string}>)!.name,address:'',cvr:'',contact:'',...template,months:3,logo_key:null};
+ return await env.PLATFORM_DB.prepare('SELECT * FROM invoice_settings WHERE company_id=?').bind(company).first<Settings>() || {name:(await env.PLATFORM_DB.prepare('SELECT name FROM companies WHERE id=?').bind(company).first<{name:string}>())!.name,address:'',cvr:'',contact:'',...template,months:3,logo_key:null};
 }
 function text(value:unknown,max:number){if(typeof value!=='string'||!value.trim()||value.length>max||/[\x00-\x08\x0b-\x1f]/.test(value))throw new HttpError(400,'Udfyld fakturaoplysningerne korrekt.');return value.trim();}
 function cutoff(s:Settings){const d=new Date();d.setUTCMonth(d.getUTCMonth()-s.months);return d.toISOString();}

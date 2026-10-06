@@ -82,7 +82,9 @@ export async function eiRequest<T>(
           'X-Request-Id': crypto.randomUUID(),
           ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
         },
-        ...(method !== 'GET' && body !== undefined ? {body:JSON.stringify(body)} : {}),
+        ...(method !== 'GET' && body !== undefined
+          ? { body: JSON.stringify(body) }
+          : {}),
         signal: AbortSignal.timeout(15000),
         redirect: 'manual',
       },

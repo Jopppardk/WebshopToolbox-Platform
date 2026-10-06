@@ -46,5 +46,4 @@ export async function providerRecordData({ request, env, actor, company, shop, p
  const filtered=rows.filter(p=>(!url.searchParams.get('from')||p.transactionDate.slice(0,10)>=url.searchParams.get('from')!)&&(!url.searchParams.get('to')||p.transactionDate.slice(0,10)<=url.searchParams.get('to')!)&&(!url.searchParams.get('search')||JSON.stringify(p).toLowerCase().includes(url.searchParams.get('search')!.toLowerCase())));
  const summary:Record<string,any>={};for(const p of filtered){const c=p.amount.currencyCode;const s=summary[c]??={currency:c,count:0,gross:0,fees:0,net:0};s.count++;s.gross+=minor(p.amount.amount,c);s.fees+=minor(p.fee.amount,c);s.net+=minor(p.net.amount,c);}
  return reply({payments:filtered.slice(offset,offset+limit).map(p=>({...p,logExternalId:refundSources.get(p.id)?.externalId||p.id,bookingStatus:module==='payments'?'not_enabled':bookingStatus(p.provider==='flatpay'?'flatpay':'shopify',p.provider==='flatpay'?'transactions':'refunds',refundSources.get(p.id)?.externalId||p.id,p.transactionDate,refundSources.get(p.id)?.json||JSON.stringify(p))})),summary:Object.values(summary)});
- return null;
 }
