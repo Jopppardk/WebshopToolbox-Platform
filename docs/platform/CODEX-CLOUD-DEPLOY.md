@@ -101,7 +101,7 @@ udgivet. Dokumentér først deployment som gennemført efter grønt workflow og 
 
 Implementeret på `platform/cloud-deploy`: Cloud-bestillingsscript, versionskontrol,
 samlet dev→prod-workflow og læsebaserede HTTP-gates. Separate Cloudflare-miljøsecrets
-var etableret og brugt succesfuldt før denne ændring; se REPOSITORY-SPLIT.md.
+var etableret og brugt succesfuldt før denne ændring; se archive/REPOSITORY-SPLIT.md.
 Testet lokalt: 384/384 tests, begge TypeScript-kontroller, begge klientbuilds,
 alle tre Wrangler-dry-runs, konfigurationskontroller og `git diff --check` bestået.
 Workflow-YAML er parset, og jobafhængigheder/pinnede checkouts er kontrolleret.

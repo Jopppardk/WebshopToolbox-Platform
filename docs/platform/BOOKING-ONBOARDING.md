@@ -1,6 +1,6 @@
 # Kundestyret bogføringsopstart
 
-Implementeret 27. september 2026. Udgivelsesstatus findes i HANDOVER.md.
+Implementeret 27. september 2026. Udgivelsesstatus findes i CHANGELOG.md.
 
 ## Kundens valg
 

@@ -6,7 +6,7 @@ Selvstændigt repository til Tier 0-administration og Tier 1-kundeportal.
 - Prod: https://portal.webshoptoolbox.dk
 - Kilde: https://github.com/Jopppardk/WebshopToolbox-Platform
 
-Læs [projektstatus](docs/platform/PROJECT.md), [overlevering](docs/platform/HANDOVER.md) og [repository-adskillelsen](docs/platform/REPOSITORY-SPLIT.md).
+Læs [overleveringen](docs/platform/HANDOVER.md) (aktuel status), [projektbeskrivelsen](docs/platform/PROJECT.md) (overblik og dokumenter), [planen](docs/platform/ROADMAP.md) og [ændringsloggen](docs/platform/CHANGELOG.md).
 
 ## Udvikling
 

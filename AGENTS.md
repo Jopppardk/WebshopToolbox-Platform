@@ -1,6 +1,6 @@
 # WebshopToolbox Platform
 
-Læs docs/platform/PROJECT.md og docs/platform/HANDOVER.md ved nye platformopgaver. Planen står i docs/platform/ROADMAP.md. Hold dokumentationen opdateret, og skeln mellem planlagt, implementeret, testet og sat i drift.
+Læs docs/platform/HANDOVER.md (aktuel status, én side) ved nye platformopgaver. Overblik og dokumentliste står i docs/platform/PROJECT.md, planen i docs/platform/ROADMAP.md og historikken i docs/platform/CHANGELOG.md. Hold dokumentationen opdateret, og skeln mellem planlagt, implementeret, testet og sat i drift.
 
 - Arbejd på dansk i dialogen med brugeren.
 - Produktionsløsningen til Sablen indeholder rigtige bogføringsdata. Platformsarbejde skal bruge separat testmiljø.
@@ -20,11 +20,11 @@ Læs docs/platform/PROJECT.md og docs/platform/HANDOVER.md ved nye platformopgav
 
 Begge assistenter arbejder i samme repository. For at undgå konflikter og overraskelser:
 
-- **Start altid fra en frisk main**: `git pull` før ny opgave, og læs de øverste noter i `docs/platform/HANDOVER.md`. Her står, hvad den anden senest har lavet.
+- **Start altid fra en frisk main**: `git pull` før ny opgave, og læs `docs/platform/HANDOVER.md` og de øverste noter i `docs/platform/CHANGELOG.md`. Her står, hvad den anden senest har lavet.
 - **Én opgave = én branch = én lille PR.** Arbejd aldrig direkte på main. Flet kun med squash, og kun når CI er grøn på den seneste commit.
 - **Kun én assistent ad gangen i de samme filer.** Rører en opgave store delte filer (`platform/tier1-data.ts`, `platform/production-jobs.ts`, `platform/tier1/src/app/page.tsx`, testfilerne), så afslut og flet, før den anden starter i dem. Opstår der alligevel en konflikt, så behold begge sider og kør hele testsuiten.
-- **Migreringer**: tjek nummeret på den seneste fil i `platform/migrations` lige før du opretter en ny, kør migreringen på dev og prod via workflowet *før* koden udgives, og nævn den i PR'en og i `HANDOVER.md`.
-- **Skriv en note øverst i `HANDOVER.md`** for hver udgivet ændring: dato, hvem (Codex/Claude), hvad, filer/endpoints, migrering og hvad der ikke er verificeret.
+- **Migreringer**: tjek nummeret på den seneste fil i `platform/migrations` lige før du opretter en ny, kør migreringen på dev og prod via workflowet *før* koden udgives, og nævn den i PR'en og i `CHANGELOG.md` (og seneste migration i `HANDOVER.md`).
+- **Skriv en note øverst i `CHANGELOG.md`** for hver udgivet ændring: dato, hvem (Codex/Claude), hvad, filer/endpoints, migrering og hvad der ikke er verificeret. Opdatér `HANDOVER.md` (højst én side), når status eller åbne punkter ændrer sig. Forældede dokumenter flyttes til `docs/platform/archive/`.
 - **Linjeskift er altid LF** (`.gitattributes`). Skriv aldrig CRLF ind i filer.
 - **Tests**: kør `npm test` og begge typechecks før PR. Ny adfærd får en test i den fil, der passer til området (se `lib/`). Kør portal-røgtesten (`npm run test:portal`), når brugerfladen er ændret.
 - **Lint og formatering må kun blive bedre** (`npm run lint`, også i CI). Nye fund ud over `scripts/lint-baseline.json` afvises. Det samme gælder filer, der ikke er formateret med oxfmt, medmindre de står i `scripts/format-baseline.json`. Nye filer skal derfor altid formateres (`npx oxfmt <fil>`). Store, uformaterede filer formateres i en separat PR uden andre ændringer, når ingen anden arbejder i dem. Kør `npm run lint:update` efter at have rettet fund eller formateret filer.

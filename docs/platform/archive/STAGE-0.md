@@ -42,7 +42,7 @@ Lokale ekstra filer omfatter platformdokumentation, AGENTS.md, testlogs, TypeScr
 ## Opgavegrundlag og næste skridt
 
 - [BACKLOG.md](BACKLOG.md) er den lokale opgavetavle med afhængigheder og acceptkrav; GitHub Issues/Projects er endnu ikke oprettet.
-- [DATA-MODEL.md](DATA-MODEL.md) er et forslag, ikke en implementeret migration.
+- [DATA-MODEL.md](../DATA-MODEL.md) er et forslag, ikke en implementeret migration.
 - [TEST-ENVIRONMENT.md](TEST-ENVIRONMENT.md) beskriver et foreslået isoleret miljø og betingelserne for at aktivere det.
 - Næste udviklingsleverance er P01/P02: beslut model og kortlæg isolation. Miljø og skriveblokering skal være på plads før eksterne integrationstests.
 
