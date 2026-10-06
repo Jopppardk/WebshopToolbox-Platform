@@ -1,11 +1,16 @@
 import { refreshPublicTracking } from './public-tracking';
 import { shipmondoWebhook } from './shipmondo';
-import {runProductionJobs} from './production-jobs';
+import { runProductionJobs } from './production-jobs';
 import { demoMessage, isDemoCompany, isDemoUser } from './demo';
 import { resetDemoIfDue } from './demo-reset';
 import { cleanupRuns } from './run-cleanup';
-import { checkOperations, handleOperationsOverview, markTick, schedulerHealth } from './ops-monitor';
-import {productionWrites} from './production-policy';
+import {
+  checkOperations,
+  handleOperationsOverview,
+  markTick,
+  schedulerHealth,
+} from './ops-monitor';
+import { productionWrites } from './production-policy';
 import { customerActor, customerLogin, customerLogout } from './customer-auth';
 import { publicSignup } from './signup';
 import { publicFeed } from './feeds';
@@ -19,20 +24,41 @@ import { handleAdmin } from './admin';
 import { assertTestRuntime, scheduled } from './safety';
 import { HttpError, reply, type PlatformEnv } from './types';
 
-async function asset(request:Request,env:PlatformEnv,admin=false,tier1Admin=false){
- const response=await env.ASSETS.fetch(request);
- if(!response.headers.get('content-type')?.includes('text/html'))return response;
- let body=await response.text();
- if(env.PLATFORM_ENV==='production')body=body.replaceAll('Testmiljø','Produktionsportal').replaceAll('Bogføring og kundemail er blokeret.','Bogføring og kundemail er aktive.');
- if(tier1Admin)body=body.replaceAll('"/tier1-next/','"/admin/tier1-next/');
- if(admin)body=body.replaceAll('src="/admin.js"','src="/admin/admin.js"').replaceAll('src="/onboarding.js"','src="/admin/onboarding.js"').replaceAll('action="/logout"','action="/admin/logout"').replaceAll('href="/"','href="/admin/"');
- const headers=new Headers(response.headers);for(const key of ['Content-Length','Content-Encoding','ETag'])headers.delete(key);
- return new Response(body,{status:response.status,headers});
+async function asset(
+  request: Request,
+  env: PlatformEnv,
+  admin = false,
+  tier1Admin = false,
+) {
+  const response = await env.ASSETS.fetch(request);
+  if (!response.headers.get('content-type')?.includes('text/html'))
+    return response;
+  let body = await response.text();
+  if (env.PLATFORM_ENV === 'production')
+    body = body
+      .replaceAll('Testmiljø', 'Produktionsportal')
+      .replaceAll(
+        'Bogføring og kundemail er blokeret.',
+        'Bogføring og kundemail er aktive.',
+      );
+  if (tier1Admin)
+    body = body.replaceAll('"/tier1-next/', '"/admin/tier1-next/');
+  if (admin)
+    body = body
+      .replaceAll('src="/admin.js"', 'src="/admin/admin.js"')
+      .replaceAll('src="/onboarding.js"', 'src="/admin/onboarding.js"')
+      .replaceAll('action="/logout"', 'action="/admin/logout"')
+      .replaceAll('href="/"', 'href="/admin/"');
+  const headers = new Headers(response.headers);
+  for (const key of ['Content-Length', 'Content-Encoding', 'ETag'])
+    headers.delete(key);
+  return new Response(body, { status: response.status, headers });
 }
-const globalAsset=asset;
+const globalAsset = asset;
 // Built Tier 1 files carry a content hash in their name, so the browser may keep them: a release brings new names,
 // and index.html (never cached) points to them. Private, because they are only served to signed-in users.
-const hashedTier1Asset = /^\/tier1-next\/assets\/[\w.-]+-[\w-]{8}\.(js|css|woff2)$/;
+const hashedTier1Asset =
+  /^\/tier1-next\/assets\/[\w.-]+-[\w-]{8}\.(js|css|woff2)$/;
 function keepHashed(path: string, response: Response) {
   if (!hashedTier1Asset.test(path) || response.status !== 200) return response;
   const headers = new Headers(response.headers);
@@ -49,7 +75,8 @@ function secure(response: Response, tier1 = false) {
   headers.set('Strict-Transport-Security', 'max-age=31536000');
   // Product feeds are plain data. The page policy below would block the browser's own XML viewer,
   // which then shows the feed as one run of text instead of the element tree.
-  if (headers.get('content-type')?.startsWith('application/xml')) return new Response(response.body, { status: response.status, headers });
+  if (headers.get('content-type')?.startsWith('application/xml'))
+    return new Response(response.body, { status: response.status, headers });
   headers.set(
     'Content-Security-Policy',
     tier1
@@ -62,51 +89,155 @@ export default {
   async fetch(request: Request, env: PlatformEnv) {
     try {
       assertTestRuntime(env);
-      const url=new URL(request.url),customerEnabled=env.PLATFORM_CUSTOMER_LOGIN==='enabled';
-      if(customerEnabled&&env.PLATFORM_ENV==='local-test'&&!['localhost','127.0.0.1','[::1]'].includes(url.hostname))throw new HttpError(503,'Lokal loginadgang er kun tilgængelig lokalt.');
-      if(env.PLATFORM_ADMIN_HOST){
-        const adminHost=url.hostname===env.PLATFORM_ADMIN_HOST,isAdminPath=url.pathname==='/admin'||url.pathname.startsWith('/admin/');
-        if(adminHost&&url.pathname==='/')return secure(new Response(null,{status:303,headers:{Location:'/admin/'}}));
-        if(adminHost&&!isAdminPath&&!['/robots.txt','/styles.css','/favicon.png','/brand/webshoptoolbox-logo.png'].includes(url.pathname))throw new HttpError(404,'Siden findes ikke.');
-        if(!adminHost&&isAdminPath){
-          if(!['GET','HEAD'].includes(request.method))throw new HttpError(403,'Åbn administrationsportalen på dens egen adresse.');
-          const target=new URL(request.url);target.protocol='https:';target.hostname=env.PLATFORM_ADMIN_HOST;target.port='';
-          return secure(new Response(null,{status:303,headers:{Location:target.href}}));
+      const url = new URL(request.url),
+        customerEnabled = env.PLATFORM_CUSTOMER_LOGIN === 'enabled';
+      if (
+        customerEnabled &&
+        env.PLATFORM_ENV === 'local-test' &&
+        !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+      )
+        throw new HttpError(
+          503,
+          'Lokal loginadgang er kun tilgængelig lokalt.',
+        );
+      if (env.PLATFORM_ADMIN_HOST) {
+        const adminHost = url.hostname === env.PLATFORM_ADMIN_HOST,
+          isAdminPath =
+            url.pathname === '/admin' || url.pathname.startsWith('/admin/');
+        if (adminHost && url.pathname === '/')
+          return secure(
+            new Response(null, {
+              status: 303,
+              headers: { Location: '/admin/' },
+            }),
+          );
+        if (
+          adminHost &&
+          !isAdminPath &&
+          ![
+            '/robots.txt',
+            '/styles.css',
+            '/favicon.png',
+            '/brand/webshoptoolbox-logo.png',
+          ].includes(url.pathname)
+        )
+          throw new HttpError(404, 'Siden findes ikke.');
+        if (!adminHost && isAdminPath) {
+          if (!['GET', 'HEAD'].includes(request.method))
+            throw new HttpError(
+              403,
+              'Åbn administrationsportalen på dens egen adresse.',
+            );
+          const target = new URL(request.url);
+          target.protocol = 'https:';
+          target.hostname = env.PLATFORM_ADMIN_HOST;
+          target.port = '';
+          return secure(
+            new Response(null, {
+              status: 303,
+              headers: { Location: target.href },
+            }),
+          );
         }
       }
-      const admin=customerEnabled&&(url.pathname==='/admin'||url.pathname.startsWith('/admin/'));
-      if(admin){url.pathname=url.pathname.slice(6)||'/';request=new Request(url,request);}
-      const path=url.pathname;
-      if(!admin && path.startsWith('/webhooks/shipmondo/')) return secure(await shipmondoWebhook(request,env));
-      if(!admin&&path.startsWith('/feeds/'))return secure(await publicFeed(request,env));
-      if(path==='/robots.txt'&&['GET','HEAD'].includes(request.method))return secure(new Response(request.method==='HEAD'?null:'User-agent: *\nDisallow:\n# Indexing is disabled by X-Robots-Tag on every response.\n',{headers:{'Content-Type':'text/plain; charset=utf-8'}}));
-      if(customerEnabled&&!admin){
-        if(path==='/auth/signup')return secure(await publicSignup(request,env));
-        if(['/signup','/signup.js'].includes(path)&&request.method==='GET'&&env.PLATFORM_SIGNUP==='enabled')return secure(await asset(path==='/signup'?new Request(new URL('/signup.html',url)):request,env));
-        if(['/auth/start','/auth/verify'].includes(path))return secure(await customerLogin(request,env,path.slice(6)));
-        if(path==='/logout')return secure(await customerLogout(request,env));
-        if(path==='/onboarding'&&request.method==='GET'){
-          const invitation=url.searchParams.get('invitation')||'';
-          return secure(new Response(null,{status:303,headers:{Location:'/login'+(/^[a-f0-9]{64}$/.test(invitation)?'?invitation='+invitation:'')}}));
-        }
-        if(['/login','/login.js','/login.css','/styles.css'].includes(path)&&request.method==='GET'){
-          return secure(await asset(path==='/login'?new Request(new URL('/login.html',url)):request,env));
-        }
-        if(path==='/api/platform/onboarding'||path==='/onboarding.js')throw new HttpError(404,'Åbn linket i din invitation.');
+      const admin =
+        customerEnabled &&
+        (url.pathname === '/admin' || url.pathname.startsWith('/admin/'));
+      if (admin) {
+        url.pathname = url.pathname.slice(6) || '/';
+        request = new Request(url, request);
       }
-      if(['GET','HEAD'].includes(request.method) && ['/favicon.png','/brand/webshoptoolbox-logo.png'].includes(path))
-        return secure(await asset(request,env));
+      const path = url.pathname;
+      if (!admin && path.startsWith('/webhooks/shipmondo/'))
+        return secure(await shipmondoWebhook(request, env));
+      if (!admin && path.startsWith('/feeds/'))
+        return secure(await publicFeed(request, env));
+      if (path === '/robots.txt' && ['GET', 'HEAD'].includes(request.method))
+        return secure(
+          new Response(
+            request.method === 'HEAD'
+              ? null
+              : 'User-agent: *\nDisallow:\n# Indexing is disabled by X-Robots-Tag on every response.\n',
+            { headers: { 'Content-Type': 'text/plain; charset=utf-8' } },
+          ),
+        );
+      if (customerEnabled && !admin) {
+        if (path === '/auth/signup')
+          return secure(await publicSignup(request, env));
+        if (
+          ['/signup', '/signup.js'].includes(path) &&
+          request.method === 'GET' &&
+          env.PLATFORM_SIGNUP === 'enabled'
+        )
+          return secure(
+            await asset(
+              path === '/signup'
+                ? new Request(new URL('/signup.html', url))
+                : request,
+              env,
+            ),
+          );
+        if (['/auth/start', '/auth/verify'].includes(path))
+          return secure(await customerLogin(request, env, path.slice(6)));
+        if (path === '/logout')
+          return secure(await customerLogout(request, env));
+        if (path === '/onboarding' && request.method === 'GET') {
+          const invitation = url.searchParams.get('invitation') || '';
+          return secure(
+            new Response(null, {
+              status: 303,
+              headers: {
+                Location:
+                  '/login' +
+                  (/^[a-f0-9]{64}$/.test(invitation)
+                    ? '?invitation=' + invitation
+                    : ''),
+              },
+            }),
+          );
+        }
+        if (
+          ['/login', '/login.js', '/login.css', '/styles.css'].includes(path) &&
+          request.method === 'GET'
+        ) {
+          return secure(
+            await asset(
+              path === '/login'
+                ? new Request(new URL('/login.html', url))
+                : request,
+              env,
+            ),
+          );
+        }
+        if (path === '/api/platform/onboarding' || path === '/onboarding.js')
+          throw new HttpError(404, 'Åbn linket i din invitation.');
+      }
+      if (
+        ['GET', 'HEAD'].includes(request.method) &&
+        ['/favicon.png', '/brand/webshoptoolbox-logo.png'].includes(path)
+      )
+        return secure(await asset(request, env));
       if (path === '/logout' && request.method === 'POST') {
-        if(request.headers.get('origin') !== new URL(request.url).origin)
-          throw new HttpError(403,'Start fra portalen.');
-        const local=env.PLATFORM_ENV==='local-test';
-        const headers=new Headers({Location:local?'/local-login':'/cdn-cgi/access/logout'});
-        headers.append('Set-Cookie','platform_local=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
-        headers.append('Set-Cookie','platform_support=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'+(local?'':'; Secure'));
-        return secure(new Response(null,{status:303,headers}));
+        if (request.headers.get('origin') !== new URL(request.url).origin)
+          throw new HttpError(403, 'Start fra portalen.');
+        const local = env.PLATFORM_ENV === 'local-test';
+        const headers = new Headers({
+          Location: local ? '/local-login' : '/cdn-cgi/access/logout',
+        });
+        headers.append(
+          'Set-Cookie',
+          'platform_local=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0',
+        );
+        headers.append(
+          'Set-Cookie',
+          'platform_support=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0' +
+            (local ? '' : '; Secure'),
+        );
+        return secure(new Response(null, { status: 303, headers }));
       }
       // For an external uptime monitor; says only whether the scheduler completes runs, no customer data.
-      if (path === '/healthz/scheduler' && request.method === 'GET') return secure(await schedulerHealth(env));
+      if (path === '/healthz/scheduler' && request.method === 'GET')
+        return secure(await schedulerHealth(env));
       if (path === '/healthz' && request.method === 'GET')
         return secure(
           reply({
@@ -149,77 +280,210 @@ export default {
             new Response(null, {
               status: 303,
               headers: {
-                Location: customerEnabled?'/admin/':'/',
+                Location: customerEnabled ? '/admin/' : '/',
                 'Set-Cookie': `platform_local=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=3600`,
               },
             }),
           );
         }
       }
-      if (path === '/api/platform/onboarding' && ['GET','POST'].includes(request.method))
-        {
-        if(supportToken(request)) throw new HttpError(403,'Afslut supportadgang før onboarding.');
-        return secure(await onboarding(request,env));
+      if (
+        path === '/api/platform/onboarding' &&
+        ['GET', 'POST'].includes(request.method)
+      ) {
+        if (supportToken(request))
+          throw new HttpError(403, 'Afslut supportadgang før onboarding.');
+        return secure(await onboarding(request, env));
       }
-      if (['/onboarding','/onboarding.js','/styles.css'].includes(path) && request.method==='GET') {
-        await identity(request,env);
-        const asset = path==='/onboarding' ? new Request(new URL('/onboarding.html',request.url)) : request;
-        return secure(await globalAsset(asset,env,admin));
+      if (
+        ['/onboarding', '/onboarding.js', '/styles.css'].includes(path) &&
+        request.method === 'GET'
+      ) {
+        await identity(request, env);
+        const asset =
+          path === '/onboarding'
+            ? new Request(new URL('/onboarding.html', request.url))
+            : request;
+        return secure(await globalAsset(asset, env, admin));
       }
       let realActor;
-      try{realActor=customerEnabled&&!admin?await customerActor(request,env):await authenticate(request,env);}
-      catch(error){if(customerEnabled&&!admin&&['/','/index.html'].includes(path)&&request.method==='GET'&&error instanceof HttpError&&error.status===401)return secure(new Response(null,{status:303,headers:{Location:'/login'}}));throw error;}
-      if(admin&&!realActor.platformAdmin)throw new HttpError(403,'Kræver Toolbox-administrator.');
-      if(path==='/api/platform/support'&&customerEnabled&&!admin){if(request.method==='GET')return secure(reply({active:false}));throw new HttpError(403,'Kræver Toolbox-administrator.');}
-      if(path==='/api/platform/support' && (!customerEnabled||admin)) return secure(await handleSupport(request,env,realActor));
-      const actor = path.startsWith('/api/platform/') && (!customerEnabled||admin) ? await supportActor(request,env,realActor) : realActor;
-      const context=request.headers.get('x-platform-actor');
-      const expected=actor.id+':'+(actor.support?.sessionId||'');
-      if(path.startsWith('/api/platform/') && ((context && context!==expected) || (actor.support && !['GET','HEAD'].includes(request.method) && context!==expected)))
-        throw new HttpError(409,'Din session er ændret. Genindlæs siden før du fortsætter.');
-      if(actor.support && path==='/api/platform/profile') throw new HttpError(403,'Profilen kan kun ændres af brugeren selv.');
+      try {
+        realActor =
+          customerEnabled && !admin
+            ? await customerActor(request, env)
+            : await authenticate(request, env);
+      } catch (error) {
+        if (
+          customerEnabled &&
+          !admin &&
+          ['/', '/index.html'].includes(path) &&
+          request.method === 'GET' &&
+          error instanceof HttpError &&
+          error.status === 401
+        )
+          return secure(
+            new Response(null, {
+              status: 303,
+              headers: { Location: '/login' },
+            }),
+          );
+        throw error;
+      }
+      if (admin && !realActor.platformAdmin)
+        throw new HttpError(403, 'Kræver Toolbox-administrator.');
+      if (path === '/api/platform/support' && customerEnabled && !admin) {
+        if (request.method === 'GET') return secure(reply({ active: false }));
+        throw new HttpError(403, 'Kræver Toolbox-administrator.');
+      }
+      if (path === '/api/platform/support' && (!customerEnabled || admin))
+        return secure(await handleSupport(request, env, realActor));
+      const actor =
+        path.startsWith('/api/platform/') && (!customerEnabled || admin)
+          ? await supportActor(request, env, realActor)
+          : realActor;
+      const context = request.headers.get('x-platform-actor');
+      const expected = actor.id + ':' + (actor.support?.sessionId || '');
+      if (
+        path.startsWith('/api/platform/') &&
+        ((context && context !== expected) ||
+          (actor.support &&
+            !['GET', 'HEAD'].includes(request.method) &&
+            context !== expected))
+      )
+        throw new HttpError(
+          409,
+          'Din session er ændret. Genindlæs siden før du fortsætter.',
+        );
+      if (actor.support && path === '/api/platform/profile')
+        throw new HttpError(403, 'Profilen kan kun ændres af brugeren selv.');
       // Demokonto: its users change nothing outside Tier 1 (which isolates them), and Tier 0 cannot edit or delete it.
-      if(path.startsWith('/api/platform/') && !['GET','HEAD'].includes(request.method) && path!=='/api/platform/support'){
-        if(!actor.platformAdmin && !path.startsWith('/api/platform/tier1/') && await isDemoUser(env,actor.id)) throw new HttpError(403,demoMessage);
-        const target=path.match(/^\/api\/platform\/companies\/([\w-]+)/);
-        if(actor.platformAdmin && target && await isDemoCompany(env,target[1])) throw new HttpError(403,'Demokontoen kan ikke redigeres eller slettes. Den nulstilles automatisk hver nat.');
+      if (
+        path.startsWith('/api/platform/') &&
+        !['GET', 'HEAD'].includes(request.method) &&
+        path !== '/api/platform/support'
+      ) {
+        if (
+          !actor.platformAdmin &&
+          !path.startsWith('/api/platform/tier1/') &&
+          (await isDemoUser(env, actor.id))
+        )
+          throw new HttpError(403, demoMessage);
+        const target = path.match(/^\/api\/platform\/companies\/([\w-]+)/);
+        if (
+          actor.platformAdmin &&
+          target &&
+          (await isDemoCompany(env, target[1]))
+        )
+          throw new HttpError(
+            403,
+            'Demokontoen kan ikke redigeres eller slettes. Den nulstilles automatisk hver nat.',
+          );
       }
-      if(path==='/api/platform/profile' && request.method==='POST') return secure(await saveProfile(request,env,actor));
-      if(path.startsWith('/api/platform/') && path!=='/api/platform/me' && !actor.fullName)
-        throw new HttpError(428,'Udfyld din profil for at fortsætte.');
-      if(path.startsWith('/api/platform/tier1/')) return secure(await handleTier1(request,env,actor));
+      if (path === '/api/platform/profile' && request.method === 'POST')
+        return secure(await saveProfile(request, env, actor));
+      if (
+        path.startsWith('/api/platform/') &&
+        path !== '/api/platform/me' &&
+        !actor.fullName
+      )
+        throw new HttpError(428, 'Udfyld din profil for at fortsætte.');
+      if (path.startsWith('/api/platform/tier1/'))
+        return secure(await handleTier1(request, env, actor));
       // Support opens the real customer portal inside the admin origin, as the customer user it acts for.
-      if(admin&&request.method==='GET'&&/^\/tier1-next\/assets\/[\w.-]+\.(js|css|woff2|txt)$/.test(path))return keepHashed(path,secure(await asset(request,env),true));
-      if(admin&&request.method==='GET'&&(path==='/kundeportal'||path==='/kundeportal/')){
-        if(!(await supportActor(request,env,realActor)).support)return secure(new Response(null,{status:303,headers:{Location:'/admin/'}}));
-        return secure(await asset(new Request(new URL('/tier1-next/index.html',url)),env,false,true),true);
+      if (
+        admin &&
+        request.method === 'GET' &&
+        /^\/tier1-next\/assets\/[\w.-]+\.(js|css|woff2|txt)$/.test(path)
+      )
+        return keepHashed(path, secure(await asset(request, env), true));
+      if (
+        admin &&
+        request.method === 'GET' &&
+        (path === '/kundeportal' || path === '/kundeportal/')
+      ) {
+        if (!(await supportActor(request, env, realActor)).support)
+          return secure(
+            new Response(null, {
+              status: 303,
+              headers: { Location: '/admin/' },
+            }),
+          );
+        return secure(
+          await asset(
+            new Request(new URL('/tier1-next/index.html', url)),
+            env,
+            false,
+            true,
+          ),
+          true,
+        );
       }
-      if(customerEnabled&&!admin&&request.method==='GET'&&['/','/index.html'].includes(path)) {
-        if(actor.platformAdmin||actor.support)throw new HttpError(403,'Åbn Tier 1 med en virksomhedsbruger.');
-        return secure(await asset(new Request(new URL('/tier1-next/index.html',url)),env),true);
+      if (
+        customerEnabled &&
+        !admin &&
+        request.method === 'GET' &&
+        ['/', '/index.html'].includes(path)
+      ) {
+        if (actor.platformAdmin || actor.support)
+          throw new HttpError(403, 'Åbn Tier 1 med en virksomhedsbruger.');
+        return secure(
+          await asset(new Request(new URL('/tier1-next/index.html', url)), env),
+          true,
+        );
       }
-      if(!admin&&request.method==='GET'&&(path==='/tier1-next/'||path==='/tier1-next/assets/geist-OFL.txt'||/^\/tier1-next\/assets\/[\w.-]+\.(js|css|woff2)$/.test(path))) {
-        if(actor.platformAdmin||actor.support)throw new HttpError(403,'Åbn Tier 1 med en virksomhedsbruger.');
-        return keepHashed(path,secure(await asset(path==='/tier1-next/'?new Request(new URL('/tier1-next/index.html',url)):request,env),true));
+      if (
+        !admin &&
+        request.method === 'GET' &&
+        (path === '/tier1-next/' ||
+          path === '/tier1-next/assets/geist-OFL.txt' ||
+          /^\/tier1-next\/assets\/[\w.-]+\.(js|css|woff2)$/.test(path))
+      ) {
+        if (actor.platformAdmin || actor.support)
+          throw new HttpError(403, 'Åbn Tier 1 med en virksomhedsbruger.');
+        return keepHashed(
+          path,
+          secure(
+            await asset(
+              path === '/tier1-next/'
+                ? new Request(new URL('/tier1-next/index.html', url))
+                : request,
+              env,
+            ),
+            true,
+          ),
+        );
       }
-      if (path === '/api/platform/operations') return secure(await handleOperationsOverview(request, env, actor));
+      if (path === '/api/platform/operations')
+        return secure(await handleOperationsOverview(request, env, actor));
       if (path.startsWith('/api/platform/'))
         return secure(await handleAdmin(request, env.PLATFORM_DB, actor, env));
       if (
         request.method === 'GET' &&
-        ['/', '/index.html', '/admin.js', '/customer.js', '/styles.css'].includes(path)
+        [
+          '/',
+          '/index.html',
+          '/admin.js',
+          '/customer.js',
+          '/styles.css',
+        ].includes(path)
       )
-        return secure(await asset(request,env,admin));
+        return secure(await asset(request, env, admin));
       throw new HttpError(
         404,
         'Funktionen findes ikke i administrationens testmiljø.',
       );
     } catch (error) {
-      if(error instanceof InvoiceCheckError)return secure(reply({error:error.message},409));
+      if (error instanceof InvoiceCheckError)
+        return secure(reply({ error: error.message }, 409));
       if (error instanceof HttpError)
         return secure(reply({ error: error.message }, error.status));
-      if(error instanceof Error && /LAST_COMPANY_ADMIN/.test(error.message))
-        return secure(reply({error:'Virksomheden skal have mindst én aktiv administrator.'},409));
+      if (error instanceof Error && /LAST_COMPANY_ADMIN/.test(error.message))
+        return secure(
+          reply(
+            { error: 'Virksomheden skal have mindst én aktiv administrator.' },
+            409,
+          ),
+        );
       // Never expose SQL, tokens, provider errors or user payloads.
       if (
         error instanceof Error &&
@@ -241,20 +505,41 @@ export default {
   async scheduled(_event: ScheduledController, env: PlatformEnv) {
     assertTestRuntime(env);
     // The demo is rebuilt once a night; a failure there never stops the real jobs.
-    try{await resetDemoIfDue(env);}catch(error){console.error('Demokontoen kunne ikke nulstilles',error);}
-    try{await cleanupRuns(env);}catch(error){console.error('Kørselsloggen kunne ikke ryddes op',error);}
-    if(productionWrites(env)){
+    try {
+      await resetDemoIfDue(env);
+    } catch (error) {
+      console.error('Demokontoen kunne ikke nulstilles', error);
+    }
+    try {
+      await cleanupRuns(env);
+    } catch (error) {
+      console.error('Kørselsloggen kunne ikke ryddes op', error);
+    }
+    if (productionWrites(env)) {
       // A heartbeat around the jobs, then the operations check (alerts and the daily mail to the platform admins).
-      try{
-        await markTick(env,'start');
-        const [jobs]=await Promise.all([runProductionJobs(env),refreshPublicTracking(env).catch(()=>console.error('Tracking kunne ikke opdateres'))]);
-        await markTick(env,'ok');
+      try {
+        await markTick(env, 'start');
+        const [jobs] = await Promise.all([
+          runProductionJobs(env),
+          refreshPublicTracking(env).catch(() =>
+            console.error('Tracking kunne ikke opdateres'),
+          ),
+        ]);
+        await markTick(env, 'ok');
         return jobs;
-      }catch(error){
-        try{await markTick(env,'error',error);}catch{/* The original error is what matters. */}
+      } catch (error) {
+        try {
+          await markTick(env, 'error', error);
+        } catch {
+          /* The original error is what matters. */
+        }
         throw error;
-      }finally{
-        try{await checkOperations(env);}catch(error){console.error('Driftsovervågningen fejlede',error);}
+      } finally {
+        try {
+          await checkOperations(env);
+        } catch (error) {
+          console.error('Driftsovervågningen fejlede', error);
+        }
       }
     }
     return scheduled();

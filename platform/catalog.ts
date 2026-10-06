@@ -6,21 +6,85 @@
 //  history    has its own history start date
 //  booking    has a booking start date and can be reconciled against Dinero
 export const catalog = [
-  {id:'shipmondo',name:'Shipmondo',category:'Fragt',description:'Trackingstatus direkte fra Shipmondo på Forsendelser.',kind:'shipping',optional:true,history:false,booking:false},
-  {id:'shopify',name:'Shopify',category:'Webshop',description:'Salg, tilbagebetalinger, udbetalinger og lager.',kind:'webshop',optional:false,history:true,booking:true},
-  {id:'dinero',name:'Dinero',category:'Regnskab',description:'Bilag, kontoplan og økonomisk overblik.',kind:'accounting',optional:false,history:true,booking:true},
-  {id:'flatpay',name:'Flatpay',category:'Betaling',description:'Transaktioner, afregninger og udbetalinger.',kind:'payment',optional:true,history:true,booking:true},
-  {id:'viabill',name:'ViaBill',category:'Betaling',description:'Betalinger og afregningsdata.',kind:'payment',optional:true,history:true,booking:true},
-  {id:'pensopay',name:'Pensopay',category:'Betaling',description:'Betalinger og afregninger.',kind:'payment',optional:true,history:true,booking:false},
-  {id:'emballage',name:'Emballage Indberetning',category:'Producentansvar',description:'Kvartalsvis indberetning af emballage.',kind:'packaging',optional:true,history:false,booking:false},
+  {
+    id: 'shipmondo',
+    name: 'Shipmondo',
+    category: 'Fragt',
+    description: 'Trackingstatus direkte fra Shipmondo på Forsendelser.',
+    kind: 'shipping',
+    optional: true,
+    history: false,
+    booking: false,
+  },
+  {
+    id: 'shopify',
+    name: 'Shopify',
+    category: 'Webshop',
+    description: 'Salg, tilbagebetalinger, udbetalinger og lager.',
+    kind: 'webshop',
+    optional: false,
+    history: true,
+    booking: true,
+  },
+  {
+    id: 'dinero',
+    name: 'Dinero',
+    category: 'Regnskab',
+    description: 'Bilag, kontoplan og økonomisk overblik.',
+    kind: 'accounting',
+    optional: false,
+    history: true,
+    booking: true,
+  },
+  {
+    id: 'flatpay',
+    name: 'Flatpay',
+    category: 'Betaling',
+    description: 'Transaktioner, afregninger og udbetalinger.',
+    kind: 'payment',
+    optional: true,
+    history: true,
+    booking: true,
+  },
+  {
+    id: 'viabill',
+    name: 'ViaBill',
+    category: 'Betaling',
+    description: 'Betalinger og afregningsdata.',
+    kind: 'payment',
+    optional: true,
+    history: true,
+    booking: true,
+  },
+  {
+    id: 'pensopay',
+    name: 'Pensopay',
+    category: 'Betaling',
+    description: 'Betalinger og afregninger.',
+    kind: 'payment',
+    optional: true,
+    history: true,
+    booking: false,
+  },
+  {
+    id: 'emballage',
+    name: 'Emballage Indberetning',
+    category: 'Producentansvar',
+    description: 'Kvartalsvis indberetning af emballage.',
+    kind: 'packaging',
+    optional: true,
+    history: false,
+    booking: false,
+  },
 ] as const;
 type Entry = (typeof catalog)[number];
-const ids = (keep: (item: Entry) => boolean): string[] => catalog.filter(keep).map(item => item.id);
-export const optionalIntegrations = ids(i => i.optional);
-export const paymentProviders = ids(i => i.kind === 'payment');
-export const historyProviders = ids(i => i.history);
+const ids = (keep: (item: Entry) => boolean): string[] =>
+  catalog.filter(keep).map((item) => item.id);
+export const optionalIntegrations = ids((i) => i.optional);
+export const paymentProviders = ids((i) => i.kind === 'payment');
+export const historyProviders = ids((i) => i.history);
 /** Sources whose records can be booked or reconciled in Dinero (Dinero itself is the destination). */
-export const bookingSources = ids(i => i.booking && i.kind !== 'accounting');
+export const bookingSources = ids((i) => i.booking && i.kind !== 'accounting');
 // Registry ids are lowercase letters only, so they are safe inside a route pattern.
 export const paymentProviderPattern = paymentProviders.join('|');
 
@@ -39,32 +103,69 @@ const endpoints: Record<(typeof catalog)[number]['id'], string> = {
 async function reachability(url: string, request: typeof fetch) {
   const started = Date.now();
   try {
-    const response = await request(url, {method:'GET',redirect:'manual',cache:'no-store',signal:AbortSignal.timeout(5000)});
+    const response = await request(url, {
+      method: 'GET',
+      redirect: 'manual',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5000),
+    });
     await response.body?.cancel().catch(() => {});
-    return {state: response.status >= 500 ? 'provider_error' : 'reachable', httpStatus: response.status, ms: Date.now() - started, url};
+    return {
+      state: response.status >= 500 ? 'provider_error' : 'reachable',
+      httpStatus: response.status,
+      ms: Date.now() - started,
+      url,
+    };
   } catch {
-    return {state: 'unreachable', httpStatus: null, ms: Date.now() - started, url};
+    return {
+      state: 'unreachable',
+      httpStatus: null,
+      ms: Date.now() - started,
+      url,
+    };
   }
 }
 
 // Active companies with a saved connection per integration, plus those that only selected it.
 export async function integrationUsage(db: D1Database) {
-  const active = (table: string, extra = '') => `SELECT count(DISTINCT t.company_id) FROM ${table} t JOIN companies c ON c.id=t.company_id WHERE c.status='active'${extra}`;
-  const row = await db.prepare(`SELECT
+  const active = (table: string, extra = '') =>
+    `SELECT count(DISTINCT t.company_id) FROM ${table} t JOIN companies c ON c.id=t.company_id WHERE c.status='active'${extra}`;
+  const row = await db
+    .prepare(`SELECT
     (${active('shipping_connections', " AND t.provider='shipmondo'")}) AS shipmondo,
     (${active('webshop_connections', " AND t.provider='shopify'")}) AS shopify,
     (${active('accounting_connections')}) AS dinero,
     (${active('payment_connections', " AND t.provider='flatpay'")}) AS flatpay,
     (${active('payment_connections', " AND t.provider='viabill'")}) AS viabill,
-    (${active('emballage_connections')}) AS emballage`).first<Record<string, number>>();
-  const selected = (await db.prepare(`SELECT i.integration_id AS id,count(DISTINCT i.company_id) AS n FROM company_integrations i JOIN companies c ON c.id=i.company_id WHERE c.status='active' GROUP BY i.integration_id`).all<{id:string;n:number}>()).results;
-  return Object.fromEntries(catalog.map(item => [item.id, {connected: row?.[item.id] || 0, selected: selected.find(s => s.id === item.id)?.n || 0}]));
+    (${active('emballage_connections')}) AS emballage`)
+    .first<Record<string, number>>();
+  const selected = (
+    await db
+      .prepare(
+        `SELECT i.integration_id AS id,count(DISTINCT i.company_id) AS n FROM company_integrations i JOIN companies c ON c.id=i.company_id WHERE c.status='active' GROUP BY i.integration_id`,
+      )
+      .all<{ id: string; n: number }>()
+  ).results;
+  return Object.fromEntries(
+    catalog.map((item) => [
+      item.id,
+      {
+        connected: row?.[item.id] || 0,
+        selected: selected.find((s) => s.id === item.id)?.n || 0,
+      },
+    ]),
+  );
 }
 
 export async function apiStatus(requestStatus: typeof fetch = fetch) {
   const checkedAt = new Date().toISOString();
-  const connectivity = await Promise.all(catalog.map(item => reachability(endpoints[item.id], requestStatus)));
-  return catalog.map((item,index)=>({...item,connectivity:{...connectivity[index],checkedAt}}));
+  const connectivity = await Promise.all(
+    catalog.map((item) => reachability(endpoints[item.id], requestStatus)),
+  );
+  return catalog.map((item, index) => ({
+    ...item,
+    connectivity: { ...connectivity[index], checkedAt },
+  }));
 }
 
 // Shopify order gateways named after the integration that took the payment. Shopify Payments
@@ -74,11 +175,20 @@ export async function apiStatus(requestStatus: typeof fetch = fetch) {
 export function paymentIntegrationName(gateway: string) {
   const key = gateway.toLowerCase().replace(/[^a-z]/g, '');
   if (key === 'shopifypayments') return 'Shopify Payments';
-  return catalog.find(item => item.kind === 'payment' && key.includes(item.id))?.name ?? null;
+  return (
+    catalog.find((item) => item.kind === 'payment' && key.includes(item.id))
+      ?.name ?? null
+  );
 }
 // Payment methods that are not integrations but are named unambiguously by the gateway.
 // Matched on the whole normalised name, except MobilePay, which also appears as e.g. "Vipps MobilePay".
-const paymentMethods: Array<[RegExp, string]> = [[/mobilepay/, 'MobilePay'], [/^giftcard$/, 'Gavekort'], [/^manual$/, 'Manuel betaling'], [/^paypal(expresscheckout)?$/, 'PayPal'], [/^klarna$/, 'Klarna']];
+const paymentMethods: Array<[RegExp, string]> = [
+  [/mobilepay/, 'MobilePay'],
+  [/^giftcard$/, 'Gavekort'],
+  [/^manual$/, 'Manuel betaling'],
+  [/^paypal(expresscheckout)?$/, 'PayPal'],
+  [/^klarna$/, 'Klarna'],
+];
 function paymentMethodName(gateway: string) {
   const key = gateway.toLowerCase().replace(/[^a-z]/g, '');
   return paymentMethods.find(([pattern]) => pattern.test(key))?.[1] ?? null;
@@ -86,16 +196,35 @@ function paymentMethodName(gateway: string) {
 // Gateways an integration delivers through, e.g. Flatpay's webshop payments run on Frisbii
 // (formerly Reepay). Frisbii is also sold directly, so it only counts as the integration when
 // the webshop has that integration connected; otherwise the gateway's own name is shown.
-const gatewayOperators: Array<[RegExp, string, string]> = [[/frisbii|reepay/, 'flatpay', 'Frisbii']];
+const gatewayOperators: Array<[RegExp, string, string]> = [
+  [/frisbii|reepay/, 'flatpay', 'Frisbii'],
+];
 function operatorName(gateway: string, connected: ReadonlySet<string>) {
   const key = gateway.toLowerCase().replace(/[^a-z]/g, '');
   const match = gatewayOperators.find(([pattern]) => pattern.test(key));
   if (!match) return null;
-  return connected.has(match[1]) ? catalog.find(item => item.id === match[1])!.name : match[2];
+  return connected.has(match[1])
+    ? catalog.find((item) => item.id === match[1])!.name
+    : match[2];
 }
 /** The integration(s) or known payment method behind an order's payment gateways, for display on Salg. */
-export function orderPaymentIntegration(gateways: unknown, connected: ReadonlySet<string> = new Set()) {
-  const names = Array.isArray(gateways) ? gateways.filter((g): g is string => typeof g === 'string') : [];
-  const labels = [...new Set(names.map(g => paymentIntegrationName(g) ?? operatorName(g, connected) ?? paymentMethodName(g) ?? 'Uden integration'))];
+export function orderPaymentIntegration(
+  gateways: unknown,
+  connected: ReadonlySet<string> = new Set(),
+) {
+  const names = Array.isArray(gateways)
+    ? gateways.filter((g): g is string => typeof g === 'string')
+    : [];
+  const labels = [
+    ...new Set(
+      names.map(
+        (g) =>
+          paymentIntegrationName(g) ??
+          operatorName(g, connected) ??
+          paymentMethodName(g) ??
+          'Uden integration',
+      ),
+    ),
+  ];
   return labels.length ? labels.join(', ') : 'Uden integration';
 }

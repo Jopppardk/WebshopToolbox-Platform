@@ -5,7 +5,7 @@ Den prioriterede rækkefølge efter analysen 6. oktober 2026. Den tidligere udvi
 ## Næste skridt
 
 1. ~~**Tier 1-ydelse.**~~ Udført 6. oktober 2026 (se CHANGELOG).
-2. **Kodekvalitet.** Ret først fund af typen "[object Object]" (`no-base-to-string`) og manglende sammenhæng mellem label og felt i Tier 1. Formatér de største filer én ad gangen.
+2. ~~**Kodekvalitet.**~~ Udført 6. oktober 2026: ingen "[object Object]", lint 467 → 275, al kode formateret (se CHANGELOG).
 3. **"Kræver handling".** Én liste over alt, kunden skal tage stilling til:
    - fejlede og uafklarede poster
    - ordrer, der afventer opsætning af marked
