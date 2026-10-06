@@ -30,6 +30,15 @@ async function asset(request:Request,env:PlatformEnv,admin=false,tier1Admin=fals
  return new Response(body,{status:response.status,headers});
 }
 const globalAsset=asset;
+// Built Tier 1 files carry a content hash in their name, so the browser may keep them: a release brings new names,
+// and index.html (never cached) points to them. Private, because they are only served to signed-in users.
+const hashedTier1Asset = /^\/tier1-next\/assets\/[\w.-]+-[\w-]{8}\.(js|css|woff2)$/;
+function keepHashed(path: string, response: Response) {
+  if (!hashedTier1Asset.test(path) || response.status !== 200) return response;
+  const headers = new Headers(response.headers);
+  headers.set('Cache-Control', 'private, max-age=31536000, immutable');
+  return new Response(response.body, { status: response.status, headers });
+}
 function secure(response: Response, tier1 = false) {
   const headers = new Headers(response.headers);
   headers.set('Cache-Control', 'no-store');
@@ -180,7 +189,7 @@ export default {
         throw new HttpError(428,'Udfyld din profil for at fortsætte.');
       if(path.startsWith('/api/platform/tier1/')) return secure(await handleTier1(request,env,actor));
       // Support opens the real customer portal inside the admin origin, as the customer user it acts for.
-      if(admin&&request.method==='GET'&&/^\/tier1-next\/assets\/[\w.-]+\.(js|css|woff2|txt)$/.test(path))return secure(await asset(request,env),true);
+      if(admin&&request.method==='GET'&&/^\/tier1-next\/assets\/[\w.-]+\.(js|css|woff2|txt)$/.test(path))return keepHashed(path,secure(await asset(request,env),true));
       if(admin&&request.method==='GET'&&(path==='/kundeportal'||path==='/kundeportal/')){
         if(!(await supportActor(request,env,realActor)).support)return secure(new Response(null,{status:303,headers:{Location:'/admin/'}}));
         return secure(await asset(new Request(new URL('/tier1-next/index.html',url)),env,false,true),true);
@@ -191,7 +200,7 @@ export default {
       }
       if(!admin&&request.method==='GET'&&(path==='/tier1-next/'||path==='/tier1-next/assets/geist-OFL.txt'||/^\/tier1-next\/assets\/[\w.-]+\.(js|css|woff2)$/.test(path))) {
         if(actor.platformAdmin||actor.support)throw new HttpError(403,'Åbn Tier 1 med en virksomhedsbruger.');
-        return secure(await asset(path==='/tier1-next/'?new Request(new URL('/tier1-next/index.html',url)):request,env),true);
+        return keepHashed(path,secure(await asset(path==='/tier1-next/'?new Request(new URL('/tier1-next/index.html',url)):request,env),true));
       }
       if (path === '/api/platform/operations') return secure(await handleOperationsOverview(request, env, actor));
       if (path.startsWith('/api/platform/'))

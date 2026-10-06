@@ -2,6 +2,8 @@
 
 Nyeste først. Skriv en ny note øverst for hver udgivet ændring: dato, hvem (Codex/Claude), hvad, filer/endpoints, migrering og hvad der ikke er verificeret. Indtil 6. oktober 2026 hed filen HANDOVER.md; noterne og de historiske afsnit nedenfor er flyttet hertil uændret. Aktuel status står i [HANDOVER.md](HANDOVER.md).
 
+> 6. oktober 2026 – Tier 1 hurtigere (Claude): siderne indlæses først, når de åbnes (React.lazy i `platform/tier1/src/app/page.tsx`); React og UI-kittet ligger i egne filer (`vite.config.mjs`). Første indlæsning er 410 KB i stedet for 1.020 KB (128 KB mod 292 KB komprimeret); diagrambiblioteket (362 KB) hentes kun på Performance. Byggede filer med indholdshash i navnet sendes med `Cache-Control: private, max-age=31536000, immutable` (`keepHashed` i `platform/worker.ts`); siden selv og filer uden hash forbliver `no-store`. wrangler 4.130 → 4.147, workers-types 5.20261006.1 og oxfmt 0.72: npm audit 0 sårbarheder. Portalens røgtest kontrollerer opdelingen og cachingen.
+
 > 6. oktober 2026 – Dokumentationen ryddet op (Claude): HANDOVER.md er nu én side med aktuel status og åbne punkter; historikken er flyttet uændret hertil (CHANGELOG.md). PROJECT.md og ROADMAP.md er skrevet om og korte; de tidligere udgaver og 17 forældede, daterede dokumenter ligger i `docs/platform/archive/`. AGENTS.md og README peger på de nye filer.
 
 > 6. oktober 2026 – Dashboardets integrationskort (Claude): talte kun Shopify og Dinero (hardkodet). Tæller nu som siden Integrationer: tilsluttede (alle typer) og valgte, men ikke tilsluttede. `connectedIntegrations`/`selectedIntegrations` i `platform/tier1-connections.ts` deles af begge. Kortet viser "N tilsluttet · M mangler".
