@@ -1,17 +1,9 @@
 'use client';
 import { tier1Fetch as fetch } from '@/platform/transport';
-import { ProviderLedger } from '@/components/provider-ledger';
-import { Documents } from '@/components/documents';
-import { Inventory } from '@/components/inventory';
 import { NotificationBell } from '@/components/notification-bell';
-import { Packaging } from '@/components/packaging';
 import { Dashboard } from '@/components/dashboard';
-import { ProductFeeds } from '@/components/product-feeds';
-import { Performance } from '@/components/performance';
 import { IntegrationRequired } from '@/components/integration-required';
 import { Rss, Truck } from 'lucide-react';
-import { Shipments } from '@/components/shipments';
-import { Support } from '@/platform/support';
 import { CustomerIdentity, WebshopSelector } from '@/platform/workspace';
 import { emptyAccounts, defaultAutomation, defaultInvoiceEmail, type Accounts, type Automation, type AdminSettings, type InvoiceEmailSettings } from '@/lib/admin-settings';
 import { orderPeriods, type OrderPeriod } from '@/lib/order-period';
@@ -21,17 +13,27 @@ import { processedSummary } from '@/lib/order-processing';
 import { countryName } from '@/components/country-flag';
 import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { OrderRefunds } from '@/components/order-refunds';
-import { useEffect, useState } from 'react';
-import { Payments } from '@/components/payments';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Activity, BookOpenCheck, LayoutDashboard, Boxes, Check, FileText, HandCoins, Lightbulb, Menu, PackageCheck, Warehouse, RefreshCw, RotateCcw, Search, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { OrderRow, Stat, type OrderView } from '@/components/sales-orders';
-import { Invoices } from '@/components/invoices-overview';
-import { Settings } from '@/components/settings-page';
+// Each view is its own file, loaded the first time it is opened; the dashboard and Salg are in the main file.
+const ProviderLedger = lazy(() => import('@/components/provider-ledger').then(m => ({ default: m.ProviderLedger })));
+const Documents = lazy(() => import('@/components/documents').then(m => ({ default: m.Documents })));
+const Inventory = lazy(() => import('@/components/inventory').then(m => ({ default: m.Inventory })));
+const Packaging = lazy(() => import('@/components/packaging').then(m => ({ default: m.Packaging })));
+const ProductFeeds = lazy(() => import('@/components/product-feeds').then(m => ({ default: m.ProductFeeds })));
+const Performance = lazy(() => import('@/components/performance').then(m => ({ default: m.Performance })));
+const Shipments = lazy(() => import('@/components/shipments').then(m => ({ default: m.Shipments })));
+const OrderRefunds = lazy(() => import('@/components/order-refunds').then(m => ({ default: m.OrderRefunds })));
+const Payments = lazy(() => import('@/components/payments').then(m => ({ default: m.Payments })));
+const Invoices = lazy(() => import('@/components/invoices-overview').then(m => ({ default: m.Invoices })));
+const Settings = lazy(() => import('@/components/settings-page').then(m => ({ default: m.Settings })));
+const Support = lazy(() => import('@/platform/support').then(m => ({ default: m.Support })));
+const viewLoading = <p aria-live="polite" className="mx-auto max-w-[1440px] px-5 py-9 text-sm text-muted-foreground md:px-8">Indlæser…</p>;
 
 export default function Home() {
   const syncState = useSyncStatus();
@@ -298,6 +300,7 @@ export default function Home() {
             <CustomerIdentity />
           </div>
         </header>
+        <Suspense fallback={viewLoading}>
         {view === 'performance' && <Performance onIntegrations={() => { setIntegrationTarget(null); setSettingsTab('integrations'); setView('settings'); }}/>}
         {view === 'dashboard' && <Dashboard onIntegrations={provider => { setIntegrationTarget(provider ?? null); setSettingsTab('integrations'); setView('settings'); }}/>}
         {currentRequirement && connections===null && !connectionsError && <div className="mx-auto max-w-[1440px] px-5 py-16 text-center text-sm text-muted-foreground">Kontrollerer integrationer…</div>}
@@ -437,6 +440,7 @@ export default function Home() {
           />
           </div>
         )}
+        </Suspense>
       </section>
       {notice && (
         <div

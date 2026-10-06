@@ -23,12 +23,22 @@ test.afterEach(async ({ page }) => { expect(page.__errors, 'no uncaught errors i
 
 const nav = (page, name) => page.getByRole('navigation').getByRole('button', { name, exact: true }).or(page.getByRole('button', { name, exact: true })).first();
 
+// Also checks that views load on first use (Performance brings the chart library) and that built files may be cached.
+// One login per test: the login is rate limited.
 test('every page of the portal renders', async ({ page }) => {
+  const scripts = [];
+  page.on('response', response => { if (response.url().endsWith('.js')) scripts.push({ url: response.url(), cache: response.headers()['cache-control'] }); });
+  await page.reload();
+  await expect(page.locator('main')).toContainText(/Dashboard|Forbind din virksomhed/);
+  expect(scripts.some(script => /\/performance-[\w-]+\.js$/.test(script.url)), 'Performance is not loaded up front').toBe(false);
+  expect(scripts.find(script => /\/react-[\w-]+\.js$/.test(script.url))?.cache).toBe('private, max-age=31536000, immutable');
   const pages = [['Dashboard', /Dashboard|Forbind din virksomhed/], ['Salg', /Salg/], ['Tilbagebetalinger', /Tilbagebetalinger/], ['Udbetalinger', /Udbetalinger/], ['Lager', /Lager/],
     ['Fakturaer', /Fakturaer/], ['Udbetalingsrapporter', /Udbetalingsrapporter/], ['Performance', /Performance/], ['Forsendelser', /Forsendelser/], ['Emballage', /Emballage/],
     ['Produktfeeds', /Produktfeeds/], ['Support', /Support/], ['Indstillinger', /Indstillinger|Generelt/]];
   for (const [name, heading] of pages) {
+    const loaded = name === 'Performance' && page.waitForResponse(response => /\/performance-[\w-]+\.js$/.test(response.url()));
     await nav(page, name).click();
+    if (loaded) expect((await loaded).ok(), 'Performance loads when opened').toBe(true);
     await expect(page.locator('main'), name).toContainText(heading);
   }
 });

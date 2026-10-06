@@ -4,7 +4,7 @@ Den prioriterede rækkefølge efter analysen 6. oktober 2026. Den tidligere udvi
 
 ## Næste skridt
 
-1. **Tier 1-ydelse.** Lad filer med hash i navnet blive cachet i et år, og del appen op, så f.eks. diagrambiblioteket kun hentes, hvor det bruges. Opdatér også wrangler, så de sidste sårbarheder i udviklingsværktøjerne forsvinder.
+1. ~~**Tier 1-ydelse.**~~ Udført 6. oktober 2026 (se CHANGELOG).
 2. **Kodekvalitet.** Ret først fund af typen "[object Object]" (`no-base-to-string`) og manglende sammenhæng mellem label og felt i Tier 1. Formatér de største filer én ad gangen.
 3. **"Kræver handling".** Én liste over alt, kunden skal tage stilling til:
    - fejlede og uafklarede poster
