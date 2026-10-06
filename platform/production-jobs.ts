@@ -28,7 +28,7 @@ type Mode='scheduled'|'sales';
 type QueueResult={rows:number;failed:number};
 export async function runProductionJobs(env:PlatformEnv){
  if(!productionWrites(env))return {status:'disabled',processed:0};
- const db=env.PLATFORM_DB,deadline=Date.now()+240000;
+ const deadline=Date.now()+240000;
  // A live company administrator is selected server-side. No client supplied tenant
  // or identity is used, and all adapters recheck company and webshop permissions.
  const shops=await shopRows(env);

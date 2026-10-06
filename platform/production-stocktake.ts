@@ -1,3 +1,4 @@
+import { asText } from './tier1/src/lib/format';
 import {requireCompany,requireWebshop} from './auth';
 import {shopAccess} from './invoice-source';
 import {readInventory} from './inventory-source';
@@ -49,7 +50,7 @@ export async function assertNoPendingRegulation(env:PlatformEnv,company:string,o
 export async function commitStocktake(env:PlatformEnv,actor:Actor,company:string,shop:string,input:Record<string,unknown>){
  await requireCompany(env.PLATFORM_DB,actor,company,true);await requireWebshop(env.PLATFORM_DB,actor,company,shop);
  if(!productionWrites(env)||actor.support||actor.platformAdmin)throw new HttpError(403,'Lagerændringer er ikke aktiveret her.');
- const db=env.PLATFORM_DB,id=String(input.id||'');
+ const db=env.PLATFORM_DB,id=asText(input.id||'');
  if(!/^[a-f0-9-]{36}$/.test(id)||input.confirmation!==true)throw new HttpError(400,'Godkend en gyldig lageroptælling.');
  const state=await db.prepare('SELECT * FROM stocktakes WHERE company_id=? AND webshop_id=? AND id=?').bind(company,shop,id).first<any>();
  if(!state||state.version!==input.version||state.phase!=='prepared')throw new HttpError(409,'Forslaget er ændret eller behandlet.');

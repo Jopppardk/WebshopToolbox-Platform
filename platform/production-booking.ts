@@ -1,3 +1,4 @@
+import { asText } from './tier1/src/lib/format';
 import {recordFailure} from './record-history';
 import {requireCompany,requireWebshop} from './auth';
 import {unseal} from './connections';
@@ -14,7 +15,7 @@ async function productionBooking(request:Request,env:PlatformEnv,actor:Actor,com
  if(actor.support||actor.platformAdmin)throw new HttpError(403,'Bogføring kræver en virksomhedsadministrator.');
  if(!productionWrites(env))throw new HttpError(403,'Bogføring er ikke aktiveret i dette miljø.');
  if(request.method!=='POST')throw new HttpError(405,'Brug POST.');
- const input=await jsonBody(request),id=String(input.externalId||'');
+ const input=await jsonBody(request),id=asText(input.externalId||'');
  if(input.kind!==kind||!pattern.test(id)||!['inspect','retry'].includes(String(input.action)))throw new HttpError(400,'Vælg en post og en gyldig handling.');
  const db=env.PLATFORM_DB;
  const connection=await db.prepare('SELECT * FROM accounting_connections WHERE company_id=?').bind(company).first<any>();

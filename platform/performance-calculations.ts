@@ -1,3 +1,4 @@
+import { asText } from './tier1/src/lib/format';
 import { parseEntries, resultCategories, type LedgerYear } from './finance-calculations';
 import type { MonthComparison } from './tier1/src/lib/performance';
 
@@ -32,7 +33,7 @@ export function parsePerformanceEntries(payload: unknown) {
   const entries = parseEntries(payload);
   return entries.map((entry, i) => {
     const raw = (payload as Record<string, unknown>[])[i];
-    if (!validDate(entry.date) || (raw.ContactGuid != null && !guid.test(String(raw.ContactGuid))) || (raw.VoucherGuid != null && !guid.test(String(raw.VoucherGuid)))) throw Error('Dinero returnerede ugyldige posteringer.');
+    if (!validDate(entry.date) || (raw.ContactGuid != null && !guid.test(asText(raw.ContactGuid))) || (raw.VoucherGuid != null && !guid.test(asText(raw.VoucherGuid)))) throw Error('Dinero returnerede ugyldige posteringer.');
     return { ...entry, guid: entry.guid.toLowerCase(), contact: typeof raw.ContactGuid === 'string' ? raw.ContactGuid.toLowerCase() : null, voucher: typeof raw.VoucherGuid === 'string' ? raw.VoucherGuid.toLowerCase() : null };
   });
 }

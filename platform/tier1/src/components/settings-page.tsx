@@ -21,7 +21,6 @@ import { supportedModules } from '@/lib/integration-visibility';
 import { syncIntervals } from '@/lib/sync-schedule';
 import { InvoiceMarkets } from '@/components/invoice-markets';
 import { useEffect, useState } from 'react';
-import { Payments } from '@/components/payments';
 import { ArrowDownToLine, AlertTriangle, ChevronDown, Landmark, Save, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

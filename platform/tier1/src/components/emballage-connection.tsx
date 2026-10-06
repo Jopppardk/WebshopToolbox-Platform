@@ -2,7 +2,7 @@
 import { TestModeNote } from '@/components/test-mode-note';
 import { supportedModules } from '@/lib/integration-visibility';
 import { ShopifyPackagingFields } from '@/components/shopify-packaging-fields';
-import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
+import { tier1Fetch as fetch } from '@/platform/transport';
 import { useState, useEffect } from 'react';
 import { PackageCheck, Save } from 'lucide-react';
 import type {ReactNode} from 'react';

@@ -55,7 +55,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 - **Backup:** gendannelsen er ikke øvet, og R2-dokumenterne har ingen backup.
 
 **Kendt teknisk gæld**
-- **Kodekvalitet:** 467 lint-fund og 203 uformaterede filer, låst af `npm run lint`. Store filer formateres én ad gangen i separate PR'er.
+- **Kodekvalitet:** 275 lint-fund og 203 uformaterede filer, låst af `npm run lint`. Store filer formateres én ad gangen i separate PR'er.
 
 **Før lancering** (tilmeldingen er slået fra)
 - Sletning og eksport af en kundes data (GDPR)

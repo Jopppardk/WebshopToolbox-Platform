@@ -1,3 +1,4 @@
+import { asText } from './tier1/src/lib/format';
 import { bookingSources } from './catalog';
 import { readExistingVoucher } from './dinero-read';
 import { requireCompany, requireWebshop } from './auth';
@@ -68,7 +69,7 @@ export async function handleReconciliation(request:Request,env:PlatformEnv,actor
  await requireWebshop(db,actor,company,shop);
  if(request.method!=='POST')throw new HttpError(405,'Brug Kontrollér bilag.');
  const b=await jsonBody(request);
- const provider=String(b.provider||''),module=String(b.module||''),externalId=String(b.externalId||''),guid=String(b.guid||'').trim().toLowerCase();
+ const provider=asText(b.provider||''),module=asText(b.module||''),externalId=asText(b.externalId||''),guid=asText(b.guid||'').trim().toLowerCase();
  if(!bookingSources.includes(provider)||!guidPattern.test(guid)||!externalId||externalId.length>300)throw new HttpError(400,'Vælg datakilde, eksternt ID og et gyldigt Dinero-bilags-GUID.');
  const operation=provider==='shopify';
  if(!(operation?['orders','refunds','payouts']:provider==='flatpay'?['payments','transactions']:['payout']).includes(module))throw new HttpError(400,'Vælg en gyldig posttype.');

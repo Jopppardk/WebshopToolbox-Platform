@@ -1,7 +1,7 @@
 'use client';
 import { formatDateTime } from '@/lib/format';
 import {PayoutLog} from './payout-log';
-import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
+import { tier1Fetch as fetch } from '@/platform/transport';
 
 import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';

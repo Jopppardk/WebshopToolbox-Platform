@@ -1,3 +1,4 @@
+import { asText } from './tier1/src/lib/format';
 import { historyProviders, paymentProviders } from './catalog';
 import { requireCompany } from './auth';
 import { jsonBody } from './invitations';
@@ -25,7 +26,7 @@ export async function dataStartDate(env:PlatformEnv,company:string,shop:string,p
 export async function handleHistory(request:Request,env:PlatformEnv,actor:Actor,company:string,shop:string,path:string){
  const db=env.PLATFORM_DB,isHistory=path==='/admin/history';
  const body=request.method==='POST'?await jsonBody(request):{};
- const provider=isHistory?'history':String(body.provider||new URL(request.url).searchParams.get('provider')||'');
+ const provider=isHistory?'history':asText(body.provider||new URL(request.url).searchParams.get('provider')||'');
  if(!['history',...historyProviders].includes(provider)||(!isHistory&&provider==='history'))throw new HttpError(400,'Vælg en gyldig integration.');
  const scope=isHistory||provider==='dinero'||shop==='none'?'':shop;
  const existing=await db.prepare('SELECT start_date,months,revision FROM integration_history WHERE company_id=? AND scope=? AND provider=?').bind(company,scope,provider).first<{start_date:string;months:number;revision:number}>();
@@ -37,7 +38,7 @@ export async function handleHistory(request:Request,env:PlatformEnv,actor:Actor,
   if(value.startDate>danishDate())throw new HttpError(400,'Startdato må ikke ligge i fremtiden.');
   if(isHistory&&value.startDate!==policy.startDate&&!body.confirmStartDateChange)throw new HttpError(400,'Bekræft ændringen af startdato.');
   if(body.revision!==undefined&&body.revision!==(existing?.revision||0))throw new HttpError(409,'Indstillingerne er ændret. Genindlæs.');
-  const bookingDate=body.bookingStartDate===undefined?undefined:String(body.bookingStartDate);
+  const bookingDate=body.bookingStartDate===undefined?undefined:asText(body.bookingStartDate);
   if(bookingDate!==undefined){try{validateHistory({months:24,startDate:bookingDate});}catch{throw new HttpError(400,'Angiv en gyldig bogføringsdato.');}if(isHistory||shop==='none')throw new HttpError(400,'Vælg en webshop før bogføringsstart sættes.');}
   await db.batch([...(bookingDate!==undefined?[db.prepare('INSERT INTO booking_start_dates(company_id,webshop_id,provider,start_date) VALUES(?,?,?,?) ON CONFLICT(company_id,webshop_id,provider) DO UPDATE SET start_date=excluded.start_date,revision=booking_start_dates.revision+1').bind(company,shop,provider,bookingDate)]:[]),...(scope&&paymentProviders.includes(provider)?[db.prepare('UPDATE payment_connections SET start_date=?,revision=revision+1 WHERE company_id=? AND webshop_id=? AND provider=?').bind(value.startDate,company,scope,provider)]:[]),db.prepare('INSERT INTO integration_history(company_id,scope,provider,start_date,months) VALUES(?,?,?,?,?) ON CONFLICT(company_id,scope,provider) DO UPDATE SET start_date=excluded.start_date,months=excluded.months,revision=integration_history.revision+1').bind(company,scope,provider,value.startDate,value.months),db.prepare('INSERT INTO audit_events(id,company_id,actor_id,action,resource_id,details_json) VALUES(?,?,?,?,?,?)').bind(crypto.randomUUID(),company,actor.id,'history.updated',scope||company,JSON.stringify({provider,...value,...(bookingDate!==undefined?{bookingStartDate:bookingDate,webshopId:shop}:{})}))]);
  }else if(request.method!=='GET')throw new HttpError(405,'Brug Gem.');

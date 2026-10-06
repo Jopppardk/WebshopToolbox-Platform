@@ -1,3 +1,4 @@
+import { asText } from './tier1/src/lib/format';
 import { HttpError } from './types';
 import { parseEntries } from './finance-calculations';
 
@@ -33,10 +34,10 @@ export async function readDineroAccounts(supplied: Record<string, string>): Prom
     const result = reads[index];
     if (result.status !== 'fulfilled') throw new Error('Kontoplanen kunne ikke hentes.');
     for (const raw of result.value) {
-      const number = String(raw.accountNumber ?? raw.AccountNumber ?? '');
-      const name = String(raw.name ?? raw.Name ?? '').trim().replace(/\s+/g, ' ');
+      const number = asText(raw.accountNumber ?? raw.AccountNumber ?? '');
+      const name = asText(raw.name ?? raw.Name ?? '').trim().replace(/\s+/g, ' ');
       if (!/^\d+$/.test(number) || !name) throw new Error('Dinero returnerede en ugyldig konto.');
-      const next: PreviewAccount = { number, name, vatCode: String(raw.vatCode ?? raw.VatCode ?? '').trim(), kind, hidden: (raw.isHidden ?? raw.IsHidden) === true };
+      const next: PreviewAccount = { number, name, vatCode: asText(raw.vatCode ?? raw.VatCode ?? '').trim(), kind, hidden: (raw.isHidden ?? raw.IsHidden) === true };
       const previous = accounts.get(number);
       if (previous) {
         if (previous.name.toLocaleLowerCase('da') !== name.toLocaleLowerCase('da') || (kind === 'entry' && previous.vatCode !== next.vatCode) || (kind === 'deposit' && next.vatCode && next.vatCode !== previous.vatCode)) throw new Error(`Dinero returnerede modstridende oplysninger for konto ${number}. Den gemte kontoplan bevares.`);

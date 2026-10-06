@@ -1,6 +1,6 @@
 'use client';
 import { formatDate, formatDateTime } from '@/lib/format';
-import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
+import { tier1Fetch as fetch } from '@/platform/transport';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';

@@ -16,3 +16,8 @@ function parse(value: Date | string | number | null | undefined) {
 export const formatDate = (value: Date | string | number | null | undefined, fallback = '—') => { const d = parse(value); return d ? dateFormat.format(d) : fallback; };
 export const formatDateTime = (value: Date | string | number | null | undefined, fallback = '—') => { const d = parse(value); return d ? `${dateFormat.format(d)} kl. ${timeFormat.format(d)}` : fallback; };
 export const formatTime = (value: Date | string | number | null | undefined, fallback = '—') => { const d = parse(value); return d ? timeFormat.format(d) : fallback; };
+
+/** A value from a request body or an outside API as text: strings, numbers and booleans as they are; anything
+ *  else (objects, arrays, null) becomes '', never "[object Object]". Used by the server too. */
+export const asText = (value: unknown): string =>
+  typeof value === 'string' ? value : typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint' ? String(value) : '';

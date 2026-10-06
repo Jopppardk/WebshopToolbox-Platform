@@ -1,3 +1,4 @@
+import { asText } from './tier1/src/lib/format';
 import {recordFailure} from './record-history';
 import {PDFDocument} from 'pdf-lib';
 import {invoiceDesign,exampleInvoice} from './invoice-design';
@@ -87,10 +88,10 @@ async function invoices(request:Request,env:PlatformEnv,actor:Actor,company:stri
  if(action==='preview'&&request.method==='GET'||action==='example-test'&&request.method==='POST'){
   const input=action==='example-test'?await jsonBody(request):{};
   if(action==='example-test'&&actor.support)throw new HttpError(403,'Afslut supportadgang før testmail.');
-  const shop=String(input.webshopId||url.searchParams.get('webshopId')||'');await requireWebshop(db,actor,company,shop);
+  const shop=asText(input.webshopId||url.searchParams.get('webshopId')||'');await requireWebshop(db,actor,company,shop);
   const webshop=await db.prepare('SELECT name FROM webshops WHERE company_id=? AND id=?').bind(company,shop).first<{name:string}>();
   // A market's example uses its own settings (as Danmark where it has none), with the amounts in its currency.
-  const exampleMarket=String(input.marketId||marketId||'')||null;
+  const exampleMarket=asText(input.marketId||marketId||'')||null;
   const market=exampleMarket?await marketRow(env,company,shop,exampleMarket):null;
   const profile=profileOf(await danishSettings(env,company),market);
   let logo:ArrayBuffer|undefined;if(profile.logoKey){const f=await env.PLATFORM_DOCUMENTS.get(profile.logoKey);if(!f)throw new HttpError(409,'Logoet mangler. Upload det igen.');logo=await f.arrayBuffer();}

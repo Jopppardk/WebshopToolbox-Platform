@@ -1,7 +1,7 @@
 'use client';
 import { useConfirm } from '@/components/confirm-dialog';
 import { useStackTable } from '@/lib/stack-table';
-import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
+import { tier1Fetch as fetch } from '@/platform/transport';
 import {useCapabilities} from '@/platform/capabilities';
 import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Save } from 'lucide-react';

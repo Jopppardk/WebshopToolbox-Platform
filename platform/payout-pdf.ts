@@ -5,16 +5,8 @@ import type { PayoutTransaction } from './payout-source';
 import { minorUnits } from './money';
 
 type PayoutSource = { id: string; issuedAt: string; status: string; transactionType: string; provider: string; net: { amount: string; currencyCode: string }; summary: PayoutSummary; transactions?: PayoutTransaction[]; reportVersion?: number; reportKey?: string; reportFingerprint?: string; reportEtag?: string };
-type Runtime = { INVOICES: R2Bucket; ASSETS: Fetcher };
-const keyFor = (id: string) => `payout-reports/${encodeURIComponent(id)}.pdf`;
 const safeId = (id: string) => id.split('/').pop()?.replace(/[^a-zA-Z0-9_-]/g, '-') || 'udbetaling';
 const money = (minor: number, currency: string) => new Intl.NumberFormat('da-DK', { style: 'currency', currency }).format(minor / (10 ** new Intl.NumberFormat('en', {style:'currency',currency}).resolvedOptions().maximumFractionDigits!));
-
-async function fingerprint(source: PayoutSource) {
-  const controlled = { reportVersion: 2, id: source.id, issuedAt: source.issuedAt, status: source.status, transactionType: source.transactionType, provider: source.provider, net: source.net, summary: source.summary, transactions: source.transactions };
-  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(controlled)));
-  return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
-}
 
 export async function buildPayoutReport(source: PayoutSource, issuer:string, logoBytes?: ArrayBuffer) {
   if (source.provider !== 'shopify_payments' || source.status !== 'PAID' || source.transactionType !== 'DEPOSIT') throw new Error('Kun gennemførte Shopify Payments-udbetalinger kan danne en rapport.');

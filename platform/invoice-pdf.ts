@@ -80,7 +80,6 @@ export async function buildInvoicePdf(order: InvoiceSource, issuer:InvoiceIssuer
   const paid = !!credit || order.displayFinancialStatus === 'PAID';
   chunks.forEach((pageRows, pageIndex) => {
     const page = pdf.addPage([595.28, 841.89]);
-    const { width } = page.getSize();
     if(!classic)page.drawLine({ start: { x: 54, y: 806 }, end: { x: 541, y: 806 }, thickness: 2, color: gold });
     if (logo) { const scale = Math.min(142 / logo.width, 44 / logo.height); page.drawImage(logo, { x: 54, y: 742, width: logo.width * scale, height: logo.height * scale }); }
     if(!logo){const title=wrap(issuer.name,285,14);if(title.length>2)throw new InvoiceCheckError('Virksomhedsnavnet er for langt.');title.forEach((t,i)=>page.drawText(t,{x:54,y:779-i*17,size:14,font:bold,color:ink}));

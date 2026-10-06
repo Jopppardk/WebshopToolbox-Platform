@@ -2,6 +2,7 @@
 // booked, the store shown on its invoices, and its invoice and credit-note mail texts. Its company details, design,
 // logo and sender are the same settings as Danmark's, per market (invoices.ts, mail.ts). The market itself
 // (countries, currency, language, storefront) is always read live from Shopify Markets.
+import { asText } from './tier1/src/lib/format';
 import { requireCompany, requireWebshop } from './auth';
 import { jsonBody } from './invitations';
 import { shopMarkets, type FeedMarket } from './feed-source';
@@ -43,7 +44,7 @@ export async function handleMarkets(request: Request, env: PlatformEnv, actor: A
   if (request.method !== 'PUT') throw new HttpError(405, 'Brug Gem.');
   if (actor.support) throw new HttpError(403, 'Afslut supportadgang før markedsopsætning.');
   const b = await jsonBody(request, 16000);
-  const id = String(b.marketId || '');
+  const id = asText(b.marketId || '');
   if (!/^gid:\/\/shopify\/Market\/\d{1,30}$/.test(id)) throw new HttpError(400, 'Vælg et marked.');
   if (typeof b.enabled !== 'boolean' || b.vatMode !== 'domestic') throw new HttpError(400, 'Vælg momsbehandling for markedet.');
   const input = { storeName: text(b.storeName, 80, 'webshopnavnet på fakturaen'), subject: text(b.invoiceSubject, 200, 'fakturamailens emne'), body: text(b.invoiceBody, 4000, 'fakturamailens tekst'),

@@ -1,3 +1,4 @@
+import { asText } from './tier1/src/lib/format';
 export type InventoryRow = {
   inventoryItemId: string;
   locationId: string;
@@ -21,8 +22,8 @@ export function validateStocktakeChanges(value: unknown) {
   const seen = new Set<string>();
   return value.map((raw) => {
     const item = raw as Record<string, unknown>;
-    const inventoryItemId = String(item.inventoryItemId || '');
-    const locationId = String(item.locationId || '');
+    const inventoryItemId = asText(item.inventoryItemId || '');
+    const locationId = asText(item.locationId || '');
     const quantity = Number(item.quantity);
     const compareQuantity = Number(item.compareQuantity);
     if (
