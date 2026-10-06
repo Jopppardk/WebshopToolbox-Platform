@@ -1,7 +1,7 @@
 import {invoiceDesign,type InvoiceDesign} from './invoice-design';
 import { invoiceDisplayLines } from './invoice-line-order';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import { invoiceTotals } from '../lib/invoice-totals';
+import { invoiceTotals } from './invoice-totals';
 import { checkInvoice, InvoiceCheckError, type InvoiceSource } from './order-check';
 
 

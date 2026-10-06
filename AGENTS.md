@@ -12,7 +12,7 @@ Læs docs/platform/PROJECT.md og docs/platform/HANDOVER.md ved nye platformopgav
 - Medtag ikke lokale ændringer fra stoppede eller urelaterede opgaver i en udgivelse.
 
 - Origin skal være Jopppardk/WebshopToolbox-Platform. Push aldrig platformændringer til Jopppardk/WebshopToolbox.
-- Brug kun scripts/platform.mjs eller scripts/platform-production.mjs til deployment. wrangler.direct.jsonc og gamle Sablen-deployvejledninger er kun historisk reference; de må ikke deployes fra dette repository.
+- Brug kun scripts/platform.mjs eller scripts/platform-production.mjs til deployment. Den gamle Sablen-app og wrangler.direct.jsonc er fjernet; genskab dem ikke, og deploy aldrig Sablen fra dette repository.
 - Push deployer ikke. GitHub-udgivelse kræver manuel workflow_dispatch til valgt miljø.
 - Codex Cloud: læs docs/platform/CODEX-CLOUD-DEPLOY.md. Brug scripts/platform-release.mjs til at starte GitHub-workflowet; Cloud skal ikke have Cloudflare-tokens. En prod-bestilling udgiver og efterkontrollerer først dev fra samme godkendte main-SHA. En bestilt kørsel er ikke bevis for gennemført deployment.
 

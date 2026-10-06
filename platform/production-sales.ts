@@ -1,9 +1,9 @@
 import {checkInvoice,invoiceFingerprint} from './order-check';
-import {shipmentDate} from '../lib/invoice-check';
+import {shipmentDate} from './invoice-check';
 import {shopAccess,loadCompleteOrder} from './invoice-source';
 import {readDineroAccounts} from './dinero-read';
 import {salesDraft} from './sales-preview';
-import {voucherFor} from '../lib/dinero-sale';
+import {voucherFor} from './dinero-sale';
 import {handleProductionBooking,type BookingContext} from './production-booking';
 import {bookingDate} from './production-policy';
 import {foreignHold,isForeignOrder,orderMarketSettings} from './order-markets';

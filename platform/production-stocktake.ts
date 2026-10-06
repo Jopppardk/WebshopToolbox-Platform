@@ -5,7 +5,7 @@ import {unseal} from './connections';
 import {readDineroAccounts,readDineroAccountBalance} from './dinero-read';
 import {dineroClient,DineroHttpError} from './dinero-write';
 import {financePeriods} from './finance-calculations';
-import {verifyVoucher} from '../lib/dinero-sale';
+import {verifyVoucher} from './dinero-sale';
 import {productionWrites,bookingDate} from './production-policy';
 import {readReceipt,saveReceipt,uncertainReceipt,type Receipt,type ReceiptKey} from './production-receipts';
 import {HttpError,reply,type Actor,type PlatformEnv} from './types';

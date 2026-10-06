@@ -1,4 +1,4 @@
-import { TransferError, normalizeRemote } from '../lib/dinero-sale';
+import { TransferError, normalizeRemote } from './dinero-sale';
 
 export class DineroHttpError extends TransferError {
   constructor(public readonly status:number, public readonly detail=''){super(`Dinero svarede HTTP ${status}. Kontrollér bilagsstatus før et nyt forsøg.`);}

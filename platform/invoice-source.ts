@@ -2,7 +2,7 @@ import { InvoiceCheckError } from './order-check';
 import { unseal } from './connections';
 import { HttpError, type PlatformEnv } from './types';
 
-import type { InvoiceSource, Connection } from '../lib/invoice-check';
+import type { InvoiceSource, Connection } from './invoice-check';
 // Presentment amounts are what the customer paid in their own currency (e.g. SEK); invoices for other markets use them.
 const money = '{ shopMoney { amount currencyCode } presentmentMoney { amount currencyCode } }';
 const taxes = `taxLines { rate channelLiable priceSet ${money} } discountAllocations { allocatedAmountSet ${money} }`;

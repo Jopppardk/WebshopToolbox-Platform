@@ -1,4 +1,4 @@
-import type { CheckedInvoice } from '../lib/invoice-check';
+import type { CheckedInvoice } from './invoice-check';
 type Accounts = Record<string,string>;
 export type PreviewAccount = { number: string; name: string; vatCode: string; kind: 'entry' | 'deposit'; hidden: boolean };
 export type SalesDraft = { ready: boolean; blockers: string[]; lines: { title: string; account: string | null; vatCode: string | null; net: number; tax: number; gross: number }[]; clearing: string | null; debit: number; credit: number; inventory?: { account: string; adjustmentAccount: string; cost: number } };

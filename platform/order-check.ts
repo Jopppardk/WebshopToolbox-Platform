@@ -1,6 +1,6 @@
-import {checkInvoice as originalCheck,InvoiceCheckError,units,type InvoiceSource,type MoneyBag} from '../lib/invoice-check';
-export {InvoiceCheckError,invoiceFingerprint} from '../lib/invoice-check';
-export type {InvoiceSource} from '../lib/invoice-check';
+import {checkInvoice as originalCheck,InvoiceCheckError,units,type InvoiceSource,type MoneyBag} from './invoice-check';
+export {InvoiceCheckError,invoiceFingerprint} from './invoice-check';
+export type {InvoiceSource} from './invoice-check';
 
 /** An order refunded (not edited) after purchase as it was sold: the invoice is for the original order and each
  * refund gets its own credit note. Shopify keeps the original amounts in totalPriceSet/subtotalPriceSet. */
