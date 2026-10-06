@@ -1,3 +1,4 @@
+import {connectedIntegrations,selectedIntegrations} from './tier1-connections';
 import { normalizeSyncInterval } from './tier1/src/lib/sync-schedule';
 import { handleProductionSale } from './production-sales';
 import { handleProductionOther } from './production-proposals';
@@ -90,7 +91,9 @@ export async function handleTier1Data(request:Request,env:PlatformEnv,actor:Acto
   const statusFor=await bookingStatuses(env,company,shop,sourceRows.map((r:any)=>String(r.external_id)));
   const activity=(module:string)=>{const selected=sourceRows.filter(r=>(module==='orders'?r.module==='orders':r.module!=='orders')&&day(r.occurred_at)===today);let synced=0,failed=0;for(const r of selected){const status=statusFor(r.provider,r.module,r.external_id,r.occurred_at,r.payload_json);if(['booked','draft'].includes(status))synced++;else if(['failed_retry','failed_manual','uncertain','held','booked_changed'].includes(status))failed++;}return {total:selected.length,synced,failed,pending:selected.length-synced-failed};};
   const providers=[{key:'shopify',name:'Shopify',connected:!!connections?.verified_at,checkedAt:connections?.verified_at||null,health:'unknown'},{key:'dinero',name:'Dinero',connected:!!accounting,checkedAt:accounting?.verified_at||null,health:'unknown'}];
-  return reply({inactive:providers.filter(p=>!p.connected).length,connected:providers.filter(p=>p.connected).length,providers,failed:count('failed'),succeeded:count('success'),skipped:0,running:count('running'),successRate:list.length?100*count('success')/list.length:null,checkedAt:new Date().toISOString(),activity:{today,orders:activity('orders'),payouts:activity('payouts'),updated:Object.fromEntries(['sales','refunds','packaging'].map(k=>[k,snapshots.find(r=>r.module===(k==='sales'?'orders':k))?.updated||null]))}});
+  // Same count as the Integrationer page: connected, and chosen but not yet connected.
+  const [selected,linked]=await Promise.all([selectedIntegrations(db,company),connectedIntegrations(db,company,shop)]),linkedSet=new Set(linked.map(i=>i.provider));
+  return reply({inactive:[...new Set(selected)].filter(p=>!linkedSet.has(p)).length,connected:linkedSet.size,providers,failed:count('failed'),succeeded:count('success'),skipped:0,running:count('running'),successRate:list.length?100*count('success')/list.length:null,checkedAt:new Date().toISOString(),activity:{today,orders:activity('orders'),payouts:activity('payouts'),updated:Object.fromEntries(['sales','refunds','packaging'].map(k=>[k,snapshots.find(r=>r.module===(k==='sales'?'orders':k))?.updated||null]))}});
  }
  if(path==='/shopify/packaging'){
   if(shop==='none')throw new HttpError(409,'Forbind webshoppen først.');
