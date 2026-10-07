@@ -19,7 +19,7 @@ Den prioriterede rækkefølge efter analysen 6. oktober 2026. Den tidligere udvi
    - Opbevaringsregel for `production_attempts` og `operation_snapshots`.
    - En øvelse i at gendanne data.
    - Backup af R2.
-8. **Test.** En browsertest af Tier 0 (virksomheder, support-login, driftsoverblik) og af printeropsætningen til Shipmondo.
+8. **Test.** ~~Browsertest af Tier 0~~ udført 7. oktober 2026. Mangler: printeropsætningen til Shipmondo.
 
 ## Før lancering
 

@@ -1,4 +1,4 @@
-// Portal smoke test: runs the customer portal in Chromium against a local server with fixture data.
+// Browser smoke tests: the customer portal (smoke.spec.mjs) and Tier 0 (tier0.spec.mjs) against a local server with fixture data.
 import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: 'tests/portal',
