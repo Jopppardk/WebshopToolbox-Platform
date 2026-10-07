@@ -1,3 +1,4 @@
+import { collapseRepeat } from './run-cleanup';
 import { dataCutoff } from './tier1-history';
 import { payoutSummaryFields } from './payout-calculations';
 import { checkInvoice } from './order-check';
@@ -346,6 +347,8 @@ export async function handleOperations(
         )
         .bind(nodes.length, warning || '', run),
     ]);
+    // A quiet repeat of the previous run is merged into it; never fails the run itself.
+    await collapseRepeat(db, run).catch(() => false);
     const maxUpdatedAt =
       module === 'orders'
         ? (nodes

@@ -1229,6 +1229,18 @@ async function operationsPanel(revision, target) {
   );
   target.replaceChildren(box);
 }
+// A run row can stand for several quiet runs in a row (collapseRepeat in run-cleanup.ts).
+function runDetails(r) {
+  const parts = [];
+  if (r.repeats > 1)
+    parts.push(
+      r.repeats +
+        ' kørsler uden ændringer siden ' +
+        danishTime(r.first_started_at),
+    );
+  if (r.message) parts.push(r.message);
+  return parts.join(' · ') || '—';
+}
 async function insightsView(
   companyId = '',
   shopId = '',
@@ -1331,7 +1343,7 @@ async function insightsView(
       r.started_at,
       r.finished_at || '—',
       r.count ?? '—',
-      r.message || '—',
+      runDetails(r),
     ]),
   );
   const nav = actions();

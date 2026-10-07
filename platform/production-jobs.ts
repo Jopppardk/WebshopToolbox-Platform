@@ -1,5 +1,6 @@
 import { recordFailure } from './record-history';
 import { logUnexpected } from './error-log';
+import { collapseRepeat } from './run-cleanup';
 import { normalizeSyncInterval } from './tier1/src/lib/sync-schedule';
 import { syncPackaging } from './packaging-source';
 import { handleOperations } from './operations';
@@ -163,7 +164,10 @@ async function runShop(
         )
         .bind(message.slice(0, 600), runId)
         .run();
+      return;
     }
+    // A quiet repeat of the previous run is merged into it; this never fails the run itself.
+    await collapseRepeat(db, runId).catch(() => false);
   };
   const cursor = async (job: string) => {
     const row = await db

@@ -21,7 +21,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 1. Branch fra en frisk main, og opret en lille PR.
 2. CI skal være grøn: tests, begge typechecks, `npm run lint` (lint og formatering må kun blive bedre), Tier 1-build og portalens browsertest.
 3. Squash-merge.
-4. Er der en migration, køres den først med workflowet *Vedligehold: D1-migrering* (dev, derefter prod). Seneste migration er `0045_ops_monitor.sql`.
+4. Er der en migration, køres den først med workflowet *Vedligehold: D1-migrering* (dev, derefter prod). Seneste migration er `0046_operation_run_repeats.sql`.
 5. Udgiv: `node scripts/platform-release.mjs dev --sha <sha>`, derefter `prod`. Udgivelsen genbruger den grønne testkørsel for samme commit.
 6. Skriv en note i CHANGELOG.md.
 

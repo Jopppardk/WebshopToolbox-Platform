@@ -1,3 +1,4 @@
+import { collapseRepeat } from './run-cleanup';
 import { requireCompany, requireWebshop } from './auth';
 import { seal, unseal } from './connections';
 import { jsonBody } from './invitations';
@@ -644,6 +645,8 @@ export async function handlePayments(
         )
         .bind(rows.length, run),
     ]);
+    // A quiet repeat of the previous run is merged into it; never fails the run itself.
+    await collapseRepeat(db, run).catch(() => false);
     return reply({ count: rows.length, next, externalWrites: 'blocked' });
   } catch (error) {
     await db
