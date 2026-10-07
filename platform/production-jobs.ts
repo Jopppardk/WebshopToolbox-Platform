@@ -1,4 +1,5 @@
 import { recordFailure } from './record-history';
+import { logUnexpected } from './error-log';
 import { normalizeSyncInterval } from './tier1/src/lib/sync-schedule';
 import { syncPackaging } from './packaging-source';
 import { handleOperations } from './operations';
@@ -23,10 +24,11 @@ import { dataStartDate, historyPolicy, providerStart } from './tier1-history';
 import { InvoiceCheckError } from './order-check';
 import { HttpError, type Actor, type PlatformEnv } from './types';
 // The reason shown in the bell: our own explanations (also the invoice check's), never raw internal errors.
-const reason = (error: unknown) =>
+// Unexpected errors are logged, and their ID is shown with the reason so the run can be found in Workers Logs.
+const reason = (error: unknown, context: Record<string, string>) =>
   error instanceof HttpError || error instanceof InvoiceCheckError
     ? error.message
-    : 'Integrationen kunne ikke behandles. Kontrollér forbindelse og postens detaljer.';
+    : `Integrationen kunne ikke behandles. Kontrollér forbindelse og postens detaljer. Fejl-ID: ${logUnexpected(context, error)}`;
 const request = (body: unknown) =>
   new Request('https://portal.webshoptoolbox.dk/internal-job', {
     method: 'POST',
@@ -154,7 +156,7 @@ async function runShop(
         .bind(runId)
         .run();
     } catch (error) {
-      const message = reason(error);
+      const message = reason(error, { job: name, company, webshop: id });
       await db
         .prepare(
           "UPDATE operation_runs SET status='failed',message=?,finished_at=CURRENT_TIMESTAMP WHERE id=?",
@@ -717,7 +719,17 @@ async function runShop(
               .first<{ failures: number }>();
             recorded = true;
             if ((attempt?.failures ?? 1) === 1)
-              throw new HttpError(409, item + ': ' + reason(error));
+              throw new HttpError(
+                409,
+                item +
+                  ': ' +
+                  reason(error, {
+                    job,
+                    company,
+                    webshop: id,
+                    post: externalId,
+                  }),
+              );
           } finally {
             // Failed sources get a bounded cooldown instead of starving later orders.
             if (!recorded)
