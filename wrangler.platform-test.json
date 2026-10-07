@@ -43,6 +43,9 @@
   "triggers": {
     "crons": []
   },
+  "observability": {
+    "enabled": true
+  },
   "send_email": [
     {
       "name": "PLATFORM_INVITATIONS",

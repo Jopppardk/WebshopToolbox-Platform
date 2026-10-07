@@ -42,6 +42,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 - Daglig driftsmail kl. 7.
 - Tier 0 → Indsigt → Driftsoverblik.
 - `GET /healthz/scheduler` svarer 200 eller 503.
+- Uventede fejl vises med et fejl-ID ("Fejl-ID: 7f3a1c2e") og logges i Workers Logs: Cloudflare → Workers → platform-Worker → Observability, søg på ID'et.
 - Backup og gendannelse: [BACKUP.md](BACKUP.md).
 
 ## Åbne punkter

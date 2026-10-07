@@ -4,6 +4,7 @@ import { runProductionJobs } from './production-jobs';
 import { demoMessage, isDemoCompany, isDemoUser } from './demo';
 import { resetDemoIfDue } from './demo-reset';
 import { cleanupRuns } from './run-cleanup';
+import { logUnexpected } from './error-log';
 import {
   checkOperations,
   handleOperationsOverview,
@@ -497,8 +498,19 @@ export default {
             409,
           ),
         );
+      // Anything else is unexpected: logged with an ID the user can quote to support.
+      const errorId = logUnexpected(
+        { method: request.method, path: new URL(request.url).pathname },
+        error,
+      );
       return secure(
-        reply({ error: 'Handlingen kunne ikke gennemføres.' }, 500),
+        reply(
+          {
+            error: `Handlingen kunne ikke gennemføres. Fejl-ID: ${errorId}`,
+            errorId,
+          },
+          500,
+        ),
       );
     }
   },
@@ -521,8 +533,8 @@ export default {
         await markTick(env, 'start');
         const [jobs] = await Promise.all([
           runProductionJobs(env),
-          refreshPublicTracking(env).catch(() =>
-            console.error('Tracking kunne ikke opdateres'),
+          refreshPublicTracking(env).catch((error) =>
+            console.error('Tracking kunne ikke opdateres', error),
           ),
         ]);
         await markTick(env, 'ok');
