@@ -21,6 +21,10 @@ export function flatpaySettlementNumbers(value: unknown): string[] | null {
 // One Dinero voucher for one Flatpay bank payout. A payout can cover several settlements (paid out together,
 // e.g. on Monday for the weekend): each is checked on its own exactly as a single one, and their sums must
 // make exactly the bank payout.
+// A settlement may hold refunds paid back through Flatpay. Whatever sign Flatpay uses for refundAmount, the
+// settlement must satisfy omsætning − tilbagebetaling − gebyr = udbetaling, and the derived totals must fit one of
+// the two readings (with or without the refund). The refund is booked as a negative line between the Flatpay and
+// clearing accounts, the counterpart of the order refund's booking, as for Shopify Payments payouts.
 export function flatpayDraft(
   payment: Record<string, unknown>,
   settlementOrList: Record<string, unknown> | Record<string, unknown>[],
@@ -74,6 +78,7 @@ export function flatpayDraft(
       `udbetalingen lister afregning ${String(payment.settlements)}, men ${settlements.length} afregning(er) blev fundet.`,
     );
   let gross = 0,
+    refunds = 0,
     fees = 0,
     payout = 0;
   for (const settlement of settlements) {
@@ -82,31 +87,38 @@ export function flatpayDraft(
       fail(`${name} er i ${String(settlement.currency)}, ikke DKK.`);
     const sGross = money(settlement.grossPurchase, name + ': omsætning'),
       sFees = money(settlement.feeAmount, name + ': gebyr'),
-      sNet = money(settlement.payout, name + ': udbetaling');
+      sNet = money(settlement.payout, name + ': udbetaling'),
+      sRefund = Math.abs(
+        money(settlement.refundAmount, name + ': tilbagebetalinger'),
+      );
     if (sGross <= 0 || sFees < 0 || sNet <= 0)
       fail(
         `${name} har omsætning ${kr(sGross)}, gebyr ${kr(sFees)} og udbetaling ${kr(sNet)}; kun positive afregninger kan bogføres automatisk.`,
       );
-    if (sGross - sFees !== sNet)
+    if (sGross - sRefund - sFees !== sNet)
       fail(
-        `${name}: omsætning ${kr(sGross)} minus gebyr ${kr(sFees)} giver ikke udbetalingen ${kr(sNet)} (forskel ${kr(sGross - sFees - sNet)}).`,
+        `${name}: omsætning ${kr(sGross)} minus tilbagebetalinger ${kr(sRefund)} og gebyr ${kr(sFees)} giver ikke udbetalingen ${kr(sNet)} (forskel ${kr(sGross - sRefund - sFees - sNet)}).`,
       );
+    // Without refunds each total has one value; with them, Flatpay may count the refund in or not.
     for (const [field, label, expected] of [
-      ['grossSettlement', 'brutto afregnet', sGross],
-      ['netPurchase', 'netto køb', sGross],
-      ['netSettlement', 'netto afregnet', sNet],
-      ['deduction', 'fradrag', sFees],
+      ['grossSettlement', 'brutto afregnet', [sGross, sGross - sRefund]],
+      ['netPurchase', 'netto køb', [sGross, sGross - sRefund]],
+      ['netSettlement', 'netto afregnet', [sNet]],
+      ['deduction', 'fradrag', [sFees, sFees + sRefund]],
     ] as const) {
       const value = money(settlement[field], `${name}: ${label}`);
-      if (value !== expected)
-        fail(`${name}: ${label} er ${kr(value)}, forventet ${kr(expected)}.`);
+      if (!expected.includes(value))
+        fail(
+          `${name}: ${label} er ${kr(value)}, forventet ${[...new Set(expected)].map(kr).join(' eller ')}.`,
+        );
     }
     gross += sGross;
+    refunds += sRefund;
     fees += sFees;
     payout += sNet;
   }
   const net = money(payment.payoutAmount, 'Udbetalingens beløb');
-  if (net <= 0 || payout !== net || gross - fees !== net)
+  if (net <= 0 || payout !== net || gross - refunds - fees !== net)
     fail(`afregningerne giver ${kr(payout)}, men banken modtog ${kr(net)}.`);
   const totals = new Set([
     'grossPurchase',
@@ -118,7 +130,6 @@ export function flatpayDraft(
     'deduction',
   ]);
   const adjustments: Record<string, string> = {
-    refundAmount: 'tilbagebetalinger',
     chargeback: 'chargebacks',
     rollingReserve: 'reserve',
     rollingRelease: 'frigivet reserve',
@@ -133,6 +144,7 @@ export function flatpayDraft(
       if (
         typeof v === 'number' &&
         !totals.has(k) &&
+        k !== 'refundAmount' &&
         !(k in adjustments) &&
         v !== 0
       )
@@ -156,6 +168,12 @@ export function flatpayDraft(
     {
       label: 'Afregnede betalinger',
       amount: gross,
+      account: accounts.flatpay,
+      balancing: accounts.clearing,
+    },
+    {
+      label: 'Tilbagebetalinger',
+      amount: -refunds,
       account: accounts.flatpay,
       balancing: accounts.clearing,
     },
@@ -186,6 +204,7 @@ export function flatpayDraft(
   };
   return {
     gross,
+    refunds,
     fees,
     net,
     voucher,
