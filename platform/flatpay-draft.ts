@@ -29,19 +29,25 @@ export function flatpayDraft(
   const settlements = Array.isArray(settlementOrList)
     ? settlementOrList
     : [settlementOrList];
-  const fail = (): never => {
+  // Every check says what does not add up, so the customer (and support) can see it directly.
+  const fail = (reason: string): never => {
     throw new TransferError(
-      'Flatpay-afregningen indeholder beløb eller reguleringer, som kræver særskilt kontrol.',
+      'Flatpay-afregningen kræver særskilt kontrol: ' + reason,
     );
   };
-  const money = (v: unknown) => {
+  const kr = (cents: number) =>
+    new Intl.NumberFormat('da-DK', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(cents / 100) + ' kr.';
+  const money = (v: unknown, what: string) => {
     if (
       typeof v !== 'number' ||
       !Number.isFinite(v) ||
       !Number.isSafeInteger(Math.round(v * 100)) ||
       Math.abs(v * 100 - Math.round(v * 100)) > 0.00001
     )
-      return fail();
+      return fail(`${what} mangler eller er ikke et beløb i hele øre.`);
     return Math.round(v * 100);
   };
   if (
@@ -52,7 +58,9 @@ export function flatpayDraft(
     payment.paidDate.slice(0, 10) > new Date().toISOString().slice(0, 10) ||
     payment.currency !== 'DKK'
   )
-    fail();
+    fail(
+      'udbetalingen mangler ID eller dato, ligger i fremtiden eller er ikke i DKK.',
+    );
   // The payout lists exactly these settlements, each once.
   const listed = flatpaySettlementNumbers(payment.settlements);
   if (
@@ -62,32 +70,44 @@ export function flatpayDraft(
       settlements.length ||
     settlements.some((x) => !listed.includes(String(x.settlementNumber)))
   )
-    fail();
+    fail(
+      `udbetalingen lister afregning ${String(payment.settlements)}, men ${settlements.length} afregning(er) blev fundet.`,
+    );
   let gross = 0,
     fees = 0,
     payout = 0;
   for (const settlement of settlements) {
-    const sGross = money(settlement.grossPurchase),
-      sFees = money(settlement.feeAmount),
-      sNet = money(settlement.payout);
-    if (
-      settlement.currency !== 'DKK' ||
-      sGross <= 0 ||
-      sFees < 0 ||
-      sNet <= 0 ||
-      sGross - sFees !== sNet ||
-      money(settlement.grossSettlement) !== sGross ||
-      money(settlement.netPurchase) !== sGross ||
-      money(settlement.netSettlement) !== sNet ||
-      money(settlement.deduction) !== sFees
-    )
-      fail();
+    const name = 'Afregning ' + String(settlement.settlementNumber);
+    if (settlement.currency !== 'DKK')
+      fail(`${name} er i ${String(settlement.currency)}, ikke DKK.`);
+    const sGross = money(settlement.grossPurchase, name + ': omsætning'),
+      sFees = money(settlement.feeAmount, name + ': gebyr'),
+      sNet = money(settlement.payout, name + ': udbetaling');
+    if (sGross <= 0 || sFees < 0 || sNet <= 0)
+      fail(
+        `${name} har omsætning ${kr(sGross)}, gebyr ${kr(sFees)} og udbetaling ${kr(sNet)}; kun positive afregninger kan bogføres automatisk.`,
+      );
+    if (sGross - sFees !== sNet)
+      fail(
+        `${name}: omsætning ${kr(sGross)} minus gebyr ${kr(sFees)} giver ikke udbetalingen ${kr(sNet)} (forskel ${kr(sGross - sFees - sNet)}).`,
+      );
+    for (const [field, label, expected] of [
+      ['grossSettlement', 'brutto afregnet', sGross],
+      ['netPurchase', 'netto køb', sGross],
+      ['netSettlement', 'netto afregnet', sNet],
+      ['deduction', 'fradrag', sFees],
+    ] as const) {
+      const value = money(settlement[field], `${name}: ${label}`);
+      if (value !== expected)
+        fail(`${name}: ${label} er ${kr(value)}, forventet ${kr(expected)}.`);
+    }
     gross += sGross;
     fees += sFees;
     payout += sNet;
   }
-  const net = money(payment.payoutAmount);
-  if (net <= 0 || payout !== net || gross - fees !== net) fail();
+  const net = money(payment.payoutAmount, 'Udbetalingens beløb');
+  if (net <= 0 || payout !== net || gross - fees !== net)
+    fail(`afregningerne giver ${kr(payout)}, men banken modtog ${kr(net)}.`);
   const totals = new Set([
     'grossPurchase',
     'grossSettlement',
@@ -97,22 +117,35 @@ export function flatpayDraft(
     'feeAmount',
     'deduction',
   ]);
+  const adjustments: Record<string, string> = {
+    refundAmount: 'tilbagebetalinger',
+    chargeback: 'chargebacks',
+    rollingReserve: 'reserve',
+    rollingRelease: 'frigivet reserve',
+    addedSum: 'tillæg',
+    deductedSum: 'fradrag',
+    balanceTransfer: 'saldooverførsel',
+    reversals: 'tilbageførsler',
+  };
   for (const settlement of settlements) {
+    const name = 'Afregning ' + String(settlement.settlementNumber);
     for (const [k, v] of Object.entries(settlement))
-      if (typeof v === 'number' && !totals.has(k) && v !== 0) fail();
-    for (const k of [
-      'refundAmount',
-      'chargeback',
-      'rollingReserve',
-      'rollingRelease',
-      'addedSum',
-      'deductedSum',
-      'balanceTransfer',
-      'reversals',
-    ])
-      if (money(settlement[k]) !== 0) fail();
+      if (
+        typeof v === 'number' &&
+        !totals.has(k) &&
+        !(k in adjustments) &&
+        v !== 0
+      )
+        fail(`${name} har et ukendt beløbsfelt (${k}: ${v}).`);
+    for (const [k, label] of Object.entries(adjustments)) {
+      const value = money(settlement[k], `${name}: ${label}`);
+      if (value !== 0)
+        fail(
+          `${name} indeholder ${label} på ${kr(value)} Den skal bogføres manuelt i Dinero.`,
+        );
+    }
     if (settlement.preArbitration != null && settlement.preArbitration !== '0')
-      fail();
+      fail(`${name} har en igangværende indsigelse (pre-arbitration).`);
   }
   if (
     Object.values(accounts).some((n) => !Number.isSafeInteger(n) || n <= 0) ||
