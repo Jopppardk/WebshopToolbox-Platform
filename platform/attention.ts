@@ -8,6 +8,9 @@
 // Each item says which page to open; at most `limit` items per kind, with the full count.
 import { marketHold } from './order-markets';
 import { saleBookedSql } from './order-refunds';
+import { requireCompany } from './auth';
+import { productionWrites } from './production-policy';
+import { jsonBody } from './invitations';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 
 export type AttentionKind = 'failed' | 'uncertain' | 'market' | 'waiting';
@@ -19,6 +22,8 @@ export type AttentionView =
   | 'settings';
 export type AttentionItem = {
   kind: AttentionKind;
+  /** For failed posts: the automatic job, so "Prøv igen nu" can queue it. */
+  job?: string;
   title: string;
   detail: string;
   view: AttentionView;
@@ -168,6 +173,7 @@ export async function attention(
       const where = place(provider, module);
       return {
         kind: 'failed' as const,
+        job: r.job,
         title: name(r, where.noun === 'Salg' ? 'Ordre' : where.noun),
         detail: `${r.reason || 'Behandlingen fejlede.'} ${r.failures > 1 ? `Forsøgt ${r.failures} gange; prøves igen automatisk.` : 'Prøves igen automatisk.'}`,
         view: where.view,
@@ -225,6 +231,79 @@ export async function attention(
   };
 }
 
+// "Prøv igen nu" on failed posts: the post's wait is cleared and the webshop is put first for the next automatic
+// run (every 5 minutes), which processes it with exactly its own checks and the customer's automation settings
+// (book or draft). Nothing is booked here. Company administrators only; support cannot (GET only).
+const automationFor: Record<string, (a: Record<string, unknown>) => boolean> = {
+  sales: (a) => !!a.sales,
+  order_refunds: (a) => !!a.refunds,
+  payouts: (a) => !!a.payouts,
+  flatpay: (a) => !!a.payouts,
+  invoice: (a) => !!a.invoiceEmails,
+  credit: (a) => !!a.invoiceEmails,
+};
+const retryItem = (i: unknown): i is { job: string; externalId: string } => {
+  const r = i && typeof i === 'object' ? (i as Record<string, unknown>) : null;
+  return (
+    !!r &&
+    typeof r.job === 'string' &&
+    Object.hasOwn(automationFor, r.job) &&
+    typeof r.externalId === 'string' &&
+    r.externalId.length > 0 &&
+    r.externalId.length <= 200
+  );
+};
+export async function retryAttention(
+  env: PlatformEnv,
+  company: string,
+  shop: string,
+  items: unknown,
+) {
+  if (
+    !Array.isArray(items) ||
+    !items.length ||
+    items.length > 50 ||
+    items.some((i) => !retryItem(i))
+  )
+    throw new HttpError(400, 'Vælg de poster, der skal prøves igen.');
+  if (!productionWrites(env))
+    throw new HttpError(409, 'Automatiske kørsler er slået fra i dette miljø.');
+  const db = env.PLATFORM_DB;
+  const saved = await db
+    .prepare(
+      'SELECT preferences_json FROM tier1_preferences WHERE company_id=? AND webshop_id=?',
+    )
+    .bind(company, shop)
+    .first<{ preferences_json: string }>();
+  const automation =
+    (saved ? JSON.parse(saved.preferences_json).automation : null) || {};
+  const list = items as { job: string; externalId: string }[];
+  const off = list.find((i) => !automationFor[i.job](automation));
+  if (off)
+    throw new HttpError(
+      409,
+      'Den automatiske behandling af denne type poster er slået fra under Indstillinger.',
+    );
+  const results = await db.batch([
+    ...list.map((i) =>
+      db
+        .prepare(
+          'UPDATE production_attempts SET next_attempt_at=0 WHERE company_id=? AND webshop_id=? AND job=? AND external_id=? AND failures>0',
+        )
+        .bind(company, shop, i.job, i.externalId),
+    ),
+    db
+      .prepare(
+        "UPDATE production_jobs SET next_run_at=0 WHERE company_id=? AND webshop_id=? AND job='runtime'",
+      )
+      .bind(company, shop),
+  ]);
+  const queued = results
+    .slice(0, list.length)
+    .reduce((n, r) => n + (r.meta.changes ?? 0), 0);
+  return { queued, withinMinutes: 5 };
+}
+
 export async function handleAttention(
   request: Request,
   env: PlatformEnv,
@@ -232,6 +311,12 @@ export async function handleAttention(
   company: string,
   shop: string,
 ) {
+  if (request.method === 'POST') {
+    await requireCompany(env.PLATFORM_DB, _actor, company, true);
+    if (shop === 'none') throw new HttpError(409, 'Forbind din webshop først.');
+    const b = await jsonBody(request, 20000);
+    return reply(await retryAttention(env, company, shop, b.items));
+  }
   if (request.method !== 'GET') throw new HttpError(405, 'Brug Hent.');
   if (shop === 'none')
     return reply({

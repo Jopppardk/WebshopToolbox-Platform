@@ -8,7 +8,7 @@ Den prioriterede rækkefølge efter analysen 6. oktober 2026. Den tidligere udvi
 2. ~~**Kodekvalitet.**~~ Udført 6. oktober 2026: ingen "[object Object]", lint 467 → 275, al kode formateret (se CHANGELOG).
 3. ~~**"Kræver handling".**~~ Udført 7. oktober 2026 (se CHANGELOG).
 4. **Eksport til revisor (CSV)** fra Salg, Tilbagebetalinger og Udbetalinger.
-5. **"Prøv igen" på flere poster ad gangen.**
+5. ~~**"Prøv igen" på flere poster ad gangen.**~~ Udført 7. oktober 2026 i Kræver handling (se CHANGELOG).
 6. **Afstemning af mellemregningskontoen** mod Dinero.
 7. **Drift.**
    - Databasens størrelse i den daglige driftsmail.
