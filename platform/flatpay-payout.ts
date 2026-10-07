@@ -16,6 +16,28 @@ export async function readFlatpayPayout(
   id: string,
   settlementNumbers: unknown,
 ) {
+  // flatpayRead and checkFlatpayReport report with plain errors whose texts are our own; they are shown as they
+  // are (409) rather than as an unexpected error with only an error ID.
+  try {
+    return await readPayout(env, company, shop, id, settlementNumbers);
+  } catch (error) {
+    if (
+      error instanceof HttpError ||
+      !(error instanceof Error) ||
+      !error.message
+    )
+      throw error;
+    throw new HttpError(409, 'Flatpay: ' + error.message);
+  }
+}
+
+async function readPayout(
+  env: PlatformEnv,
+  company: string,
+  shop: string,
+  id: string,
+  settlementNumbers: unknown,
+) {
   const fail = (message: string): never => {
     throw new HttpError(409, message);
   };
