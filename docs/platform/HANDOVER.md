@@ -34,7 +34,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 - `platform/tier1/src`: kundeportalen (React).
 - `platform/public/admin.js`: Tier 0.
 - `platform/migrations`: databaseskemaet.
-- Tests: `lib/platform-*.test.mjs`, der deler `lib/platform-harness.mjs`. Browsertest i `tests/portal`.
+- Tests: `lib/platform-*.test.mjs`, der deler `lib/platform-harness.mjs`. Browsertest af kundeportalen og Tier 0 i `tests/portal` (`npm run test:portal`).
 
 ## Drift
 
