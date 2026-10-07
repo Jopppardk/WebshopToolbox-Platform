@@ -2,6 +2,8 @@
 
 Nyeste først. Skriv en ny note øverst for hver udgivet ændring: dato, hvem (Codex/Claude), hvad, filer/endpoints, migrering og hvad der ikke er verificeret. Indtil 6. oktober 2026 hed filen HANDOVER.md; noterne og de historiske afsnit nedenfor er flyttet hertil uændret. Aktuel status står i [HANDOVER.md](HANDOVER.md).
 
+> 7. oktober 2026 – Flatpay-afregninger med tilbagebetalinger (Claude): en afregning med refusion (fx 5,24 kr. solgt, 3,29 kr. refunderet, 0,11 kr. gebyr, 1,84 kr. udbetalt) blev afvist. `flatpayDraft` kræver nu omsætning − |refundAmount| − gebyr = udbetaling (uanset Flatpays fortegn), og de afledte totaler skal passe med én af de to læsninger (med eller uden refusion). Refusionen bogføres som en negativ linje Flatpay ← mellemregning ("Tilbagebetalinger"), modposten til ordrerefusionens bogføring, som ved Shopify Payments. Chargebacks, reserver mv. kræver fortsat manuel bogføring.
+
 > 7. oktober 2026 – Flatpay-bilagets kontrol siger præcis hvad (Claude): "Flatpay-afregningen indeholder beløb eller reguleringer, som kræver særskilt kontrol" er erstattet af en præcis årsag med afregningsnummer, felt og beløb, fx "Afregning 56789 indeholder tilbagebetalinger på 125,50 kr. Den skal bogføres manuelt i Dinero." Kontrollerne er uændrede (`platform/flatpay-draft.ts`).
 
 > 7. oktober 2026 – Flatpay-fejl vises med årsag (Claude): fund fra Flatpay-læsningen, udbetalingskontrollen (`checkFlatpayReport`) og bilagskontrollen (`flatpayDraft`) var almindelige fejl og blev til "Handlingen kunne ikke gennemføres. Fejl-ID" ved Bogfør manuelt og i den automatiske kørsel. De vises nu som 409 med deres egen tekst ("Flatpay: …"), også i posthistorikken og Kræver handling. Teksterne er vores egne, aldrig rå Flatpay-svar.
