@@ -14,6 +14,32 @@ export type LabelState = {
   message: string | null;
 } | null;
 
+// Shipmondo marks the order as sent in Shopify shortly after the label is made. The order is fetched again 5, 10
+// and 20 seconds later, so Salg shows it as sent without waiting for the next automatic run. The timers live
+// outside the component, so they keep going while the order list reloads.
+const refreshDelays = [5000, 10000, 20000];
+const refreshing = new Set<string>();
+function refreshOrderAfterLabel(externalId: string, onDone: () => void) {
+  if (refreshing.has(externalId)) return;
+  refreshing.add(externalId);
+  refreshDelays.forEach((delay, index) =>
+    setTimeout(() => {
+      void fetch('/api/shopify/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: externalId }),
+      })
+        .then((response) => {
+          if (response.ok) onDone();
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (index === refreshDelays.length - 1) refreshing.delete(externalId);
+        });
+    }, delay),
+  );
+}
+
 export function LabelPrint({
   externalId,
   orderName,
@@ -58,6 +84,7 @@ export function LabelPrint({
         text: `${d.reprint ? 'Udskrevet igen' : 'Label udskrevet'} på ${d.printer}`,
       });
       onDone();
+      if (!d.reprint) refreshOrderAfterLabel(externalId, onDone);
     } catch (e) {
       setResult({
         ok: false,

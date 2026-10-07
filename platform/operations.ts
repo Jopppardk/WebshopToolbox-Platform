@@ -161,7 +161,20 @@ export async function handleOperations(
     throw new HttpError(403, 'Afslut impersonering før import.');
   const b = await jsonBody(request),
     after = b.after ?? null,
-    since = b.since ?? null;
+    since = b.since ?? null,
+    // One order only, e.g. right after its label was printed, so it shows as sent without waiting for the next run.
+    orderNumber =
+      b.orderId === undefined
+        ? null
+        : typeof b.orderId === 'string'
+          ? /^gid:\/\/shopify\/Order\/(\d{1,20})$/.exec(b.orderId)?.[1]
+          : undefined;
+  if (
+    orderNumber === undefined ||
+    (orderNumber !== null &&
+      (module !== 'orders' || after !== null || since !== null))
+  )
+    throw new HttpError(400, 'Ugyldig ordre.');
   if (
     after !== null &&
     (typeof after !== 'string' || !after || after.length > 2048)
@@ -218,7 +231,8 @@ export async function handleOperations(
           : {
               query:
                 module === 'orders'
-                  ? (since ? `updated_at:>='${since}' ` : '') +
+                  ? (orderNumber ? `id:${orderNumber} ` : '') +
+                    (since ? `updated_at:>='${since}' ` : '') +
                     'created_at:>=' +
                     from
                   : module === 'payments'
