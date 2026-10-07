@@ -6,7 +6,7 @@ import { tier1Fetch as fetch } from '@/platform/transport';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { BookingStatus } from '@/components/booking-status';
-import { Input } from '@/components/ui/input';
+import { RefreshButton } from '@/components/refresh-button';
 import { ManualBookingAction } from '@/components/manual-booking-action';
 import { PayoutLog } from '@/components/payout-log';
 import type { UnifiedPayout } from '@/lib/unified-payouts';
@@ -24,10 +24,7 @@ export function UnifiedPayouts({
     [loading, setLoading] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
-    [notice, setNotice] = useState(''),
-    [provider, setProvider] = useState('shopify'),
-    [from, setFrom] = useState(''),
-    [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+    [notice, setNotice] = useState('');
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -61,69 +58,89 @@ export function UnifiedPayouts({
       });
     return () => controller.abort();
   }, [offset, revision, syncRevision]);
+  // "Opdatér": payouts from every connected provider (Shopify Payments, Flatpay, ViaBill, Pensopay), for ViaBill
+  // and Pensopay the last 30 days, which covers payouts still on their way; older ones are fetched by the automatic
+  // run. A provider that fails does not stop the others; their errors are shown together.
+  async function syncProvider(provider: string) {
+    const to = new Date().toISOString().slice(0, 10),
+      from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    let next: unknown = null;
+    const seen = new Set<string>();
+    for (let page = 0; page < 200; page++) {
+      const endpoint =
+        provider === 'shopify'
+          ? '/api/shopify/payouts'
+          : provider === 'viabill'
+            ? '/api/viabill/records'
+            : provider === 'pensopay'
+              ? '/api/pensopay/records'
+              : '/api/flatpay/sync';
+      const body =
+        provider === 'shopify'
+          ? { after: next }
+          : provider === 'viabill'
+            ? { kind: 'payout', from, to, next }
+            : provider === 'pensopay'
+              ? { kind: 'settlements', from, to, next }
+              : { next };
+      const r = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const d = (await r.json()) as {
+        error?: string;
+        reportWarnings?: string[];
+        hasNextPage?: boolean;
+        endCursor?: string;
+        next?: unknown;
+      };
+      if (!r.ok) throw Error(d.error || 'Hentningen fejlede.');
+      next =
+        provider === 'shopify' ? (d.hasNextPage ? d.endCursor : null) : d.next;
+      if (provider === 'shopify' && d.hasNextPage && !next)
+        throw Error('Hentningen mangler en fortsættelse.');
+      if (!next) return d.reportWarnings ?? [];
+      const key = JSON.stringify(next);
+      if (seen.has(key) || page === 199)
+        throw Error('Hentningen er ikke afsluttet. Prøv igen.');
+      seen.add(key);
+    }
+    return [];
+  }
   async function sync() {
     setBusy(true);
     setError('');
-    setNotice('Henter…');
-    let next: unknown = null;
-    const seen = new Set<string>();
+    setNotice('');
+    const names: Record<string, string> = {
+      shopify: 'Shopify Payments',
+      flatpay: 'Flatpay',
+      viabill: 'ViaBill',
+      pensopay: 'Pensopay',
+    };
+    const failures: string[] = [],
+      warnings: string[] = [];
     try {
-      for (let page = 0; page < 200; page++) {
-        const endpoint =
-          provider === 'shopify'
-            ? '/api/shopify/payouts'
-            : provider === 'viabill'
-              ? '/api/viabill/records'
-              : provider === 'pensopay'
-                ? '/api/pensopay/records'
-                : '/api/flatpay/sync';
-        const body =
-          provider === 'shopify'
-            ? { after: next }
-            : provider === 'viabill'
-              ? { kind: 'payout', from, to, next }
-              : provider === 'pensopay'
-                ? { kind: 'settlements', from, to, next }
-                : { next };
-        const r = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        const d = (await r.json()) as {
-          error?: string;
-          message?: string;
-          reportWarnings?: string[];
-          hasNextPage?: boolean;
-          endCursor?: string;
-          next?: unknown;
-        };
-        if (!r.ok) throw Error(d.error || 'Hentningen fejlede.');
-        next =
-          provider === 'shopify'
-            ? d.hasNextPage
-              ? d.endCursor
-              : null
-            : d.next;
-        if (provider === 'shopify' && d.hasNextPage && !next)
-          throw Error('Hentningen mangler en fortsættelse.');
-        if (!next) {
-          setNotice(
-            (d.message || 'Udbetalingerne er hentet.') +
-              (d.reportWarnings?.length
-                ? ' ' + d.reportWarnings.join(' ')
-                : ''),
+      const connected = (
+        (await (
+          await fetch('/api/integrations', { cache: 'no-store' })
+        ).json()) as { integrations?: Array<{ provider: string }> }
+      ).integrations?.map((i) => i.provider) ?? ['shopify'];
+      for (const provider of Object.keys(names).filter((p) =>
+        connected.includes(p),
+      )) {
+        try {
+          warnings.push(...(await syncProvider(provider)));
+        } catch (e) {
+          failures.push(
+            names[provider] +
+              ': ' +
+              (e instanceof Error ? e.message : 'Hentningen fejlede.'),
           );
-          break;
         }
-        const key = JSON.stringify(next);
-        if (seen.has(key) || page === 199)
-          throw Error('Hentningen er ikke afsluttet. Prøv igen.');
-        seen.add(key);
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Hentningen fejlede.');
-      setNotice('Eventuelle allerede hentede poster vises i oversigten.');
+      if (warnings.length) setNotice(warnings.join(' '));
+      if (failures.length) throw Error(failures.join(' · '));
     } finally {
       setBusy(false);
       setOffset(0);
@@ -138,60 +155,9 @@ export function UnifiedPayouts({
       <p className="mt-2 text-sm text-muted-foreground">
         Alle udbydere samlet · nyeste først · perioden følger fælles historik.
       </p>
-      <fieldset disabled={busy} className="my-5 flex flex-wrap items-end gap-3">
-        <label className="text-sm">
-          Hent fra
-          <select
-            className="mt-1 block h-10 rounded-lg border px-3"
-            value={provider}
-            onChange={(e) => setProvider(e.target.value)}
-          >
-            <option value="shopify">Shopify Payments</option>
-            <option value="viabill">ViaBill</option>
-            <option value="flatpay">Flatpay</option>
-            <option value="pensopay">Pensopay</option>
-          </select>
-        </label>
-        {(provider === 'viabill' || provider === 'pensopay') && (
-          <>
-            <label className="text-sm">
-              Fra
-              <Input
-                type="date"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-              />
-            </label>
-            <label className="text-sm">
-              Til
-              <Input
-                type="date"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-              />
-            </label>
-          </>
-        )}
-        <Button
-          disabled={
-            busy ||
-            ((provider === 'viabill' || provider === 'pensopay') &&
-              (!from || !to))
-          }
-          onClick={() => void sync()}
-        >
-          {busy ? 'Henter…' : 'Hent udbetalinger'}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => {
-            setError('');
-            setRevision((v) => v + 1);
-          }}
-        >
-          Opdatér oversigt
-        </Button>
-      </fieldset>
+      <div className="my-5 flex justify-end">
+        <RefreshButton onRefresh={sync} disabled={busy} />
+      </div>
       <p className="mb-4 text-xs text-muted-foreground">
         Udbetalinger hentes automatisk ved hver synkronisering fra
         integrationens startdato og fælles historik. Kommende udbetalinger

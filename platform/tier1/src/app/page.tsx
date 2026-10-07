@@ -21,7 +21,6 @@ import {
   type IntegrationGatedView,
 } from '@/lib/integration-visibility';
 import { useSyncStatus } from '@/components/sync-status';
-import { processedSummary } from '@/lib/order-processing';
 import { countryName } from '@/components/country-flag';
 import {
   Sheet,
@@ -44,12 +43,12 @@ import {
   Menu,
   PackageCheck,
   Warehouse,
-  RefreshCw,
   RotateCcw,
   Search,
   Settings2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/refresh-button';
 import { Input } from '@/components/ui/input';
 import {
   NativeSelect,
@@ -176,12 +175,6 @@ export default function Home() {
     | 'shipments'
     | 'settings'
   >('dashboard');
-  useEffect(() => {
-    if (sessionStorage.getItem('toolbox-refresh-sales') === '1') {
-      sessionStorage.removeItem('toolbox-refresh-sales');
-      setView('orders');
-    }
-  }, []);
   const [integrationTarget, setIntegrationTarget] = useState<
     'shopify' | 'dinero' | 'emballage' | null
   >(null);
@@ -293,13 +286,13 @@ export default function Home() {
     orderPageSize,
     orderCountry,
   ]);
+  // "Opdatér" on Salg and Fakturaer: new and changed orders from Shopify, then the list again. Fulfilled orders
+  // are invoiced, mailed and booked by the automatic run as before, never by this button.
   const syncOrders = async () => {
     setSyncingOrders(true);
     try {
       let after: string | null = null;
       let synced = 0;
-      let invoices = 0;
-      let warnings = 0;
       let historyWarning = '';
       const seen = new Set<string>();
       do {
@@ -309,65 +302,31 @@ export default function Home() {
           body: JSON.stringify({ after }),
         });
         const data: {
-          orders: OrderView[];
           synced: number;
-          invoicesCreated: number;
-          invoiceWarnings?: string[];
           warning?: string;
           hasNextPage: boolean;
           endCursor: string | null;
           error?: string;
         } = await response.json();
-        if (!response.ok) throw new Error(data.error);
+        if (!response.ok)
+          throw new Error(data.error || 'Shopify-ordrer kunne ikke hentes.');
         synced += data.synced;
-        invoices += data.invoicesCreated || 0;
         if (data.warning) historyWarning = data.warning;
-        warnings += data.invoiceWarnings?.length || 0;
         after = data.hasNextPage ? data.endCursor : null;
         if (data.hasNextPage && (!after || seen.has(after) || seen.size >= 200))
           throw new Error(
             'Hentningen blev stoppet ved en ugyldig fortsættelse. Allerede hentede ordrer er bevaret.',
           );
         if (after) seen.add(after);
-        notify(
-          `${synced} Shopify-ordrer hentet · ${invoices} PDF-fakturaer${warnings ? ` · ${warnings} fakturaer kræver kontrol under Indstillinger` : ''}${after ? ' · henter flere…' : ''}${historyWarning ? ` · ${historyWarning}` : ''}`,
-        );
       } while (after);
-      // Afsendte ordrer faktureres, sendes og bogføres med det samme, hvis automatikken er slået til.
-      notify(`${synced} Shopify-ordrer hentet · behandler afsendte ordrer…`);
-      const fetched = `${synced} Shopify-ordrer hentet${historyWarning ? ` · ${historyWarning}` : ''}`;
-      try {
-        const response = await fetch('/api/shopify/orders/process', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: '{}',
-        });
-        const result: {
-          status: string;
-          invoices?: number;
-          sent?: number;
-          booked?: number;
-          drafts?: number;
-          failed?: number;
-          error?: string;
-        } = await response.json();
-        if (!response.ok) throw new Error(result.error);
-        notify(`${fetched} · ${processedSummary(result)}`);
-      } catch (error) {
-        notify(
-          `${fetched} · ${error instanceof Error && error.message ? error.message : 'Afsendte ordrer kunne ikke behandles nu. De behandles ved næste automatiske kørsel.'}`,
-        );
-      }
-    } catch (error) {
       notify(
-        error instanceof Error
-          ? error.message
-          : 'Shopify-ordrer kunne ikke synkroniseres',
+        `${synced} Shopify-ordrer hentet${historyWarning ? ` · ${historyWarning}` : ''}`,
       );
     } finally {
       setSyncingOrders(false);
       setOrderOffset(0);
       setOrderRevision((value) => value + 1);
+      void syncState.refresh();
     }
   };
   const notify = (message: string) => {
@@ -858,30 +817,7 @@ export default function Home() {
                     Følg salg, realisering og bogføring ét sted.
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-10 rounded-xl px-4"
-                    onClick={() => {
-                      sessionStorage.setItem('toolbox-refresh-sales', '1');
-                      window.location.reload();
-                    }}
-                  >
-                    Opdater side
-                  </Button>
-                  <Button
-                    className="h-10 rounded-xl px-4 shadow-sm"
-                    onClick={syncOrders}
-                    disabled={syncingOrders}
-                  >
-                    <RefreshCw
-                      data-icon="inline-start"
-                      className={syncingOrders ? 'animate-spin' : ''}
-                    />
-                    {syncingOrders ? 'Synkroniserer…' : 'Synkronisér nu'}
-                  </Button>
-                </div>
+                <RefreshButton onRefresh={syncOrders} />
               </div>
               <div className="mb-6 grid gap-3 sm:grid-cols-3">
                 <Stat
@@ -1022,7 +958,6 @@ export default function Home() {
                 )
               }
               onSync={syncOrders}
-              syncing={syncingOrders}
             />
           )}
           {view === 'documents' && integrationAvailable('documents') && (

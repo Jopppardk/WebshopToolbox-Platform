@@ -13,11 +13,11 @@ import {
   ChevronRight,
   Pencil,
   Plus,
-  RefreshCw,
   Save,
   Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/refresh-button';
 import { Input } from '@/components/ui/input';
 import type {
   PackagingPeriod,
@@ -174,14 +174,7 @@ export function Packaging({
             </p>
           )}
         </div>
-        <Button
-          variant="outline"
-          onClick={() => void synchronize()}
-          disabled={syncing}
-        >
-          <RefreshCw className={syncing ? 'animate-spin' : ''} />
-          {syncing ? 'Synkroniserer…' : 'Synkronisér nu'}
-        </Button>
+        <RefreshButton onRefresh={synchronize} disabled={syncing} />
       </div>
       {error && (
         <p role="alert" className="mb-4 rounded-xl bg-red-50 p-4 text-red-800">

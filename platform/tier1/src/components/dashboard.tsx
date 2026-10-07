@@ -8,7 +8,6 @@ import {
   ArrowRight,
   BarChart3,
   Boxes,
-  RefreshCw,
   Wallet,
   Package,
   Activity,
@@ -19,6 +18,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/refresh-button';
 import { AttentionList, type AttentionView } from '@/components/attention-list';
 import { danishDate } from '@/lib/history-policy';
 import {
@@ -294,14 +294,10 @@ function ConnectedDashboard({
             Din økonomi og drift, samlet ét sted.
           </p>
         </div>
-        <Button
-          variant="outline"
+        <RefreshButton
+          onRefresh={() => setRevision((v) => v + 1)}
           disabled={loading}
-          onClick={() => setRevision((v) => v + 1)}
-        >
-          <RefreshCw className={loading ? 'animate-spin' : ''} />
-          {loading ? 'Opdaterer…' : 'Opdatér'}
-        </Button>
+        />
       </header>
       <AttentionList onOpen={onOpen} revision={revision} />
       <section

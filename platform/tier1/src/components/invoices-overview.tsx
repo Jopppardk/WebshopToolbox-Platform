@@ -5,6 +5,7 @@ import { useCapabilities } from '@/platform/capabilities';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
 import { useEffect, useState } from 'react';
 import { Check, FileText, Mail, RefreshCw, Search } from 'lucide-react';
+import { RefreshButton } from '@/components/refresh-button';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -21,14 +22,12 @@ export function Invoices({
   orders,
   onGenerated,
   onSync,
-  syncing,
   pagination,
 }: {
   pagination: React.ReactNode;
   orders: OrderView[];
   onGenerated: (count: number) => void;
   onSync: () => Promise<void>;
-  syncing: boolean;
 }) {
   const capabilities = useCapabilities();
   const [statuses, setStatuses] = useState<Record<string, string>>({});
@@ -182,19 +181,11 @@ export function Invoices({
           <h1 className="page-title">Fakturaer</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Fakturaer oprettes først, når hele ordren er markeret som afsendt i
-            Shopify. Opdateringen sker ved hentning fra Shopify.
+            Shopify. Opdatér henter nye og ændrede ordrer fra Shopify.
           </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            className="h-10 rounded-xl px-4"
-            onClick={onSync}
-            disabled={syncing}
-          >
-            <RefreshCw className={syncing ? 'animate-spin' : ''} />
-            {syncing ? 'Henter…' : 'Hent fra Shopify'}
-          </Button>
+          <RefreshButton onRefresh={onSync} />
           <Button
             className="h-10 rounded-xl px-4"
             onClick={generateAll}
@@ -369,7 +360,7 @@ export function Invoices({
       {!orders.length && (
         <div className="mt-4 rounded-xl border border-dashed bg-white p-8 text-center text-sm text-muted-foreground">
           Ingen Shopify-ordrer er hentet endnu. Forbind Shopify under
-          Indstillinger, og vælg derefter “Hent fra Shopify”.
+          Indstillinger, og vælg derefter “Opdatér”.
         </div>
       )}
     </div>
