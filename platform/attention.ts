@@ -22,8 +22,8 @@ export type AttentionView =
   | 'settings';
 export type AttentionItem = {
   kind: AttentionKind;
-  /** For failed posts: the automatic job, so "Prøv igen nu" can queue it. */
-  job?: string;
+  /** The automatic job the post belongs to (uncertain: provider.module), for "Prøv igen nu" and "Afvis". */
+  job: string;
   title: string;
   detail: string;
   view: AttentionView;
@@ -185,6 +185,7 @@ export async function attention(
       const where = place(r.provider, r.module);
       return {
         kind: 'uncertain' as const,
+        job: r.provider + '.' + r.module,
         title: name(r, where.noun === 'Salg' ? 'Ordre' : where.noun),
         detail:
           r.phase === 'held'
@@ -200,6 +201,7 @@ export async function attention(
       .filter((r) => held(r.country, r.currency, r.shop_currency))
       .map((r) => ({
         kind: 'market' as const,
+        job: 'sales',
         title: `Ordre ${r.name || short(r.external_id)}`,
         detail: `Venter på opsætning af markedet for ${r.country || 'ukendt land'}${r.currency ? ` (${r.currency})` : ''} under Indstillinger → Faktura-afsendelse.`,
         view: 'settings' as const,
@@ -210,6 +212,7 @@ export async function attention(
       .filter(() => wantsRefunds)
       .map((r) => ({
         kind: 'waiting' as const,
+        job: 'order_refunds',
         title: `Tilbagebetaling på ordre ${r.order_name || short(r.external_id)}`,
         detail:
           'Venter på, at salget er bogført i Dinero. Den bogføres automatisk bagefter.',
@@ -218,17 +221,150 @@ export async function attention(
         at: r.occurred_at,
       })),
   ];
+  const dismissed = new Set(
+    (
+      await db
+        .prepare(
+          'SELECT kind,job,external_id FROM attention_dismissals WHERE company_id=? AND webshop_id=?',
+        )
+        .bind(company, shop)
+        .all<{ kind: string; job: string; external_id: string }>()
+    ).results.map((d) => key(d.kind, d.job, d.external_id)),
+  );
+  const shown = items.filter(
+    (i) => !dismissed.has(key(i.kind, i.job, i.externalId)),
+  );
   const kinds: AttentionKind[] = ['failed', 'uncertain', 'market', 'waiting'];
   const counts = Object.fromEntries(
-    kinds.map((k) => [k, items.filter((i) => i.kind === k).length]),
+    kinds.map((k) => [k, shown.filter((i) => i.kind === k).length]),
   ) as Record<AttentionKind, number>;
   return {
-    total: items.length,
+    total: shown.length,
     counts,
+    dismissed: dismissed.size,
     items: kinds.flatMap((k) =>
-      items.filter((i) => i.kind === k).slice(0, limit),
+      shown.filter((i) => i.kind === k).slice(0, limit),
     ),
   };
+}
+const key = (kind: string, job: string, id: string) =>
+  kind + '|' + job + '|' + id;
+
+// "Afvis": the customer has checked the post and wants it off the list. Besides hiding it, its automatic attempts
+// stop (next attempt set to never), so it cannot be booked later, e.g. after it was handled directly in Dinero;
+// "Bogfør manuelt" still works. "Fortryd" removes the dismissal and queues the post again. Only posts on the list
+// can be dismissed, and an uncertain post is never retried automatically anyway.
+const never = 32503680000000; // year 3000
+const blockedJobs = (item: { kind: string; job: string }) =>
+  item.kind === 'failed'
+    ? [item.job]
+    : item.kind === 'market'
+      ? ['sales', 'invoice']
+      : item.kind === 'waiting'
+        ? ['order_refunds']
+        : [];
+type Picked = { kind: string; job: string; externalId: string };
+const picked = (items: unknown): Picked[] => {
+  if (!Array.isArray(items) || !items.length || items.length > 50)
+    throw new HttpError(400, 'Vælg de poster, det gælder.');
+  return items.map((i) => {
+    const r = i && typeof i === 'object' ? (i as Record<string, unknown>) : {};
+    if (
+      typeof r.kind !== 'string' ||
+      typeof r.job !== 'string' ||
+      r.job.length > 60 ||
+      typeof r.externalId !== 'string' ||
+      !r.externalId ||
+      r.externalId.length > 200
+    )
+      throw new HttpError(400, 'Vælg de poster, det gælder.');
+    return { kind: r.kind, job: r.job, externalId: r.externalId };
+  });
+};
+export async function dismissAttention(
+  env: PlatformEnv,
+  actor: Actor,
+  company: string,
+  shop: string,
+  items: unknown,
+) {
+  const list = picked(items),
+    db = env.PLATFORM_DB;
+  const current = await attention(env, company, shop, Number.MAX_SAFE_INTEGER);
+  const found = list.map((p) =>
+    current.items.find(
+      (i) =>
+        i.kind === p.kind && i.job === p.job && i.externalId === p.externalId,
+    ),
+  );
+  if (found.some((i) => !i))
+    throw new HttpError(
+      409,
+      'Posten er ikke længere på listen. Opdatér siden.',
+    );
+  const now = Date.now();
+  await db.batch(
+    (found as AttentionItem[]).flatMap((i) => [
+      db
+        .prepare(
+          'INSERT OR IGNORE INTO attention_dismissals(company_id,webshop_id,kind,job,external_id,title,dismissed_by) VALUES(?,?,?,?,?,?,?)',
+        )
+        .bind(company, shop, i.kind, i.job, i.externalId, i.title, actor.id),
+      ...blockedJobs(i).map((job) =>
+        db
+          .prepare(
+            'INSERT INTO production_attempts(company_id,webshop_id,job,external_id,attempted_at,next_attempt_at,failures) VALUES(?,?,?,?,?,?,0) ON CONFLICT(company_id,webshop_id,job,external_id) DO UPDATE SET next_attempt_at=excluded.next_attempt_at',
+          )
+          .bind(company, shop, job, i.externalId, now, never),
+      ),
+    ]),
+  );
+  return { dismissed: found.length };
+}
+export async function restoreAttention(
+  env: PlatformEnv,
+  company: string,
+  shop: string,
+  items: unknown,
+) {
+  const list = picked(items),
+    db = env.PLATFORM_DB;
+  // One delete per post, then the queueing of its blocked jobs; the deletes count the restored posts.
+  const statements = list.map((i) => [
+    db
+      .prepare(
+        'DELETE FROM attention_dismissals WHERE company_id=? AND webshop_id=? AND kind=? AND job=? AND external_id=?',
+      )
+      .bind(company, shop, i.kind, i.job, i.externalId),
+    ...blockedJobs(i).map((job) =>
+      db
+        .prepare(
+          'UPDATE production_attempts SET next_attempt_at=0 WHERE company_id=? AND webshop_id=? AND job=? AND external_id=? AND next_attempt_at=?',
+        )
+        .bind(company, shop, job, i.externalId, never),
+    ),
+  ]);
+  const results = await db.batch(statements.flat());
+  let at = 0,
+    restored = 0;
+  for (const group of statements) {
+    restored += results[at].meta.changes ? 1 : 0;
+    at += group.length;
+  }
+  return { restored };
+}
+export async function dismissedAttention(
+  env: PlatformEnv,
+  company: string,
+  shop: string,
+) {
+  return (
+    await env.PLATFORM_DB.prepare(
+      'SELECT d.kind,d.job,d.external_id externalId,d.title,d.dismissed_at dismissedAt,COALESCE(u.full_name,u.email) dismissedBy FROM attention_dismissals d LEFT JOIN users u ON u.id=d.dismissed_by WHERE d.company_id=? AND d.webshop_id=? ORDER BY d.dismissed_at DESC LIMIT 100',
+    )
+      .bind(company, shop)
+      .all()
+  ).results;
 }
 
 // "Prøv igen nu" on failed posts: the post's wait is cleared and the webshop is put first for the next automatic
@@ -288,7 +424,8 @@ export async function retryAttention(
     ...list.map((i) =>
       db
         .prepare(
-          'UPDATE production_attempts SET next_attempt_at=0 WHERE company_id=? AND webshop_id=? AND job=? AND external_id=? AND failures>0',
+          // A dismissed post is only queued again by Fortryd.
+          'UPDATE production_attempts SET next_attempt_at=0 WHERE company_id=? AND webshop_id=? AND job=? AND external_id=? AND failures>0 AND NOT EXISTS(SELECT 1 FROM attention_dismissals d WHERE d.company_id=production_attempts.company_id AND d.webshop_id=production_attempts.webshop_id AND d.job=production_attempts.job AND d.external_id=production_attempts.external_id)',
         )
         .bind(company, shop, i.job, i.externalId),
     ),
@@ -315,7 +452,13 @@ export async function handleAttention(
     await requireCompany(env.PLATFORM_DB, _actor, company, true);
     if (shop === 'none') throw new HttpError(409, 'Forbind din webshop først.');
     const b = await jsonBody(request, 20000);
-    return reply(await retryAttention(env, company, shop, b.items));
+    if (b.action === 'dismiss')
+      return reply(await dismissAttention(env, _actor, company, shop, b.items));
+    if (b.action === 'restore')
+      return reply(await restoreAttention(env, company, shop, b.items));
+    if (b.action === 'retry')
+      return reply(await retryAttention(env, company, shop, b.items));
+    throw new HttpError(400, 'Ukendt handling.');
   }
   if (request.method !== 'GET') throw new HttpError(405, 'Brug Hent.');
   if (shop === 'none')
@@ -324,5 +467,7 @@ export async function handleAttention(
       counts: { failed: 0, uncertain: 0, market: 0, waiting: 0 },
       items: [],
     });
+  if (new URL(request.url).searchParams.get('dismissed') === '1')
+    return reply({ dismissed: await dismissedAttention(env, company, shop) });
   return reply(await attention(env, company, shop));
 }

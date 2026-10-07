@@ -64,6 +64,14 @@ test('every page of the portal renders', async ({ page }) => {
   await expect(
     attention.getByRole('button', { name: 'Prøv igen nu' }),
   ).toBeVisible();
+  // "Afvis" takes it off the list after a confirmation; "Vis afviste" → "Fortryd" puts it back.
+  await attention.getByRole('button', { name: 'Afvis', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Afvis' }).click();
+  await expect(attention).toContainText('Intet kræver din handling lige nu.');
+  await attention.getByRole('button', { name: 'Vis afviste (1)' }).click();
+  await expect(attention).toContainText('Afvist');
+  await attention.getByRole('button', { name: 'Fortryd' }).click();
+  await expect(attention).toContainText('Fejlede poster · 1');
   await attention.getByRole('button', { name: /Ordre #2701/ }).click();
   await expect(page.locator('main')).toContainText('#2683');
   expect(
