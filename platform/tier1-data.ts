@@ -125,18 +125,24 @@ export async function handleTier1Data(
       job_key: r.module,
       job_name: r.module,
       status: r.status === 'success' ? 'succeeded' : r.status,
+      // A row can stand for several quiet runs in a row (collapseRepeat in run-cleanup.ts).
+      repeats: r.repeats ?? 1,
       duration_ms: r.finished_at
         ? Date.parse(r.finished_at) - Date.parse(r.started_at)
         : null,
     }));
     const status = url.searchParams.get('status'),
       filtered = status ? list.filter((r) => r.status === status) : list,
+      runsWith = (wanted?: string) =>
+        list
+          .filter((r) => !wanted || r.status === wanted)
+          .reduce((n, r) => n + r.repeats, 0),
       p = Math.max(1, pageNumber(url.searchParams.get('page'), 1));
     return reply({
       summary: {
-        total: list.length,
-        succeeded: list.filter((r) => r.status === 'succeeded').length,
-        failed: list.filter((r) => r.status === 'failed').length,
+        total: runsWith(),
+        succeeded: runsWith('succeeded'),
+        failed: runsWith('failed'),
         skipped: 0,
         running: list.filter((r) => r.status === 'running').length,
       },
@@ -318,13 +324,17 @@ export async function handleTier1Data(
     const list = (
         await db
           .prepare(
-            "SELECT status FROM operation_runs WHERE company_id=? AND webshop_id=? AND started_at>datetime('now','-1 day')",
+            "SELECT status,repeats FROM operation_runs WHERE company_id=? AND webshop_id=? AND started_at>datetime('now','-1 day')",
           )
           .bind(company, shop)
-          .all<{ status: string }>()
+          .all<{ status: string; repeats: number }>()
       ).results,
+      // Quiet runs in a row are one row with a repeat count (collapseRepeat in run-cleanup.ts).
       count = (status: string) =>
-        list.filter((r) => r.status === status).length;
+        list
+          .filter((r) => r.status === status)
+          .reduce((n, r) => n + (r.repeats ?? 1), 0),
+      allRuns = list.reduce((n, r) => n + (r.repeats ?? 1), 0);
     const connections = await db
       .prepare(
         'SELECT verified_at FROM webshop_connections WHERE company_id=? AND webshop_id=?',
@@ -446,7 +456,7 @@ export async function handleTier1Data(
       succeeded: count('success'),
       skipped: 0,
       running: count('running'),
-      successRate: list.length ? (100 * count('success')) / list.length : null,
+      successRate: allRuns ? (100 * count('success')) / allRuns : null,
       checkedAt: new Date().toISOString(),
       activity: {
         today,
