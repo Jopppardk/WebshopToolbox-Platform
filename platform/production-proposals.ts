@@ -425,7 +425,7 @@ async function flatpay(ctx: BookingContext): Promise<PreparedBooking> {
   const {
     connection,
     payment: p,
-    settlement,
+    settlements,
     source,
   } = await readFlatpayPayout(env, company, shop, id, saved.settlements);
   const date = await bookingDate(
@@ -445,7 +445,7 @@ async function flatpay(ctx: BookingContext): Promise<PreparedBooking> {
       flatpay: num(a.flatpayClearing),
     };
   await chartFor(ctx, Object.values(accounts));
-  const proposal = flatpayDraft(p, settlement, accounts);
+  const proposal = flatpayDraft(p, settlements, accounts);
   proposal.voucher.VoucherDate = date;
   proposal.voucher.ExternalReference = `wtb:${shop}:flatpay:${id}`;
   const companyRow = await env.PLATFORM_DB.prepare(

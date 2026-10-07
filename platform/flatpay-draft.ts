@@ -1,9 +1,34 @@
 import { TransferError, type Voucher } from './dinero-sale';
+/** The settlement numbers a Flatpay payment lists ("123", "123,124", "123 124"); null when not a clean list. */
+export function flatpaySettlementNumbers(value: unknown): string[] | null {
+  const text =
+    typeof value === 'number' && Number.isSafeInteger(value)
+      ? String(value)
+      : typeof value === 'string'
+        ? value
+        : '';
+  const ids = text.split(/[,;\s]+/).filter(Boolean);
+  if (
+    !ids.length ||
+    ids.length > 30 ||
+    ids.some((id) => !/^\d{1,30}$/.test(id)) ||
+    new Set(ids).size !== ids.length
+  )
+    return null;
+  return ids;
+}
+
+// One Dinero voucher for one Flatpay bank payout. A payout can cover several settlements (paid out together,
+// e.g. on Monday for the weekend): each is checked on its own exactly as a single one, and their sums must
+// make exactly the bank payout.
 export function flatpayDraft(
   payment: Record<string, unknown>,
-  settlement: Record<string, unknown>,
+  settlementOrList: Record<string, unknown> | Record<string, unknown>[],
   accounts: { bank: number; fees: number; clearing: number; flatpay: number },
 ) {
+  const settlements = Array.isArray(settlementOrList)
+    ? settlementOrList
+    : [settlementOrList];
   const fail = (): never => {
     throw new TransferError(
       'Flatpay-afregningen indeholder beløb eller reguleringer, som kræver særskilt kontrol.',
@@ -25,26 +50,44 @@ export function flatpayDraft(
     typeof payment.paidDate !== 'string' ||
     !Number.isFinite(Date.parse(payment.paidDate)) ||
     payment.paidDate.slice(0, 10) > new Date().toISOString().slice(0, 10) ||
-    payment.currency !== 'DKK' ||
-    settlement.currency !== 'DKK' ||
-    settlement.settlementNumber !== payment.settlements
+    payment.currency !== 'DKK'
   )
     fail();
-  const gross = money(settlement.grossPurchase),
-    fees = money(settlement.feeAmount),
-    net = money(payment.payoutAmount);
+  // The payout lists exactly these settlements, each once.
+  const listed = flatpaySettlementNumbers(payment.settlements);
   if (
-    gross <= 0 ||
-    fees < 0 ||
-    net <= 0 ||
-    gross - fees !== net ||
-    money(settlement.grossSettlement) !== gross ||
-    money(settlement.netPurchase) !== gross ||
-    money(settlement.netSettlement) !== net ||
-    money(settlement.payout) !== net ||
-    money(settlement.deduction) !== fees
+    !listed ||
+    listed.length !== settlements.length ||
+    new Set(settlements.map((x) => x.settlementNumber)).size !==
+      settlements.length ||
+    settlements.some((x) => !listed.includes(String(x.settlementNumber)))
   )
     fail();
+  let gross = 0,
+    fees = 0,
+    payout = 0;
+  for (const settlement of settlements) {
+    const sGross = money(settlement.grossPurchase),
+      sFees = money(settlement.feeAmount),
+      sNet = money(settlement.payout);
+    if (
+      settlement.currency !== 'DKK' ||
+      sGross <= 0 ||
+      sFees < 0 ||
+      sNet <= 0 ||
+      sGross - sFees !== sNet ||
+      money(settlement.grossSettlement) !== sGross ||
+      money(settlement.netPurchase) !== sGross ||
+      money(settlement.netSettlement) !== sNet ||
+      money(settlement.deduction) !== sFees
+    )
+      fail();
+    gross += sGross;
+    fees += sFees;
+    payout += sNet;
+  }
+  const net = money(payment.payoutAmount);
+  if (net <= 0 || payout !== net || gross - fees !== net) fail();
   const totals = new Set([
     'grossPurchase',
     'grossSettlement',
@@ -54,21 +97,23 @@ export function flatpayDraft(
     'feeAmount',
     'deduction',
   ]);
-  for (const [k, v] of Object.entries(settlement))
-    if (typeof v === 'number' && !totals.has(k) && v !== 0) fail();
-  for (const k of [
-    'refundAmount',
-    'chargeback',
-    'rollingReserve',
-    'rollingRelease',
-    'addedSum',
-    'deductedSum',
-    'balanceTransfer',
-    'reversals',
-  ])
-    if (money(settlement[k]) !== 0) fail();
-  if (settlement.preArbitration != null && settlement.preArbitration !== '0')
-    fail();
+  for (const settlement of settlements) {
+    for (const [k, v] of Object.entries(settlement))
+      if (typeof v === 'number' && !totals.has(k) && v !== 0) fail();
+    for (const k of [
+      'refundAmount',
+      'chargeback',
+      'rollingReserve',
+      'rollingRelease',
+      'addedSum',
+      'deductedSum',
+      'balanceTransfer',
+      'reversals',
+    ])
+      if (money(settlement[k]) !== 0) fail();
+    if (settlement.preArbitration != null && settlement.preArbitration !== '0')
+      fail();
+  }
   if (
     Object.values(accounts).some((n) => !Number.isSafeInteger(n) || n <= 0) ||
     new Set(Object.values(accounts)).size !== 4
