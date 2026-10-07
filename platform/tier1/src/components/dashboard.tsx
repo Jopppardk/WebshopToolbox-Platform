@@ -19,6 +19,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { AttentionList, type AttentionView } from '@/components/attention-list';
 import { danishDate } from '@/lib/history-policy';
 import {
   percentageChange,
@@ -78,6 +79,7 @@ const date = (value: string) => formatDate(value);
 const timestamp = (value: string) => formatDateTime(value);
 type DashboardProps = {
   onIntegrations: (provider?: 'dinero' | 'shopify') => void;
+  onOpen: (view: AttentionView) => void;
 };
 export function Dashboard(props: DashboardProps) {
   const [connections, setConnections] = useState<Set<string> | null>(null);
@@ -210,8 +212,10 @@ export function Dashboard(props: DashboardProps) {
 }
 function ConnectedDashboard({
   onIntegrations,
+  onOpen,
 }: {
   onIntegrations: () => void;
+  onOpen: (view: AttentionView) => void;
 }) {
   const [finance, setFinance] = useState<Finance | null>(null),
     [platform, setPlatform] = useState<Platform | null>(null);
@@ -299,6 +303,7 @@ function ConnectedDashboard({
           {loading ? 'Opdaterer…' : 'Opdatér'}
         </Button>
       </header>
+      <AttentionList onOpen={onOpen} revision={revision} />
       <section
         aria-label="Dagens aktivitet og systemstatus"
         className="mb-8 overflow-hidden rounded-2xl border border-[#e3d8c7] bg-white shadow-[0_8px_30px_rgba(70,50,20,0.05)]"

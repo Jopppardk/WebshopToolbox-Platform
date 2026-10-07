@@ -55,6 +55,13 @@ test('every page of the portal renders', async ({ page }) => {
   await expect(page.locator('main')).toContainText(
     /Dashboard|Forbind din virksomhed/,
   );
+  // "Kræver handling" lists the fixture's failed sale and opens Salg.
+  const attention = page.getByRole('region', { name: /Kræver handling/ });
+  await expect(attention).toContainText('Fejlede poster · 1');
+  await expect(attention).toContainText('Ordre #2701');
+  await expect(attention).toContainText('Momsen stemmer ikke.');
+  await attention.getByRole('button', { name: /Ordre #2701/ }).click();
+  await expect(page.locator('main')).toContainText('#2683');
   expect(
     scripts.some((script) => /\/performance-[\w-]+\.js$/.test(script.url)),
     'Performance is not loaded up front',
