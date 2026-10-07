@@ -1,3 +1,4 @@
+import { TransferError } from './dinero-sale';
 import { asText } from './tier1/src/lib/format';
 import {
   handleProductionBooking,
@@ -445,7 +446,14 @@ async function flatpay(ctx: BookingContext): Promise<PreparedBooking> {
       flatpay: num(a.flatpayClearing),
     };
   await chartFor(ctx, Object.values(accounts));
-  const proposal = flatpayDraft(p, settlements, accounts);
+  let proposal: ReturnType<typeof flatpayDraft>;
+  try {
+    proposal = flatpayDraft(p, settlements, accounts);
+  } catch (error) {
+    // The voucher check explains what does not add up; show it rather than an unexpected error.
+    if (error instanceof TransferError) throw new HttpError(409, error.message);
+    throw error;
+  }
   proposal.voucher.VoucherDate = date;
   proposal.voucher.ExternalReference = `wtb:${shop}:flatpay:${id}`;
   const companyRow = await env.PLATFORM_DB.prepare(
