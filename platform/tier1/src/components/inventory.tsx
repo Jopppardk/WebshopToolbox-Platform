@@ -4,8 +4,9 @@ import { useStackTable } from '@/lib/stack-table';
 import { tier1Fetch as fetch } from '@/platform/transport';
 import { useCapabilities } from '@/platform/capabilities';
 import { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/refresh-button';
 import { Input } from '@/components/ui/input';
 import type { InventoryRow } from '@/lib/inventory';
 
@@ -284,10 +285,7 @@ export function Inventory() {
             kostpris.
           </p>
         </div>
-        <Button variant="outline" onClick={load} disabled={busy}>
-          <RefreshCw className={busy ? 'animate-spin' : ''} />
-          {busy ? 'Henter…' : 'Hent lagerstatus'}
-        </Button>
+        <RefreshButton onRefresh={load} disabled={busy} />
       </div>
       {error && (
         <p

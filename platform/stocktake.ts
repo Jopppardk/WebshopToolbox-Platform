@@ -161,7 +161,7 @@ export async function handleStocktake(
         JSON.stringify([change.inventoryItemId, change.locationId]),
       );
       if (!row || row.quantity !== change.compareQuantity)
-        throw new HttpError(409, 'Lageret er ændret. Hent lagerstatus igen.');
+        throw new HttpError(409, 'Lageret er ændret. Opdatér siden.');
       if (row.currency !== 'DKK')
         throw new HttpError(409, 'Lagerregulering kræver kostpriser i DKK.');
       return {
@@ -232,13 +232,13 @@ export async function handleStocktake(
     )
       throw new HttpError(
         409,
-        'Regnskabsopsætningen er ændret. Hent lagerstatus igen.',
+        'Regnskabsopsætningen er ændret. Opdatér siden.',
       );
     assertReconcilable(inventory);
     if (inventory.valueMinor !== shown[0] || dinero.balanceMinor !== shown[1])
       throw new HttpError(
         409,
-        'Lagerværdierne er ændret siden visningen. Hent lagerstatus igen.',
+        'Lagerværdierne er ændret siden visningen. Opdatér siden.',
       );
     const adjustmentMinor = inventory.valueMinor - dinero.balanceMinor;
     if (adjustmentMinor === 0)
@@ -257,7 +257,7 @@ export async function handleStocktake(
     if (saved?.organization_id !== account.organizationId)
       throw new HttpError(
         409,
-        'Regnskabsopsætningen er ændret. Hent lagerstatus igen.',
+        'Regnskabsopsætningen er ændret. Opdatér siden.',
       );
     let credentials: Record<string, string>;
     try {
@@ -362,7 +362,7 @@ export async function handleStocktake(
       if (all.valueMinor !== value.shopifyValueMinor)
         throw new HttpError(
           409,
-          'Lagerværdien i webshoppen er ændret. Hent lagerstatus igen.',
+          'Lagerværdien i webshoppen er ændret. Opdatér siden.',
         );
       if (
         (await dineroInventory(env, company)).balanceMinor !==
@@ -370,7 +370,7 @@ export async function handleStocktake(
       )
         throw new HttpError(
           409,
-          'Lagerværdien i Dinero er ændret. Hent lagerstatus igen.',
+          'Lagerværdien i Dinero er ændret. Opdatér siden.',
         );
     }
     for (const change of value.changes) {
@@ -387,7 +387,7 @@ export async function handleStocktake(
       )
         throw new HttpError(
           409,
-          'Lagerantal eller kostpris er ændret siden forslaget. Hent lagerstatus igen.',
+          'Lagerantal eller kostpris er ændret siden forslaget. Opdatér siden.',
         );
     }
   }

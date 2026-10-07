@@ -106,8 +106,27 @@ test('every page of the portal renders', async ({ page }) => {
     if (loaded)
       expect((await loaded).ok(), 'Performance loads when opened').toBe(true);
     await expect(page.locator('main'), name).toContainText(heading);
+    // Each page with data has exactly one "Opdatér" (refresh-button.tsx), no other ways to fetch.
+    if (withRefresh.includes(name))
+      await expect(
+        page
+          .locator('main')
+          .getByRole('button', { name: 'Opdatér', exact: true }),
+        name,
+      ).toHaveCount(1);
   }
 });
+const withRefresh = [
+  'Dashboard',
+  'Salg',
+  'Tilbagebetalinger',
+  'Udbetalinger',
+  'Lager',
+  'Fakturaer',
+  'Performance',
+  'Forsendelser',
+  'Emballage',
+];
 
 test('Salg: one view per order with invoice, booking, refund and log', async ({
   page,

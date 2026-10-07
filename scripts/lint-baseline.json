@@ -68,7 +68,7 @@
  "platform/tier1-order-refunds.ts :: typescript(no-explicit-any)": 1,
  "platform/tier1-orders.ts :: typescript(no-explicit-any)": 2,
  "platform/tier1-provider-records.ts :: typescript(no-explicit-any)": 7,
- "platform/tier1/src/app/page.tsx :: react(react-compiler)": 3,
+ "platform/tier1/src/app/page.tsx :: react(react-compiler)": 2,
  "platform/tier1/src/components/dashboard.tsx :: react(react-compiler)": 1,
  "platform/tier1/src/components/documents.tsx :: jsx-a11y(anchor-has-content)": 1,
  "platform/tier1/src/components/documents.tsx :: jsx-a11y(control-has-associated-label)": 1,

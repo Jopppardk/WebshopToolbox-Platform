@@ -27,8 +27,7 @@ export async function orderRefundData({
 }: DataContext): Promise<Response | null> {
   // Tilbagebetalinger: every refund of an order, whatever the gateway, with its credit note and booking.
   if (path === '/order-refunds/sync') {
-    if (request.method !== 'POST')
-      throw new HttpError(405, 'Brug Hent tilbagebetalinger.');
+    if (request.method !== 'POST') throw new HttpError(405, 'Brug Opdatér.');
     const result = await syncOrderRefunds(env, company, shop, 25);
     return reply({
       synced: result.refunds,

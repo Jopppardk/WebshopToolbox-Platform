@@ -403,8 +403,7 @@ export function Settings({
                     tryk Gem indstillinger. Udbetalinger hentes hver time og
                     hvert kvarter, når en udbetaling er på vej. Lager hentes
                     hver 4. time og emballagehistorik én gang i døgnet.
-                    Synkronisér nu på den enkelte side henter altid med det
-                    samme.
+                    “Opdatér” på den enkelte side henter altid med det samme.
                   </p>
                 </div>
                 <label className="w-full sm:w-52">

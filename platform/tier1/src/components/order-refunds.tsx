@@ -1,9 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { FileDown, RefreshCw } from 'lucide-react';
+import { FileDown } from 'lucide-react';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
 import { formatDateTime } from '@/lib/format';
 import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/refresh-button';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -183,14 +184,7 @@ export function OrderRefunds({ syncRevision = 0 }: { syncRevision?: number }) {
             WebshopToolbox får en kreditnota pr. tilbagebetaling.
           </p>
         </div>
-        <Button
-          className="h-10 rounded-xl px-4"
-          onClick={() => void sync()}
-          disabled={syncing}
-        >
-          <RefreshCw className={syncing ? 'animate-spin' : ''} />
-          {syncing ? 'Henter…' : 'Hent tilbagebetalinger'}
-        </Button>
+        <RefreshButton onRefresh={sync} disabled={syncing} />
       </div>
       <div className="mb-5 flex flex-wrap items-end gap-3">
         <label className="text-sm">

@@ -20,6 +20,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/refresh-button';
 import { tier1Fetch } from '@/platform/transport';
 import { useWorkspace } from '@/platform/workspace';
 import { danishDate } from '@/lib/history-policy';
@@ -161,17 +162,13 @@ export function Performance({
               )}
             </select>
           </label>
-          <Button
-            variant="outline"
-            disabled={loading}
-            onClick={() => {
+          <RefreshButton
+            onRefresh={() => {
               refresh.current = true;
               setRevision((v) => v + 1);
             }}
-          >
-            <RefreshCw className={loading ? 'animate-spin' : ''} />
-            {loading ? 'Henter…' : 'Opdatér'}
-          </Button>
+            disabled={loading}
+          />
         </div>
       </header>
       <div className="mb-7 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e9e2d7] bg-[#faf8f5] px-4 py-3 text-xs text-muted-foreground">

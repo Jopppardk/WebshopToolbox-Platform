@@ -4,8 +4,8 @@ import { PayoutLog } from './payout-log';
 import { tier1Fetch as fetch } from '@/platform/transport';
 
 import { useEffect, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/refresh-button';
 import { BookingStatus } from '@/components/booking-status';
 import { Input } from '@/components/ui/input';
 import {
@@ -62,12 +62,20 @@ export function Payments({
 }) {
   const refund = kind === 'refund';
   const endpoint = refund ? '/api/refunds/overview' : '/api/shopify/payments';
-  const [provider, setProvider] = useState('shopify');
-  const syncEndpoint = refund
-    ? provider === 'flatpay'
-      ? '/api/flatpay/refunds'
-      : '/api/shopify/refunds'
-    : endpoint;
+  // Refunds: Opdatér fetches from Shopify Payments and, when connected, Flatpay.
+  const syncEndpoints = async () => {
+    if (!refund) return [endpoint];
+    const response = await fetch('/api/integrations', { cache: 'no-store' });
+    const data = (await response.json()) as {
+      integrations?: Array<{ provider: string }>;
+    };
+    return [
+      '/api/shopify/refunds',
+      ...(data.integrations?.some((i) => i.provider === 'flatpay')
+        ? ['/api/flatpay/refunds']
+        : []),
+    ];
+  };
   const plural = refund ? 'tilbagebetalinger' : 'betalinger';
   const title = refund ? 'Tilbagebetalinger' : 'Betalinger';
   const [from, setFrom] = useState(() => `${today().slice(0, 7)}-01`);
@@ -138,38 +146,43 @@ export function Payments({
     setSyncing(true);
     setError('');
     setNotice(`Henter ${plural}…`);
-    let after: string | null = null;
     let synced = 0;
-    const seen = new Set<string>();
     try {
-      do {
-        const response = await fetch(syncEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ from, to, after }),
-        });
-        const data: {
-          synced: number;
-          hasNextPage: boolean;
-          endCursor: string | null;
-          error?: string;
-        } = (await response.json()) as {
-          synced: number;
-          hasNextPage: boolean;
-          endCursor: string | null;
-          error?: string;
-        };
-        if (!response.ok)
-          throw new Error(data.error || 'Hentningen mislykkedes');
-        synced += data.synced;
-        after = data.hasNextPage ? data.endCursor : null;
-        if (data.hasNextPage && (!after || seen.has(after) || seen.size >= 200))
-          throw Error('Hentningen kunne ikke fortsætte. Prøv igen.');
-        if (after) seen.add(after);
-        setNotice(
-          `${synced} ${plural} hentet${after ? ' · henter flere…' : ' · perioden er færdighentet'}`,
-        );
-      } while (after);
+      for (const syncEndpoint of await syncEndpoints()) {
+        let after: string | null = null;
+        const seen = new Set<string>();
+        do {
+          const response = await fetch(syncEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ from, to, after }),
+          });
+          const data: {
+            synced: number;
+            hasNextPage: boolean;
+            endCursor: string | null;
+            error?: string;
+          } = (await response.json()) as {
+            synced: number;
+            hasNextPage: boolean;
+            endCursor: string | null;
+            error?: string;
+          };
+          if (!response.ok)
+            throw new Error(data.error || 'Hentningen mislykkedes');
+          synced += data.synced;
+          after = data.hasNextPage ? data.endCursor : null;
+          if (
+            data.hasNextPage &&
+            (!after || seen.has(after) || seen.size >= 200)
+          )
+            throw Error('Hentningen kunne ikke fortsætte. Prøv igen.');
+          if (after) seen.add(after);
+          setNotice(
+            `${synced} ${plural} hentet${after ? ' · henter flere…' : ' · perioden er færdighentet'}`,
+          );
+        } while (after);
+      }
     } catch (failure) {
       setError(
         failure instanceof Error ? failure.message : 'Hentningen mislykkedes',
@@ -199,32 +212,10 @@ export function Payments({
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
-          {refund && (
-            <label className="text-sm">
-              Hent fra
-              <select
-                className="mt-1 block h-10 rounded-lg border px-3"
-                value={provider}
-                disabled={syncing}
-                onChange={(e) => setProvider(e.target.value)}
-              >
-                <option value="shopify">Shopify Payments</option>
-                <option value="flatpay">Flatpay</option>
-              </select>
-            </label>
-          )}
-          <Button
-            className="h-10 rounded-xl px-4"
-            onClick={sync}
+          <RefreshButton
+            onRefresh={sync}
             disabled={syncing || !from || !to || from > to}
-          >
-            <RefreshCw className={syncing ? 'animate-spin' : ''} />
-            {syncing
-              ? 'Henter…'
-              : refund
-                ? 'Hent tilbagebetalinger'
-                : 'Hent fra Shopify Payments'}
-          </Button>
+          />
         </div>
       </div>
       <div className="mb-5 flex flex-wrap items-end gap-3">

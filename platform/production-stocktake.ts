@@ -328,7 +328,7 @@ export async function commitStocktake(
     if (!inserted.meta.changes)
       throw new HttpError(
         409,
-        'En anden lagerregulering er behandlet eller i gang. Hent lagerstatus igen.',
+        'En anden lagerregulering er behandlet eller i gang. Opdatér siden.',
       );
     claim = { phase: 'prepared', version, payload: claimPayload };
   } else
@@ -549,7 +549,7 @@ async function releaseClaim(
       ),
   ]);
   if (result[1].meta.changes !== 1)
-    throw new HttpError(409, 'Reguleringen er ændret. Hent lagerstatus igen.');
+    throw new HttpError(409, 'Reguleringen er ændret. Opdatér siden.');
 }
 // Regulations that block a new one. A reconciliation reads both values live, so an old regulation only matters while it may still
 // be booked later: as a draft in Dinero. One with a voucher ID is checked in Dinero; one without is released after the user has checked.

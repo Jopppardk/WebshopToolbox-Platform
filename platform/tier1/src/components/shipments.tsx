@@ -16,6 +16,7 @@ import {
   Truck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/refresh-button';
 import { Input } from '@/components/ui/input';
 import {
   Dialog,
@@ -443,8 +444,9 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
     [carrier, setCarrier] = useState<'all' | Carrier>('all');
   const [open, setOpen] = useState<Set<string>>(new Set()),
     [tracking, setTracking] = useState<Shipment | null>(null);
-  const [refreshingId, setRefreshingId] = useState<string | null>(null),
-    [parcelFeedback, setParcelFeedback] = useState<Record<string, string>>({});
+  const [parcelFeedback, setParcelFeedback] = useState<Record<string, string>>(
+    {},
+  );
   const activeView = useRef('');
   activeView.current = `${webshopId}:${days}`;
   const today = danishDate(),
@@ -513,10 +515,25 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
     }, 60000);
     return () => window.clearInterval(timer);
   }, []);
+  // "Opdatér": fresh tracking for parcels that are not delivered (one at a time, at most 15; each parcel at most
+  // once a minute on the server), then the shipments from Shopify again. Support and the demo only reload.
+  const refreshAll = async () => {
+    if (!user.support && !demo)
+      for (const parcel of (data?.shipments ?? [])
+        .filter(
+          (x) =>
+            Boolean(x.trackingNumber) &&
+            !x.delivered &&
+            x.publicTracking?.state !== 'unavailable',
+        )
+        .slice(0, 15))
+        await refreshParcel(parcel);
+    refresh.current = true;
+    setRevision((v) => v + 1);
+  };
   const refreshParcel = async (s: Shipment) => {
-    if (refreshingId || s.delivered) return;
+    if (s.delivered) return;
     const view = activeView.current;
-    setRefreshingId(s.id);
     setParcelFeedback((p) => ({ ...p, [s.id]: '' }));
     try {
       const response = await tier1Fetch(`/api/shipments/refresh?days=${days}`, {
@@ -555,8 +572,6 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
           [s.id]:
             e instanceof Error ? e.message : 'Status kunne ikke opdateres.',
         }));
-    } finally {
-      setRefreshingId(null);
     }
   };
   const all = useMemo(() => data?.shipments || [], [data]);
@@ -638,17 +653,7 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
               ))}
             </select>
           </label>
-          <Button
-            variant="outline"
-            disabled={loading}
-            onClick={() => {
-              refresh.current = true;
-              setRevision((v) => v + 1);
-            }}
-          >
-            <RefreshCw className={loading ? 'animate-spin' : ''} />
-            {loading ? 'Henter…' : 'Opdatér'}
-          </Button>
+          <RefreshButton onRefresh={refreshAll} disabled={loading} />
         </div>
       </header>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e9e2d7] bg-[#faf8f5] px-4 py-3 text-xs text-muted-foreground">
@@ -671,9 +676,9 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
       <p className="mb-4 text-xs text-muted-foreground">
         Tracking hentes fra Shipmondos offentlige trackingside på tværs af
         fragtfirmaer. Ingen API-nøgle eller Pro-abonnement kræves. Aktive pakker
-        kontrolleres automatisk hver sjette time. Brug “Hent ny status” ved en
-        pakke for et manuelt opslag (højst én gang pr. minut). Leverede pakker
-        kontrolleres ikke igen.
+        kontrolleres automatisk hver sjette time. “Opdatér” henter ny status på
+        op til 15 pakker, der ikke er leveret (hver pakke højst én gang pr.
+        minut). Leverede pakker kontrolleres ikke igen.
       </p>
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         {(
@@ -855,28 +860,6 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
                             onToggle={() => toggle(s.id)}
                             today={today}
                           />
-                          {Boolean(s.trackingNumber) &&
-                            !s.delivered &&
-                            !user.support &&
-                            !demo &&
-                            s.publicTracking?.state !== 'unavailable' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                disabled={Boolean(refreshingId)}
-                                onClick={() => void refreshParcel(s)}
-                                aria-label={`Hent ny status for ${s.orderName}, ${s.trackingNumber || 'pakken'}`}
-                              >
-                                <RefreshCw
-                                  className={
-                                    refreshingId === s.id ? 'animate-spin' : ''
-                                  }
-                                />
-                                {refreshingId === s.id
-                                  ? 'Henter…'
-                                  : 'Hent ny status'}
-                              </Button>
-                            )}
                           {parcelFeedback[s.id] && (
                             <p
                               role="status"
