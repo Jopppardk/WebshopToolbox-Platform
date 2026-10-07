@@ -1,9 +1,12 @@
 // "Kræver handling" on the dashboard: everything the customer has to look at, grouped, each with a link to the page
-// where it is handled (GET /attention, platform/attention.ts).
+// where it is handled (GET /attention, platform/attention.ts). Failed posts have "Prøv igen nu" (one or all shown):
+// the next automatic run, within 5 minutes, processes them with the usual checks and settings (POST /attention).
 import { ArrowRight, Check, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { formatDateTime } from '@/lib/format';
 import { tier1Fetch as fetch } from '@/platform/transport';
+import { useCapabilities } from '@/platform/capabilities';
+import { Button } from '@/components/ui/button';
 
 export type AttentionView =
   | 'orders'
@@ -14,6 +17,7 @@ export type AttentionView =
 type Kind = 'failed' | 'uncertain' | 'market' | 'waiting';
 type Item = {
   kind: Kind;
+  job?: string;
   title: string;
   detail: string;
   view: AttentionView;
@@ -37,8 +41,43 @@ export function AttentionList({
   onOpen: (view: AttentionView) => void;
   revision: number;
 }) {
+  const capabilities = useCapabilities();
   const [data, setData] = useState<Attention | null>(null),
-    [error, setError] = useState('');
+    [error, setError] = useState(''),
+    [queued, setQueued] = useState<Set<string>>(new Set()),
+    [busy, setBusy] = useState(false),
+    [notice, setNotice] = useState('');
+  async function retry(items: Item[]) {
+    setBusy(true);
+    setNotice('');
+    try {
+      const response = await fetch('/api/attention', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: items.map((i) => ({ job: i.job, externalId: i.externalId })),
+        }),
+      });
+      const value = (await response.json()) as { error?: string };
+      if (!response.ok)
+        throw new Error(value.error || 'Posterne kunne ikke sættes i kø.');
+      setQueued(
+        (previous) =>
+          new Set([...previous, ...items.map((i) => i.job + i.externalId)]),
+      );
+      setNotice(
+        `${items.length === 1 ? 'Posten prøves' : items.length + ' poster prøves'} igen inden for 5 minutter. Listen opdateres, når de er behandlet.`,
+      );
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error
+          ? reason.message
+          : 'Posterne kunne ikke sættes i kø.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
   useEffect(() => {
     const controller = new AbortController();
     fetch('/api/attention', { cache: 'no-store', signal: controller.signal })
@@ -94,6 +133,11 @@ export function AttentionList({
           Intet kræver din handling lige nu.
         </p>
       )}
+      {notice && (
+        <p role="status" className="mt-3 text-sm">
+          {notice}
+        </p>
+      )}
       {data &&
         groups
           .filter((group) => data.counts[group.kind] > 0)
@@ -103,16 +147,31 @@ export function AttentionList({
               data.counts[group.kind] - Math.min(shown, items.length);
             return (
               <div key={group.kind} className="mt-4">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {group.label} · {data.counts[group.kind]}
-                </h3>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {group.label} · {data.counts[group.kind]}
+                  </h3>
+                  {group.kind === 'failed' && items.length > 1 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy || !capabilities.bookkeeping}
+                      onClick={() => void retry(items)}
+                    >
+                      Prøv alle igen nu
+                    </Button>
+                  )}
+                </div>
                 <ul className="mt-2 divide-y divide-[#efe8dc] rounded-xl border border-[#e9e2d7]">
                   {items.slice(0, shown).map((item) => (
-                    <li key={item.kind + item.externalId}>
+                    <li
+                      key={item.kind + item.externalId}
+                      className="flex items-center gap-2 pr-3"
+                    >
                       <button
                         type="button"
                         onClick={() => onOpen(item.view)}
-                        className="group flex w-full items-start justify-between gap-3 p-3 text-left transition hover:bg-[#faf8f5] focus-visible:outline-2 focus-visible:outline-[#c09960]"
+                        className="group flex min-w-0 flex-1 items-start justify-between gap-3 p-3 text-left transition hover:bg-[#faf8f5] focus-visible:outline-2 focus-visible:outline-[#c09960]"
                       >
                         <span className="min-w-0">
                           <span className="block text-sm font-medium">
@@ -127,6 +186,28 @@ export function AttentionList({
                           <ArrowRight className="size-3.5 text-stone-400 transition group-hover:translate-x-0.5" />
                         </span>
                       </button>
+                      {item.kind === 'failed' &&
+                        item.job &&
+                        (queued.has(item.job + item.externalId) ? (
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            I kø
+                          </span>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="shrink-0"
+                            disabled={busy || !capabilities.bookkeeping}
+                            title={
+                              capabilities.bookkeeping
+                                ? undefined
+                                : 'Bogføring er blokeret i testmiljøet'
+                            }
+                            onClick={() => void retry([item])}
+                          >
+                            Prøv igen nu
+                          </Button>
+                        ))}
                     </li>
                   ))}
                 </ul>

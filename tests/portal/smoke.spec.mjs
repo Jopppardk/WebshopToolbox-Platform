@@ -60,6 +60,10 @@ test('every page of the portal renders', async ({ page }) => {
   await expect(attention).toContainText('Fejlede poster · 1');
   await expect(attention).toContainText('Ordre #2701');
   await expect(attention).toContainText('Momsen stemmer ikke.');
+  // "Prøv igen nu" is shown on the failed post (disabled locally, where bookkeeping is blocked).
+  await expect(
+    attention.getByRole('button', { name: 'Prøv igen nu' }),
+  ).toBeVisible();
   await attention.getByRole('button', { name: /Ordre #2701/ }).click();
   await expect(page.locator('main')).toContainText('#2683');
   expect(
