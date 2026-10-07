@@ -14,7 +14,7 @@ import { marketHold } from './order-markets';
 import { orderDetail } from './order-detail';
 import { labelsEnabled } from './shipmondo-labels';
 import { HttpError, reply } from './types';
-import { type DataContext, pageNumber } from './tier1-data-shared';
+import { type DataContext, forwarded, pageNumber } from './tier1-data-shared';
 
 export async function orderData({
   request,
@@ -56,8 +56,31 @@ export async function orderData({
   }
   if (path === '/shopify/orders') {
     if (!get) {
+      // "Opdatér" (recent): only orders changed since the newest one already here (less 10 minutes), the same
+      // watermark as the automatic run, so unchanged and long-booked orders are skipped. Orders that change after
+      // booking, e.g. by a refund, still come. The first page answers with the since used; the client sends it
+      // back with each next page. Without a stored order everything is read.
+      const b = await request
+        .clone()
+        .json()
+        .catch(() => ({}) as Record<string, unknown>);
+      let forward = request;
+      let since: string | null = null;
+      if (b && (b as Record<string, unknown>).recent === true) {
+        const newest = await db
+          .prepare(
+            "SELECT max(json_extract(payload_json,'$.updatedAt')) newest FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module='orders'",
+          )
+          .bind(company, shop)
+          .first<{ newest: string | null }>();
+        since =
+          newest?.newest && Number.isFinite(Date.parse(newest.newest))
+            ? new Date(Date.parse(newest.newest) - 600000).toISOString()
+            : null;
+        forward = forwarded(request, since ? { since } : {});
+      }
       const response = await handleOperations(
-        request,
+        forward,
         env,
         actor,
         company,
@@ -68,6 +91,7 @@ export async function orderData({
       const data = (await response.json()) as any;
       return reply({
         ...data,
+        since,
         synced: data.count,
         invoicesCreated: 0,
         orders: [],

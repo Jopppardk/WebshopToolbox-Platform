@@ -292,22 +292,28 @@ export default function Home() {
     setSyncingOrders(true);
     try {
       let after: string | null = null;
+      let since: string | null = null;
+      let first = true;
       let synced = 0;
       let historyWarning = '';
       const seen = new Set<string>();
       do {
+        // Only orders changed since the newest one already fetched (see /shopify/orders).
         const response: Response = await fetch('/api/shopify/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ after }),
+          body: JSON.stringify(first ? { recent: true } : { after, since }),
         });
         const data: {
           synced: number;
+          since?: string | null;
           warning?: string;
           hasNextPage: boolean;
           endCursor: string | null;
           error?: string;
         } = await response.json();
+        if (first) since = data.since ?? null;
+        first = false;
         if (!response.ok)
           throw new Error(data.error || 'Shopify-ordrer kunne ikke hentes.');
         synced += data.synced;
