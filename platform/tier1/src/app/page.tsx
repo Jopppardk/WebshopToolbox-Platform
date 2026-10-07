@@ -803,6 +803,11 @@ export default function Home() {
                 setSettingsTab('integrations');
                 setView('settings');
               }}
+              onOpen={(target) => {
+                // Markets are set up under Indstillinger → Faktura-afsendelse.
+                if (target === 'settings') setSettingsTab('invoice-email');
+                setView(target);
+              }}
             />
           )}
           {currentRequirement && connections === null && !connectionsError && (

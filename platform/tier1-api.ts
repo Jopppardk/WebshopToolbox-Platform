@@ -9,6 +9,7 @@ import { handleShopifyFields } from './shopify-metafields';
 import { handlePackagingProducts } from './packaging-products';
 import { handleFeeds } from './feeds';
 import { handleTier1Data } from './tier1-data';
+import { handleAttention } from './attention';
 import { handleHistory } from './tier1-history';
 import { handleTier1Connections } from './tier1-connections';
 import { requireCompany, requireWebshop } from './auth';
@@ -95,6 +96,8 @@ export async function handleTier1(
     );
   if (path === '/admin/history' || path === '/integrations/start-date')
     return handleHistory(request, env, actor, company.company_id, shop, path);
+  if (path === '/attention')
+    return handleAttention(request, env, actor, company.company_id, shop);
   if (path === '/integrations/reconciliation')
     return handleReconciliation(request, env, actor, company.company_id, shop);
   const data = await handleTier1Data(
