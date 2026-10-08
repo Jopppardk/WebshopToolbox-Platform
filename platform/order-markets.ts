@@ -106,8 +106,10 @@ export async function fillOrderMarkets(
 }
 
 // Orders are invoiced, mailed and booked in the home market (Denmark, in the shop's currency) and in the
-// markets set up and enabled under Indstillinger → Markeder (in the market's currency). Orders to any other
-// country or currency stay on hold. The platform books in DKK with Danish VAT in Dinero.
+// markets set up and enabled under Indstillinger → Markeder: in the market's currency (e.g. SEK), or in the
+// shop's own currency when the customer was charged that (e.g. a Swedish order bought in the Danish store or
+// paid with a method without SEK; its invoice has the market's texts with the amounts in DKK as paid).
+// Orders to any other country or currency stay on hold. The platform books in DKK in Dinero.
 export const HOME_COUNTRY = 'DK';
 export const foreignHold =
   'Ordren går til et marked, der ikke er sat op til fakturering og bogføring. Slå markedet til under Indstillinger → Markeder.';
@@ -120,11 +122,13 @@ const homeSql = (shopCurrency: string) =>
   ' IS NULL OR m.currency=' +
   shopCurrency +
   ')';
-// An enabled market that sells to the order's country in the order's currency.
-const marketSql =
+// An enabled market that sells to the order's country, in the market's currency or the shop's own.
+const marketSql = (shopCurrency: string) =>
   "(m.country IS NOT NULL AND m.country<>'" +
   HOME_COUNTRY +
-  "' AND m.currency IS NOT NULL AND EXISTS(SELECT 1 FROM webshop_markets wm,json_each(wm.countries_json) c WHERE wm.company_id=m.company_id AND wm.webshop_id=m.webshop_id AND wm.enabled=1 AND c.value=m.country AND wm.currency=m.currency))";
+  "' AND m.currency IS NOT NULL AND EXISTS(SELECT 1 FROM webshop_markets wm,json_each(wm.countries_json) c WHERE wm.company_id=m.company_id AND wm.webshop_id=m.webshop_id AND wm.enabled=1 AND c.value=m.country AND (wm.currency=m.currency OR m.currency=" +
+  shopCurrency +
+  ')))';
 /** SQL condition on an operation_snapshots row aliased s: the order's market is known and is home or an enabled market. */
 export const domesticOrderSql =
   'EXISTS(SELECT 1 FROM order_markets m WHERE m.company_id=s.company_id AND m.webshop_id=s.webshop_id AND m.external_id=s.external_id AND ((' +
@@ -132,7 +136,9 @@ export const domesticOrderSql =
     "json_extract(s.payload_json,'$.currentTotalPriceSet.shopMoney.currencyCode')",
   ) +
   ') OR ' +
-  marketSql +
+  marketSql(
+    "json_extract(s.payload_json,'$.currentTotalPriceSet.shopMoney.currencyCode')",
+  ) +
   '))';
 /** The same condition for a row aliased s that belongs to an order (e.g. a refund), given the SQL of its order ID. */
 export const domesticOrderOfSql = (orderId: string) =>
@@ -143,7 +149,9 @@ export const domesticOrderOfSql = (orderId: string) =>
     "json_extract(o.payload_json,'$.currentTotalPriceSet.shopMoney.currencyCode')",
   ) +
   ') OR ' +
-  marketSql +
+  marketSql(
+    "json_extract(o.payload_json,'$.currentTotalPriceSet.shopMoney.currencyCode')",
+  ) +
   '))';
 /** Whether an order is held: its market is known and is neither home nor an enabled market. */
 export async function isForeignOrder(
@@ -166,7 +174,9 @@ export async function isForeignOrder(
           "json_extract(s.payload_json,'$.currentTotalPriceSet.shopMoney.currencyCode')",
         ) +
         ') OR ' +
-        marketSql +
+        marketSql(
+          "json_extract(s.payload_json,'$.currentTotalPriceSet.shopMoney.currencyCode')",
+        ) +
         ')',
     )
     .bind(company, shop, externalId)
@@ -194,9 +204,10 @@ export async function orderMarketSettings(
 ): Promise<WebshopMarket | null> {
   const row = await db
     .prepare(
-      "SELECT wm.* FROM order_markets m JOIN webshop_markets wm ON wm.company_id=m.company_id AND wm.webshop_id=m.webshop_id AND wm.enabled=1 AND wm.currency=m.currency AND EXISTS(SELECT 1 FROM json_each(wm.countries_json) c WHERE c.value=m.country) WHERE m.company_id=? AND m.webshop_id=? AND m.external_id=? AND m.country<>'" +
+      // The market's own currency first; an order paid in the shop's currency belongs to the market as well.
+      "SELECT wm.* FROM order_markets m LEFT JOIN operation_snapshots s ON s.company_id=m.company_id AND s.webshop_id=m.webshop_id AND s.module='orders' AND s.external_id=m.external_id JOIN webshop_markets wm ON wm.company_id=m.company_id AND wm.webshop_id=m.webshop_id AND wm.enabled=1 AND (wm.currency=m.currency OR m.currency=json_extract(s.payload_json,'$.currentTotalPriceSet.shopMoney.currencyCode')) AND EXISTS(SELECT 1 FROM json_each(wm.countries_json) c WHERE c.value=m.country) WHERE m.company_id=? AND m.webshop_id=? AND m.external_id=? AND m.country<>'" +
         HOME_COUNTRY +
-        "'",
+        "' ORDER BY wm.currency=m.currency DESC LIMIT 1",
     )
     .bind(company, shop, orderId)
     .first<Omit<WebshopMarket, 'countries'> & { countries_json: string }>();
@@ -229,7 +240,9 @@ export async function marketHold(
     return (
       !currency ||
       !enabled.some(
-        (m) => m.countries.includes(country) && m.currency === currency,
+        (m) =>
+          m.countries.includes(country) &&
+          (m.currency === currency || currency === shopCurrency),
       )
     );
   };

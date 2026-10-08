@@ -261,13 +261,16 @@ export function invoicedOrder(
 ) {
   const base = originalOrder(order) ?? order;
   if (!market) return base;
-  const local = inPresentment(base);
-  if (local.currentTotalPriceSet?.shopMoney?.currencyCode !== market.currency)
-    throw new HttpError(
-      409,
-      `Ordren er ikke betalt i markedets valuta (${market.currency}). Den faktureres ikke automatisk.`,
-    );
-  return local;
+  const local = inPresentment(base),
+    paid = local.currentTotalPriceSet?.shopMoney?.currencyCode;
+  if (paid === market.currency) return local;
+  // Charged in the shop's own currency (e.g. a Swedish order paid in DKK): the market's texts, the amounts as paid.
+  if (paid && paid === base.currentTotalPriceSet?.shopMoney?.currencyCode)
+    return base;
+  throw new HttpError(
+    409,
+    `Ordren er ikke betalt i markedets valuta (${market.currency}). Den faktureres ikke automatisk.`,
+  );
 }
 function audit(
   env: PlatformEnv,
