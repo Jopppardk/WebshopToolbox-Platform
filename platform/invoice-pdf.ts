@@ -124,6 +124,27 @@ const texts = {
   },
 };
 
+// The one VAT rate of an invoice line, from Shopify's tax lines. A line of 0 kr. without tax lines (e.g. free
+// shipping) is 0 %. Otherwise the invoice stops, saying which line and why: no VAT at all usually means Shopify
+// does not charge VAT for the customer's country, which has to be set up in Shopify.
+export function lineRate(line: {
+  title: string;
+  net: number;
+  tax: number;
+  rates: number[];
+}) {
+  const rates = [
+    ...new Set(line.rates.filter((rate) => Number.isFinite(rate) && rate >= 0)),
+  ];
+  if (!rates.length && line.tax === 0 && line.net === 0) return 0;
+  if (rates.length === 1) return rates[0];
+  throw new InvoiceCheckError(
+    rates.length
+      ? `“${line.title}” har flere momssatser (${rates.map((r) => Math.round(r * 100) + ' %').join(', ')}). Ingen PDF gemmes.`
+      : `“${line.title}” har ingen moms i Shopify. Kontrollér, at Shopify opkræver moms for kundens land (Indstillinger → Moms og afgifter i Shopify). Ingen PDF gemmes.`,
+  );
+}
+
 export async function buildInvoicePdf(
   order: InvoiceSource,
   issuer: InvoiceIssuer,
@@ -264,15 +285,7 @@ export async function buildInvoicePdf(
     return lines;
   };
   const rows = invoiceDisplayLines(checked.lines).map((line) => {
-    const rates = [
-      ...new Set(
-        line.rates.filter((rate) => Number.isFinite(rate) && rate >= 0),
-      ),
-    ];
-    if (rates.length !== 1)
-      throw new InvoiceCheckError(
-        'En fakturalinje mangler en entydig momssats. Ingen PDF gemmes.',
-      );
+    const rates = [lineRate(line)];
     const indent = /indgravering/i.test(line.title) ? 12 : 0;
     return {
       indent,
@@ -285,16 +298,7 @@ export async function buildInvoicePdf(
   const vatGroups = [
     ...checked.lines
       .reduce((groups, line) => {
-        const rates = [
-          ...new Set(
-            line.rates.filter((rate) => Number.isFinite(rate) && rate >= 0),
-          ),
-        ];
-        if (rates.length !== 1)
-          throw new InvoiceCheckError(
-            'En fakturalinje mangler en entydig momssats. Ingen PDF gemmes.',
-          );
-        const key = rates[0];
+        const key = lineRate(line);
         const current = groups.get(key) || { rate: key, net: 0, tax: 0 };
         current.net += line.net;
         current.tax += line.tax;
