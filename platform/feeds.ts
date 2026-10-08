@@ -290,7 +290,9 @@ async function refresh(env: PlatformEnv, f: Feed) {
   if (claim.meta.changes !== 1)
     throw new HttpError(
       409,
-      'Feedet opdateres allerede eller er lige forsøgt. Vent 30 sekunder og prøv igen.',
+      f.lock_until > at
+        ? 'Feedet bliver lavet lige nu. Det tager op til et par minutter; prøv igen om lidt.'
+        : 'Feedet er lige forsøgt lavet. Vent 30 sekunder og prøv igen.',
     );
   try {
     const result = (await isDemoCompany(env, f.company_id))
