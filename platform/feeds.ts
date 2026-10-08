@@ -370,16 +370,25 @@ export async function publicFeed(request: Request, env: PlatformEnv) {
     !f.generated_at ||
     f.generated_at < now() - feedRefreshMinutes(JSON.parse(f.config_json)) * 60
   ) {
-    if (request.method === 'HEAD') return new Response(null, { status: 503 });
-    const updated = await refresh(env, f),
-      current = await lookup();
-    if (
-      !current ||
-      updated.revision !== current.revision ||
-      updated.xml_key !== current.xml_key
-    )
-      throw new HttpError(409, 'Feedet er ændret. Prøv igen.');
-    f = current;
+    if (request.method === 'HEAD' && !f.xml_key)
+      return new Response(null, { status: 503 });
+    if (request.method !== 'HEAD') {
+      // While another fetch is making it, or when making it fails, the last file made with the same settings
+      // is served: a partner fetching the feed gets products, not an error. The error shows in the portal.
+      const failure = await refresh(env, f).then(
+        () => null,
+        (error) => error,
+      );
+      const current = await lookup();
+      if (!current)
+        throw new HttpError(404, 'Feedet findes ikke eller er sat på pause.');
+      // Without a file, the reason the feed could not be made is shown rather than only "try again".
+      if (!current.xml_key)
+        throw failure instanceof HttpError && current.last_error
+          ? new HttpError(failure.status, current.last_error)
+          : (failure ?? new HttpError(409, 'Feedet er ændret. Prøv igen.'));
+      f = current;
+    }
   }
   return xmlResponse(env, f, request.method === 'HEAD');
 }
