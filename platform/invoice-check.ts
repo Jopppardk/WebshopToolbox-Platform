@@ -21,6 +21,9 @@ export type SourceLine = {
   requiresShipping: boolean;
   isGiftCard: boolean;
   variant?: null | {
+    // For product names in the market's language (invoice-translations.ts).
+    title?: string | null;
+    product?: null | { id: string; title: string };
     inventoryItem?: null | {
       id: string;
       unitCost?: null | { amount: string; currencyCode: string };

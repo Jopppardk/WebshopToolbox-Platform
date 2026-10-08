@@ -240,21 +240,21 @@ export async function orderData({
               ),
             m.currencyCode,
           ),
-          status: held(
-            row.country ?? null,
-            row.market_currency ?? null,
-            m.currencyCode,
-          )
-            ? 'Afventer · marked ikke sat op'
-            : bookingStatusLabel(
-                bookingStatus(
-                  'shopify',
-                  'orders',
-                  o.id,
-                  o.createdAt,
-                  row.payload_json,
-                ),
+          status:
+            held.reason(
+              row.country ?? null,
+              row.market_currency ?? null,
+              m.currencyCode,
+            ) ??
+            bookingStatusLabel(
+              bookingStatus(
+                'shopify',
+                'orders',
+                o.id,
+                o.createdAt,
+                row.payload_json,
               ),
+            ),
           currency: m.currencyCode,
           total: m.amount,
           paymentStatus: o.displayFinancialStatus,

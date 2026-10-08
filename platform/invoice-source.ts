@@ -7,7 +7,7 @@ import type { InvoiceSource, Connection } from './invoice-check';
 const money =
   '{ shopMoney { amount currencyCode } presentmentMoney { amount currencyCode } }';
 const taxes = `taxLines { rate channelLiable priceSet ${money} } discountAllocations { allocatedAmountSet ${money} }`;
-const itemFields = `id name quantity currentQuantity requiresShipping isGiftCard variant { inventoryItem { id unitCost { amount currencyCode } } } originalUnitPriceSet ${money} priceAfterAllDiscountsBeforeTaxesSet ${money} originalTotalSet ${money} discountedTotalSet ${money} ${taxes}`;
+const itemFields = `id name quantity currentQuantity requiresShipping isGiftCard variant { title product { id title } inventoryItem { id unitCost { amount currencyCode } } } originalUnitPriceSet ${money} priceAfterAllDiscountsBeforeTaxesSet ${money} originalTotalSet ${money} discountedTotalSet ${money} ${taxes}`;
 const shippingFields = `id title isRemoved originalPriceSet ${money} discountedPriceSet ${money} ${taxes}`;
 const page = 'pageInfo { hasNextPage endCursor }';
 export const orderFields = `id name email createdAt updatedAt processedAt test edited cancelledAt taxesIncluded presentmentCurrencyCode paymentGatewayNames displayFinancialStatus displayFulfillmentStatus
@@ -18,7 +18,7 @@ export const orderFields = `id name email createdAt updatedAt processedAt test e
   currentTotalPriceSet ${money} currentSubtotalPriceSet ${money} currentTotalTaxSet ${money} totalRefundedSet ${money} totalPriceSet ${money} totalTaxSet ${money} subtotalPriceSet ${money}
   lineItems(first:100) { nodes { ${itemFields} } ${page} }
   shippingLines(first:25) { nodes { ${shippingFields} } ${page} }`;
-type Access = { shop: string; accessToken: string };
+export type Access = { shop: string; accessToken: string };
 export async function orderQuery<T>(
   access: Access,
   query: string,
