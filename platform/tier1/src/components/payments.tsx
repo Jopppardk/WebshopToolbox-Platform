@@ -147,6 +147,9 @@ export function Payments({
     setError('');
     setNotice(`Henter ${plural}…`);
     let synced = 0;
+    const recent = new Date(Date.now() - 30 * 86400000)
+      .toISOString()
+      .slice(0, 10);
     try {
       for (const syncEndpoint of await syncEndpoints()) {
         let after: string | null = null;
@@ -155,7 +158,12 @@ export function Payments({
           const response = await fetch(syncEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ from, to, after }),
+            // The last 30 days only: refunds change while they are recent; the automatic run reads the rest.
+            body: JSON.stringify(
+              syncEndpoint.includes('flatpay')
+                ? { from: from > recent ? from : recent, to, after }
+                : { from, to, after, recentDays: 30 },
+            ),
           });
           const data: {
             synced: number;
