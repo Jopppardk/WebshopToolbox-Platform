@@ -139,6 +139,12 @@ export async function bookingStatuses(
         : provider === 'flatpay' && module === 'payments'
           ? 'flatpay'
           : undefined;
+    // An order cancelled in Shopify leaves the automatic run; earlier failed tries on it no longer matter
+    // as long as nothing reached Dinero.
+    const cancelled =
+      provider === 'shopify' &&
+      module === 'orders' &&
+      /"cancelledAt":"/.test(sourceJson);
     const failed =
       job &&
       attempts.some(
@@ -150,6 +156,7 @@ export async function bookingStatuses(
           ? 'booked_changed'
           : 'booked';
       if (['uncertain', 'held'].includes(found.phase)) return 'failed_manual';
+      if (cancelled && found.phase === 'prepared') return 'cancelled';
       if (failed)
         return found.phase === 'prepared' &&
           automation[
@@ -166,6 +173,7 @@ export async function bookingStatuses(
     if (receipt) return onboardingStatus(date, '', '', receipt, sourceJson);
     // A payout that has not been paid out yet is simply waiting; earlier refused attempts are not failures.
     if (upcoming) return 'expected';
+    if (cancelled && failed) return 'cancelled';
     if (failed)
       return automation[
         job === 'flatpay'
