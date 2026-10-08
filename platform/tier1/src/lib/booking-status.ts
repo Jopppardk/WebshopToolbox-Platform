@@ -51,6 +51,7 @@ export const bookingStatuses: Record<string, { label: string; tone: string }> =
 // An order cancelled in Shopify before its sale was booked needs nothing more: it shows as cancelled, not waiting.
 // A sale already booked, in Dinero as a draft or failed keeps its status.
 const unbooked = new Set([
+  'cancelled',
   'setup_required',
   'pending',
   'prepared',
