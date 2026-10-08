@@ -14,7 +14,7 @@ import {
 import { productionWrites } from './production-policy';
 import { customerActor, customerLogin, customerLogout } from './customer-auth';
 import { publicSignup } from './signup';
-import { publicFeed } from './feeds';
+import { publicFeed, refreshDueFeeds } from './feeds';
 import { handleTier1 } from './tier1-api';
 import { InvoiceCheckError } from './invoice-check';
 import { handleSupport, supportActor, supportToken } from './support';
@@ -535,6 +535,9 @@ export default {
           runProductionJobs(env),
           refreshPublicTracking(env).catch((error) =>
             console.error('Tracking kunne ikke opdateres', error),
+          ),
+          refreshDueFeeds(env).catch((error) =>
+            console.error('Feeds kunne ikke laves', error),
           ),
         ]);
         await markTick(env, 'ok');

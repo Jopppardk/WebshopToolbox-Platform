@@ -1,3 +1,4 @@
+import { productionWrites } from './production-policy';
 import { requireCompany, requireWebshop } from './auth';
 import { jsonBody } from './invitations';
 import {
@@ -351,6 +352,36 @@ async function xmlResponse(env: PlatformEnv, f: Feed, head = false) {
     },
   });
 }
+// Production makes feeds in the scheduled run (every 5 minutes), not while a partner waits: a fetch that gives
+// up after a few seconds would otherwise stop the making half way and lock the feed for 5 minutes. Feeds whose
+// data will be older than their interval within the next run are made, at most a few per run, oldest first.
+// A feed that failed is tried again after 15 minutes; its error shows in the portal.
+const scheduledFeeds = 4;
+export async function refreshDueFeeds(env: PlatformEnv) {
+  const at = now();
+  const rows = (
+    await env.PLATFORM_DB.prepare(
+      "SELECT f.* FROM product_feeds f JOIN companies c ON c.id=f.company_id JOIN webshop_connections sc ON sc.company_id=f.company_id AND sc.webshop_id=f.webshop_id AND sc.provider='shopify' JOIN webshops w ON w.company_id=f.company_id AND w.id=f.webshop_id WHERE f.enabled=1 AND c.status='active' AND w.status='active' AND f.lock_until<=? AND f.last_attempt<=? ORDER BY coalesce(f.generated_at,0) LIMIT 50",
+    )
+      .bind(at, at - 60)
+      .all<Feed>()
+  ).results;
+  const due = rows
+    .filter(
+      (f) =>
+        (!f.last_error || f.last_attempt <= at - 900) &&
+        (!f.xml_key ||
+          !f.generated_at ||
+          f.generated_at <=
+            at - feedRefreshMinutes(JSON.parse(f.config_json)) * 60 + 300),
+    )
+    .slice(0, scheduledFeeds);
+  for (const f of due)
+    await refresh(env, f).catch((error) =>
+      console.error('Feedet kunne ikke laves', f.id, error),
+    );
+  return due.length;
+}
 export async function publicFeed(request: Request, env: PlatformEnv) {
   if (!['GET', 'HEAD'].includes(request.method))
     throw new HttpError(405, 'Brug GET.');
@@ -366,11 +397,14 @@ export async function publicFeed(request: Request, env: PlatformEnv) {
       .first<Feed>();
   let f = await lookup();
   if (!f) throw new HttpError(404, 'Feedet findes ikke eller er sat på pause.');
-  // The feed is made again when it is fetched and its data is older than its chosen update interval.
+  // The feed is made again when it is fetched and its data is older than its chosen update interval. In
+  // production the scheduled run does that; a fetch only makes a feed that has no file yet.
   if (
     !f.xml_key ||
-    !f.generated_at ||
-    f.generated_at < now() - feedRefreshMinutes(JSON.parse(f.config_json)) * 60
+    (!productionWrites(env) && !f.generated_at) ||
+    (!productionWrites(env) &&
+      f.generated_at! <
+        now() - feedRefreshMinutes(JSON.parse(f.config_json)) * 60)
   ) {
     if (request.method === 'HEAD' && !f.xml_key)
       return new Response(null, { status: 503 });
