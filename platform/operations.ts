@@ -198,11 +198,14 @@ export async function handleOperations(
     .run();
   try {
     const access = await shopAccess(env, company, shop);
-    // Without read_all_orders Shopify silently returns only the last 60 days of orders.
+    // Without read_all_orders Shopify silently returns only the last 60 days of orders. Checked on full reads
+    // only; an incremental read ("changed since") is about recent changes.
     let warning: string | undefined;
     if (
       module === 'orders' &&
       after === null &&
+      since === null &&
+      orderNumber === null &&
       from < new Date(Date.now() - 59 * 86400000).toISOString()
     ) {
       const scopes = await orderQuery<{

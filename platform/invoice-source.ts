@@ -228,6 +228,11 @@ export async function shopAccess(
     creds.clientSecret,
   );
 }
+// A Shopify access token from the client credentials grant is valid for hours. It is kept in the Worker's memory
+// for at most 20 minutes (never past Shopify's own expiry), so a page or a run does not ask for a new token on
+// every call. The key holds the full credentials, so changed credentials always get a new token.
+const tokens = new Map<string, { token: string; until: number }>();
+const tokenMinutes = 20;
 export async function credentialAccess(
   domain: string,
   clientId: string,
@@ -235,6 +240,10 @@ export async function credentialAccess(
 ): Promise<Access> {
   if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(domain))
     throw new HttpError(400, 'Ugyldigt Shopify-domæne.');
+  const key = domain + '\n' + clientId + '\n' + clientSecret,
+    kept = tokens.get(key);
+  if (kept && kept.until > Date.now())
+    return { shop: domain, accessToken: kept.token };
   const response = await fetch(
     'https://' + domain + '/admin/oauth/access_token',
     {
@@ -249,12 +258,26 @@ export async function credentialAccess(
       }),
     },
   );
-  const token = (await response.json()) as { access_token?: string };
+  const token = (await response.json()) as {
+    access_token?: string;
+    expires_in?: number;
+  };
   if (!response.ok || !token.access_token)
     throw new HttpError(
       409,
       'Shopify-adgangen kunne ikke godkendes. App og butik skal tilhøre kundens Shopify-organisation og have read_orders-adgang.',
     );
+  const seconds =
+    typeof token.expires_in === 'number' && token.expires_in > 120
+      ? Math.min(tokenMinutes * 60, token.expires_in - 60)
+      : 0;
+  if (seconds > 0) {
+    if (tokens.size > 200) tokens.clear();
+    tokens.set(key, {
+      token: token.access_token,
+      until: Date.now() + seconds * 1000,
+    });
+  }
   return { shop: domain, accessToken: token.access_token };
 }
 export async function listInvoiceOrders(

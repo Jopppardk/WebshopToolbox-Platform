@@ -56,10 +56,11 @@ export async function orderData({
   }
   if (path === '/shopify/orders') {
     if (!get) {
-      // "Opdatér" (recent): only orders changed since the newest one already here (less 10 minutes), the same
-      // watermark as the automatic run, so unchanged and long-booked orders are skipped. Orders that change after
-      // booking, e.g. by a refund, still come. The first page answers with the since used; the client sends it
-      // back with each next page. Without a stored order everything is read.
+      // "Opdatér" (recent): only orders changed since the automatic run's own watermark (production_jobs
+      // import.orders, the newest change it has read less 10 minutes), so unchanged and long-booked orders are
+      // skipped. Orders that change after booking, e.g. by a refund, still come. The stored orders themselves
+      // carry no updatedAt (left out so a re-read does not count as a change). The first page answers with the
+      // since used; the client sends it back with each next page. Without a watermark everything is read.
       const b = await request
         .clone()
         .json()
@@ -67,15 +68,18 @@ export async function orderData({
       let forward = request;
       let since: string | null = null;
       if (b && (b as Record<string, unknown>).recent === true) {
-        const newest = await db
+        const cursor = await db
           .prepare(
-            "SELECT max(json_extract(payload_json,'$.updatedAt')) newest FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module='orders'",
+            "SELECT json_extract(cursor_json,'$.since') since FROM production_jobs WHERE company_id=? AND webshop_id=? AND job='import.orders'",
           )
           .bind(company, shop)
-          .first<{ newest: string | null }>();
+          .first<{ since: string | null }>();
         since =
-          newest?.newest && Number.isFinite(Date.parse(newest.newest))
-            ? new Date(Date.parse(newest.newest) - 600000).toISOString()
+          typeof cursor?.since === 'string' &&
+          /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(cursor.since) &&
+          Number.isFinite(Date.parse(cursor.since)) &&
+          cursor.since > '2000-01-02'
+            ? cursor.since
             : null;
         forward = forwarded(request, since ? { since } : {});
       }
