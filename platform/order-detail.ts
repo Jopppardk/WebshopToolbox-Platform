@@ -2,7 +2,10 @@
 // and every refund with its credit note, credit-note mail and booking. Read-only; the log is /sales/log.
 import { orderPaymentIntegration } from './catalog';
 import { bookingStatuses } from './booking-onboarding';
-import { bookingStatusLabel } from './tier1/src/lib/booking-status';
+import {
+  bookingStatusLabel,
+  cancelledOrder,
+} from './tier1/src/lib/booking-status';
 import { marketHold, orderMarketSettings } from './order-markets';
 import { legacyRefundSql, type OrderRefund } from './order-refunds';
 import { HttpError, reply, type PlatformEnv } from './types';
@@ -186,11 +189,18 @@ export async function orderDetail(
         : o.displayFulfillmentStatus === 'FULFILLED'
           ? 'Afsendt'
           : 'Ikke afsendt',
-      status:
-        held ??
-        bookingStatusLabel(
-          status('shopify', 'orders', id, o.createdAt, row.payload_json),
-        ),
+      status: (() => {
+        const booking = status(
+          'shopify',
+          'orders',
+          id,
+          o.createdAt,
+          row.payload_json,
+        );
+        return cancelledOrder(o.cancelledAt, booking)
+          ? bookingStatusLabel('cancelled')
+          : (held ?? bookingStatusLabel(booking));
+      })(),
       market: market
         ? {
             name: market.name,
