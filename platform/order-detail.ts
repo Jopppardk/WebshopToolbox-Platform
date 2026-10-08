@@ -80,7 +80,7 @@ export async function orderDetail(
         .all<{ provider: string }>()
     ).results.map((r) => r.provider),
   );
-  const held = (await marketHold(db, company, shop))(
+  const held = (await marketHold(db, company, shop)).reason(
     row.country ?? null,
     row.market_currency ?? null,
     currency,
@@ -186,11 +186,11 @@ export async function orderDetail(
         : o.displayFulfillmentStatus === 'FULFILLED'
           ? 'Afsendt'
           : 'Ikke afsendt',
-      status: held
-        ? 'Afventer · marked ikke sat op'
-        : bookingStatusLabel(
-            status('shopify', 'orders', id, o.createdAt, row.payload_json),
-          ),
+      status:
+        held ??
+        bookingStatusLabel(
+          status('shopify', 'orders', id, o.createdAt, row.payload_json),
+        ),
       market: market
         ? {
             name: market.name,

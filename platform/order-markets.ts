@@ -219,7 +219,7 @@ export async function marketHold(
     countries: JSON.parse(r.countries_json) as string[],
     currency: r.currency,
   }));
-  return (
+  const held = (
     country: string | null,
     currency: string | null,
     shopCurrency: string | null,
@@ -233,4 +233,20 @@ export async function marketHold(
       )
     );
   };
+  // Why an order waits, for Salg and the order view: a market in another currency than the order was paid in
+  // (e.g. a Swedish order paid in DKK while Sverige uses SEK) or no active market for the country.
+  const reason = (
+    country: string | null,
+    currency: string | null,
+    shopCurrency: string | null,
+  ) => {
+    if (!held(country, currency, shopCurrency)) return null;
+    const market = country
+      ? enabled.find((m) => m.countries.includes(country))
+      : undefined;
+    return market && currency && market.currency !== currency
+      ? `Afventer · betalt i ${currency}, markedet bruger ${market.currency}`
+      : 'Afventer · marked ikke sat op';
+  };
+  return Object.assign(held, { reason });
 }

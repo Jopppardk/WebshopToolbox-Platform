@@ -52,6 +52,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 - **Daglig driftsmail:** modtagelsen er ikke bekræftet.
 
 **Mangler**
+- **Svenske produktnavne på fakturaer:** kræver read_translations i kundens Shopify-app; ellers danske navne.
 - **Ekstern overvågning:** `/healthz/scheduler` overvåges ikke eksternt endnu (ejerens opgave).
 - **Backup:** gendannelsen er ikke øvet, og R2-dokumenterne har ingen backup.
 

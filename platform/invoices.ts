@@ -1,3 +1,4 @@
+import { withTranslatedLines } from './invoice-translations';
 import { asText } from './tier1/src/lib/format';
 import { recordFailure } from './record-history';
 import { PDFDocument } from 'pdf-lib';
@@ -722,8 +723,16 @@ async function invoices(
     let logo: ArrayBuffer | undefined;
     // Orders from another market: invoice with the market's settings (company details, design, logo), in its
     // language and currency, from its store (e.g. Sabeln.se). Danish orders use the company's settings as before.
-    const market = await orderMarketSettings(db, company, shop, id),
-      source = invoicedOrder(order, market);
+    const market = await orderMarketSettings(db, company, shop, id);
+    // In the market's language, product names too where the shop has translations (Shopify keeps Danish ones).
+    const source =
+      market && market.locale !== 'da'
+        ? await withTranslatedLines(
+            await shopAccess(env, company, shop),
+            invoicedOrder(order, market),
+            market.locale,
+          )
+        : invoicedOrder(order, market);
     const profile = market
       ? profileOf(
           await danishSettings(env, company),

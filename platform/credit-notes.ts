@@ -1,6 +1,7 @@
 // One credit note per refund of an invoiced order. It is built from the invoice as it was issued (customer,
 // company details and design), so it always matches the document it credits, and stored once in R2.
 // Orders the platform did not invoice get no credit note; their refunds are still booked.
+import { creditLineTitles } from './invoice-translations';
 import { buildInvoicePdf } from './invoice-pdf';
 import { sendCustomerInvoice } from './mail';
 import type { OrderRefund } from './order-refunds';
@@ -152,7 +153,8 @@ export async function ensureCreditNote(
     date: refund.processedAt,
     invoiceNumber,
     currency: credited.currency,
-    lines: credited.lines,
+    // Product names as on the invoice, e.g. Swedish for an order from Sweden.
+    lines: creditLineTitles(credited.lines, order.lineItems?.nodes ?? []),
   });
   const id = crypto.randomUUID(),
     key = `companies/${company}/webshops/${shop}/credit-notes/${id}.pdf`;
