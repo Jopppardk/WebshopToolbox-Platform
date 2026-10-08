@@ -91,7 +91,7 @@ export function OrderRow({
 }) {
   const state = order.status;
   const booked = state === 'Bogført';
-  const handled = booked || state === 'Annulleret · håndteret';
+  const handled = booked || state === 'Annulleret';
   return (
     <TableRow className={state === 'Fejlet' ? 'bg-red-50/35' : ''}>
       <TableCell className="pl-5 font-semibold text-[#365f08]">
@@ -129,7 +129,7 @@ export function OrderRow({
         <Badge
           variant={state.startsWith('Fejlet') ? 'destructive' : 'secondary'}
           className={
-            state === 'Bogført'
+            state === 'Bogført' || state === 'Annulleret'
               ? 'badge-booked'
               : state === 'Afventer' || state === 'Bogfører…'
                 ? 'badge-pending'

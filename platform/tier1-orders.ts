@@ -3,7 +3,10 @@
 import { orderPaymentIntegration, paymentProviders } from './catalog';
 import { recordHistory } from './record-history';
 import { bookingStatuses } from './booking-onboarding';
-import { bookingStatusLabel } from './tier1/src/lib/booking-status';
+import {
+  bookingStatusLabel,
+  cancelledOrder,
+} from './tier1/src/lib/booking-status';
 import { requireCompany } from './auth';
 import { handleOperations } from './operations';
 import { runSalesNow } from './production-jobs';
@@ -240,21 +243,22 @@ export async function orderData({
               ),
             m.currencyCode,
           ),
-          status:
-            held.reason(
-              row.country ?? null,
-              row.market_currency ?? null,
-              m.currencyCode,
-            ) ??
-            bookingStatusLabel(
-              bookingStatus(
-                'shopify',
-                'orders',
-                o.id,
-                o.createdAt,
-                row.payload_json,
-              ),
-            ),
+          status: (() => {
+            const booking = bookingStatus(
+              'shopify',
+              'orders',
+              o.id,
+              o.createdAt,
+              row.payload_json,
+            );
+            return cancelledOrder(o.cancelledAt, booking)
+              ? bookingStatusLabel('cancelled')
+              : (held.reason(
+                  row.country ?? null,
+                  row.market_currency ?? null,
+                  m.currencyCode,
+                ) ?? bookingStatusLabel(booking));
+          })(),
           currency: m.currencyCode,
           total: m.amount,
           paymentStatus: o.displayFinancialStatus,
