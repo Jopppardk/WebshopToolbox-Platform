@@ -48,7 +48,7 @@ type Page<T> = {
 const page = 'pageInfo { hasNextPage endCursor }';
 const variantFields =
   'id barcode title price compareAtPrice availableForSale inventoryQuantity selectedOptions { name value } image { url }';
-const productFields = `id status title handle productType descriptionHtml vendor featuredImage { url } gender:metafield(namespace:"custom",key:"gender"){value} variants(first:50){nodes{${variantFields}} ${page}}`;
+const productFields = `id status title handle productType descriptionHtml vendor featuredImage { url } gender:metafield(namespace:"custom",key:"gender"){value} collections(first:1){nodes{id title}} variants(first:50){nodes{${variantFields}} ${page}}`;
 const problem = () =>
   new HttpError(
     409,
@@ -224,8 +224,19 @@ export async function generateFeed(
   if (domain.protocol !== 'https:' || domain.username || domain.password)
     throw problem();
   const storefront = market ? market.url : domain.origin;
-  const products = new Map<string, { product: Product; category: string }>();
-  const add = (p: Product, category: string) => {
+  // The category is a collection's name: the chosen collection the product came from, otherwise the product's
+  // first collection in Shopify (its product type when it has none). Market feeds use the market's language.
+  type Category = { id: string | null; title: string };
+  const products = new Map<string, { product: Product; category: Category }>();
+  const own = (
+    p: Product & { collections?: { nodes?: Partial<Category>[] } },
+  ): Category => {
+    const c = p.collections?.nodes?.[0];
+    return c && typeof c.id === 'string' && typeof c.title === 'string'
+      ? { id: c.id, title: c.title }
+      : { id: null, title: p.productType || '' };
+  };
+  const add = (p: Product, category: Category) => {
     if (!p || !/^gid:\/\/shopify\/Product\/\d+$/.test(p.id)) throw problem();
     if (!products.has(p.id)) products.set(p.id, { product: p, category });
     if (products.size > 2500)
@@ -252,7 +263,7 @@ export async function generateFeed(
       for (const p of connection.nodes) {
         if (productIds.has(p.id)) throw problem();
         productIds.add(p.id);
-        add(p, id ? response.collection.title : p.productType || '');
+        add(p, id ? { id, title: response.collection.title } : own(p));
       }
       after = cursor;
     } while (after);
@@ -272,7 +283,7 @@ export async function generateFeed(
         data.nodes.some((p, i) => !p || p.id !== ids[i])
       )
         throw problem();
-      for (const p of data.nodes) add(p!, p!.productType || '');
+      for (const p of data.nodes) add(p!, own(p!));
     }
   }
   // Market feeds: is the product sold in the market, its price there and its texts in the market's language.
@@ -350,6 +361,38 @@ export async function generateFeed(
       });
     }
   }
+  // Collection names in the market's language; without a translation the Shopify name is used.
+  const names = new Map<string, string>();
+  if (market && !market.primary && market.locale) {
+    const ids = [
+      ...new Set(
+        [...products.values()]
+          .map((x) => x.category.id)
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    for (let i = 0; i < ids.length; i += 50) {
+      const batch = ids.slice(i, i + 50);
+      type Named = {
+        id?: unknown;
+        translations?: { key?: unknown; value?: unknown }[];
+      } | null;
+      const data = await query<{ nodes: Named[] }>(
+        'query FeedCategoryNames($ids:[ID!]!,$locale:String!){nodes(ids:$ids){... on Collection{id translations(locale:$locale){key value}}}}',
+        { ids: batch, locale: market.locale },
+      );
+      for (const n of Array.isArray(data.nodes) ? data.nodes : []) {
+        const title = (
+          Array.isArray(n?.translations) ? n.translations : []
+        ).find(
+          (t) =>
+            t?.key === 'title' && typeof t.value === 'string' && t.value.trim(),
+        )?.value;
+        if (typeof n?.id === 'string' && typeof title === 'string')
+          names.set(n.id, title);
+      }
+    }
+  }
   const entries: string[] = [];
   for (const { product: original, category } of products.values()) {
     if (original.status !== 'ACTIVE') continue;
@@ -390,7 +433,10 @@ export async function generateFeed(
           throw problem();
         entries.push(
           productXml(p, v, storefront, {
-            SHOPIFY_COLLECTION_TITLE: config.category || category,
+            SHOPIFY_COLLECTION_TITLE:
+              config.category ||
+              (category.id && names.get(category.id)) ||
+              category.title,
             SHIPPING_COST: config.shippingCost,
             FREE_SHIPPING_FROM:
               config.freeShippingFrom === null
