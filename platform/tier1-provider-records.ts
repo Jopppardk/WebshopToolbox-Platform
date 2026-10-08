@@ -227,7 +227,6 @@ export async function providerRecordData({
     : path.includes('refund')
       ? 'refunds'
       : 'payments';
-  const bookingStatus = await bookingStatuses(env, company, shop);
   const from = await dataCutoff(env, company, shop),
     offset = pageNumber(url.searchParams.get('offset'), 0),
     limit = pageNumber(url.searchParams.get('limit'), 50, 100) || 50;
@@ -241,6 +240,20 @@ export async function providerRecordData({
   ).results.map((r) => JSON.parse(r.payload_json));
   if (rows.length > 10000)
     throw new HttpError(409, 'Vælg en kortere historik.');
+  // Receipts only for the posts this overview can show (Shopify Payments and the providers' own records in the
+  // period), not every sales receipt of the webshop.
+  const providerIds = (
+    await db
+      .prepare(
+        'SELECT external_id FROM payment_records WHERE company_id=? AND webshop_id=? AND occurred_at>=?',
+      )
+      .bind(company, shop, from.slice(0, 10))
+      .all<{ external_id: string }>()
+  ).results.map((r) => r.external_id);
+  const bookingStatus = await bookingStatuses(env, company, shop, [
+    ...rows.map((r) => String(r.id)),
+    ...providerIds,
+  ]);
   if (module === 'payouts') {
     // Each provider stores its payouts under its own kind; Pensopay 'payments' are card payments, not payouts.
     const payments = (

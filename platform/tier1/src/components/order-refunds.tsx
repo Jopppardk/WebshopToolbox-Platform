@@ -5,6 +5,7 @@ import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
 import { formatDateTime } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { RefreshButton } from '@/components/refresh-button';
+import { fetchRecentOrders } from '@/lib/recent-orders';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -127,10 +128,13 @@ export function OrderRefunds({ syncRevision = 0 }: { syncRevision?: number }) {
   async function sync() {
     setSyncing(true);
     setError('');
-    setNotice('Henter tilbagebetalinger fra Shopify…');
+    setNotice('Henter ændrede ordrer fra Shopify…');
     let refunds = 0,
       orders = 0;
     try {
+      // New refunds show on their order first; the changed orders are fetched before the refunds are read.
+      await fetchRecentOrders();
+      setNotice('Henter tilbagebetalinger fra Shopify…');
       for (let round = 0; round < 20; round++) {
         const response = await fetch('/api/order-refunds/sync', {
           method: 'POST',
@@ -155,7 +159,7 @@ export function OrderRefunds({ syncRevision = 0 }: { syncRevision?: number }) {
       setNotice(
         orders
           ? `${refunds} tilbagebetaling${refunds === 1 ? '' : 'er'} hentet fra ${orders} ordre${orders === 1 ? '' : 'r'}.`
-          : 'Ingen nye tilbagebetalinger. Ordrer hentes fra Shopify ved hver synkronisering.',
+          : 'Ingen nye tilbagebetalinger.',
       );
     } catch (failure) {
       setError(

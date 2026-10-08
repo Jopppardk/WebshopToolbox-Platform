@@ -58,13 +58,14 @@ export function UnifiedPayouts({
       });
     return () => controller.abort();
   }, [offset, revision, syncRevision]);
-  // "Opdatér": payouts from every connected provider (Shopify Payments, Flatpay, ViaBill, Pensopay), for ViaBill
-  // and Pensopay the last 30 days, which covers payouts still on their way; older ones are fetched by the automatic
-  // run. A provider that fails does not stop the others; their errors are shown together.
+  // "Opdatér": payouts from every connected provider (Shopify Payments, Flatpay, ViaBill, Pensopay) for the last
+  // 30 days, which covers payouts still on their way; older ones are fetched by the automatic run. A provider that
+  // fails does not stop the others; their errors are shown together.
   async function syncProvider(provider: string) {
     const to = new Date().toISOString().slice(0, 10),
       from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-    let next: unknown = null;
+    // Flatpay walks forward in 30-day steps from `next`; it starts 30 days back instead of at the history start.
+    let next: unknown = provider === 'flatpay' ? from : null;
     const seen = new Set<string>();
     for (let page = 0; page < 200; page++) {
       const endpoint =
@@ -77,7 +78,7 @@ export function UnifiedPayouts({
               : '/api/flatpay/sync';
       const body =
         provider === 'shopify'
-          ? { after: next }
+          ? { after: next, recentDays: 30 }
           : provider === 'viabill'
             ? { kind: 'payout', from, to, next }
             : provider === 'pensopay'

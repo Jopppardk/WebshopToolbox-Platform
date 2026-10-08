@@ -49,6 +49,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { RefreshButton } from '@/components/refresh-button';
+import { fetchRecentOrders } from '@/lib/recent-orders';
 import { Input } from '@/components/ui/input';
 import {
   NativeSelect,
@@ -291,42 +292,9 @@ export default function Home() {
   const syncOrders = async () => {
     setSyncingOrders(true);
     try {
-      let after: string | null = null;
-      let since: string | null = null;
-      let first = true;
-      let synced = 0;
-      let historyWarning = '';
-      const seen = new Set<string>();
-      do {
-        // Only orders changed since the newest one already fetched (see /shopify/orders).
-        const response: Response = await fetch('/api/shopify/orders', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(first ? { recent: true } : { after, since }),
-        });
-        const data: {
-          synced: number;
-          since?: string | null;
-          warning?: string;
-          hasNextPage: boolean;
-          endCursor: string | null;
-          error?: string;
-        } = await response.json();
-        if (first) since = data.since ?? null;
-        first = false;
-        if (!response.ok)
-          throw new Error(data.error || 'Shopify-ordrer kunne ikke hentes.');
-        synced += data.synced;
-        if (data.warning) historyWarning = data.warning;
-        after = data.hasNextPage ? data.endCursor : null;
-        if (data.hasNextPage && (!after || seen.has(after) || seen.size >= 200))
-          throw new Error(
-            'Hentningen blev stoppet ved en ugyldig fortsættelse. Allerede hentede ordrer er bevaret.',
-          );
-        if (after) seen.add(after);
-      } while (after);
+      const { synced, warning } = await fetchRecentOrders();
       notify(
-        `${synced} Shopify-ordrer hentet${historyWarning ? ` · ${historyWarning}` : ''}`,
+        `${synced} Shopify-ordrer hentet${warning ? ` · ${warning}` : ''}`,
       );
     } finally {
       setSyncingOrders(false);

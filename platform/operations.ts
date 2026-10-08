@@ -188,7 +188,24 @@ export async function handleOperations(
       !Number.isFinite(Date.parse(since)))
   )
     throw new HttpError(400, 'Ugyldigt ændringstidspunkt.');
-  const from = await dataCutoff(env, company, shop);
+  // "Opdatér" reads Shopify Payments for the last days only (recentDays, 1-90): payouts and refunds change only
+  // while they are recent, and the automatic run reads the rest. Never before the data cutoff.
+  const recentDays: unknown = b.recentDays;
+  if (
+    recentDays !== undefined &&
+    (!['payouts', 'refunds', 'payments'].includes(module) ||
+      typeof recentDays !== 'number' ||
+      !Number.isSafeInteger(recentDays) ||
+      recentDays < 1 ||
+      recentDays > 90)
+  )
+    throw new HttpError(400, 'Ugyldig periode.');
+  const cutoff = await dataCutoff(env, company, shop),
+    recentFrom =
+      typeof recentDays === 'number'
+        ? new Date(Date.now() - recentDays * 86400000).toISOString()
+        : '';
+  const from = recentFrom > cutoff ? recentFrom : cutoff;
   const run = crypto.randomUUID();
   await db
     .prepare(
