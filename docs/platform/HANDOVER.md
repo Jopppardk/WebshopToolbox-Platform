@@ -2,7 +2,7 @@
 
 Aktuel status på én side. Læs den før hver opgave. Historikken står i [CHANGELOG.md](CHANGELOG.md), planen i [ROADMAP.md](ROADMAP.md) og arbejdsreglerne i [AGENTS.md](../../AGENTS.md). Opdatér denne side, når status eller åbne punkter ændrer sig. Skriv selve ændringen som en note øverst i CHANGELOG.md.
 
-_Senest opdateret 6. oktober 2026._
+_Senest opdateret 10. oktober 2026._
 
 ## Miljøer
 
@@ -55,6 +55,8 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 - **Svenske produktnavne på fakturaer:** kræver read_translations i kundens Shopify-app; ellers danske navne.
 - **Ekstern overvågning:** `/healthz/scheduler` overvåges ikke eksternt endnu (ejerens opgave).
 - **Backup:** gendannelsen er ikke øvet, og R2-dokumenterne har ingen backup.
+
+- **Fakturanumre ved flere webshops:** fakturanummeret er Shopify-ordrenavnet (`#1001` → `1001`, kreditnota `1001-K1`). To webshops i samme virksomhed uden eget ordre-præfiks i Shopify får samme numre, og platformen opdager det ikke. Løsning afventer beslutning.
 
 **Kendt teknisk gæld**
 - **Kodekvalitet:** 275 lint-fund (mest `any` og React-compiler), låst af `npm run lint`. Al kode er formateret, og nye ændringer skal være det.

@@ -315,7 +315,7 @@ export async function handleTier1Connections(
   } catch {
     throw new HttpError(
       409,
-      'Shopify kunne ikke godkende forbindelsen. Kontrollér butiksadresse og appoplysninger. Tidligere oplysninger er bevaret.',
+      'Shopify kunne ikke godkende forbindelsen. Kontrollér butiksadresse og appoplysninger. Appen skal være oprettet i samme Shopify-organisation som butikken; ligger butikken i en anden organisation, skal den have sin egen app. Tidligere oplysninger er bevaret.',
     );
   }
   const write = db

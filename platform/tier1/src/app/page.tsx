@@ -4,7 +4,11 @@ import { NotificationBell } from '@/components/notification-bell';
 import { Dashboard } from '@/components/dashboard';
 import { IntegrationRequired } from '@/components/integration-required';
 import { Rss, Truck } from 'lucide-react';
-import { CustomerIdentity, WebshopSelector } from '@/platform/workspace';
+import {
+  CustomerIdentity,
+  useAddingWebshop,
+  WebshopSelector,
+} from '@/platform/workspace';
 import {
   emptyAccounts,
   defaultAutomation,
@@ -120,6 +124,8 @@ const viewLoading = (
 
 export default function Home() {
   const syncState = useSyncStatus();
+  // "Tilføj webshop" opens the Shopify connection directly; the new webshop is created when it is connected.
+  const adding = useAddingWebshop();
   const [connections, setConnections] = useState<Set<string> | null>(null);
   const [connectionsError, setConnectionsError] = useState('');
   const refreshConnections = async () => {
@@ -175,13 +181,13 @@ export default function Home() {
     | 'performance'
     | 'shipments'
     | 'settings'
-  >('dashboard');
+  >(adding ? 'settings' : 'dashboard');
   const [integrationTarget, setIntegrationTarget] = useState<
     'shopify' | 'dinero' | 'emballage' | null
-  >(null);
+  >(adding ? 'shopify' : null);
   const [settingsTab, setSettingsTab] = useState<
     'dashboard' | 'integrations' | 'invoice-email' | 'inventory'
-  >('dashboard');
+  >(adding ? 'integrations' : 'dashboard');
   const [notice, setNotice] = useState('');
   const [accounts, setAccounts] = useState<Accounts>(emptyAccounts);
   const [automation, setAutomation] = useState<Automation>(defaultAutomation);
@@ -547,6 +553,9 @@ export default function Home() {
                 <SheetDescription className="text-slate-300">
                   WebshopToolbox
                 </SheetDescription>
+                <div className="mt-3 text-sm text-slate-300">
+                  <WebshopSelector />
+                </div>
                 <nav
                   className="flex-1 px-3 py-4"
                   aria-label="Primær navigation"
