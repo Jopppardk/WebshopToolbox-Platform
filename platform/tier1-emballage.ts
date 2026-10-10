@@ -246,14 +246,21 @@ export async function handleTier1Emballage(
       });
     }
     // The company's other webshops with a connection; this webshop can use the same organisation.
-    const reusable = (
-      await db
-        .prepare(
-          "SELECT w.id,w.name,e.identity FROM emballage_connections e JOIN webshops w ON w.company_id=e.company_id AND w.id=e.webshop_id WHERE e.company_id=? AND e.webshop_id<>? AND w.status='active' ORDER BY w.name,w.id",
-        )
-        .bind(company, shop)
-        .all<{ id: string; name: string; identity: string }>()
-    ).results;
+    // Only company administrators see the other webshops.
+    const admin = await requireCompany(db, actor, company, true).then(
+      () => true,
+      () => false,
+    );
+    const reusable = !admin
+      ? []
+      : (
+          await db
+            .prepare(
+              "SELECT w.id,w.name,e.identity FROM emballage_connections e JOIN webshops w ON w.company_id=e.company_id AND w.id=e.webshop_id WHERE e.company_id=? AND e.webshop_id<>? AND w.status='active' ORDER BY w.name,w.id",
+            )
+            .bind(company, shop)
+            .all<{ id: string; name: string; identity: string }>()
+        ).results;
     return reply({
       connected: !!context,
       reusable: reusable

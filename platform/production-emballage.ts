@@ -58,14 +58,15 @@ export async function productionEmballage(
   const sharers = (
     await db
       .prepare(
-        "SELECT e.webshop_id,e.config_json,e.revision,w.name FROM emballage_connections e JOIN webshops w ON w.company_id=e.company_id AND w.id=e.webshop_id WHERE e.company_id=? AND e.identity=? AND (w.status='active' OR e.webshop_id=?) ORDER BY e.webshop_id",
+        'SELECT e.webshop_id,e.config_json,e.revision,w.name,w.status FROM emballage_connections e JOIN webshops w ON w.company_id=e.company_id AND w.id=e.webshop_id WHERE e.company_id=? AND e.identity=? ORDER BY e.webshop_id',
       )
-      .bind(company, saved.identity, shop)
+      .bind(company, saved.identity)
       .all<{
         webshop_id: string;
         config_json: string;
         revision: number;
         name: string;
+        status: string;
       }>()
   ).results;
   if (!sharers.some((s) => s.webshop_id === shop))
@@ -113,12 +114,22 @@ export async function productionEmballage(
       destination:
         saved.identity + ':' + (context.api_key.is_test ? 'test' : 'live'),
     }),
-    // One receipt per organisation and report, kept on the first of the sharing webshops; earlier
-    // receipts kept on another webshop (before it shared the organisation) still count.
+    // One receipt per organisation and report, kept on the first of the sharing webshops. Receipts kept
+    // on any other webshop of the company (shared earlier, or no longer connected) still count.
     receiptKey = keyFor(sharers[0].webshop_id);
+  const receiptShops = (
+    await db
+      .prepare(
+        "SELECT DISTINCT webshop_id FROM production_receipts WHERE company_id=? AND provider='emballage' AND module='report' AND external_id=? AND destination=?",
+      )
+      .bind(company, receiptKey.externalId, receiptKey.destination)
+      .all<{ webshop_id: string }>()
+  ).results.map((r) => r.webshop_id);
   const priors = (
       await Promise.all(
-        sharers.map((s) => readReceipt(env, keyFor(s.webshop_id))),
+        [
+          ...new Set([...sharers.map((s) => s.webshop_id), ...receiptShops]),
+        ].map((id) => readReceipt(env, keyFor(id))),
       )
     ).filter((r) => r !== null),
     prior = priors.find((r) => r?.phase === 'accepted') || priors[0] || null;
@@ -142,6 +153,11 @@ export async function productionEmballage(
   url.searchParams.set('to', end);
   const periods: any[] = [];
   for (const s of sharers) {
+    // A deactivated webshop's quantities cannot be read here, and leaving them out would under-report.
+    if (s.status !== 'active')
+      fail(
+        `${s.name} er ikke aktiv, men deler organisationen. Genaktivér webshoppen, eller indberet hos Emballage Indberetning.`,
+      );
     const result = await handlePackaging(
       new Request(url, { headers: request.headers }),
       env,
@@ -253,7 +269,9 @@ export async function productionEmballage(
       .bind(company, saved.identity)
       .all<{ webshop_id: string; revision: number }>()
   ).results;
+  // The same webshops must still share the organisation, unchanged.
   if (
+    latest.length !== sharers.length ||
     sharers.some(
       (s) =>
         latest.find((l) => l.webshop_id === s.webshop_id)?.revision !==
