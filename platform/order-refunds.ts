@@ -342,6 +342,16 @@ export async function syncOrderRefunds(
 /** The refund's sale is in Dinero (booked or drafted here, or reconciled), so the clearing account it credits holds the sale. */
 export const saleBookedSql =
   "(EXISTS(SELECT 1 FROM production_receipts b WHERE b.company_id=s.company_id AND b.webshop_id=s.webshop_id AND b.provider='shopify' AND b.module='orders' AND b.external_id=s.order_id AND b.phase IN ('draft','booking','booked')) OR EXISTS(SELECT 1 FROM accounting_reconciliations b WHERE b.company_id=s.company_id AND b.webshop_id=s.webshop_id AND b.provider='shopify' AND b.module='orders' AND b.external_id=s.order_id))";
+/**
+ * An order that needs no bookkeeping at all: cancelled in Shopify and fully refunded, before its sale reached
+ * Dinero and before an invoice was made. Sale and refund cancel out, so neither is booked, invoiced or mailed.
+ * `a` is the alias of the row, `order` the column with the order's ID.
+ */
+export const voidOrderSql = (a: string, order: string) =>
+  `(EXISTS(SELECT 1 FROM operation_snapshots vo WHERE vo.company_id=${a}.company_id AND vo.webshop_id=${a}.webshop_id AND vo.module='orders' AND vo.external_id=${order} AND json_extract(vo.payload_json,'$.cancelledAt') IS NOT NULL AND json_extract(vo.payload_json,'$.displayFinancialStatus')='REFUNDED')` +
+  ` AND NOT EXISTS(SELECT 1 FROM production_receipts vr WHERE vr.company_id=${a}.company_id AND vr.webshop_id=${a}.webshop_id AND vr.provider='shopify' AND vr.module='orders' AND vr.external_id=${order} AND vr.phase<>'prepared')` +
+  ` AND NOT EXISTS(SELECT 1 FROM accounting_reconciliations vr WHERE vr.company_id=${a}.company_id AND vr.webshop_id=${a}.webshop_id AND vr.provider='shopify' AND vr.module='orders' AND vr.external_id=${order})` +
+  ` AND NOT EXISTS(SELECT 1 FROM platform_invoices vi WHERE vi.company_id=${a}.company_id AND vi.webshop_id=${a}.webshop_id AND vi.external_id=${order} AND vi.status='generated'))`;
 /** A refund already booked by the earlier Shopify Payments refund flow, so it is never booked twice. */
 export const legacyRefundSql =
   "EXISTS(SELECT 1 FROM production_receipts l WHERE l.company_id=s.company_id AND l.webshop_id=s.webshop_id AND l.provider='shopify' AND l.module='refunds' AND l.phase<>'prepared' AND json_extract(l.payload_json,'$.source.refund.id')=s.external_id)";

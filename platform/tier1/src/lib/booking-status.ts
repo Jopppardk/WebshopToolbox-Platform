@@ -46,6 +46,7 @@ export const bookingStatuses: Record<string, { label: string; tone: string }> =
       tone: 'badge-pending',
     },
     cancelled: { label: 'Annulleret', tone: 'badge-booked' },
+    void: { label: 'Annulleret · intet at bogføre', tone: 'badge-booked' },
   };
 
 // An order cancelled in Shopify before its sale was booked needs nothing more: it shows as cancelled, not waiting.

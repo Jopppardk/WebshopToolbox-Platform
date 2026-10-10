@@ -7,6 +7,7 @@ import { marketHold } from './order-markets';
 import {
   legacyRefundSql,
   saleBookedSql,
+  voidOrderSql,
   syncOrderRefunds,
   type OrderRefund,
 } from './order-refunds';
@@ -97,7 +98,7 @@ export async function orderRefundData({
     const rows = (
       await db
         .prepare(`SELECT s.external_id,s.occurred_at,s.payload_json,c.number credit_number,m.country,m.currency market_currency,
- EXISTS(SELECT 1 FROM platform_invoices i WHERE i.company_id=s.company_id AND i.webshop_id=s.webshop_id AND i.external_id=s.order_id AND i.status='generated') invoiced,${legacyRefundSql} legacy,${saleBookedSql} sale_booked,
+ EXISTS(SELECT 1 FROM platform_invoices i WHERE i.company_id=s.company_id AND i.webshop_id=s.webshop_id AND i.external_id=s.order_id AND i.status='generated') invoiced,${legacyRefundSql} legacy,${saleBookedSql} sale_booked,${voidOrderSql('s', 's.order_id')} voided,
  (SELECT r.phase FROM production_receipts r WHERE r.company_id=s.company_id AND r.webshop_id=s.webshop_id AND r.provider='invoice' AND r.module='credit_email' AND r.external_id=c.id) mail
  FROM order_refunds s LEFT JOIN platform_credit_notes c ON c.company_id=s.company_id AND c.webshop_id=s.webshop_id AND c.external_id=s.external_id AND c.status='generated'
  LEFT JOIN order_markets m ON m.company_id=s.company_id AND m.webshop_id=s.webshop_id AND m.external_id=s.order_id
@@ -166,22 +167,26 @@ export async function orderRefundData({
           legacy: !!row.legacy,
           foreign,
           booking:
-            row.legacy ||
-            [
-              'booked',
-              'draft',
-              'booked_changed',
-              'failed_manual',
-              'failed_retry',
-              'historical',
-              'setup_required',
-            ].includes(booking)
-              ? booking
-              : foreign
-                ? 'foreign'
-                : !row.sale_booked
-                  ? 'sale_pending'
-                  : booking,
+            row.voided &&
+            !row.legacy &&
+            !['booked', 'draft', 'booked_changed'].includes(booking)
+              ? 'void'
+              : row.legacy ||
+                  [
+                    'booked',
+                    'draft',
+                    'booked_changed',
+                    'failed_manual',
+                    'failed_retry',
+                    'historical',
+                    'setup_required',
+                  ].includes(booking)
+                ? booking
+                : foreign
+                  ? 'foreign'
+                  : !row.sale_booked
+                    ? 'sale_pending'
+                    : booking,
         };
       })
       .filter(

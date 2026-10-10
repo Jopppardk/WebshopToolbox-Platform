@@ -7,7 +7,7 @@
 // - waiting: refunds older than a day whose order sale is not in Dinero yet, when refunds are booked automatically.
 // Each item says which page to open; at most `limit` items per kind, with the full count.
 import { marketHold } from './order-markets';
-import { saleBookedSql } from './order-refunds';
+import { saleBookedSql, voidOrderSql } from './order-refunds';
 import { requireCompany } from './auth';
 import { productionWrites } from './production-policy';
 import { jsonBody } from './invitations';
@@ -87,6 +87,8 @@ export async function attention(
  FROM production_attempts a WHERE a.company_id=? AND a.webshop_id=? AND a.failures>0 AND a.job IN (SELECT value FROM json_each(?))
  AND NOT EXISTS(SELECT 1 FROM production_receipts b WHERE b.company_id=a.company_id AND b.webshop_id=a.webshop_id AND b.external_id=a.external_id AND b.phase='booked'
   AND b.provider=json_extract(?,'$.'||a.job||'[0]') AND b.module=json_extract(?,'$.'||a.job||'[1]'))
+ AND NOT (a.job IN ('sales','invoice') AND ${voidOrderSql('a', 'a.external_id')})
+ AND NOT (a.job IN ('order_refunds','credit') AND ${voidOrderSql('a', '(SELECT vf.order_id FROM order_refunds vf WHERE vf.company_id=a.company_id AND vf.webshop_id=a.webshop_id AND vf.external_id=a.external_id)')})
  ORDER BY a.attempted_at DESC`,
       )
       .bind(
@@ -142,7 +144,7 @@ export async function attention(
       .prepare(
         `SELECT s.external_id,s.occurred_at,(SELECT json_extract(o.payload_json,'$.name') FROM operation_snapshots o WHERE o.company_id=s.company_id AND o.webshop_id=s.webshop_id AND o.module='orders' AND o.external_id=s.order_id) order_name
  FROM order_refunds s WHERE s.company_id=? AND s.webshop_id=? AND s.occurred_at<strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')
- AND s.occurred_at>=strftime('%Y-%m-%dT%H:%M:%SZ','now','-90 days') AND NOT ${saleBookedSql}
+ AND s.occurred_at>=strftime('%Y-%m-%dT%H:%M:%SZ','now','-90 days') AND NOT ${saleBookedSql} AND NOT ${voidOrderSql('s', 's.order_id')}
  AND NOT EXISTS(SELECT 1 FROM production_receipts b WHERE b.company_id=s.company_id AND b.webshop_id=s.webshop_id AND b.provider='shopify' AND b.module='order_refunds' AND b.external_id=s.external_id AND b.phase='booked')
  ORDER BY s.occurred_at DESC`,
       )
