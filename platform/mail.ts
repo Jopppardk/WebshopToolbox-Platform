@@ -7,6 +7,7 @@ import {
 import { requireCompany, requireWebshop } from './auth';
 import { seal, unseal } from './connections';
 import { jsonBody } from './invitations';
+import { webshopInvoiceRow } from './invoice-profiles';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 
 type MailRow = {
@@ -41,41 +42,50 @@ function senderName(value: unknown) {
     throw new HttpError(400, 'Angiv et gyldigt afsendernavn.');
   return value.trim();
 }
-/** A market's own sender (Indstillinger → Faktura-afsendelse, the market's tab); without one it sends as Danmark. */
-export type MailScope = { shop: string; market: string } | undefined;
-async function row(env: PlatformEnv, company: string, scope?: MailScope) {
-  return scope
-    ? env.PLATFORM_DB.prepare(
-        'SELECT * FROM market_mail WHERE company_id=? AND webshop_id=? AND market_id=?',
-      )
-        .bind(company, scope.shop, scope.market)
-        .first<MailRow>()
-    : env.PLATFORM_DB.prepare('SELECT * FROM company_mail WHERE company_id=?')
-        .bind(company)
-        .first<MailRow>();
-}
-// A market sends with its own sender only; until one is saved it uses the standard sender (never Danmark's own domain).
-async function sendingRow(
-  env: PlatformEnv,
-  company: string,
-  scope?: MailScope,
-) {
-  return scope ? await row(env, company, scope) : await row(env, company);
-}
-// The table holding the sender that was used: the market's own, or Danmark's.
-async function ownScope(
-  env: PlatformEnv,
-  company: string,
-  scope?: MailScope,
-): Promise<MailScope> {
-  return scope && (await row(env, company, scope)) ? scope : undefined;
-}
+/**
+ * Whose sender (Indstillinger → Faktura-afsendelse): a market's own (shop + market), a webshop's own (shop, when it
+ * has its own invoice settings), or the company's (none).
+ */
+export type MailScope = { shop: string; market?: string } | undefined;
 const mailTable = (scope: MailScope) =>
-  scope ? 'market_mail' : 'company_mail';
+  scope?.market ? 'market_mail' : scope ? 'webshop_mail' : 'company_mail';
 const mailWhere = (scope: MailScope) =>
-  scope ? 'company_id=? AND webshop_id=? AND market_id=?' : 'company_id=?';
+  scope?.market
+    ? 'company_id=? AND webshop_id=? AND market_id=?'
+    : scope
+      ? 'company_id=? AND webshop_id=?'
+      : 'company_id=?';
 const mailKeys = (company: string, scope: MailScope) =>
-  scope ? [company, scope.shop, scope.market] : [company];
+  scope?.market
+    ? [company, scope.shop, scope.market]
+    : scope
+      ? [company, scope.shop]
+      : [company];
+async function row(env: PlatformEnv, company: string, scope?: MailScope) {
+  return env.PLATFORM_DB.prepare(
+    `SELECT * FROM ${mailTable(scope)} WHERE ${mailWhere(scope)}`,
+  )
+    .bind(...mailKeys(company, scope))
+    .first<MailRow>();
+}
+/**
+ * The sender a mail goes out with, and the scope holding it. A market, and a webshop with its own invoice settings,
+ * send with their own sender only; until one is saved they use the standard sender (never another one's domain).
+ * A webshop without its own settings sends as the company.
+ */
+export async function senderSettings(
+  env: PlatformEnv,
+  company: string,
+  scope?: MailScope,
+): Promise<{ settings: MailRow | null; own: MailScope }> {
+  if (
+    scope &&
+    !scope.market &&
+    !(await webshopInvoiceRow(env, company, scope.shop))
+  )
+    scope = undefined;
+  return { settings: await row(env, company, scope), own: scope };
+}
 function standardFrom(env: PlatformEnv) {
   return mailAddress(env.PLATFORM_MAIL_FROM || 'faktura@webshoptoolbox.dk');
 }
@@ -86,7 +96,13 @@ export function effectiveSender(settings: MailRow | null, standard: string) {
     ? settings.custom_from
     : standard;
 }
-async function defaultSenderName(env: PlatformEnv, company: string) {
+async function defaultSenderName(
+  env: PlatformEnv,
+  company: string,
+  scope?: MailScope,
+) {
+  const own = scope && (await webshopInvoiceRow(env, company, scope.shop));
+  if (own && own.name) return own.name;
   const value = await env.PLATFORM_DB.prepare(
     `SELECT COALESCE(NULLIF(i.name,''),c.name) AS name FROM companies c LEFT JOIN invoice_settings i ON i.company_id=c.id WHERE c.id=?`,
   )
@@ -102,7 +118,7 @@ async function info(
 ) {
   const own = await row(env, company, scope),
     settings = own;
-  const fallbackName = await defaultSenderName(env, company);
+  const fallbackName = await defaultSenderName(env, company, scope);
   const from = standardFrom(env);
   const allowed = (env.PLATFORM_MAIL_TEST_RECIPIENTS || '')
     .split(',')
@@ -124,7 +140,7 @@ async function info(
     testEnabled:
       !actor.support && (env.PLATFORM_ENV === 'local-test' || allowed),
     localPreview: env.PLATFORM_ENV === 'local-test',
-    // A market without its own sender sends from the standard sender until one is saved.
+    // A market or webshop without its own sender sends from the standard sender until one is saved.
     ...(scope ? { inherited: !own } : {}),
   };
 }
@@ -221,7 +237,7 @@ export async function handleMail(
         ? revision
         : null;
     await env.PLATFORM_DB.batch([
-      scope
+      scope?.market
         ? env.PLATFORM_DB.prepare(`INSERT INTO market_mail(company_id,webshop_id,market_id,sender_name,reply_to,custom_from,account_id,credentials_encrypted,revision,verified_revision) VALUES(?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(company_id,webshop_id,market_id) DO UPDATE SET sender_name=excluded.sender_name,reply_to=excluded.reply_to,custom_from=excluded.custom_from,account_id=excluded.account_id,credentials_encrypted=excluded.credentials_encrypted,revision=excluded.revision,verified_revision=excluded.verified_revision,updated_at=CURRENT_TIMESTAMP`).bind(
             company,
@@ -235,17 +251,30 @@ export async function handleMail(
             revision,
             verified,
           )
-        : env.PLATFORM_DB.prepare(`INSERT INTO company_mail(company_id,sender_name,reply_to,custom_from,account_id,credentials_encrypted,revision,verified_revision) VALUES(?,?,?,?,?,?,?,?)
+        : scope
+          ? env.PLATFORM_DB.prepare(`INSERT INTO webshop_mail(company_id,webshop_id,sender_name,reply_to,custom_from,account_id,credentials_encrypted,revision,verified_revision) VALUES(?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(company_id,webshop_id) DO UPDATE SET sender_name=excluded.sender_name,reply_to=excluded.reply_to,custom_from=excluded.custom_from,account_id=excluded.account_id,credentials_encrypted=excluded.credentials_encrypted,revision=excluded.revision,verified_revision=excluded.verified_revision,updated_at=CURRENT_TIMESTAMP`).bind(
+              company,
+              scope.shop,
+              name,
+              replyTo,
+              custom,
+              account,
+              credentials,
+              revision,
+              verified,
+            )
+          : env.PLATFORM_DB.prepare(`INSERT INTO company_mail(company_id,sender_name,reply_to,custom_from,account_id,credentials_encrypted,revision,verified_revision) VALUES(?,?,?,?,?,?,?,?)
     ON CONFLICT(company_id) DO UPDATE SET sender_name=excluded.sender_name,reply_to=excluded.reply_to,custom_from=excluded.custom_from,account_id=excluded.account_id,credentials_encrypted=excluded.credentials_encrypted,revision=excluded.revision,verified_revision=excluded.verified_revision,updated_at=CURRENT_TIMESTAMP`).bind(
-            company,
-            name,
-            replyTo,
-            custom,
-            account,
-            credentials,
-            revision,
-            verified,
-          ),
+              company,
+              name,
+              replyTo,
+              custom,
+              account,
+              credentials,
+              revision,
+              verified,
+            ),
       audit(env, company, actor, 'mail.settings.saved', {
         mode: custom ? 'custom' : 'standard',
       }),
@@ -302,16 +331,16 @@ export async function handleMail(
       throw new HttpError(409, 'Testmailen tilhører en anden session.');
     return reply(previous);
   }
-  const settings = await sendingRow(env, company, scope),
-    custom = input.mode === 'custom',
-    own = await ownScope(env, company, scope);
+  const { settings, own } = await senderSettings(env, company, scope),
+    custom = input.mode === 'custom';
   if (custom && (!settings?.custom_from || !settings.credentials_encrypted))
     throw new HttpError(
       400,
       'Gem din egen afsender og Cloudflare-oplysninger først.',
     );
   const from = custom ? settings!.custom_from : standardFrom(env);
-  const name = settings?.sender_name || (await defaultSenderName(env, company));
+  const name =
+    settings?.sender_name || (await defaultSenderName(env, company, own));
   const message = {
     from: { email: from, name },
     to: recipient,
@@ -504,9 +533,10 @@ export async function sendCustomerInvoice(
         : 'Den genererede faktura findes ikke i webshoppen.',
     );
   const recipient = mailAddress(recipientValue),
-    settings = await sendingRow(env, company, scope),
+    { settings, own } = await senderSettings(env, company, scope),
     from = effectiveSender(settings, standardFrom(env));
-  const name = settings?.sender_name || (await defaultSenderName(env, company));
+  const name =
+    settings?.sender_name || (await defaultSenderName(env, company, own));
   const key: ReceiptKey = {
     company,
     shop,

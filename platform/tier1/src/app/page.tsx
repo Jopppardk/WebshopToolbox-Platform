@@ -200,7 +200,8 @@ export default function Home() {
   const [settingsMessage, setSettingsMessage] = useState('');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [orderError, setOrderError] = useState('');
-  useEffect(() => {
+  // Also reloaded when a webshop switches between the company's and its own invoice settings (mail texts).
+  const loadSettings = () =>
     fetch('/api/admin/settings')
       .then(async (response) => {
         const data = (await response.json()) as {
@@ -224,6 +225,8 @@ export default function Home() {
             'Indstillinger kunne ikke indlæses. Genindlæs siden.',
         ),
       );
+  useEffect(() => {
+    void loadSettings();
   }, []);
   const orderPageSize = 25;
   const activePeriod = view === 'invoices' ? 'all' : orderPeriod;
@@ -1041,6 +1044,7 @@ export default function Home() {
                 saving={settingsSaving}
                 message={settingsMessage}
                 onConnectionsChanged={refreshConnections}
+                onSettingsChanged={loadSettings}
               />
             </div>
           )}

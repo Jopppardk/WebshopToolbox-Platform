@@ -18,7 +18,7 @@ import { handleInvoices } from './invoices';
 import { handlePackaging } from './packaging';
 import { financeService } from './finance-source';
 import { dataStartDate } from './tier1-history';
-import { ensureMarketRow } from './invoice-profiles';
+import { ensureMarketRow, webshopInvoiceRow } from './invoice-profiles';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 import { forwarded, pageNumber } from './tier1-data-shared';
 import { orderData } from './tier1-orders';
@@ -573,7 +573,8 @@ export async function handleTier1Data(
       lastSyncedAt,
     });
   }
-  // A market's tab (?marketId=) has its own sender, company details, design and logo; Danmark's tab has none.
+  // A market's tab (?marketId=) has its own sender, company details, design and logo. Danmark's tab is the
+  // company's, or the webshop's own when it has switched them on (webshop_invoice_settings).
   const marketId = url.searchParams.get('marketId');
   if (marketId && !/^gid:\/\/shopify\/Market\/\d{1,30}$/.test(marketId))
     throw new HttpError(400, 'Vælg et marked.');
@@ -590,6 +591,8 @@ export async function handleTier1Data(
         actor,
         company,
         path.endsWith('/test') ? 'test' : undefined,
+        undefined,
+        (await webshopInvoiceRow(env, company, shop)) ? { shop } : undefined,
       );
     if (shop === 'none') throw new HttpError(409, 'Forbind en webshop først.');
     if (request.method !== 'GET' && !actor.support)
@@ -606,7 +609,7 @@ export async function handleTier1Data(
   }
   if (path === '/invoices/logo')
     return handleInvoices(
-      marketId ? withShop() : request,
+      shop !== 'none' ? withShop() : request,
       env,
       actor,
       company,
@@ -627,7 +630,7 @@ export async function handleTier1Data(
   }
   if (path === '/invoices/settings')
     return handleInvoices(
-      marketId ? withShop() : request,
+      shop !== 'none' ? withShop() : request,
       env,
       actor,
       company,

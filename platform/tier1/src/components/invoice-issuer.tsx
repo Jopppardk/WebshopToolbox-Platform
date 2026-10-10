@@ -10,6 +10,7 @@ type Settings = {
   contact: string;
   hasLogo: boolean;
   ownLogo?: boolean;
+  own?: boolean;
   revision: number;
   design: Design;
 };
@@ -126,7 +127,12 @@ export function InvoiceIssuer({
           <div>
             <h2 className="text-lg font-semibold">1. Design din faktura</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Gælder virksomhedens nye fakturaer. Eksisterende PDF’er bevares.
+              {marketId
+                ? 'Gælder markedets nye fakturaer.'
+                : value?.own
+                  ? 'Gælder kun denne webshops nye fakturaer.'
+                  : 'Gælder virksomhedens nye fakturaer.'}{' '}
+              Eksisterende PDF’er bevares.
             </p>
           </div>
           <a

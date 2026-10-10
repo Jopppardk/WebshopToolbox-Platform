@@ -13,7 +13,7 @@ import {
 } from './order-markets';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 import { jsonBody } from './invitations';
-import { handleMail, sendCustomerInvoice } from './mail';
+import { handleMail, sendCustomerInvoice, senderSettings } from './mail';
 import { buildInvoicePdf } from './invoice-pdf';
 import {
   shopAccess,
@@ -26,6 +26,7 @@ import {
   fillTemplate,
   marketRow,
   profileOf,
+  webshopInvoiceRow,
   type InvoiceProfile,
 } from './invoice-profiles';
 import {
@@ -72,6 +73,29 @@ async function settings(env: PlatformEnv, company: string): Promise<Settings> {
       logo_key: null,
     }
   );
+}
+// A webshop with its own invoice settings invoices and mails with them; the history (months) stays the company's.
+async function withWebshop(
+  env: PlatformEnv,
+  company: string,
+  shop: string,
+  s: Settings,
+): Promise<Settings> {
+  const own = await webshopInvoiceRow(env, company, shop);
+  return own
+    ? {
+        ...s,
+        name: own.name,
+        address: own.address,
+        cvr: own.cvr,
+        contact: own.contact,
+        subject: own.subject,
+        body: own.body,
+        logo_key: own.logo_key,
+        design_json: own.design_json || '{}',
+        revision: own.revision,
+      }
+    : s;
 }
 function text(value: unknown, max: number) {
   if (
@@ -150,7 +174,7 @@ async function marketInvoiceSettings(
 ): Promise<Response> {
   const db = env.PLATFORM_DB,
     url = new URL(request.url),
-    dk = await danishSettings(env, company);
+    dk = await danishSettings(env, company, shop);
   const saved = await marketRow(env, company, shop, marketId),
     profile = profileOf(dk, saved);
   if (action === 'settings' && request.method === 'GET')
@@ -221,6 +245,148 @@ async function marketInvoiceSettings(
     throw new HttpError(403, 'Upload et PNG-logo fra fakturaindstillingerne.');
   const key = await storeLogo(env, company, await request.arrayBuffer());
   return save('logo_key=?', [key], 'invoice.market.logo.saved');
+}
+/** Danmark's tab for one webshop: switching its own settings on (a copy of the company's) or off, and editing them. */
+async function webshopInvoiceSettings(
+  request: Request,
+  env: PlatformEnv,
+  actor: Actor,
+  company: string,
+  shop: string,
+  action: string,
+  s: Settings,
+): Promise<Response> {
+  const db = env.PLATFORM_DB,
+    url = new URL(request.url),
+    own = await webshopInvoiceRow(env, company, shop);
+  if (action === 'settings' && request.method === 'POST') {
+    await requireCompany(db, actor, company, true);
+    if (actor.support)
+      throw new HttpError(403, 'Afslut supportadgang før fakturaopsætning.');
+    const b = await jsonBody(request);
+    if (typeof b.own !== 'boolean')
+      throw new HttpError(400, 'Vælg fælles eller egen opsætning.');
+    if (b.own && !own) {
+      // Starts as a copy of the company's settings, so nothing changes until the webshop's own are edited.
+      const c = await danishSettings(env, company);
+      await db.batch([
+        db
+          .prepare(
+            'INSERT INTO webshop_invoice_settings(company_id,webshop_id,name,address,cvr,contact,subject,body,credit_subject,credit_body,logo_key,design_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING',
+          )
+          .bind(
+            company,
+            shop,
+            c.name,
+            c.address,
+            c.cvr,
+            c.contact,
+            c.subject,
+            c.body,
+            c.credit_subject ?? null,
+            c.credit_body ?? null,
+            c.logo_key,
+            c.design_json || '{}',
+          ),
+        audit(env, actor, company, 'invoice.webshop.own', shop),
+      ]);
+    } else if (!b.own && own)
+      // Back to the company's settings: the webshop's own sender goes with them.
+      await db.batch([
+        db
+          .prepare(
+            'DELETE FROM webshop_mail WHERE company_id=? AND webshop_id=?',
+          )
+          .bind(company, shop),
+        db
+          .prepare(
+            'DELETE FROM webshop_invoice_settings WHERE company_id=? AND webshop_id=?',
+          )
+          .bind(company, shop),
+        audit(env, actor, company, 'invoice.webshop.shared', shop),
+      ]);
+    return reply({ own: b.own });
+  }
+  if (!own) return invoices(request, env, actor, company, action, true);
+  if (action === 'settings' && request.method === 'GET')
+    return reply({
+      name: own.name,
+      address: own.address,
+      cvr: own.cvr,
+      contact: own.contact,
+      subject: own.subject,
+      body: own.body,
+      months: s.months,
+      design: invoiceDesign(JSON.parse(own.design_json || '{}')),
+      revision: own.revision,
+      hasLogo: !!own.logo_key,
+      own: true,
+    });
+  if (action === 'logo' && request.method === 'GET') {
+    if (!own.logo_key) throw new HttpError(404, 'Intet logo gemt.');
+    const file = await env.PLATFORM_DOCUMENTS.get(own.logo_key);
+    if (!file) throw new HttpError(404, 'Logo mangler.');
+    return new Response(file.body, {
+      headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' },
+    });
+  }
+  await requireCompany(db, actor, company, true);
+  if (actor.support)
+    throw new HttpError(403, 'Afslut supportadgang før fakturaopsætning.');
+  const save = async (set: string, values: unknown[], event: string) => {
+    const result = await db.batch([
+      db
+        .prepare(
+          `UPDATE webshop_invoice_settings SET ${set},revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE company_id=? AND webshop_id=? AND revision=?`,
+        )
+        .bind(...values, company, shop, own.revision),
+      audit(env, actor, company, event, shop),
+    ]);
+    if (result[0].meta.changes !== 1)
+      throw new HttpError(409, 'Fakturaindstillingerne er ændret. Genindlæs.');
+    return reply({ ok: true });
+  };
+  if (action === 'settings') {
+    if (request.method !== 'PUT') throw new HttpError(405, 'Brug Gem.');
+    const b = await jsonBody(request, 12000);
+    const v = {
+      name: text(b.name, 120),
+      address: text(b.address, 180),
+      cvr: text(b.cvr, 30),
+      contact: text(b.contact, 100),
+      subject: text(b.subject ?? own.subject, 200),
+      body: text(b.body ?? own.body, 4000),
+    };
+    if (/[\r\n]/.test(v.name + v.address + v.cvr + v.contact + v.subject))
+      throw new HttpError(400, 'Kontrollér fakturaoplysningerne.');
+    if (b.revision !== undefined && b.revision !== own.revision)
+      throw new HttpError(409, 'Fakturaindstillingerne er ændret. Genindlæs.');
+    return save(
+      'name=?,address=?,cvr=?,contact=?,subject=?,body=?,design_json=?',
+      [
+        v.name,
+        v.address,
+        v.cvr,
+        v.contact,
+        v.subject,
+        v.body,
+        JSON.stringify(
+          invoiceDesign(b.design ?? JSON.parse(own.design_json || '{}')),
+        ),
+      ],
+      'invoice.webshop.settings.saved',
+    );
+  }
+  if (request.method === 'DELETE')
+    return save('logo_key=?', [null], 'invoice.webshop.logo.removed');
+  if (
+    request.method !== 'PUT' ||
+    request.headers.get('origin') !== url.origin ||
+    request.headers.get('content-type') !== 'image/png'
+  )
+    throw new HttpError(403, 'Upload et PNG-logo fra fakturaindstillingerne.');
+  const key = await storeLogo(env, company, await request.arrayBuffer());
+  return save('logo_key=?', [key], 'invoice.webshop.logo.saved');
 }
 async function storeLogo(
   env: PlatformEnv,
@@ -303,12 +469,32 @@ async function invoices(
   actor: Actor,
   company: string,
   action = '',
+  companySettings = false,
 ): Promise<Response> {
   const url = new URL(request.url),
     db = env.PLATFORM_DB;
   await requireCompany(db, actor, company, request.method !== 'GET');
   const s = await settings(env, company);
   s.months = (await historyPolicy(env, company)).months;
+  // Danmark's tab of a webshop (?webshopId= without a market): its own settings, or the company's (own: false).
+  const ownShop = url.searchParams.get('webshopId');
+  if (
+    !companySettings &&
+    ownShop &&
+    !url.searchParams.get('marketId') &&
+    (action === 'settings' || action === 'logo')
+  ) {
+    await requireWebshop(db, actor, company, ownShop);
+    return webshopInvoiceSettings(
+      request,
+      env,
+      actor,
+      company,
+      ownShop,
+      action,
+      s,
+    );
+  }
   if (action === 'test-latest' && request.method === 'POST') {
     if (actor.support)
       throw new HttpError(403, 'Afslut supportadgang før testmail.');
@@ -376,7 +562,7 @@ async function invoices(
     const market = exampleMarket
       ? await marketRow(env, company, shop, exampleMarket)
       : null;
-    const profile = profileOf(await danishSettings(env, company), market);
+    const profile = profileOf(await danishSettings(env, company, shop), market);
     let logo: ArrayBuffer | undefined;
     if (profile.logoKey) {
       const f = await env.PLATFORM_DOCUMENTS.get(profile.logoKey);
@@ -408,18 +594,8 @@ async function invoices(
       logo,
     );
     if (action === 'example-test') {
-      const scope = market ? { shop, market: market.market_id } : undefined;
-      const sender = scope
-        ? await db
-            .prepare(
-              'SELECT custom_from FROM market_mail WHERE company_id=? AND webshop_id=? AND market_id=?',
-            )
-            .bind(company, shop, scope.market)
-            .first<{ custom_from: string }>()
-        : await db
-            .prepare('SELECT custom_from FROM company_mail WHERE company_id=?')
-            .bind(company)
-            .first<{ custom_from: string }>();
+      const scope = market ? { shop, market: market.market_id } : { shop };
+      const sender = (await senderSettings(env, company, scope)).settings;
       const rendered = profileText(profile, s.name, exampleInvoice());
       const mailRequest = new Request(request.url, {
         method: 'POST',
@@ -469,6 +645,7 @@ async function invoices(
         design: invoiceDesign(JSON.parse(s.design_json || '{}')),
         revision: s.revision || 0,
         hasLogo: !!s.logo_key,
+        own: false,
       });
     if (actor.support)
       throw new HttpError(403, 'Afslut supportadgang før fakturaopsætning.');
@@ -616,6 +793,7 @@ async function invoices(
       : await jsonBody(request);
   const shop = typeof input.webshopId === 'string' ? input.webshopId : '';
   await requireWebshop(db, actor, company, shop);
+  Object.assign(s, await withWebshop(env, company, shop, s));
   if (actor.support && ['sync', 'generate', 'test', 'send'].includes(action))
     throw new HttpError(
       403,
@@ -738,7 +916,7 @@ async function invoices(
         : invoicedOrder(order, market);
     const profile = market
       ? profileOf(
-          await danishSettings(env, company),
+          await danishSettings(env, company, shop),
           await marketRow(env, company, shop, market.market_id),
         )
       : null;
@@ -815,7 +993,7 @@ async function invoices(
   const rendered = market
     ? profileText(
         profileOf(
-          await danishSettings(env, company),
+          await danishSettings(env, company, shop),
           await marketRow(env, company, shop, market.market_id),
         ),
         s.name,
@@ -839,25 +1017,33 @@ async function invoices(
         disposition: 'attachment',
       },
       'invoice',
-      market ? { shop, market: market.market_id } : undefined,
+      market ? { shop, market: market.market_id } : { shop },
     );
   const mailRequest = new Request(request.url, {
     method: 'POST',
     headers: request.headers,
     body: JSON.stringify({ requestId: input.requestId, mode: input.mode }),
   });
-  return handleMail(mailRequest, env, actor, company, 'test', {
-    subject: '[TEST] ' + rendered.subject,
-    text:
-      rendered.text +
-      '\n\nTESTMAIL – sendt til din loginadresse, ikke til kunden.',
-    attachment: {
-      content: bytes,
-      filename: 'faktura-' + id.split('/').pop() + '.pdf',
-      type: 'application/pdf',
-      disposition: 'attachment',
+  return handleMail(
+    mailRequest,
+    env,
+    actor,
+    company,
+    'test',
+    {
+      subject: '[TEST] ' + rendered.subject,
+      text:
+        rendered.text +
+        '\n\nTESTMAIL – sendt til din loginadresse, ikke til kunden.',
+      attachment: {
+        content: bytes,
+        filename: 'faktura-' + id.split('/').pop() + '.pdf',
+        type: 'application/pdf',
+        disposition: 'attachment',
+      },
     },
-  });
+    market ? { shop, market: market.market_id } : { shop },
+  );
 }
 
 export async function handleInvoices(

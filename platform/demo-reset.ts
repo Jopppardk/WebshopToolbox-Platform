@@ -34,6 +34,8 @@ export const demoTables = [
   'ops_alerts',
   'shipping_labels',
   'market_mail',
+  'webshop_mail',
+  'webshop_invoice_settings',
   'webshop_markets',
   'shipment_tracking_cache',
   'shipping_events',
