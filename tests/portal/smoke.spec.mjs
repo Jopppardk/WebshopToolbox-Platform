@@ -170,6 +170,22 @@ test('Indstillinger: the Swedish tab mirrors Danmark, and Tilføj webshop opens 
   await expect(page.locator('main')).not.toContainText(
     'ændret i en anden fane',
   );
+  // Danmark: the webshop can have its own invoice settings, and go back to the company's.
+  await page.getByRole('tab', { name: /Danmark/ }).click();
+  const profile = page.getByRole('region', {
+    name: 'Fakturaopsætning for webshoppen',
+  });
+  await profile.getByRole('switch').click();
+  await expect(profile).toContainText('gælder kun Webshop A1');
+  await expect(page.locator('main')).toContainText(
+    'Gælder kun denne webshops nye fakturaer.',
+  );
+  await profile.getByRole('switch').click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Brug fælles opsætning' })
+    .click();
+  await expect(profile).toContainText('bruger virksomhedens fælles opsætning');
   // Tilføj webshop: from Integrationer straight to the Shopify connection, and back.
   // In this test because logins are rate limited.
   await nav(page, 'Indstillinger').click();

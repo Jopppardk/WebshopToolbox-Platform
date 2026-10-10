@@ -241,7 +241,7 @@ export async function sendCreditNote(
     refund.orderId,
   );
   const profile = profileOf(
-    await danishSettings(env, company),
+    await danishSettings(env, company, shop),
     market ? await marketRow(env, company, shop, market.market_id) : null,
   );
   const name =
@@ -293,7 +293,7 @@ export async function sendCreditNote(
       disposition: 'attachment',
     },
     'credit',
-    market ? { shop, market: market.market_id } : undefined,
+    market ? { shop, market: market.market_id } : { shop },
   );
   if (!response.ok)
     throw new HttpError(

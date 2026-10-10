@@ -24,7 +24,30 @@ async function fingerprint(parts: string[]) {
     (n) => n.toString(16).padStart(2, '0'),
   ).join('');
 }
+// The Danish invoice mail texts are the company's, or the webshop's own when it has its own invoice settings.
+async function textsOf(db: D1Database, company: string, shop: string) {
+  const own = await db
+    .prepare(
+      'SELECT 1 AS own FROM webshop_invoice_settings WHERE company_id=? AND webshop_id=?',
+    )
+    .bind(company, shop)
+    .first();
+  return own
+    ? {
+        own: 1,
+        table: 'webshop_invoice_settings',
+        where: 'company_id=? AND webshop_id=?',
+        keys: [company, shop],
+      }
+    : {
+        own: 0,
+        table: 'invoice_settings',
+        where: 'company_id=?',
+        keys: [company],
+      };
+}
 async function state(db: D1Database, company: string, shop: string) {
+  const texts = await textsOf(db, company, shop);
   const preference = await db
     .prepare(
       'SELECT preferences_json,revision FROM tier1_preferences WHERE company_id=? AND webshop_id=?',
@@ -37,9 +60,9 @@ async function state(db: D1Database, company: string, shop: string) {
     .first<{ accounts_json: string }>();
   const invoice = await db
     .prepare(
-      'SELECT subject,body,credit_subject,credit_body FROM invoice_settings WHERE company_id=?',
+      `SELECT subject,body,credit_subject,credit_body FROM ${texts.table} WHERE ${texts.where}`,
     )
-    .bind(company)
+    .bind(...texts.keys)
     .first<{
       subject: string;
       body: string;
@@ -47,6 +70,7 @@ async function state(db: D1Database, company: string, shop: string) {
       credit_body: string | null;
     }>();
   const revision = await fingerprint([
+    String(texts.own),
     preference?.revision || '',
     mapping?.accounts_json || '',
     invoice?.subject || '',
@@ -63,6 +87,7 @@ async function state(db: D1Database, company: string, shop: string) {
     ? JSON.parse(preference.preferences_json)
     : { automation: defaultAutomation, syncIntervalMinutes: 15 };
   return {
+    texts,
     preference,
     mapping,
     invoice,
@@ -120,17 +145,22 @@ export async function handleTier1Settings(
   // Shared mapping/mail fields may be edited through the existing portal or a
   // different webshop while this request is in flight. Compare them inside the
   // transaction as well, before claiming the per-webshop preference revision.
-  const condition = `COALESCE((SELECT accounts_json FROM accounting_mapping WHERE company_id=?),'')=? AND COALESCE((SELECT subject FROM invoice_settings WHERE company_id=?),'')=? AND COALESCE((SELECT body FROM invoice_settings WHERE company_id=?),'')=? AND COALESCE((SELECT credit_subject FROM invoice_settings WHERE company_id=?),'')=? AND COALESCE((SELECT credit_body FROM invoice_settings WHERE company_id=?),'')=?`;
+  // Also that the webshop has not switched between the company's and its own invoice settings meanwhile.
+  const { table, where, keys } = old.texts;
+  const condition = `EXISTS(SELECT 1 FROM webshop_invoice_settings WHERE company_id=? AND webshop_id=?)=? AND COALESCE((SELECT accounts_json FROM accounting_mapping WHERE company_id=?),'')=? AND COALESCE((SELECT subject FROM ${table} WHERE ${where}),'')=? AND COALESCE((SELECT body FROM ${table} WHERE ${where}),'')=? AND COALESCE((SELECT credit_subject FROM ${table} WHERE ${where}),'')=? AND COALESCE((SELECT credit_body FROM ${table} WHERE ${where}),'')=?`;
   const guard = [
     company,
+    shop,
+    old.texts.own,
+    company,
     old.mapping?.accounts_json || '',
-    company,
+    ...keys,
     old.invoice?.subject || '',
-    company,
+    ...keys,
     old.invoice?.body || '',
-    company,
+    ...keys,
     old.invoice?.credit_subject || '',
-    company,
+    ...keys,
     old.invoice?.credit_body || '',
   ];
   const preferences = JSON.stringify({
@@ -163,17 +193,30 @@ export async function handleTier1Settings(
         'INSERT INTO accounting_mapping(company_id,accounts_json) SELECT ?,? WHERE changes()=1 ON CONFLICT(company_id) DO UPDATE SET accounts_json=excluded.accounts_json,updated_at=CURRENT_TIMESTAMP',
       )
       .bind(company, JSON.stringify(settings.accounts)),
-    db
-      .prepare(
-        "INSERT INTO invoice_settings(company_id,name,address,cvr,contact,subject,body,credit_subject,credit_body) SELECT id,name,'','','',?,?,?,? FROM companies WHERE id=? AND changes()=1 ON CONFLICT(company_id) DO UPDATE SET subject=excluded.subject,body=excluded.body,credit_subject=excluded.credit_subject,credit_body=excluded.credit_body",
-      )
-      .bind(
-        settings.invoiceEmail.subject,
-        settings.invoiceEmail.body,
-        settings.invoiceEmail.creditSubject,
-        settings.invoiceEmail.creditBody,
-        company,
-      ),
+    old.texts.own
+      ? db
+          .prepare(
+            'UPDATE webshop_invoice_settings SET subject=?,body=?,credit_subject=?,credit_body=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE company_id=? AND webshop_id=? AND changes()=1',
+          )
+          .bind(
+            settings.invoiceEmail.subject,
+            settings.invoiceEmail.body,
+            settings.invoiceEmail.creditSubject,
+            settings.invoiceEmail.creditBody,
+            company,
+            shop,
+          )
+      : db
+          .prepare(
+            "INSERT INTO invoice_settings(company_id,name,address,cvr,contact,subject,body,credit_subject,credit_body) SELECT id,name,'','','',?,?,?,? FROM companies WHERE id=? AND changes()=1 ON CONFLICT(company_id) DO UPDATE SET subject=excluded.subject,body=excluded.body,credit_subject=excluded.credit_subject,credit_body=excluded.credit_body",
+          )
+          .bind(
+            settings.invoiceEmail.subject,
+            settings.invoiceEmail.body,
+            settings.invoiceEmail.creditSubject,
+            settings.invoiceEmail.creditBody,
+            company,
+          ),
     db
       .prepare(
         "INSERT INTO audit_events(id,company_id,actor_id,action,resource_id,details_json) SELECT ?,?,?,'tier1.settings.saved',?,'{}' WHERE changes()=1",
@@ -186,6 +229,7 @@ export async function handleTier1Settings(
       'Indstillingerne er ændret. Genindlæs før du gemmer.',
     );
   const savedRevision = await fingerprint([
+    String(old.texts.own),
     revision,
     JSON.stringify(settings.accounts),
     settings.invoiceEmail.subject,

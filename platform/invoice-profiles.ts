@@ -1,5 +1,6 @@
-// Invoice settings per country. Danmark is the company's invoice_settings/company_mail; every other market has
-// the same settings in webshop_markets/market_mail, where an empty value means "as Danmark".
+// Invoice settings per country. Danmark is the company's invoice_settings/company_mail, or the webshop's own
+// webshop_invoice_settings/webshop_mail when it has them; every other market has the same settings in
+// webshop_markets/market_mail, where an empty value means "as Danmark" (the webshop's Danmark).
 import { HttpError, type PlatformEnv } from './types';
 import { invoiceDesign, type InvoiceDesign } from './invoice-design';
 import { shopMarkets } from './feed-source';
@@ -101,10 +102,28 @@ export type InvoiceProfile = {
   creditBody: string;
 };
 
+export type WebshopInvoiceRow = DanishSettings & { revision: number };
+/** A webshop's own invoice settings (Danmark tab, "Egen opsætning for denne webshop"), or null when it uses the company's. */
+export async function webshopInvoiceRow(
+  env: PlatformEnv,
+  company: string,
+  shop: string | null | undefined,
+) {
+  if (!shop || shop === 'none') return null;
+  return env.PLATFORM_DB.prepare(
+    'SELECT * FROM webshop_invoice_settings WHERE company_id=? AND webshop_id=?',
+  )
+    .bind(company, shop)
+    .first<WebshopInvoiceRow>();
+}
+/** Danmark's invoice settings: the webshop's own when it has them, otherwise the company's. */
 export async function danishSettings(
   env: PlatformEnv,
   company: string,
+  shop?: string | null,
 ): Promise<DanishSettings> {
+  const own = await webshopInvoiceRow(env, company, shop);
+  if (own) return own;
   const saved = await env.PLATFORM_DB.prepare(
     'SELECT * FROM invoice_settings WHERE company_id=?',
   )

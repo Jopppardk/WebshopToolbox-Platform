@@ -29,6 +29,7 @@ import {
 import { supportedModules } from '@/lib/integration-visibility';
 import { syncIntervals } from '@/lib/sync-schedule';
 import { InvoiceMarkets } from '@/components/invoice-markets';
+import { WebshopInvoiceProfile } from '@/components/webshop-invoice-profile';
 import { useEffect, useState } from 'react';
 import {
   ArrowDownToLine,
@@ -54,6 +55,7 @@ export function Settings({
   setAccounts,
   onSave,
   onConnectionsChanged,
+  onSettingsChanged,
   automation,
   setAutomation,
   invoiceEmail,
@@ -81,6 +83,7 @@ export function Settings({
   saving: boolean;
   message: string;
   onConnectionsChanged: () => Promise<void>;
+  onSettingsChanged?: () => Promise<void>;
 }) {
   const capabilities = useCapabilities();
   const workspace = useWorkspace(),
@@ -120,6 +123,8 @@ export function Settings({
     return () => cancelAnimationFrame(frame);
   }, [mode, initialIntegration]);
   const [connected, setConnected] = useState<Record<string, string>>({});
+  // Danmark's sections reload when the webshop switches between shared and own invoice settings.
+  const [profileRevision, setProfileRevision] = useState(0);
   const [shopify, setShopify] = useState({
     shop: '',
     clientId: '',
@@ -551,11 +556,18 @@ export function Settings({
           </fieldset>
         </>
       )}
-      {/* One tab per country: Danmark is the company's invoice settings, other markets have their own. */}
+      {/* One tab per country: Danmark is the company's (or the webshop's own) invoice settings, other markets have their own. */}
       {mode === 'invoice-email' && (
         <InvoiceMarkets
+          key={profileRevision}
           home={
             <>
+              <WebshopInvoiceProfile
+                onChanged={async () => {
+                  await onSettingsChanged?.();
+                  setProfileRevision((value) => value + 1);
+                }}
+              />
               <InvoiceIssuer />
               <fieldset disabled={!ready || saving} className="min-w-0">
                 {!ready && !message && (

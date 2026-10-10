@@ -80,7 +80,7 @@ export async function handleMarkets(
           : 'Shopify-markederne kunne ikke hentes.';
     }
     const home = markets.find((m) => m.primary) || null,
-      dk = await danishSettings(env, company);
+      dk = await danishSettings(env, company, shop);
     const view = (
       s: MarketRow | undefined,
       m: { locale: string | null; url: string; name: string },

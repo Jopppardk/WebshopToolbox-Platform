@@ -24,7 +24,8 @@ type Sender = {
   localPreview: boolean;
   inherited?: boolean;
 };
-// Danmark's sender, or a market's own (marketId); a market without its own sends as Danmark.
+// Danmark's sender (the company's, or the webshop's own), or a market's own (marketId). A market, and a webshop
+// with its own invoice settings, send from the standard sender until their own is saved.
 export function InvoiceSender({
   marketId,
   onSaved,
@@ -133,7 +134,9 @@ export function InvoiceSender({
           {saved.inherited && (
             <span className="mt-1 block text-xs text-muted-foreground">
               Sender fra standardafsenderen, indtil du gemmer en afsender her.
-              Tilknyt jeres eget domæne nedenfor, typisk et svensk.
+              {marketId
+                ? 'Tilknyt jeres eget domæne nedenfor, typisk et svensk.'
+                : 'Tilknyt webshoppens eget domæne nedenfor.'}
             </span>
           )}
         </p>
