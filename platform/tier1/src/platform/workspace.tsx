@@ -40,7 +40,7 @@ export function WebshopSelector() {
       {webshops.length > 0 && (
         <select
           aria-label="Webshop"
-          className="rounded border bg-white px-2 py-1"
+          className="rounded border bg-white px-2 py-1 text-foreground"
           value={webshopId || ''}
           onChange={(event) => choose(event.target.value)}
         >
@@ -56,6 +56,11 @@ export function WebshopSelector() {
       )}
     </label>
   );
+}
+// No webshop chosen while the company already has one: an administrator is adding another webshop.
+export function useAddingWebshop() {
+  const { webshops, webshopId } = useWorkspace();
+  return webshopId === null && webshops.length > 0;
 }
 export function CustomerIdentity() {
   const { user, company } = useWorkspace();

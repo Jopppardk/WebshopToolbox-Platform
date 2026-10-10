@@ -146,7 +146,7 @@ test('Salg: one view per order with invoice, booking, refund and log', async ({
     await expect(dialog).toContainText(text);
 });
 
-test('Faktura-afsendelse: the Swedish tab mirrors Danmark and its mail text saves', async ({
+test('Indstillinger: the Swedish tab mirrors Danmark, and Tilføj webshop opens the Shopify connection', async ({
   page,
 }) => {
   await nav(page, 'Indstillinger').click();
@@ -170,4 +170,34 @@ test('Faktura-afsendelse: the Swedish tab mirrors Danmark and its mail text save
   await expect(page.locator('main')).not.toContainText(
     'ændret i en anden fane',
   );
+  // Tilføj webshop: from Integrationer straight to the Shopify connection, and back.
+  // In this test because logins are rate limited.
+  await nav(page, 'Indstillinger').click();
+  await page.getByRole('tab', { name: /Integrationer/ }).click();
+  await page.getByRole('button', { name: 'Tilføj webshop' }).click();
+  const region = page.getByRole('region', { name: 'Ny webshop' });
+  await expect(region).toContainText('Tilføj en ny webshop');
+  await expect(page.getByLabel('Shopify butiksadresse')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Test og opret webshop' }),
+  ).toBeVisible();
+  await region.getByRole('button', { name: 'Fortryd' }).click();
+  await expect(
+    page.locator('select[aria-label="Webshop"]').first(),
+  ).toHaveValue('shop-a1');
+  // Fortryd returns to the webshop the user came from, also when it is not the first.
+  const selector = page.locator('select[aria-label="Webshop"]').first();
+  await selector.selectOption('shop-a2');
+  await selector.selectOption('');
+  await page
+    .getByRole('region', { name: 'Ny webshop' })
+    .getByRole('button', { name: 'Fortryd' })
+    .click();
+  await expect(selector).toHaveValue('shop-a2');
+  // The webshop selector is also in the menu on small screens.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: /menu/i }).first().click();
+  await expect(
+    page.getByRole('dialog').getByRole('combobox', { name: 'Webshop' }),
+  ).toBeVisible();
 });

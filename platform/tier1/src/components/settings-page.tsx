@@ -4,6 +4,7 @@
 import { formatDateTime } from '@/lib/format';
 import { useCapabilities } from '@/platform/capabilities';
 import { tier1Fetch as fetch } from '@/platform/transport';
+import { useAddingWebshop, useWorkspace } from '@/platform/workspace';
 import { IntegrationStartDate } from '@/components/integration-start-date';
 import {
   IntegrationLibrary,
@@ -82,6 +83,11 @@ export function Settings({
   onConnectionsChanged: () => Promise<void>;
 }) {
   const capabilities = useCapabilities();
+  const workspace = useWorkspace(),
+    adding = useAddingWebshop();
+  // Another webshop is added from here by an administrator; support only looks.
+  const canAddWebshop =
+    workspace.company.role === 'admin' && !workspace.user.support;
   const [chart, setChart] = useState<
     Array<{ number: string; name: string; vatCode?: string }>
   >([]);
@@ -765,6 +771,49 @@ export function Settings({
               else setExpandedIntegration(id);
             }}
           />
+          {adding ? (
+            <div
+              className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#c8d6a6] bg-[#f4f8ea] p-4"
+              role="region"
+              aria-label="Ny webshop"
+            >
+              <div>
+                <p className="text-sm font-semibold">Tilføj en ny webshop</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Udfyld Shopify med den nye butiks adresse og appoplysninger.
+                  Webshoppen oprettes og vælges, når forbindelsen er testet.
+                  Dinero og kontoplanen deles med virksomhedens øvrige webshops.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const previous = sessionStorage.getItem(
+                    'toolbox-previous-shop',
+                  );
+                  workspace.choose(
+                    workspace.webshops.find((shop) => shop.id === previous)
+                      ?.id || workspace.webshops[0].id,
+                  );
+                }}
+              >
+                Fortryd
+              </Button>
+            </div>
+          ) : (
+            canAddWebshop &&
+            connected.shopify && (
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white p-4">
+                <p className="text-sm text-muted-foreground">
+                  Har virksomheden flere Shopify-butikker? Hver butik tilsluttes
+                  som sin egen webshop.
+                </p>
+                <Button variant="outline" onClick={() => workspace.choose('')}>
+                  Tilføj webshop
+                </Button>
+              </div>
+            )
+          )}
           <div className="mb-8 grid items-start gap-3 md:grid-cols-2">
             {library.selection?.selected.includes('shipmondo') && (
               <ShipmondoConnection
@@ -848,7 +897,9 @@ export function Settings({
                           ? 'Tester…'
                           : isConnected
                             ? 'Test og opdatér forbindelse'
-                            : 'Test og forbind'}
+                            : adding
+                              ? 'Test og opret webshop'
+                              : 'Test og forbind'}
                       </Button>
                     </div>
                   ) : (
@@ -914,7 +965,10 @@ export function Settings({
                       </Button>
                     </div>
                   )}
-                  <IntegrationStartDate provider={provider} />
+                  {/* Start dates belong to a webshop; a new one gets them once it exists. */}
+                  {!(adding && provider === 'shopify') && (
+                    <IntegrationStartDate provider={provider} />
+                  )}
                   {connectionMessage && (
                     <p className="mt-3 text-sm text-[#5d712f]" role="status">
                       {connectionMessage}
