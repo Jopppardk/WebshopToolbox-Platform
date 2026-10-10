@@ -44,6 +44,8 @@ type Preview = {
   commercialKg: number;
   testMode: boolean;
   organisation: string;
+  // Webshops sharing the organisation; the report covers them together.
+  webshops?: string[];
 };
 export function PackagingReporting({
   revision = 0,
@@ -307,6 +309,12 @@ export function PackagingReporting({
                 <dd>{kg(preview.commercialKg * 1000)}</dd>
               </div>
             </dl>
+            {(preview.webshops?.length || 0) > 1 && (
+              <p className="mb-4 text-sm text-muted-foreground">
+                Samlet for {preview.webshops!.join(', ')}, som deler
+                organisationen.
+              </p>
+            )}
             {preview.ignoredLines > 0 && (
               <div
                 role="alert"
