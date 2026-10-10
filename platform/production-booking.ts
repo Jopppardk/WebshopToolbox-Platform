@@ -1,4 +1,5 @@
 import { asText } from './tier1/src/lib/format';
+import { accountsForWebshop } from './tier1/src/lib/admin-settings';
 import { recordFailure } from './record-history';
 import { requireCompany, requireWebshop } from './auth';
 import { unseal } from './connections';
@@ -154,6 +155,7 @@ async function productionBooking(
     .first<any>();
   if (!mapping || !prefs)
     throw new HttpError(409, 'Gem kontoplan og indstillinger først.');
+
   const { snapshot: proposal, file } = await prepare({
     env,
     company,
@@ -162,7 +164,15 @@ async function productionBooking(
     connection,
     credentials,
     prefs,
-    mapping,
+    // The webshop's own mellemregningskonti replace the company's. The receipt keeps the company's
+    // mapping (mappingJson), which the database checks at the claim; the webshop's part is covered by
+    // the preferences revision.
+    mapping: {
+      ...mapping,
+      accounts_json: JSON.stringify(
+        accountsForWebshop(mapping.accounts_json, prefs.preferences_json),
+      ),
+    },
     sourceRow,
   });
   const dates = (

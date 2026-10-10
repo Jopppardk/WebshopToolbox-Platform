@@ -1,4 +1,5 @@
 import { collapseRepeat } from './run-cleanup';
+import { accountsForWebshop } from './tier1/src/lib/admin-settings';
 import { dataCutoff } from './tier1-history';
 import { payoutSummaryFields } from './payout-calculations';
 import { checkInvoice } from './order-check';
@@ -118,11 +119,19 @@ export async function handleOperations(
       )
       .bind(company)
       .first<{ accounts_json: string }>();
+    const prefs = await db
+      .prepare(
+        'SELECT preferences_json FROM tier1_preferences WHERE company_id=? AND webshop_id=?',
+      )
+      .bind(company, shop)
+      .first<{ preferences_json: string }>();
     return reply({
       invoice,
       draft: salesDraft(
         invoice,
-        mapping ? JSON.parse(mapping.accounts_json) : {},
+        mapping
+          ? accountsForWebshop(mapping.accounts_json, prefs?.preferences_json)
+          : {},
         connection ? JSON.parse(connection.chart_json) : [],
         false,
       ),

@@ -25,6 +25,7 @@ import {
   type Accounts,
   type Automation,
   type InvoiceEmailSettings,
+  webshopAccountKeys,
 } from '@/lib/admin-settings';
 import { supportedModules } from '@/lib/integration-visibility';
 import { syncIntervals } from '@/lib/sync-schedule';
@@ -266,6 +267,12 @@ export function Settings({
     void loadChart(false);
   }, []);
   const vatCodes = vatCodeOptions(chart);
+  // With several webshops the mellemregningskonti are saved for the chosen webshop only.
+  const { webshops, webshopId } = useWorkspace(),
+    perShop =
+      webshops.length > 1
+        ? webshops.find((shop) => shop.id === webshopId)?.name
+        : undefined;
   const Field = ({ name, label }: { name: keyof Accounts; label: string }) => (
     <label className="block">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
@@ -345,6 +352,11 @@ export function Settings({
           />
           <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#c09960]" />
         </div>
+      )}
+      {perShop && (webshopAccountKeys as readonly string[]).includes(name) && (
+        <span className="mt-1 block text-xs text-muted-foreground">
+          Gælder kun {perShop}. Hver webshop har sin egen mellemregningskonto.
+        </span>
       )}
     </label>
   );
