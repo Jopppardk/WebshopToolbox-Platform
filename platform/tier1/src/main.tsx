@@ -139,6 +139,9 @@ function App() {
   const choose = (id: string) => {
     if (id !== '' && !workspace.webshops.some((shop) => shop.id === id)) return;
     if (id === '' && workspace.company.role !== 'admin') return;
+    // "Fortryd" while adding a webshop returns to the one the user came from.
+    if (id === '' && workspace.webshopId)
+      sessionStorage.setItem('toolbox-previous-shop', workspace.webshopId);
     sessionStorage.setItem('toolbox-selected-shop', id);
     selectWebshop(id || null);
     setWorkspace({ ...workspace, webshopId: id || null });

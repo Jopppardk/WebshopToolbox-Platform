@@ -787,7 +787,15 @@ export function Settings({
               </div>
               <Button
                 variant="outline"
-                onClick={() => workspace.choose(workspace.webshops[0].id)}
+                onClick={() => {
+                  const previous = sessionStorage.getItem(
+                    'toolbox-previous-shop',
+                  );
+                  workspace.choose(
+                    workspace.webshops.find((shop) => shop.id === previous)
+                      ?.id || workspace.webshops[0].id,
+                  );
+                }}
               >
                 Fortryd
               </Button>

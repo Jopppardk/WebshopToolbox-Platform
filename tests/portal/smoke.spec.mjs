@@ -185,6 +185,15 @@ test('Indstillinger: the Swedish tab mirrors Danmark, and Tilføj webshop opens 
   await expect(
     page.locator('select[aria-label="Webshop"]').first(),
   ).toHaveValue('shop-a1');
+  // Fortryd returns to the webshop the user came from, also when it is not the first.
+  const selector = page.locator('select[aria-label="Webshop"]').first();
+  await selector.selectOption('shop-a2');
+  await selector.selectOption('');
+  await page
+    .getByRole('region', { name: 'Ny webshop' })
+    .getByRole('button', { name: 'Fortryd' })
+    .click();
+  await expect(selector).toHaveValue('shop-a2');
   // The webshop selector is also in the menu on small screens.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: /menu/i }).first().click();
