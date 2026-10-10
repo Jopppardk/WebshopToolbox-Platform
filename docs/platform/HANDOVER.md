@@ -50,6 +50,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 **Ikke verificeret i drift**
 - **Shipmondo-labels fra Salg:** ikke afprøvet mod en rigtig konto. Den første rigtige ordre er testen (aftalt).
 - **Daglig driftsmail:** modtagelsen er ikke bekræftet.
+- **Flere webshops (udgivet 10. oktober 2026, dev og prod, run 38064862126, main `15bf3cd`):** faktura og afsender pr. webshop, genbrug af Shipmondo/Emballage med samlet Emballage-indberetning og mellemregningskonti pr. webshop. Kun afprøvet med testdata; ikke mod rigtig afsendelse fra eget domæne, Shipmondo, Emballage Indberetning eller Dinero.
 
 **Mangler**
 - **Svenske produktnavne på fakturaer:** kræver read_translations i kundens Shopify-app; ellers danske navne.
