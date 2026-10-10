@@ -1,7 +1,7 @@
 import { asText } from './tier1/src/lib/format';
 import { productionEmballage } from './production-emballage';
 import { productionWrites } from './production-policy';
-import { requireCompany } from './auth';
+import { requireCompany, requireWebshop } from './auth';
 import { seal, unseal } from './connections';
 import {
   eiConnectionError,
@@ -73,13 +73,40 @@ export async function handleTier1Emballage(
       );
       if (!response.ok) return response;
     } else if (b.action === 'connect') {
-      if (
-        typeof b.apiKey !== 'string' ||
-        !b.apiKey.trim() ||
-        b.apiKey.length > 2048
-      )
-        throw new HttpError(400, 'Angiv en gyldig API-nøgle.');
-      key = b.apiKey.trim();
+      if (b.copyFrom !== undefined) {
+        // The same organisation as another of the company's webshops: the key is copied and sealed on the
+        // server, never sent to the browser. Its quarterly reports then cover both webshops together.
+        const from = asText(b.copyFrom);
+        if (!from || from === shop)
+          throw new HttpError(400, 'Vælg en anden webshop.');
+        await requireWebshop(db, actor, company, from);
+        const source = await db
+          .prepare(
+            'SELECT identity,credentials_encrypted FROM emballage_connections WHERE company_id=? AND webshop_id=?',
+          )
+          .bind(company, from)
+          .first<{ identity: string; credentials_encrypted: string }>();
+        if (!source)
+          throw new HttpError(
+            409,
+            'Den valgte webshop har ingen forbindelse til Emballage Indberetning.',
+          );
+        key = (
+          await unseal(
+            env,
+            [company, from, 'emballage', source.identity],
+            source.credentials_encrypted,
+          )
+        ).apiKey;
+      } else {
+        if (
+          typeof b.apiKey !== 'string' ||
+          !b.apiKey.trim() ||
+          b.apiKey.length > 2048
+        )
+          throw new HttpError(400, 'Angiv en gyldig API-nøgle.');
+        key = b.apiKey.trim();
+      }
       let verified: EIContext;
       try {
         verified = (await eiRequest<EIContext>(key, '/me')).data;
@@ -218,8 +245,25 @@ export async function handleTier1Emballage(
         schema: (await eiRequest<EISchema>(key, `/reports/${id}/schema`)).data,
       });
     }
+    // The company's other webshops with a connection; this webshop can use the same organisation.
+    const reusable = (
+      await db
+        .prepare(
+          "SELECT w.id,w.name,e.identity FROM emballage_connections e JOIN webshops w ON w.company_id=e.company_id AND w.id=e.webshop_id WHERE e.company_id=? AND e.webshop_id<>? AND w.status='active' ORDER BY w.name,w.id",
+        )
+        .bind(company, shop)
+        .all<{ id: string; name: string; identity: string }>()
+    ).results;
     return reply({
       connected: !!context,
+      reusable: reusable
+        .filter((r) => !saved || r.identity !== saved.identity)
+        .map(({ id, name }) => ({ id, name })),
+      sharedWith: saved
+        ? reusable
+            .filter((r) => r.identity === saved.identity)
+            .map((r) => r.name)
+        : [],
       testMode: context?.api_key.is_test,
       organisation: context?.organisation.name,
       config,

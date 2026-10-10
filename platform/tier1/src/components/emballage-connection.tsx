@@ -18,6 +18,9 @@ type Status = {
   config: EIConfig;
   responsibilities?: Array<{ code: string }>;
   reports?: EIReport[];
+  // The company's other webshops with a connection; this webshop can use the same organisation.
+  reusable?: Array<{ id: string; name: string }>;
+  sharedWith?: string[];
   error?: string;
 };
 export function EmballageConnection({
@@ -33,6 +36,7 @@ export function EmballageConnection({
     [status, setStatus] = useState<Status | null>(null),
     [config, setConfig] = useState<EIConfig>(emptyEIConfig),
     [apiKey, setApiKey] = useState(''),
+    [copyFrom, setCopyFrom] = useState(''),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState(''),
     [error, setError] = useState(''),
@@ -51,6 +55,7 @@ export function EmballageConnection({
       d = (await r.json()) as Status;
     if (!r.ok) throw Error(d.error);
     setStatus(d);
+    setCopyFrom(d.reusable?.[0]?.id || '');
     setConfig({
       ...d.config,
       responsibility:
@@ -135,6 +140,45 @@ export function EmballageConnection({
     >
       {status?.connected && (
         <p className="text-sm">Forbundet til {status.organisation}.</p>
+      )}
+      {!!status?.sharedWith?.length && (
+        <p className="text-xs text-muted-foreground">
+          Deler organisationen med {status.sharedWith.join(', ')}. Kvartalets
+          indberetning dækker webshoppene samlet og sendes kun én gang.
+        </p>
+      )}
+      {!!status?.reusable?.length && (
+        <div className="space-y-2 rounded-xl border bg-[#fcfbf9] p-3">
+          <p className="text-sm font-medium">
+            Brug samme organisation som en anden webshop
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <select
+              aria-label="Webshop med Emballage Indberetning"
+              className="rounded border bg-white px-2 py-1 text-sm"
+              value={copyFrom}
+              onChange={(e) => setCopyFrom(e.target.value)}
+            >
+              {status.reusable.map((shop) => (
+                <option key={shop.id} value={shop.id}>
+                  {shop.name}
+                </option>
+              ))}
+            </select>
+            <Button
+              variant="outline"
+              disabled={busy || !copyFrom}
+              onClick={() => void act({ action: 'connect', copyFrom })}
+            >
+              Brug samme organisation
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Nøglen kopieres sikkert og testes igen. Kvartalets indberetning
+            dækker derefter webshoppene samlet. Har webshoppen sin egen
+            organisation, så indtast dens API-nøgle herunder.
+          </p>
+        </div>
       )}
       <ShopifyPackagingFields />
       <label htmlFor="emballage-api-key" className="block text-sm">

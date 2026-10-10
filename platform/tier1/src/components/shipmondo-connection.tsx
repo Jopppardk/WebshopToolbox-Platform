@@ -121,6 +121,8 @@ type State = {
   webhookUrl?: string;
   webhookSecret?: string;
   lastEventAt?: string | null;
+  // The company's other webshops with Shipmondo; their account can be used here too.
+  reusable?: Array<{ id: string; name: string }>;
 };
 export function ShipmondoConnection({
   initialExpanded = false,
@@ -135,13 +137,15 @@ export function ShipmondoConnection({
     [busy, setBusy] = useState(false);
   const [apiUser, setUser] = useState(''),
     [apiKey, setKey] = useState(''),
-    [sandbox, setSandbox] = useState(false);
+    [sandbox, setSandbox] = useState(false),
+    [copyFrom, setCopyFrom] = useState('');
   const load = async () => {
     const r = await tier1Fetch('/api/shipmondo/connection'),
       d = (await r.json()) as State & { error?: string };
     if (!r.ok) throw Error(d.error);
     setState(d);
     setSandbox(Boolean(d.sandbox));
+    setCopyFrom(d.reusable?.[0]?.id || '');
   };
   useEffect(() => {
     void load().catch((e) => setError(e.message));
@@ -149,19 +153,23 @@ export function ShipmondoConnection({
   useEffect(() => {
     if (initialExpanded) setOpen(true);
   }, [initialExpanded]);
-  const save = async (disconnect = false) => {
+  const save = async (disconnect = false, reuse = false) => {
     setBusy(true);
     setError('');
     try {
       const r = await tier1Fetch('/api/shipmondo/connection', {
           method: disconnect ? 'DELETE' : 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            revision: state?.revision ?? null,
-            apiUser,
-            apiKey,
-            sandbox,
-          }),
+          body: JSON.stringify(
+            reuse
+              ? { revision: state?.revision ?? null, copyFrom }
+              : {
+                  revision: state?.revision ?? null,
+                  apiUser,
+                  apiKey,
+                  sandbox,
+                },
+          ),
         }),
         d = (await r.json()) as { error?: string };
       if (!r.ok) throw Error(d.error);
@@ -193,6 +201,38 @@ export function ShipmondoConnection({
           trackinglinks, også uden API-adgang og Pro. API-forbindelsen her er
           valgfri; oplysningerne gemmes krypteret.
         </p>
+        {!!state?.reusable?.length && (
+          <div className="space-y-2 rounded-xl border bg-[#fcfbf9] p-3">
+            <p className="text-sm font-medium">
+              Brug samme Shipmondo-konto som en anden webshop
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <select
+                aria-label="Webshop med Shipmondo"
+                className="rounded border bg-white px-2 py-1 text-sm"
+                value={copyFrom}
+                onChange={(e) => setCopyFrom(e.target.value)}
+              >
+                {state.reusable.map((shop) => (
+                  <option key={shop.id} value={shop.id}>
+                    {shop.name}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="outline"
+                disabled={busy || !copyFrom}
+                onClick={() => void save(false, true)}
+              >
+                Brug samme konto
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Adgangsoplysningerne kopieres sikkert og testes igen. Printeren
+              vælges for hver webshop. Ellers indtast en anden konto herunder.
+            </p>
+          </div>
+        )}
         <label className="block text-sm">
           API-bruger
           <Input

@@ -38,6 +38,15 @@ const connection = (env: PlatformEnv, company: string, shop: string) =>
     .bind(company, shop)
     .first<Connection>();
 
+// The company's other webshops with a Shipmondo connection, whose account this webshop may use too.
+const reusable = (env: PlatformEnv, company: string, shop: string) =>
+  env.PLATFORM_DB.prepare(
+    "SELECT w.id,w.name FROM shipping_connections s JOIN webshops w ON w.company_id=s.company_id AND w.id=s.webshop_id WHERE s.company_id=? AND s.webshop_id<>? AND s.provider='shipmondo' AND w.status='active' ORDER BY w.name,w.id",
+  )
+    .bind(company, shop)
+    .all<{ id: string; name: string }>()
+    .then((r) => r.results);
+
 // Deliberately read-only; shipment creation needs a separate, idempotent write adapter later.
 export async function verifyShipmondo(credentials: Credentials) {
   const base = credentials.sandbox
@@ -106,7 +115,9 @@ export async function handleShipmondo(
   const db = env.PLATFORM_DB,
     saved = await connection(env, company, shop);
   if (request.method === 'GET') {
-    if (!saved) return reply({ connected: false, revision: null });
+    const others = await reusable(env, company, shop);
+    if (!saved)
+      return reply({ connected: false, revision: null, reusable: others });
     const credentials = (await unseal(
       env,
       scope(company, shop),
@@ -118,6 +129,7 @@ export async function handleShipmondo(
       sandbox: credentials.sandbox,
       verifiedAt: saved.verified_at,
       lastEventAt: saved.last_event_at,
+      reusable: others,
       webhookUrl: new URL(pathFor(saved.webhook_id), request.url).href,
       webhookSecret: await unseal(
         env,
@@ -149,20 +161,41 @@ export async function handleShipmondo(
       ]);
     return reply({ connected: false });
   }
-  const apiUser = text(body.apiUser, 256),
-    apiKey = text(body.apiKey, 512);
-  if (
-    !apiUser ||
-    !apiKey ||
-    !/^[\x21-\x7e]+$/.test(apiUser + apiKey) ||
-    apiUser.includes(':') ||
-    typeof body.sandbox !== 'boolean'
-  )
-    throw new HttpError(
-      400,
-      'Angiv API-bruger, API-nøgle og miljø fra Shipmondo.',
-    );
-  const credentials = { apiUser, apiKey, sandbox: body.sandbox };
+  let credentials: Credentials;
+  if (body.copyFrom !== undefined) {
+    // The same Shipmondo account as another of the company's webshops: its credentials are copied on the
+    // server and sealed for this webshop; they never reach the browser.
+    const from = text(body.copyFrom, 100);
+    if (!from || from === shop)
+      throw new HttpError(400, 'Vælg en anden webshop.');
+    await requireWebshop(db, actor, company, from);
+    const source = await connection(env, company, from);
+    if (!source)
+      throw new HttpError(
+        409,
+        'Den valgte webshop har ingen Shipmondo-forbindelse.',
+      );
+    credentials = (await unseal(
+      env,
+      scope(company, from),
+      source.credentials_encrypted,
+    )) as Credentials;
+  } else {
+    const apiUser = text(body.apiUser, 256),
+      apiKey = text(body.apiKey, 512);
+    if (
+      !apiUser ||
+      !apiKey ||
+      !/^[\x21-\x7e]+$/.test(apiUser + apiKey) ||
+      apiUser.includes(':') ||
+      typeof body.sandbox !== 'boolean'
+    )
+      throw new HttpError(
+        400,
+        'Angiv API-bruger, API-nøgle og miljø fra Shipmondo.',
+      );
+    credentials = { apiUser, apiKey, sandbox: body.sandbox };
+  }
   await verifyShipmondo(credentials);
   // Rotate the webhook on credential replacement: old-account tracking must never leak into a new connection.
   const id = crypto.randomUUID(),

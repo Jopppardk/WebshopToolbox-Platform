@@ -54,12 +54,33 @@ export async function productionEmballage(
       .first<any>();
   if (!saved) fail('Forbind Emballage Indberetning først.');
   const config = JSON.parse(saved.config_json);
-  if (
-    !config.startDate ||
-    start < config.startDate ||
-    start < (await dataStartDate(env, company, shop))
-  )
-    fail('Kvartalet ligger før den valgte historikstart.');
+  // Webshops connected to the same organisation share its quarterly report, so it covers all of them together.
+  const sharers = (
+    await db
+      .prepare(
+        "SELECT e.webshop_id,e.config_json,e.revision,w.name FROM emballage_connections e JOIN webshops w ON w.company_id=e.company_id AND w.id=e.webshop_id WHERE e.company_id=? AND e.identity=? AND (w.status='active' OR e.webshop_id=?) ORDER BY e.webshop_id",
+      )
+      .bind(company, saved.identity, shop)
+      .all<{
+        webshop_id: string;
+        config_json: string;
+        revision: number;
+        name: string;
+      }>()
+  ).results;
+  if (!sharers.some((s) => s.webshop_id === shop))
+    fail('Forbind Emballage Indberetning først.');
+  const named = (s: { name: string }) =>
+    sharers.length > 1 ? ` for ${s.name}` : '';
+  for (const s of sharers) {
+    const startDate = JSON.parse(s.config_json || '{}').startDate;
+    if (
+      !startDate ||
+      start < startDate ||
+      start < (await dataStartDate(env, company, s.webshop_id))
+    )
+      fail(`Kvartalet ligger før den valgte historikstart${named(s)}.`);
+  }
   const key = (
     await unseal(
       env,
@@ -83,16 +104,24 @@ export async function productionEmballage(
   if (reports.length !== 1)
     fail('Der skal være præcis én rapport for perioden og producentansvaret.');
   const report = reports[0],
-    receiptKey: ReceiptKey = {
+    keyFor = (webshop: string): ReceiptKey => ({
       company,
-      shop,
+      shop: webshop,
       provider: 'emballage',
       module: 'report',
       externalId: String(report.id),
       destination:
         saved.identity + ':' + (context.api_key.is_test ? 'test' : 'live'),
-    };
-  const prior = await readReceipt(env, receiptKey);
+    }),
+    // One receipt per organisation and report, kept on the first of the sharing webshops; earlier
+    // receipts kept on another webshop (before it shared the organisation) still count.
+    receiptKey = keyFor(sharers[0].webshop_id);
+  const priors = (
+      await Promise.all(
+        sharers.map((s) => readReceipt(env, keyFor(s.webshop_id))),
+      )
+    ).filter((r) => r !== null),
+    prior = priors.find((r) => r?.phase === 'accepted') || priors[0] || null;
   if (prior?.phase === 'accepted')
     return reply({
       receipt: prior.payload.receipt,
@@ -111,22 +140,33 @@ export async function productionEmballage(
   const url = new URL(request.url);
   url.searchParams.set('from', start);
   url.searchParams.set('to', end);
-  const result = await handlePackaging(
-    new Request(url, { headers: request.headers }),
-    env,
-    actor,
-    company,
-    shop,
-  );
-  if (!result.ok) return result;
-  const value = (await result.json()) as any,
-    p = value.period;
-  if (
-    !value.sync ||
-    value.sync.coverage_start > start ||
-    value.sync.coverage_end < end
-  )
-    fail('Hent komplet historik til indberetning først.');
+  const periods: any[] = [];
+  for (const s of sharers) {
+    const result = await handlePackaging(
+      new Request(url, { headers: request.headers }),
+      env,
+      actor,
+      company,
+      s.webshop_id,
+    );
+    if (!result.ok) return result;
+    const value = (await result.json()) as any;
+    if (
+      !value.sync ||
+      value.sync.coverage_start > start ||
+      value.sync.coverage_end < end
+    )
+      fail(`Hent komplet historik til indberetning først${named(s)}.`);
+    periods.push(value.period);
+  }
+  const sum = (field: string) =>
+      periods.reduce((total, period) => total + (period[field] || 0), 0),
+    p: Record<string, number> = {
+      householdGrams: sum('householdGrams'),
+      commercialGrams: sum('commercialGrams'),
+      unknownAudienceGrams: sum('unknownAudienceGrams'),
+      unresolved: sum('unresolved'),
+    };
   if (p.unknownAudienceGrams)
     fail(
       'Afklar kundetypen (husholdning/erhverv) for alle emballagelinjer før indberetning.',
@@ -181,10 +221,10 @@ export async function productionEmballage(
           'SHA-256',
           new TextEncoder().encode(
             JSON.stringify({
-              revision: saved.revision,
+              revisions: sharers.map((s) => [s.webshop_id, s.revision]),
               schema,
               report,
-              period: p,
+              periods,
               payload,
             }),
           ),
@@ -201,16 +241,26 @@ export async function productionEmballage(
       ignoredLines: p.unresolved || 0,
       testMode: context.api_key.is_test,
       organisation: context.organisation.name,
+      webshops: sharers.map((s) => s.name),
     });
   if (input.token !== token)
     fail('Data eller opsætning er ændret. Åbn kontrollen igen.');
-  const latest = await db
-    .prepare(
-      'SELECT revision FROM emballage_connections WHERE company_id=? AND webshop_id=?',
+  const latest = (
+    await db
+      .prepare(
+        'SELECT webshop_id,revision FROM emballage_connections WHERE company_id=? AND identity=? ORDER BY webshop_id',
+      )
+      .bind(company, saved.identity)
+      .all<{ webshop_id: string; revision: number }>()
+  ).results;
+  if (
+    sharers.some(
+      (s) =>
+        latest.find((l) => l.webshop_id === s.webshop_id)?.revision !==
+        s.revision,
     )
-    .bind(company, shop)
-    .first<any>();
-  if (latest?.revision !== saved.revision) fail('Forbindelsen er ændret.');
+  )
+    fail('Forbindelsen er ændret.');
   let claim = await saveReceipt(env, receiptKey, null, 'sending', {
     token,
     requestKey: crypto.randomUUID(),
