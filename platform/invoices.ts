@@ -354,22 +354,20 @@ async function webshopInvoiceSettings(
       address: text(b.address, 180),
       cvr: text(b.cvr, 30),
       contact: text(b.contact, 100),
-      subject: text(b.subject ?? own.subject, 200),
-      body: text(b.body ?? own.body, 4000),
     };
-    if (/[\r\n]/.test(v.name + v.address + v.cvr + v.contact + v.subject))
+    if (/[\r\n]/.test(v.name + v.address + v.cvr + v.contact))
       throw new HttpError(400, 'Kontrollér fakturaoplysningerne.');
     if (b.revision !== undefined && b.revision !== own.revision)
       throw new HttpError(409, 'Fakturaindstillingerne er ændret. Genindlæs.');
+    // The mail texts are saved with "Gem mailtekst" (tier1-settings) and never written from here, so a
+    // concurrent save of them cannot be overwritten by this editor.
     return save(
-      'name=?,address=?,cvr=?,contact=?,subject=?,body=?,design_json=?',
+      'name=?,address=?,cvr=?,contact=?,design_json=?',
       [
         v.name,
         v.address,
         v.cvr,
         v.contact,
-        v.subject,
-        v.body,
         JSON.stringify(
           invoiceDesign(b.design ?? JSON.parse(own.design_json || '{}')),
         ),
