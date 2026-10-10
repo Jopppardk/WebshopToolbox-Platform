@@ -56,7 +56,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 - **Ekstern overvågning:** `/healthz/scheduler` overvåges ikke eksternt endnu (ejerens opgave).
 - **Backup:** gendannelsen er ikke øvet, og R2-dokumenterne har ingen backup.
 
-- **Fakturanumre ved flere webshops:** fakturanummeret er Shopify-ordrenavnet (`#1001` → `1001`, kreditnota `1001-K1`). To webshops i samme virksomhed uden eget ordre-præfiks i Shopify får samme numre, og platformen opdager det ikke. Løsning afventer beslutning.
+- **Fakturanumre ved flere webshops:** fakturanummeret er Shopify-ordrenavnet (`#1001` → `1001`, kreditnota `1001-K1`). Besluttet 10. oktober 2026: hver webshop får sit eget ordre-præfiks i Shopify (Indstillinger → Generelt → ordre-ID-format), før den tilsluttes som webshop nr. 2 eller senere. Platformen kontrollerer det ikke.
 
 **Kendt teknisk gæld**
 - **Kodekvalitet:** 275 lint-fund (mest `any` og React-compiler), låst af `npm run lint`. Al kode er formateret, og nye ændringer skal være det.
