@@ -23,6 +23,32 @@ export const accountKeys = [
   'inventoryAdjustment',
 ] as const;
 export type Accounts = Record<(typeof accountKeys)[number], string>;
+// Mellemregningskonti are chosen per webshop: each webshop has its own payment providers. A webshop
+// without its own value uses the company's account.
+export const webshopAccountKeys = [
+  'clearing',
+  'shopifyPaymentsClearing',
+  'viaBillClearing',
+  'flatpayClearing',
+] as const;
+export function webshopAccounts(preferencesJson?: string | null) {
+  const own = JSON.parse(preferencesJson || '{}').accounts || {};
+  return Object.fromEntries(
+    webshopAccountKeys
+      .filter((key) => typeof own[key] === 'string' && own[key])
+      .map((key) => [key, own[key] as string]),
+  ) as Partial<Accounts>;
+}
+/** The company's accounts with the webshop's own mellemregningskonti on top. */
+export function accountsForWebshop(
+  companyJson: string | null | undefined,
+  preferencesJson?: string | null,
+): Record<string, string> {
+  return {
+    ...JSON.parse(companyJson || '{}'),
+    ...webshopAccounts(preferencesJson),
+  };
+}
 export const automationKeys = [
   'attachments',
   'bookDinero',

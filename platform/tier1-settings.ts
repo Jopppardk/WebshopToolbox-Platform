@@ -5,6 +5,8 @@ import {
   validateSettings,
   emptyAccounts,
   defaultAutomation,
+  accountsForWebshop,
+  webshopAccountKeys,
   type AdminSettings,
 } from './tier1/src/lib/admin-settings';
 import { creditMailTemplates } from './invoice-profiles';
@@ -96,7 +98,10 @@ async function state(db: D1Database, company: string, shop: string) {
       ...preferences,
       accounts: {
         ...emptyAccounts,
-        ...JSON.parse(mapping?.accounts_json || '{}'),
+        ...accountsForWebshop(
+          mapping?.accounts_json,
+          preference?.preferences_json,
+        ),
       },
       invoiceEmail: invoice
         ? { subject: invoice.subject, body: invoice.body, ...credit }
@@ -163,9 +168,25 @@ export async function handleTier1Settings(
     ...keys,
     old.invoice?.credit_body || '',
   ];
+  // The mellemregningskonti are saved for this webshop. The company's value is the default for webshops
+  // without their own; it follows the save only while the company has a single webshop.
+  const shared: Record<string, string> = { ...settings.accounts },
+    previous = JSON.parse(old.mapping?.accounts_json || '{}'),
+    { n: activeShops } = (await db
+      .prepare(
+        "SELECT count(*) n FROM webshops WHERE company_id=? AND status='active'",
+      )
+      .bind(company)
+      .first<{ n: number }>()) || { n: 0 };
+  if (activeShops > 1)
+    for (const key of webshopAccountKeys) shared[key] = previous[key] || '';
+  const companyAccounts = JSON.stringify(shared);
   const preferences = JSON.stringify({
     automation: settings.automation,
     syncIntervalMinutes: settings.syncIntervalMinutes,
+    accounts: Object.fromEntries(
+      webshopAccountKeys.map((key) => [key, settings.accounts[key]]),
+    ),
   });
   const revision = crypto.randomUUID();
   const claim = old.preference
@@ -192,7 +213,7 @@ export async function handleTier1Settings(
       .prepare(
         'INSERT INTO accounting_mapping(company_id,accounts_json) SELECT ?,? WHERE changes()=1 ON CONFLICT(company_id) DO UPDATE SET accounts_json=excluded.accounts_json,updated_at=CURRENT_TIMESTAMP',
       )
-      .bind(company, JSON.stringify(settings.accounts)),
+      .bind(company, companyAccounts),
     old.texts.own
       ? db
           .prepare(
@@ -231,7 +252,7 @@ export async function handleTier1Settings(
   const savedRevision = await fingerprint([
     String(old.texts.own),
     revision,
-    JSON.stringify(settings.accounts),
+    companyAccounts,
     settings.invoiceEmail.subject,
     settings.invoiceEmail.body,
     settings.invoiceEmail.creditSubject,
