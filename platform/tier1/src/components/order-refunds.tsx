@@ -388,6 +388,7 @@ export function OrderRefunds({ syncRevision = 0 }: { syncRevision?: number }) {
                         'historical',
                         'sale_pending',
                         'foreign',
+                        'void',
                       ].includes(r.booking) &&
                         !r.legacy &&
                         !r.problem && (

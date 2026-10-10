@@ -17,6 +17,7 @@ import {
 import {
   legacyRefundSql,
   saleBookedSql,
+  voidOrderSql,
   syncOrderRefunds,
 } from './order-refunds';
 import { sendCreditNote } from './credit-notes';
@@ -553,6 +554,9 @@ async function runShop(
               ' AND NOT ' +
               legacyRefundSql +
               " AND json_extract(s.payload_json,'$.problem') IS NULL" +
+              // Nothing is booked or mailed for an order cancelled and fully refunded before its sale was booked.
+              ' AND NOT ' +
+              voidOrderSql('s', 's.order_id') +
               (job === 'order_refunds' ? ' AND ' + saleBookedSql : '') +
               (job === 'credit'
                 ? " AND s.occurred_at>=strftime('%Y-%m-%dT%H:%M:%SZ','now','-14 days')"
