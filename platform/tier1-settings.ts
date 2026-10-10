@@ -217,7 +217,7 @@ export async function handleTier1Settings(
     old.texts.own
       ? db
           .prepare(
-            'UPDATE webshop_invoice_settings SET subject=?,body=?,credit_subject=?,credit_body=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE company_id=? AND webshop_id=? AND changes()=1',
+            'UPDATE webshop_invoice_settings SET subject=?,body=?,credit_subject=?,credit_body=?,updated_at=CURRENT_TIMESTAMP WHERE company_id=? AND webshop_id=? AND changes()=1',
           )
           .bind(
             settings.invoiceEmail.subject,
