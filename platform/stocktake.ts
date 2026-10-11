@@ -90,8 +90,17 @@ export async function handleStocktake(
       });
     // Webshop value beside the Dinero inventory account, so a difference can be regulated with a voucher.
     // The account is company-wide, so the comparison uses all the company's webshops.
+    // The list spans all the company's webshops, so only a company admin (who alone can regulate or release) sees it.
+    // Likewise only an admin is told which other webshop failed; others may not see that webshop.
+    const admin = await requireCompany(db, actor, company, true).then(
+      () => true,
+      () => false,
+    );
     const failed = (fallback: string) => (e: unknown) => ({
-      error: e instanceof HttpError ? e.message : fallback,
+      error:
+        e instanceof HttpError && (admin || !('otherWebshop' in e))
+          ? e.message
+          : fallback,
     });
     const inventory = await readInventory(env, company, shop);
     const [dinero, all] = await Promise.all([
@@ -114,11 +123,6 @@ export async function handleStocktake(
         failed('Lagerværdien for virksomhedens webshops kunne ikke hentes.'),
       ),
     ]);
-    // The list spans all the company's webshops, so only a company admin (who alone can regulate or release) sees it.
-    const admin = await requireCompany(db, actor, company, true).then(
-      () => true,
-      () => false,
-    );
     const pending = admin
       ? (await pendingRegulations(env, company)).map(
           ({

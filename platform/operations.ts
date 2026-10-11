@@ -14,7 +14,7 @@ const queries: Record<string, string> = {
   orders: `query ToolboxSales($after:String,$query:String!){orders(first:50,after:$after,sortKey:CREATED_AT,reverse:true,query:$query){nodes{id name createdAt updatedAt processedAt cancelledAt test displayFinancialStatus displayFulfillmentStatus fulfillments{createdAt status} paymentGatewayNames currentTotalPriceSet{shopMoney{amount currencyCode}} totalRefundedSet{shopMoney{amount currencyCode}}} ${page}}}`,
   refunds: `query ToolboxRefunds($after:String,$query:String!){shopifyPaymentsAccount{balanceTransactions(first:50,after:$after,query:$query,sortKey:PROCESSED_AT,reverse:true){nodes{id type test transactionDate amount{amount currencyCode} fee{amount currencyCode} net{amount currencyCode} associatedOrder{id name} associatedPayout{id status} sourceOrderTransactionId} ${page}}}}`,
   payouts: `query ToolboxPayouts($after:String,$query:String!){shopifyPaymentsAccount{payouts(first:50,after:$after,query:$query,sortKey:ISSUED_AT,reverse:true){nodes{id issuedAt status transactionType net{amount currencyCode} summary{${payoutSummaryFields.map((f) => f + ' { amount currencyCode }').join(' ')}}} ${page}}}}`,
-  inventory: `query ToolboxInventory($after:String){inventoryItems(first:25,after:$after){nodes{id tracked unitCost{amount currencyCode} variant{title sku product{title status}} inventoryLevels(first:100){nodes{location{id name isActive} quantities(names:["on_hand"]){name quantity}} ${page}}} ${page}}}`,
+  inventory: `query ToolboxInventory($after:String){inventoryItems(first:25,after:$after){nodes{id tracked unitCost{amount currencyCode} variant{title sku product{title status}} inventoryLevels(first:100){nodes{location{id} quantities(names:["on_hand"]){name quantity}} ${page}}} ${page}}}`,
 };
 queries.payments = queries.refunds.replace('ToolboxRefunds', 'ToolboxPayments');
 // Incremental order sync: oldest change first, so a stored watermark never skips an order.
@@ -352,12 +352,10 @@ export async function handleOperations(
             409,
             'Lageret har flere lokationer end denne import kan vise. Ingen delvis lagerlinje gemmes.',
           );
-        // A missing on_hand quantity is not an error: such items are listed on Lager instead.
+        // A missing on_hand quantity is not an error: such items are listed on Lager instead. Only the location's
+        // id is read: its name and status need read_locations, which the app is not required to have.
         for (const level of n.inventoryLevels.nodes)
-          if (
-            !level.location?.id ||
-            typeof level.location.isActive !== 'boolean'
-          )
+          if (!level.location?.id)
             throw new HttpError(409, 'Ufuldstændig lagerlokation.');
       }
       return db
