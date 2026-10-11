@@ -56,7 +56,9 @@ async function inventoryPage(
       .catch(() => null);
     if (!granted) throw error;
     const missing = ['read_inventory', 'read_products'].filter(
-      (s) => !granted.includes(s),
+      // A write_ scope includes its read_ access, and Shopify may then list only the write_ handle.
+      (s) =>
+        !granted.includes(s) && !granted.includes(s.replace('read_', 'write_')),
     );
     throw new HttpError(
       409,
