@@ -317,7 +317,12 @@ export async function handleTier1Emballage(
     });
   }
   const sharers = await sharing(shop),
-    missing = sharers.find((s) => !s.readable);
+    missing = sharers.find((s) => !s.readable),
+    // Only company administrators may learn the names of webshops they cannot otherwise read.
+    admin = await requireCompany(db, actor, company, true).then(
+      () => true,
+      () => false,
+    );
   const now = new Date(),
     year = now.getUTCFullYear(),
     quarter = Math.floor(now.getUTCMonth() / 3),
@@ -400,9 +405,11 @@ export async function handleTier1Emballage(
         : early
           ? `Før integrationens startdato${named(early.sharer)}.`
           : missing
-            ? missing.active
-              ? `Kræver adgang til ${missing.name}, som deler organisationen.`
-              : `${missing.name} er ikke aktiv, men deler organisationen.`
+            ? !admin
+              ? 'En anden webshop deler organisationen. Indberetningen kræver adgang til alle webshops, der deler den.'
+              : missing.active
+                ? `Kræver adgang til ${missing.name}, som deler organisationen.`
+                : `${missing.name} er ikke aktiv, men deler organisationen.`
             : !report
               ? 'Perioden findes ikke hos udbyderen.'
               : !report.accepts_writes
@@ -450,7 +457,10 @@ export async function handleTier1Emballage(
     testMode: context?.api_key.is_test,
     organisation: context?.organisation.name,
     startDate: config.startDate,
-    webshops: sharers.length > 1 ? sharers.map((s) => s.name) : [],
+    webshops:
+      sharers.length > 1
+        ? sharers.filter((s) => admin || s.readable).map((s) => s.name)
+        : [],
     quarters,
   });
 }
