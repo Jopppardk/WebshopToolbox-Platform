@@ -1,4 +1,4 @@
-import { orderQuery, shopAccess } from './invoice-source';
+import { orderQuery, shopAccess, type Access } from './invoice-source';
 import { HttpError, type PlatformEnv } from './types';
 import {
   inventoryValueMinor,
@@ -25,6 +25,50 @@ type Page = {
     pageInfo: { hasNextPage: boolean; endCursor: string | null };
   };
 };
+const lagerMessage =
+  'Shopify kunne ikke hente lagerdata. Kontrollér read_inventory, read_products og adgang til kostpriser.';
+// On ACCESS_DENIED the scopes Shopify actually granted this installation are read and named, so a scope
+// that is set in the app but not yet approved in the store (a new app version) can be told apart.
+async function inventoryPage(
+  access: Access,
+  query: string,
+  variables: Record<string, unknown>,
+) {
+  try {
+    return await orderQuery<Page>(access, query, variables, lagerMessage);
+  } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      !/\(Shopify: ACCESS_DENIED/.test(error.message)
+    )
+      throw error;
+    const granted = await orderQuery<{
+      currentAppInstallation: { accessScopes: Array<{ handle: string }> };
+    }>(
+      access,
+      'query InventoryAccess{currentAppInstallation{accessScopes{handle}}}',
+      {},
+      lagerMessage,
+    )
+      .then((d) =>
+        (d.currentAppInstallation?.accessScopes ?? []).map((s) => s.handle),
+      )
+      .catch(() => null);
+    if (!granted) throw error;
+    const missing = ['read_inventory', 'read_products'].filter(
+      // A write_ scope includes its read_ access, and Shopify may then list only the write_ handle.
+      (s) =>
+        !granted.includes(s) && !granted.includes(s.replace('read_', 'write_')),
+    );
+    throw new HttpError(
+      409,
+      error.message +
+        (missing.length
+          ? `. Butikken ${access.shop} har ikke godkendt ${missing.join(' og ')} for appen. Er adgangen tilføjet i appen, skal den nye app-version udgives og godkendes i butikken.`
+          : `. Butikken ${access.shop} har godkendt read_inventory og read_products for appen.`),
+    );
+  }
+}
 export async function readInventory(
   env: PlatformEnv,
   company: string,
@@ -45,11 +89,10 @@ export async function readInventory(
   let after: string | null = null;
   const seen = new Set<string>();
   for (let page = 0; page < 25; page++) {
-    const data: Page = await orderQuery<Page>(
+    const data: Page = await inventoryPage(
       access,
       `query InventoryStatus($after:String) { inventoryItems(first:100,after:$after) { nodes { id tracked unitCost { amount currencyCode } variant { title sku product { title status } } inventoryLevels(first:100) { nodes { location { id name isActive } quantities(names:["on_hand"]) { name quantity } } pageInfo { hasNextPage endCursor } } } pageInfo { hasNextPage endCursor } } }`,
       { after },
-      'Shopify kunne ikke hente lagerdata. Kontrollér read_inventory, read_products og adgang til kostpriser.',
     );
     for (const item of data.inventoryItems.nodes) {
       if (

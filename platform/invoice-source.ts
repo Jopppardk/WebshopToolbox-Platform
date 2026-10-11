@@ -45,7 +45,10 @@ export async function orderQuery<T>(
     );
     const payload = (await response.json().catch(() => ({}))) as {
       data?: T;
-      errors?: Array<{ extensions?: { code?: string } }>;
+      errors?: Array<{
+        path?: unknown[];
+        extensions?: { code?: string; requiredAccess?: string };
+      }>;
       extensions?: {
         cost?: {
           requestedQueryCost?: number;
@@ -81,18 +84,51 @@ export async function orderQuery<T>(
       continue;
     }
     // The error code (never the payload) is added so the cause is visible, e.g. THROTTLED or ACCESS_DENIED.
-    if (!response.ok || payload.errors?.length || !payload.data)
+    if (!response.ok || payload.errors?.length || !payload.data) {
+      if (code === 'ACCESS_DENIED') forgetToken(access.accessToken);
       throw new HttpError(
         409,
         errorMessage +
           (code && /^[A-Z_]{3,40}$/.test(code)
-            ? ` (Shopify: ${code})`
+            ? ` (Shopify: ${code}${code === 'ACCESS_DENIED' ? deniedAccess(payload.errors) : ''})`
             : response.ok
               ? ''
               : ` (Shopify: HTTP ${response.status})`),
       );
+    }
     return payload.data;
   }
+}
+// Names the field Shopify refused and the access it asks for, e.g. " – inventoryItems.unitCost kræver read_inventory".
+// Only GraphQL field names and scope handles are copied, never other text from Shopify.
+function deniedAccess(
+  errors: Array<{
+    path?: unknown[];
+    extensions?: { requiredAccess?: string };
+  }> = [],
+) {
+  const denied = errors.find((e) => Array.isArray(e?.path)),
+    field = (denied?.path ?? [])
+      .filter(
+        (p): p is string =>
+          typeof p === 'string' && /^[A-Za-z_]\w{0,60}$/.test(p),
+      )
+      .slice(0, 6)
+      .join('.'),
+    scopes = [
+      ...new Set(
+        errors.flatMap((e) =>
+          typeof e?.extensions?.requiredAccess === 'string'
+            ? (e.extensions.requiredAccess.match(
+                /\b(?:read|write)_[a-z_]{2,50}\b/g,
+              ) ?? [])
+            : [],
+        ),
+      ),
+    ].slice(0, 4);
+  return field || scopes.length
+    ? ` – ${field ? 'feltet ' + field : 'adgangen'}${scopes.length ? ' kræver ' + scopes.join(' eller ') : ' er nægtet'}`
+    : '';
 }
 class OrderChangedError extends HttpError {
   constructor() {
@@ -233,6 +269,11 @@ export async function shopAccess(
 // every call. The key holds the full credentials, so changed credentials always get a new token.
 const tokens = new Map<string, { token: string; until: number }>();
 const tokenMinutes = 20;
+// A refused field can mean the token predates newly approved access, so the next call asks Shopify for a new one.
+function forgetToken(token: string) {
+  for (const [key, kept] of tokens)
+    if (kept.token === token) tokens.delete(key);
+}
 export async function credentialAccess(
   domain: string,
   clientId: string,
