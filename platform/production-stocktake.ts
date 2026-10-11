@@ -94,7 +94,10 @@ export async function companyInventory(
         ? current
         : readInventory(env, company, id).catch((e: unknown) => {
             if (id === shop || !(e instanceof Error)) throw e;
-            throw new HttpError(409, `Webshoppen ${name}: ${e.message}`);
+            throw Object.assign(
+              new HttpError(409, `Webshoppen ${name}: ${e.message}`),
+              { otherWebshop: true },
+            );
           }),
     ),
   );
