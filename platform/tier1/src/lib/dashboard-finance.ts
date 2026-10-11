@@ -161,7 +161,11 @@ export type ShopFinance = {
   currency: string | null;
   revenue: ShopRevenue | null;
   revenueError?: string;
-  inventory: { valueMinor: number; incomplete: number } | null;
+  inventory: {
+    valueMinor: number;
+    incomplete: number;
+    currency: string | null;
+  } | null;
   inventoryError?: string;
   checkedAt: string;
 };

@@ -267,24 +267,31 @@ type ShipmentCounts = ReturnType<typeof shipmentCounts>;
 // Forsendelser for the last 30 days, as on the Forsendelser page (which shares the server's five-minute cache).
 function useShipmentCounts(shop: string, revision: number) {
   const [counts, setCounts] = useState<ShipmentCounts | null>(null),
+    [truncated, setTruncated] = useState(false),
     [error, setError] = useState('');
   useEffect(() => {
     const controller = new AbortController();
+    // Opdatér asks for a new list; the server still reuses a list less than a minute old.
+    const force = revision > 0;
     let running = false;
-    const load = async () => {
+    const load = async (refresh: boolean) => {
       if (running) return;
       running = true;
       try {
         let response: Response, value: ShipmentList & { error?: string };
         // Another tab may be reading the same list; wait for it instead of failing.
         for (let attempt = 0; ; attempt++) {
-          response = await tier1FetchFor(shop, '/api/shipments?days=30', {
-            cache: 'no-store',
-            signal: AbortSignal.any([
-              controller.signal,
-              AbortSignal.timeout(120000),
-            ]),
-          });
+          response = await tier1FetchFor(
+            shop,
+            '/api/shipments?days=30' + (refresh ? '&refresh=1' : ''),
+            {
+              cache: 'no-store',
+              signal: AbortSignal.any([
+                controller.signal,
+                AbortSignal.timeout(120000),
+              ]),
+            },
+          );
           value = await response.json();
           if (
             response.status !== 409 ||
@@ -299,6 +306,7 @@ function useShipmentCounts(shop: string, revision: number) {
           throw new Error(value.error || 'Forsendelserne kunne ikke hentes.');
         if (controller.signal.aborted) return;
         setCounts(shipmentCounts(value.shipments, danishDate()));
+        setTruncated(value.truncated);
         setError('');
       } catch (reason) {
         if (!controller.signal.aborted)
@@ -311,23 +319,25 @@ function useShipmentCounts(shop: string, revision: number) {
         running = false;
       }
     };
-    void load();
+    void load(force);
     const timer = window.setInterval(() => {
-      if (!document.hidden) void load();
+      if (!document.hidden) void load(false);
     }, 5 * 60000);
     return () => {
       controller.abort();
       window.clearInterval(timer);
     };
   }, [shop, revision]);
-  return { counts, error };
+  return { counts, truncated, error };
 }
 
 function ShipmentLine({
   counts,
+  truncated,
   error,
 }: {
   counts: ShipmentCounts | null;
+  truncated: boolean;
   error: string;
 }) {
   const cell = (name: string, value: number | undefined, tone: string) => (
@@ -353,9 +363,10 @@ function ShipmentLine({
         counts?.waiting,
         'bg-amber-50/70 text-amber-800',
       )}
-      {error && (
+      {(error || truncated) && (
         <p className="col-span-3 text-[11px] text-muted-foreground sm:col-span-4">
-          {error}
+          {error ||
+            'Ufuldstændigt: der er flere forsendelser i perioden, end der kan hentes på én gang, så tallene kan være for lave.'}
         </p>
       )}
     </div>

@@ -128,6 +128,7 @@ function ShopFinanceCard({
       badge={<ShopBadge id={shop.id} name={shop.name} />}
       source="Shopify"
       currency={data?.currency || 'DKK'}
+      inventoryCurrency={data?.inventory?.currency || data?.currency || 'DKK'}
       notes={notes}
       inventoryNote="Kostpris × lager i Shopify"
       figures={{
@@ -178,6 +179,7 @@ function FinanceCard({
   currency,
   notes,
   inventoryNote,
+  inventoryCurrency,
   figures,
   accent = false,
 }: {
@@ -188,6 +190,7 @@ function FinanceCard({
   currency: string;
   notes: string[];
   inventoryNote: string;
+  inventoryCurrency?: string;
   figures: FinanceFigures;
   accent?: boolean;
 }) {
@@ -248,7 +251,7 @@ function FinanceCard({
             Lagerværdi
           </h4>
           <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">
-            {money(figures.inventory, currency)}
+            {money(figures.inventory, inventoryCurrency || currency)}
           </p>
           <p className="mt-2 text-[11px] text-muted-foreground">
             {inventoryNote}

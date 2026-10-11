@@ -683,7 +683,11 @@ export function demoShopFinance(today = danishDate()) {
       previousMtd: finance.previousMtd,
       previousYtd: finance.previousYtd,
     },
-    inventory: { valueMinor: demoInventory().totalValueMinor, incomplete: 0 },
+    inventory: {
+      valueMinor: demoInventory().totalValueMinor,
+      incomplete: 0,
+      currency: 'DKK',
+    },
     checkedAt: new Date().toISOString(),
   };
 }

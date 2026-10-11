@@ -120,6 +120,8 @@ export async function readShopFinance(
           value: {
             valueMinor: value.totalValueMinor,
             incomplete: value.incomplete.length,
+            // Cost prices carry their own currency; with no stocked items the value is 0 in any currency.
+            currency: [...currencies][0] ?? null,
           },
         };
       },
@@ -141,12 +143,19 @@ export async function readShopFinance(
         () => null,
       ),
   ]);
+  // Revenue is in the store's currency; without it the amounts are not shown rather than shown as DKK.
+  const revenueError =
+    'error' in revenue
+      ? revenue.error
+      : currency
+        ? undefined
+        : 'Shopify oplyste ikke butikkens valuta, så omsætningen vises ikke.';
   return {
     periods: financePeriods(now),
     startDate: start,
     currency,
-    revenue: 'value' in revenue ? revenue.value : null,
-    ...('error' in revenue ? { revenueError: revenue.error } : {}),
+    revenue: 'value' in revenue && !revenueError ? revenue.value : null,
+    ...(revenueError ? { revenueError } : {}),
     inventory: 'value' in inventory ? inventory.value! : null,
     ...('error' in inventory ? { inventoryError: inventory.error } : {}),
     checkedAt: now.toISOString(),
