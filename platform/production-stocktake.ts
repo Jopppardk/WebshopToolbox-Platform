@@ -81,15 +81,21 @@ export async function companyInventory(
 ) {
   const ids = (
     await env.PLATFORM_DB.prepare(
-      "SELECT c.webshop_id id FROM webshop_connections c JOIN webshops w ON w.company_id=c.company_id AND w.id=c.webshop_id WHERE c.company_id=? AND c.provider='shopify' AND w.status='active' ORDER BY c.webshop_id",
+      "SELECT c.webshop_id id,w.name FROM webshop_connections c JOIN webshops w ON w.company_id=c.company_id AND w.id=c.webshop_id WHERE c.company_id=? AND c.provider='shopify' AND w.status='active' ORDER BY c.webshop_id",
     )
       .bind(company)
-      .all<{ id: string }>()
-  ).results.map((r) => r.id);
-  if (!ids.includes(shop)) ids.push(shop);
+      .all<{ id: string; name: string }>()
+  ).results;
+  if (!ids.some((r) => r.id === shop)) ids.push({ id: shop, name: '' });
+  // Another webshop's failure is shown with its name, so it is not read as the selected webshop's.
   const reads = await Promise.all(
-    ids.map((id) =>
-      id === shop && current ? current : readInventory(env, company, id),
+    ids.map(({ id, name }) =>
+      id === shop && current
+        ? current
+        : readInventory(env, company, id).catch((e: unknown) => {
+            if (id === shop || !(e instanceof Error)) throw e;
+            throw new HttpError(409, `Webshoppen ${name}: ${e.message}`);
+          }),
     ),
   );
   const valueMinor = reads.reduce((sum, r) => sum + r.totalValueMinor, 0);
