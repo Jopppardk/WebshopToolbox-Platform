@@ -1,4 +1,5 @@
 'use client';
+import { PageTitle } from '@/platform/workspace';
 import { useConfirm } from '@/components/confirm-dialog';
 import { useStackTable } from '@/lib/stack-table';
 import { tier1Fetch as fetch } from '@/platform/transport';
@@ -278,7 +279,7 @@ export function Inventory() {
       <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="eyebrow">Bogføring · Shopify</p>
-          <h1 className="page-title">Lager</h1>
+          <PageTitle title="Lager" />
           <p className="mt-2 text-sm text-muted-foreground">
             Webshoppens lagerværdi sammenholdt med lagerkontoen i Dinero, og
             kontrolleret optælling baseret på Shopifys fysiske antal og

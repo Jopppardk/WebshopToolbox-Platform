@@ -1,11 +1,12 @@
 'use client';
+import { PageTitle } from '@/platform/workspace';
 import { formatDateTime } from '@/lib/format';
 import { PackagingFieldsWarning } from '@/components/shopify-packaging-fields';
 import { tier1Fetch as fetch } from '@/platform/transport';
-import { packagingEstimate } from '@/lib/packaging';
 import { PackagingSupplier } from '@/components/packaging-supplier';
 import { PackagingReporting } from '@/components/packaging-reporting';
 import { PackagingProducts } from '@/components/packaging-products';
+import { PackagingCards } from '@/components/packaging-cards';
 
 import { useEffect, useState } from 'react';
 import {
@@ -65,7 +66,9 @@ export function Packaging({
     [form, setForm] = useState<any>(blank),
     [editing, setEditing] = useState(false),
     [open, setOpen] = useState<Record<string, boolean>>({}),
-    [price, setPrice] = useState('3.79');
+    [price, setPrice] = useState('3.79'),
+    // The period query the page last loaded, which the other webshops' cards follow.
+    [shownQuery, setShownQuery] = useState('');
   const periodQuery = () =>
     period === 'custom' && start && end ? `?start=${start}&end=${end}` : '';
   const apply = (v: Result) => {
@@ -80,11 +83,13 @@ export function Packaging({
     setBusy(true);
     setError('');
     try {
-      const r = await fetch(`/api/shopify/packaging${periodQuery()}`, {
+      const query = periodQuery(),
+        r = await fetch(`/api/shopify/packaging${query}`, {
           cache: 'no-store',
         }),
         v = (await r.json()) as Result;
       if (!r.ok) throw Error(v.error);
+      setShownQuery(query);
       apply(v);
     } catch (e) {
       setError(
@@ -147,22 +152,17 @@ export function Packaging({
     }
   };
   const kg = (g: number) =>
-      new Intl.NumberFormat('da-DK', {
-        minimumFractionDigits: 3,
-        maximumFractionDigits: 3,
-      }).format(g / 1000) + ' kg',
-    money = (n: number) =>
-      new Intl.NumberFormat('da-DK', {
-        style: 'currency',
-        currency: 'DKK',
-      }).format(n);
+    new Intl.NumberFormat('da-DK', {
+      minimumFractionDigits: 3,
+      maximumFractionDigits: 3,
+    }).format(g / 1000) + ' kg';
   return (
     <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
       {onIntegrations && <PackagingFieldsWarning onFix={onIntegrations} />}
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="eyebrow">Shopify · Miljødata</p>
-          <h1 className="page-title">Emballage</h1>
+          <PageTitle title="Emballage" />
           <p className="mt-2 text-sm text-muted-foreground">
             Historiske data låses pr. afsendt ordrelinje. Linjer uden gyldig
             vægt eller afklaret indberetningspligt ignoreres i beregning og
@@ -221,6 +221,7 @@ export function Packaging({
             setPeriod('custom');
             setTab('consumption');
             setBusy(true);
+            setShownQuery(`?start=${from}&end=${to}`);
             fetch(`/api/shopify/packaging?start=${from}&end=${to}`, {
               cache: 'no-store',
             })
@@ -282,50 +283,16 @@ export function Packaging({
           </section>
           {selected && (
             <>
-              <div className="mb-5 grid gap-3 sm:grid-cols-4">
-                <Stat
-                  label="Samlet emballage"
-                  value={kg(selected.totalGrams)}
-                />
-                <Stat
-                  label="Indberetningspligtig"
-                  value={kg(selected.reportableGrams)}
-                />
-                <Stat
-                  label="Anslået pris"
-                  value={
-                    packagingEstimate(
-                      selected,
-                      Number(price || 0),
-                      commercialPrice === '' ? null : Number(commercialPrice),
-                    ) === null
-                      ? 'Pris mangler'
-                      : money(
-                          packagingEstimate(
-                            selected,
-                            Number(price || 0),
-                            commercialPrice === ''
-                              ? null
-                              : Number(commercialPrice),
-                          )!,
-                        )
-                  }
-                />
-                <Stat
-                  label="Ignorerede linjer"
-                  value={`${selected.unresolved} linjer`}
-                />
-              </div>
-              <div className="mb-5 grid gap-3 sm:grid-cols-2">
-                <Stat
-                  label="Privat · samlet / indberetningspligtig"
-                  value={`${kg(selected.householdTotalGrams)} / ${kg(selected.householdGrams)}`}
-                />
-                <Stat
-                  label="Erhverv · samlet / indberetningspligtig"
-                  value={`${kg(selected.commercialTotalGrams)} / ${kg(selected.commercialGrams)}`}
-                />
-              </div>
+              <PackagingCards
+                period={period}
+                query={shownQuery}
+                revision={revision}
+                selected={selected}
+                price={Number(price || 0)}
+                commercialPrice={
+                  commercialPrice === '' ? null : Number(commercialPrice)
+                }
+              />
               <p className="mb-4 text-xs text-muted-foreground">
                 Priser beregnes kun for indberetningspligtig emballage. Forbrug
                 og Indberetning bruger de samme registreringer og samme
@@ -615,12 +582,4 @@ export function Packaging({
 }
 function label(v: Reportable) {
   return v === 'yes' ? 'Ja' : v === 'no' ? 'Nej' : 'Ignoreres';
-}
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="stat-card">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-2 text-xl font-semibold">{value}</p>
-    </div>
-  );
 }

@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { formatDateTime } from '@/lib/format';
 import { tier1Fetch as fetch } from '@/platform/transport';
 import { useCapabilities } from '@/platform/capabilities';
+import { useWebshopName, useWorkspace } from '@/platform/workspace';
 import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/components/confirm-dialog';
 
@@ -74,6 +75,8 @@ export function AttentionList({
   revision: number;
 }) {
   const capabilities = useCapabilities();
+  const { webshops } = useWorkspace(),
+    shopName = useWebshopName();
   const { confirm, dialog } = useConfirm();
   const [data, setData] = useState<Attention | null>(null),
     [error, setError] = useState(''),
@@ -198,6 +201,11 @@ export function AttentionList({
             <TriangleAlert className="size-4 text-amber-700" />
           )}
           Kræver handling
+          {webshops.length > 1 && shopName && (
+            <span className="font-normal text-muted-foreground">
+              · {shopName}
+            </span>
+          )}
           {data && data.total > 0 && (
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-900">
               {data.total}

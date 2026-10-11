@@ -1,4 +1,5 @@
 'use client';
+import { PageTitle } from '@/platform/workspace';
 import { useEffect, useState } from 'react';
 import { FileDown } from 'lucide-react';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
@@ -180,7 +181,7 @@ export function OrderRefunds({ syncRevision = 0 }: { syncRevision?: number }) {
       <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <p className="eyebrow">Alle betalingsudbydere</p>
-          <h1 className="page-title">Tilbagebetalinger</h1>
+          <PageTitle title="Tilbagebetalinger" />
           <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
             Hver tilbagebetaling på en ordre, uanset om kunden betalte med
             Shopify Payments, MobilePay, Flatpay, ViaBill eller andet. Delvise

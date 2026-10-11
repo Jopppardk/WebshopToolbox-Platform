@@ -26,7 +26,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { tier1Fetch } from '@/platform/transport';
-import { useWorkspace } from '@/platform/workspace';
+import { PageTitle, useWorkspace } from '@/platform/workspace';
 import { danishDate } from '@/lib/history-policy';
 import { useStackTable } from '@/lib/stack-table';
 import { formatDate, formatDateTime } from '@/lib/format';
@@ -631,7 +631,7 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="eyebrow">Tools · Track & trace</p>
-          <h1 className="page-title">Forsendelser</h1>
+          <PageTitle title="Forsendelser" />
           <p className="mt-2 text-sm text-muted-foreground">
             Følg pakkerne fra label til kunde, og se hvilke der snart sendes
             retur.

@@ -1,4 +1,5 @@
 'use client';
+import { PageTitle } from '@/platform/workspace';
 import { formatDateTime } from '@/lib/format';
 import { PayoutLog } from './payout-log';
 import { tier1Fetch as fetch } from '@/platform/transport';
@@ -212,7 +213,7 @@ export function Payments({
           <p className="eyebrow">
             {refund ? 'Samlet oversigt' : 'Shopify Payments'}
           </p>
-          <h1 className="page-title">{title}</h1>
+          <PageTitle title={title} />
           <p className="mt-2 text-sm text-muted-foreground">
             {refund
               ? 'Tilbagebetalinger fra Shopify Payments og Flatpay samlet, nyeste først. Delvise tilbagebetalinger vises som separate transaktioner.'

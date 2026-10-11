@@ -1,4 +1,5 @@
 'use client';
+import { PageTitle } from '@/platform/workspace';
 import { formatDate, asText } from '@/lib/format';
 import { useStackTable } from '@/lib/stack-table';
 import { TestModeNote } from '@/components/test-mode-note';
@@ -152,7 +153,7 @@ export function UnifiedPayouts({
   return (
     <section className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
       <p className="eyebrow">Bogføring · Samlet oversigt</p>
-      <h1 className="page-title">Udbetalinger</h1>
+      <PageTitle title="Udbetalinger" />
       <p className="mt-2 text-sm text-muted-foreground">
         Alle udbydere samlet · nyeste først · perioden følger fælles historik.
       </p>
