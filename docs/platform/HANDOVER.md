@@ -51,6 +51,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 - **Shipmondo-labels fra Salg:** ikke afprøvet mod en rigtig konto. Den første rigtige ordre er testen (aftalt).
 - **Daglig driftsmail:** modtagelsen er ikke bekræftet.
 - **Webshopnavn på udbetalingsrapporter og Dinero-linjer (udgivet 11. oktober 2026, dev og prod, run 38143685177, main `c70bc7b`):** "Webshop: {navn}" på rapporten og " · {webshop}" sidst på hver bilagslinje. Ikke afprøvet mod rigtig Dinero.
+- **Økonomi pr. webshop og forsendelser på dashboardet (udgivet 11. oktober 2026, dev og prod, run 38149276433, main `42c7229`):** omsætning MTD/YTD mod sidste år fra Shopify Analytics (kræver read_reports) og lagerværdi fra Shopify pr. webshop, samlet kort fra Dinero med overskud, og forsendelseslinje i webshopkortene. Kun afprøvet med testdata.
 - **Overblik med flere webshops (udgivet 11. oktober 2026, dev og prod, run 38133154668, main `3f2a9bd`):** webshopvælger, kort pr. webshop på dashboard og Emballage, fælles Emballage-indberetning i oversigten, tydelig fælles/egen faktura og webshopnavn i overskrifter. Kun afprøvet med testdata.
 - **Flere webshops (udgivet 10. oktober 2026, dev og prod, run 38064862126, main `15bf3cd`):** faktura og afsender pr. webshop, genbrug af Shipmondo/Emballage med samlet Emballage-indberetning og mellemregningskonti pr. webshop. Kun afprøvet med testdata; ikke mod rigtig afsendelse fra eget domæne, Shipmondo, Emballage Indberetning eller Dinero.
 
