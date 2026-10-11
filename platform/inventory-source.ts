@@ -17,7 +17,7 @@ type Page = {
       };
       inventoryLevels: {
         nodes: Array<{
-          location: { id: string; name: string; isActive: boolean };
+          location: { id: string; name?: string; isActive?: boolean };
           quantities: Array<{ name: string; quantity: number }>;
         }>;
       };
@@ -42,18 +42,7 @@ async function inventoryPage(
       !/\(Shopify: ACCESS_DENIED/.test(error.message)
     )
       throw error;
-    const granted = await orderQuery<{
-      currentAppInstallation: { accessScopes: Array<{ handle: string }> };
-    }>(
-      access,
-      'query InventoryAccess{currentAppInstallation{accessScopes{handle}}}',
-      {},
-      lagerMessage,
-    )
-      .then((d) =>
-        (d.currentAppInstallation?.accessScopes ?? []).map((s) => s.handle),
-      )
-      .catch(() => null);
+    const granted = await grantedScopes(access).catch(() => null);
     if (!granted) throw error;
     const missing = ['read_inventory', 'read_products'].filter(
       // A write_ scope includes its read_ access, and Shopify may then list only the write_ handle.
@@ -69,12 +58,35 @@ async function inventoryPage(
     );
   }
 }
+// A location's name and status need read_locations (or read_markets_home); read_inventory alone only gives
+// its id. Without them the location is named from its id and counted as active.
+async function grantedScopes(access: Access) {
+  const d = await orderQuery<{
+    currentAppInstallation: { accessScopes: Array<{ handle: string }> };
+  }>(
+    access,
+    'query InventoryAccess{currentAppInstallation{accessScopes{handle}}}',
+    {},
+    lagerMessage,
+  );
+  return (d.currentAppInstallation?.accessScopes ?? []).map((s) => s.handle);
+}
+export function locationLabel(location: { id: string; name?: string }) {
+  return (
+    location.name ||
+    'Lokation ' + (location.id.match(/(\d+)$/)?.[1] ?? location.id)
+  );
+}
 export async function readInventory(
   env: PlatformEnv,
   company: string,
   shop: string,
 ) {
   const access = await shopAccess(env, company, shop);
+  const scopes = await grantedScopes(access),
+    named = ['read_locations', 'write_locations', 'read_markets_home'].some(
+      (s) => scopes.includes(s),
+    );
   const rows: InventoryRow[] = [],
     locations = new Map<string, string>();
   // Tracked items Shopify gives no quantity or cost for; shown on Lager instead of failing the read.
@@ -91,7 +103,7 @@ export async function readInventory(
   for (let page = 0; page < 25; page++) {
     const data: Page = await inventoryPage(
       access,
-      `query InventoryStatus($after:String) { inventoryItems(first:100,after:$after) { nodes { id tracked unitCost { amount currencyCode } variant { title sku product { title status } } inventoryLevels(first:100) { nodes { location { id name isActive } quantities(names:["on_hand"]) { name quantity } } pageInfo { hasNextPage endCursor } } } pageInfo { hasNextPage endCursor } } }`,
+      `query InventoryStatus($after:String) { inventoryItems(first:100,after:$after) { nodes { id tracked unitCost { amount currencyCode } variant { title sku product { title status } } inventoryLevels(first:100) { nodes { location { ${named ? 'id name isActive' : 'id'} } quantities(names:["on_hand"]) { name quantity } } pageInfo { hasNextPage endCursor } } } pageInfo { hasNextPage endCursor } } }`,
       { after },
     );
     for (const item of data.inventoryItems.nodes) {
@@ -104,8 +116,8 @@ export async function readInventory(
       if ((item.inventoryLevels as any).pageInfo?.hasNextPage !== false)
         throw new HttpError(409, 'Lagerets lokationer er ufuldstændige.');
       for (const level of item.inventoryLevels.nodes) {
-        if (!level.location.isActive) continue;
-        locations.set(level.location.id, level.location.name);
+        if (level.location.isActive === false) continue;
+        locations.set(level.location.id, locationLabel(level.location));
         const quantity = level.quantities.find(
             (q) => q.name === 'on_hand',
           )?.quantity,
@@ -118,7 +130,7 @@ export async function readInventory(
             product: item.variant.product.title,
             variant: item.variant.title,
             sku: item.variant.sku || '',
-            location: level.location.name,
+            location: locationLabel(level.location),
             reason:
               noQuantity && noCost
                 ? 'Mangler lagerantal og kostpris'
