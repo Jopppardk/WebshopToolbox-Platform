@@ -3,6 +3,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { payoutBreakdown, type PayoutSummary } from './payout-calculations';
 import type { PayoutTransaction } from './payout-source';
 import { minorUnits } from './money';
+import { webshopLabel } from './dinero-sale';
 
 type PayoutSource = {
   id: string;
@@ -37,6 +38,7 @@ export async function buildPayoutReport(
   source: PayoutSource,
   issuer: string,
   logoBytes?: ArrayBuffer,
+  webshop = '',
 ) {
   if (
     source.provider !== 'shopify_payments' ||
@@ -82,6 +84,15 @@ export async function buildPayoutReport(
     color: rgb(0.1, 0.14, 0.12),
   });
   page.drawText('Shopify Payments', { x: 55, y: 724, size: 11, font: regular });
+  // Helvetica only draws Latin-1; anything else in the name becomes '?'.
+  const shopName = webshopLabel(webshop).replace(/[^\x20-\x7e\xa0-\xff]/g, '?');
+  if (shopName)
+    page.drawText(`Webshop: ${shopName}`, {
+      x: 55,
+      y: 698,
+      size: 10,
+      font: bold,
+    });
   const id = safeId(source.id);
   const date = new Intl.DateTimeFormat('da-DK', {
     dateStyle: 'long',
@@ -176,7 +187,11 @@ export async function buildPayoutReport(
       font: bold,
       color: rgb(0.1, 0.14, 0.12),
     });
-    target.drawText(`Shopify Payments ${id}`, {
+    // Kept within the page: a long payout ID and webshop name shorten the name.
+    let subtitle = `Shopify Payments ${id}${shopName ? ' · ' + shopName : ''}`;
+    while (regular.widthOfTextAtSize(subtitle, 9) > 485)
+      subtitle = subtitle.slice(0, -4) + '...';
+    target.drawText(subtitle, {
       x: 55,
       y: 759,
       size: 9,

@@ -158,7 +158,7 @@ async function payout(ctx: BookingContext): Promise<PreparedBooking> {
     .bind(company)
     .first<{ name: string }>();
   const report = await reportFile(ctx, id, source, () =>
-    buildPayoutReport(source, companyRow!.name),
+    buildPayoutReport(source, companyRow!.name, undefined, ctx.webshopName),
   );
   return {
     file: prefs.attachments ? report.file : undefined,
@@ -462,7 +462,7 @@ async function flatpay(ctx: BookingContext): Promise<PreparedBooking> {
     .bind(company)
     .first<{ name: string }>();
   const report = await reportFile(ctx, 'flatpay:' + id, source, () =>
-    buildFlatpayReport(source, undefined, companyRow!.name),
+    buildFlatpayReport(source, undefined, companyRow!.name, ctx.webshopName),
   );
   const attach =
     JSON.parse(ctx.prefs.preferences_json).automation.attachments === true;

@@ -20,6 +20,24 @@ export type Voucher = {
   }[];
 };
 export type Expected = { net: number; tax: number; gross: number }[];
+// The webshop's name, kept short and on one line, so postings from several webshops can be told apart.
+export const webshopLabel = (name: unknown) =>
+  asText(name ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 40)
+    .trim();
+export function withWebshop(voucher: Voucher, name: unknown): Voucher {
+  const label = webshopLabel(name);
+  if (!label) return voucher;
+  return {
+    ...voucher,
+    Lines: voucher.Lines.map((line) => ({
+      ...line,
+      Description: `${line.Description} · ${label}`,
+    })),
+  };
+}
 export function voucherFor(
   invoice: CheckedInvoice,
   draft: SalesDraft,

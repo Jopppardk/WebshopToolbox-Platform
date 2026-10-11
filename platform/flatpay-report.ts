@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { webshopLabel } from './dinero-sale';
 export type FlatpayReportSource = {
   payment: {
     paymentID: string;
@@ -90,6 +91,7 @@ export async function buildFlatpayReport(
   source: FlatpayReportSource,
   logoBytes?: ArrayBuffer,
   issuer = 'WebshopToolbox',
+  webshop = '',
 ) {
   const totals = checkFlatpayReport(source),
     pdf = await PDFDocument.create(),
@@ -130,6 +132,8 @@ export async function buildFlatpayReport(
   };
   text('Udbetalingsrapport', 45, 778, 23, true);
   text('Flatpay', 45, 751, 12);
+  if (webshopLabel(webshop))
+    text('Webshop: ' + webshopLabel(webshop), 45, 700, 10, true);
   if (logoBytes) {
     const logo = await pdf.embedPng(logoBytes);
     const scale = Math.min(120 / logo.width, 42 / logo.height);
