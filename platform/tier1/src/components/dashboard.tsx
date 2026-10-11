@@ -1,27 +1,18 @@
 'use client';
-import { formatDate, formatDateTime } from '@/lib/format';
+import { formatDateTime } from '@/lib/format';
 import { tier1Fetch as fetch } from '@/platform/transport';
-import { useEffect, useState, type ReactNode } from 'react';
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  ArrowRight,
-  BarChart3,
-  Boxes,
-  Wallet,
-  Landmark,
-  ShoppingBag,
-  CheckCircle2,
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowRight, Landmark, ShoppingBag, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { RefreshButton } from '@/components/refresh-button';
 import { AttentionList, type AttentionView } from '@/components/attention-list';
 import { WebshopCards } from '@/components/webshop-cards';
-import { useWorkspace } from '@/platform/workspace';
 import {
-  percentageChange,
-  type calculateFinance,
-} from '@/lib/dashboard-finance';
+  CompanyFinanceCard,
+  ShopFinanceCards,
+} from '@/components/finance-cards';
+import { useWorkspace } from '@/platform/workspace';
+import { type calculateFinance } from '@/lib/dashboard-finance';
 
 type Finance = {
   ready: boolean;
@@ -31,15 +22,6 @@ type Finance = {
   through?: string;
   stale?: boolean;
 };
-const money = (value: number | null | undefined) =>
-  value == null
-    ? '—'
-    : new Intl.NumberFormat('da-DK', {
-        style: 'currency',
-        currency: 'DKK',
-        maximumFractionDigits: 0,
-      }).format(value / 100);
-const date = (value: string) => formatDate(value);
 const timestamp = (value: string) => formatDateTime(value);
 type DashboardProps = {
   onIntegrations: (provider?: 'dinero' | 'shopify') => void;
@@ -181,7 +163,7 @@ function ConnectedDashboard({
   onIntegrations: () => void;
   onOpen: (view: AttentionView) => void;
 }) {
-  const { company, webshops } = useWorkspace();
+  const { company } = useWorkspace();
   const [finance, setFinance] = useState<Finance | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({}),
     [revision, setRevision] = useState(0),
@@ -271,191 +253,44 @@ function ConnectedDashboard({
             Økonomi
           </h2>
           <span className="rounded-full border bg-white px-3 py-1 text-xs text-muted-foreground">
-            Fælles for {company.name} · Dinero · Omsætning ekskl. moms
+            Omsætning ekskl. moms · sammenlignet med samme dato sidste år
           </span>
         </div>
-        {(errors.finance || finance?.message) && (
-          <p
-            role={errors.finance ? 'alert' : undefined}
-            className="mb-4 text-sm text-muted-foreground"
-          >
-            {errors.finance || finance?.message}
-          </p>
-        )}
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Revenue
-            label="Omsætning MTD"
-            subtitle="Denne måned"
-            current={data?.revenueMtd ?? null}
-            previous={data?.previousMtd ?? null}
-            period={
-              data
-                ? date(data.periods.monthStart) +
-                  ' – ' +
-                  date(data.periods.today)
-                : undefined
-            }
-            priorPeriod={
-              data
-                ? date(data.periods.priorMonthStart) +
-                  ' – ' +
-                  date(data.periods.previous)
-                : undefined
-            }
-          />
-          <Revenue
-            label="Omsætning YTD"
-            subtitle="Året til dato"
-            current={data?.revenueYtd ?? null}
-            previous={data?.previousYtd ?? null}
-            period={
-              data
-                ? date(data.periods.yearStart) +
-                  ' – ' +
-                  date(data.periods.today)
-                : undefined
-            }
-            priorPeriod={
-              data
-                ? date(data.periods.priorYearStart) +
-                  ' – ' +
-                  date(data.periods.previous)
-                : undefined
-            }
-            accent
-          />
-        </div>
-        <div className="mt-4 grid gap-4 md:grid-cols-3">
-          <Metric
-            icon={<Wallet />}
-            label="Overskud MTD"
-            value={money(data?.profitMtd)}
-            note="Denne måned · før skat"
-          />
-          <Metric
-            icon={<BarChart3 />}
-            label="Overskud YTD"
-            value={money(data?.profitYtd)}
-            note="Året til dato · før skat"
-          />
-          <Metric
-            icon={<Boxes />}
-            label="Lagerværdi"
-            value={money(data?.inventory)}
-            note="Bogført saldo på lagerkontoen"
+        <ShopFinanceCards revision={revision} />
+        <div className="mt-4">
+          <CompanyFinanceCard
+            name={company.name}
+            notes={[errors.finance || finance?.message || ''].filter(Boolean)}
+            figures={{
+              periods: data?.periods ?? null,
+              revenueMtd: data?.revenueMtd ?? null,
+              revenueYtd: data?.revenueYtd ?? null,
+              previousMtd: data?.previousMtd ?? null,
+              previousYtd: data?.previousYtd ?? null,
+              inventory: data?.inventory ?? null,
+              profitMtd: data?.profitMtd ?? null,
+              profitYtd: data?.profitYtd ?? null,
+            }}
           />
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
           {finance?.checkedAt
-            ? 'Senest hentet ' + timestamp(finance.checkedAt) + '. '
+            ? 'Dinero senest hentet ' + timestamp(finance.checkedAt) + '. '
             : ''}
-          {webshops.length > 1
-            ? 'Tallene kommer fra Dinero og dækker hele virksomheden, alle webshops samlet. '
+          {finance?.stale
+            ? 'Data fra Dinero er forsinkede; opdatering afventes. '
             : ''}
-          {finance?.stale ? 'Data er forsinkede; opdatering afventes. ' : ''}
-          Omsætning er ekskl. moms. Overskud er før skat og efter bogførte
+          Webshoppernes omsætning kommer fra Shopify Analytics (salg inkl. fragt
+          og gebyrer, efter rabatter og returneringer, ekskl. moms), og
+          lagerværdien er kostpris gange lagerantal i Shopify. {company.name}{' '}
+          samlet er de bogførte tal i Dinero for hele virksomheden, så summen af
+          webshops kan afvige, fx på grund af bogføringstidspunkt eller salg
+          uden for webshops. Overskud er før skat og efter bogførte
           omkostninger; ikke-fradragsberettiget moms kan indgå i omkostningerne.
-          Lagerværdi følger den bogførte saldo på lagerkontoen. MTD/YTD følger
-          kalenderåret til og med dags dato. — betyder, at datagrundlaget
-          mangler eller ikke kan beregnes sikkert.
+          Måned og år til dato følger kalenderen til og med i dag. — betyder, at
+          datagrundlaget mangler eller ligger før historikstart.
         </p>
       </section>
     </div>
-  );
-}
-function Revenue({
-  label,
-  subtitle,
-  current,
-  previous,
-  period,
-  priorPeriod,
-  accent = false,
-}: {
-  label: string;
-  subtitle: string;
-  current: number | null;
-  previous: number | null;
-  period?: string;
-  priorPeriod?: string;
-  accent?: boolean;
-}) {
-  const change = percentageChange(current, previous);
-  return (
-    <article
-      className={
-        'rounded-2xl border p-6 shadow-sm md:p-7 ' +
-        (accent ? 'border-[#d9c4a2] bg-[#f7efe3]' : 'bg-white')
-      }
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold">{label}</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {subtitle}
-            {period ? ' · ' + period : ''}
-          </p>
-        </div>
-        <BarChart3 className="size-5 text-[#9b7742]" />
-      </div>
-      <p className="mt-6 text-4xl font-semibold tracking-[-.04em] tabular-nums md:text-5xl">
-        {money(current)}
-      </p>
-      <div className="mt-5 flex flex-wrap items-center gap-2">
-        {change !== null ? (
-          <span
-            className={
-              'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ' +
-              (change >= 0
-                ? 'bg-emerald-100 text-emerald-800'
-                : 'bg-red-100 text-red-800')
-            }
-          >
-            {change >= 0 ? (
-              <ArrowUpRight className="size-3.5" />
-            ) : (
-              <ArrowDownRight className="size-3.5" />
-            )}
-            {change > 0 ? '+' : ''}
-            {change.toLocaleString('da-DK', { maximumFractionDigits: 1 })} %
-          </span>
-        ) : (
-          <span className="text-xs text-muted-foreground">
-            Ingen beregnelig %-sammenligning
-          </span>
-        )}
-        <span className="text-xs text-muted-foreground">
-          ift. samme periode sidste år
-        </span>
-      </div>
-      <div className="mt-5 flex flex-wrap justify-between gap-2 border-t border-black/10 pt-4 text-xs text-muted-foreground">
-        <span>{priorPeriod || 'Samme dato sidste år'}</span>
-        <span className="font-medium tabular-nums">{money(previous)}</span>
-      </div>
-    </article>
-  );
-}
-function Metric({
-  icon,
-  label,
-  value,
-  note,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  note: string;
-}) {
-  return (
-    <article className="rounded-2xl border bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm text-muted-foreground">{label}</h3>
-        <span className="text-[#9b7742] [&_svg]:size-5">{icon}</span>
-      </div>
-      <p className="mt-4 text-3xl font-semibold tracking-tight tabular-nums">
-        {value}
-      </p>
-      <p className="mt-2 text-xs text-muted-foreground">{note}</p>
-    </article>
   );
 }

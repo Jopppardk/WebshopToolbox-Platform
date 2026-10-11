@@ -148,3 +148,24 @@ export function percentageChange(
     ? null
     : ((current - previous) / previous) * 100;
 }
+// Dashboard: one webshop's revenue (Shopify Analytics, excl. tax) and inventory value (Shopify cost prices).
+export type ShopRevenue = {
+  revenueMtd: number | null;
+  revenueYtd: number | null;
+  previousMtd: number | null;
+  previousYtd: number | null;
+};
+export type ShopFinance = {
+  periods: ReturnType<typeof financePeriods>;
+  startDate: string;
+  currency: string | null;
+  revenue: ShopRevenue | null;
+  revenueError?: string;
+  inventory: {
+    valueMinor: number;
+    incomplete: number;
+    currency: string | null;
+  } | null;
+  inventoryError?: string;
+  checkedAt: string;
+};
