@@ -84,6 +84,13 @@ export async function generatePayoutReport(
     .prepare('SELECT name FROM companies WHERE id=?')
     .bind(company)
     .first<{ name: string }>();
+  const webshop =
+    (
+      await db
+        .prepare('SELECT name FROM webshops WHERE company_id=? AND id=?')
+        .bind(company, shop)
+        .first<{ name: string }>()
+    )?.name || '';
   let bytes: Uint8Array, source: any;
   if (flatpay) {
     const record = await db
@@ -107,7 +114,12 @@ export async function generatePayoutReport(
           JSON.parse(record.payload_json).settlements,
         )
       ).source;
-      bytes = await buildFlatpayReport(source, undefined, companyRow!.name);
+      bytes = await buildFlatpayReport(
+        source,
+        undefined,
+        companyRow!.name,
+        webshop,
+      );
     } catch (error) {
       if (error instanceof HttpError) throw error;
       throw new HttpError(
@@ -135,7 +147,12 @@ export async function generatePayoutReport(
         breakdown.net,
         await shopAccess(env, company, shop),
       );
-      bytes = await buildPayoutReport(source, companyRow!.name);
+      bytes = await buildPayoutReport(
+        source,
+        companyRow!.name,
+        undefined,
+        webshop,
+      );
     } catch (error) {
       throw new HttpError(
         409,

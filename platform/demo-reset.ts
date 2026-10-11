@@ -585,7 +585,15 @@ export async function resetDemo(env: PlatformEnv, today = danishDate()) {
       },
       doc = `demo-payout-${p.snapshot.id.split('/').pop()}`,
       key = `companies/${DEMO_COMPANY}/webshops/${DEMO_SHOP}/payout-reports/${doc}.pdf`;
-    pdfs.push({ key, bytes: await buildPayoutReport(source, COMPANY_NAME) });
+    pdfs.push({
+      key,
+      bytes: await buildPayoutReport(
+        source,
+        COMPANY_NAME,
+        undefined,
+        SHOP_NAME,
+      ),
+    });
     records.push(
       db
         .prepare(
