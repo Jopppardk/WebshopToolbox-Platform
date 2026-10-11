@@ -187,16 +187,17 @@ export async function buildPayoutReport(
       font: bold,
       color: rgb(0.1, 0.14, 0.12),
     });
-    target.drawText(
-      `Shopify Payments ${id}${shopName ? ' · ' + shopName : ''}`,
-      {
-        x: 55,
-        y: 759,
-        size: 9,
-        font: regular,
-        color: rgb(0.35, 0.38, 0.42),
-      },
-    );
+    // Kept within the page: a long payout ID and webshop name shorten the name.
+    let subtitle = `Shopify Payments ${id}${shopName ? ' · ' + shopName : ''}`;
+    while (regular.widthOfTextAtSize(subtitle, 9) > 485)
+      subtitle = subtitle.slice(0, -4) + '...';
+    target.drawText(subtitle, {
+      x: 55,
+      y: 759,
+      size: 9,
+      font: regular,
+      color: rgb(0.35, 0.38, 0.42),
+    });
     const headers = [
       ['Dato', 55],
       ['Ordre', 118],
