@@ -21,6 +21,9 @@ export type FinanceFigures = {
   previousMtd: number | null;
   previousYtd: number | null;
   inventory: number | null;
+  // Only the company card (Dinero): result before tax after booked costs.
+  profitMtd?: number | null;
+  profitYtd?: number | null;
 };
 
 export const money = (value: number | null | undefined, currency = 'DKK') =>
@@ -252,6 +255,22 @@ function FinanceCard({
           </p>
         </div>
       </div>
+      {'profitMtd' in figures && (
+        <div className="grid gap-3 px-4 pb-4 sm:grid-cols-2 md:px-5">
+          <Plain
+            label="Overskud måned til dato"
+            title={range(p?.monthStart, p?.today)}
+            value={money(figures.profitMtd, currency)}
+            note="Før skat"
+          />
+          <Plain
+            label="Overskud år til dato"
+            title={range(p?.yearStart, p?.today)}
+            value={money(figures.profitYtd, currency)}
+            note="Før skat"
+          />
+        </div>
+      )}
     </article>
   );
 }
@@ -306,6 +325,30 @@ function Figure({
           </span>
         </span>
       </div>
+    </div>
+  );
+}
+
+function Plain({
+  label,
+  title,
+  value,
+  note,
+}: {
+  label: string;
+  title?: string;
+  value: string;
+  note: string;
+}) {
+  return (
+    <div className="rounded-xl bg-white/80 p-3.5 ring-1 ring-black/5">
+      <h4 className="text-xs font-medium text-muted-foreground" title={title}>
+        {label}
+      </h4>
+      <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">
+        {value}
+      </p>
+      <p className="mt-2 text-[11px] text-muted-foreground">{note}</p>
     </div>
   );
 }

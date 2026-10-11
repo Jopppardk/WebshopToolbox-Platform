@@ -73,6 +73,10 @@ test('every page of the portal renders', async ({ page }) => {
   await expect(card('Økonomi for Testvirksomhed A')).toContainText(
     'Omsætning år til dato',
   );
+  await expect(card('Økonomi for Testvirksomhed A')).toContainText(
+    'Overskud år til dato',
+  );
+  await expect(card('Økonomi for Webshop A1')).not.toContainText('Overskud');
   // "Kræver handling" lists the fixture's failed sale and opens Salg.
   const attention = page.getByRole('region', { name: /Kræver handling/ });
   await expect(attention).toContainText('Fejlede poster · 1');

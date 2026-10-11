@@ -268,6 +268,8 @@ function ConnectedDashboard({
               previousMtd: data?.previousMtd ?? null,
               previousYtd: data?.previousYtd ?? null,
               inventory: data?.inventory ?? null,
+              profitMtd: data?.profitMtd ?? null,
+              profitYtd: data?.profitYtd ?? null,
             }}
           />
         </div>
@@ -283,9 +285,10 @@ function ConnectedDashboard({
           lagerværdien er kostpris gange lagerantal i Shopify. {company.name}{' '}
           samlet er de bogførte tal i Dinero for hele virksomheden, så summen af
           webshops kan afvige, fx på grund af bogføringstidspunkt eller salg
-          uden for webshops. Måned og år til dato følger kalenderen til og med i
-          dag. — betyder, at datagrundlaget mangler eller ligger før
-          historikstart.
+          uden for webshops. Overskud er før skat og efter bogførte
+          omkostninger; ikke-fradragsberettiget moms kan indgå i omkostningerne.
+          Måned og år til dato følger kalenderen til og med i dag. — betyder, at
+          datagrundlaget mangler eller ligger før historikstart.
         </p>
       </section>
     </div>
