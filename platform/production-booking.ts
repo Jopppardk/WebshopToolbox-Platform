@@ -4,7 +4,7 @@ import { recordFailure } from './record-history';
 import { requireCompany, requireWebshop } from './auth';
 import { unseal } from './connections';
 import { jsonBody } from './invitations';
-import { verifyVoucher } from './dinero-sale';
+import { verifyVoucher, withWebshop, type Voucher } from './dinero-sale';
 import { dineroClient } from './dinero-write';
 import {
   readReceipt,
@@ -24,6 +24,7 @@ export type BookingContext = {
   prefs: any;
   mapping: any;
   sourceRow: any;
+  webshopName: string;
 };
 export type PreparedBooking = {
   snapshot: Record<string, any>;
@@ -155,6 +156,10 @@ async function productionBooking(
     .first<any>();
   if (!mapping || !prefs)
     throw new HttpError(409, 'Gem kontoplan og indstillinger først.');
+  const webshop = await db
+    .prepare('SELECT name FROM webshops WHERE company_id=? AND id=?')
+    .bind(company, shop)
+    .first<{ name: string }>();
 
   const { snapshot: proposal, file } = await prepare({
     env,
@@ -174,7 +179,10 @@ async function productionBooking(
       ),
     },
     sourceRow,
+    webshopName: webshop?.name || '',
   });
+  // Every line in Dinero names the webshop, so postings from several webshops can be told apart.
+  proposal.voucher = withWebshop(proposal.voucher, webshop?.name);
   const dates = (
     await db
       .prepare(
@@ -221,6 +229,14 @@ async function productionBooking(
       delete original[key];
       delete compared[key];
     }
+    // The draft already in Dinero keeps its own line texts (checked against Dinero below), so a renamed
+    // webshop or a draft from before the webshop name was added can still be booked.
+    const texts = (voucher: Voucher) => ({
+      ...voucher,
+      Lines: voucher.Lines.map((line) => ({ ...line, Description: '' })),
+    });
+    original.voucher = texts(original.voucher);
+    compared.voucher = texts(compared.voucher);
   }
   if (JSON.stringify(original) !== JSON.stringify(compared))
     throw new HttpError(

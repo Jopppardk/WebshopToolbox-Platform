@@ -11,7 +11,7 @@ _Senest opdateret 11. oktober 2026._
 | Adresse | https://portal.webshoptoolbox.dk (Tier 1). Tier 0 under `/admin/` bag Cloudflare Access | https://dev.webshoptoolbox.dk |
 | Bogføring i Dinero og kundemail | Aktiveret | Blokeret |
 | Automatiske kørsler (cron) | Hvert 5. minut | Ingen |
-| Selvbetjent tilmelding | Slået fra | Slået til, kun for godkendte modtagere |
+| Selvbetjent tilmelding | Slået til (genåbnet 11. oktober 2026) | Slået til, kun for godkendte modtagere |
 | Database | D1 `webshop-toolbox-platform-production` | D1 `webshop-toolbox-platform-test` |
 
 Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:dev` (port 8790, syntetiske data).
@@ -50,6 +50,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 **Ikke verificeret i drift**
 - **Shipmondo-labels fra Salg:** ikke afprøvet mod en rigtig konto. Den første rigtige ordre er testen (aftalt).
 - **Daglig driftsmail:** modtagelsen er ikke bekræftet.
+- **Webshopnavn på udbetalingsrapporter og Dinero-linjer (udgivet 11. oktober 2026, dev og prod, run 38143685177, main `c70bc7b`):** "Webshop: {navn}" på rapporten og " · {webshop}" sidst på hver bilagslinje. Ikke afprøvet mod rigtig Dinero.
 - **Overblik med flere webshops (udgivet 11. oktober 2026, dev og prod, run 38133154668, main `3f2a9bd`):** webshopvælger, kort pr. webshop på dashboard og Emballage, fælles Emballage-indberetning i oversigten, tydelig fælles/egen faktura og webshopnavn i overskrifter. Kun afprøvet med testdata.
 - **Flere webshops (udgivet 10. oktober 2026, dev og prod, run 38064862126, main `15bf3cd`):** faktura og afsender pr. webshop, genbrug af Shipmondo/Emballage med samlet Emballage-indberetning og mellemregningskonti pr. webshop. Kun afprøvet med testdata; ikke mod rigtig afsendelse fra eget domæne, Shipmondo, Emballage Indberetning eller Dinero.
 
@@ -63,7 +64,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 **Kendt teknisk gæld**
 - **Kodekvalitet:** 275 lint-fund (mest `any` og React-compiler), låst af `npm run lint`. Al kode er formateret, og nye ændringer skal være det.
 
-**Før lancering** (tilmeldingen er slået fra)
+**Mangler efter genåbning** (tilmeldingen blev genåbnet 11. oktober 2026 på brugerens bestilling, før disse var færdige)
 - Sletning og eksport af en kundes data (GDPR)
 - "Kom godt i gang"-tjekliste
 - Abonnement og betaling
