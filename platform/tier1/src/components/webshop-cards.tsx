@@ -2,9 +2,10 @@
 // Dashboard: one card per webshop with today's activity and the latest updates, two side by side. Each card
 // reads its own webshop; the server checks access to it as for any other request.
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowRight, Link2, Package, Wallet } from 'lucide-react';
+import { ArrowRight, Link2, Package, Truck, Wallet } from 'lucide-react';
 import { formatDate, formatTime } from '@/lib/format';
 import { danishDate } from '@/lib/history-policy';
+import { shipmentCounts, type ShipmentList } from '@/lib/shipments';
 import { tier1FetchFor } from '@/platform/transport';
 import { ShopBadge, useWorkspace } from '@/platform/workspace';
 
@@ -59,8 +60,10 @@ export function WebshopCards({
       </div>
       <p className="mt-3 text-[11px] text-muted-foreground">
         Registrerede ordrer og udbetalinger fra alle betalingsudbydere med
-        dagens dato i dansk tid. Dinero = kladde eller bogført i Dinero.
-        Afventer = endnu ikke overført, inkl. igangværende overførsler. Fejlede
+        dagens dato i dansk tid. Forsendelser er pakker fra de seneste 30 dage
+        som på Forsendelser: oprettet i dag, under transport og klar til
+        afhentning i pakkeshop. Dinero = kladde eller bogført i Dinero. Afventer
+        = endnu ikke overført, inkl. igangværende overførsler. Fejlede
         inkluderer overførsler, der kræver kontrol.
       </p>
     </section>
@@ -126,6 +129,7 @@ function WebshopCard({
       window.clearInterval(timer);
     };
   }, [shop.id, revision]);
+  const shipments = useShipmentCounts(shop.id, revision);
   const updated = stats?.activity.updated;
   return (
     <article
@@ -172,6 +176,7 @@ function WebshopCard({
           label="Udbetalinger"
           counts={stats?.activity.payouts}
         />
+        <ShipmentLine {...shipments} />
       </div>
       <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-[#e9e2d7] bg-[#faf8f5] px-4 py-3 text-[11px] text-muted-foreground md:px-5">
         <span className="font-medium text-foreground">Senest opdateret</span>
@@ -255,5 +260,104 @@ function Updated({ label, value }: { label: string; value?: string | null }) {
         {value ? (today ? 'kl. ' + formatTime(value) : formatDate(value)) : '—'}
       </span>
     </span>
+  );
+}
+
+type ShipmentCounts = ReturnType<typeof shipmentCounts>;
+// Forsendelser for the last 30 days, as on the Forsendelser page (which shares the server's five-minute cache).
+function useShipmentCounts(shop: string, revision: number) {
+  const [counts, setCounts] = useState<ShipmentCounts | null>(null),
+    [error, setError] = useState('');
+  useEffect(() => {
+    const controller = new AbortController();
+    let running = false;
+    const load = async () => {
+      if (running) return;
+      running = true;
+      try {
+        let response: Response, value: ShipmentList & { error?: string };
+        // Another tab may be reading the same list; wait for it instead of failing.
+        for (let attempt = 0; ; attempt++) {
+          response = await tier1FetchFor(shop, '/api/shipments?days=30', {
+            cache: 'no-store',
+            signal: AbortSignal.any([
+              controller.signal,
+              AbortSignal.timeout(120000),
+            ]),
+          });
+          value = await response.json();
+          if (
+            response.status !== 409 ||
+            !/hentes allerede/.test(value.error || '') ||
+            attempt >= 10
+          )
+            break;
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          if (controller.signal.aborted) return;
+        }
+        if (!response.ok)
+          throw new Error(value.error || 'Forsendelserne kunne ikke hentes.');
+        if (controller.signal.aborted) return;
+        setCounts(shipmentCounts(value.shipments, danishDate()));
+        setError('');
+      } catch (reason) {
+        if (!controller.signal.aborted)
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : 'Forsendelserne kunne ikke hentes.',
+          );
+      } finally {
+        running = false;
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void load();
+    }, 5 * 60000);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+    };
+  }, [shop, revision]);
+  return { counts, error };
+}
+
+function ShipmentLine({
+  counts,
+  error,
+}: {
+  counts: ShipmentCounts | null;
+  error: string;
+}) {
+  const cell = (name: string, value: number | undefined, tone: string) => (
+    <div className={'rounded-lg px-2 py-1.5 text-center ' + tone}>
+      <p className="text-[10px] leading-tight font-medium opacity-80">{name}</p>
+      <p className="mt-0.5 text-xl font-semibold tracking-tight tabular-nums">
+        {value ?? '—'}
+      </p>
+    </div>
+  );
+  return (
+    <div className="grid grid-cols-3 items-center gap-1.5 sm:grid-cols-[132px_repeat(3,minmax(0,1fr))]">
+      <div className="col-span-3 flex items-center gap-2 sm:col-span-1">
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#f4eadc] text-[#8a6636]">
+          <Truck className="size-4" />
+        </span>
+        <span className="text-sm font-semibold">Forsendelser</span>
+      </div>
+      {cell('Oprettet i dag', counts?.created, 'bg-stone-50')}
+      {cell('Under transport', counts?.moving, 'bg-sky-50/70 text-sky-800')}
+      {cell(
+        'Afventer afhentning',
+        counts?.waiting,
+        'bg-amber-50/70 text-amber-800',
+      )}
+      {error && (
+        <p className="col-span-3 text-[11px] text-muted-foreground sm:col-span-4">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

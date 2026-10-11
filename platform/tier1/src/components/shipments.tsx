@@ -33,6 +33,7 @@ import { formatDate, formatDateTime } from '@/lib/format';
 import {
   carriers,
   pickupDeadline,
+  shipmentCounts,
   shipmentDays,
   type Carrier,
   type Shipment,
@@ -577,14 +578,7 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
   const all = useMemo(() => data?.shipments || [], [data]);
   const counts = useMemo(
     () => ({
-      moving: all.filter(
-        (s) =>
-          s.current !== 'delivered' &&
-          s.current !== 'manual' &&
-          s.current !== 'untracked' &&
-          s.current !== 'ready',
-      ).length,
-      waiting: all.filter((s) => s.current === 'ready').length,
+      ...shipmentCounts(all, today),
       return: all.filter((s) => returnWarning(s, today)).length,
     }),
     [all, today],

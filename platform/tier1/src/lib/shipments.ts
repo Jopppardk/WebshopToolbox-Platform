@@ -411,3 +411,25 @@ export function pickupDeadline(
           : ('ok' as const),
   };
 }
+
+/** Dashboard: shipments created today (Danish date), on the way, and waiting in a parcel shop. "Under transport"
+ *  is the Forsendelser page's "På vej": everything not delivered, ready for pickup, manual or untracked. */
+export function shipmentCounts(shipments: Shipment[], today: string) {
+  const day = (value: string) =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Copenhagen',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date(value));
+  return {
+    created: shipments.filter(
+      (s) =>
+        Number.isFinite(Date.parse(s.shippedAt)) && day(s.shippedAt) === today,
+    ).length,
+    moving: shipments.filter(
+      (s) => !['delivered', 'manual', 'untracked', 'ready'].includes(s.current),
+    ).length,
+    waiting: shipments.filter((s) => s.current === 'ready').length,
+  };
+}

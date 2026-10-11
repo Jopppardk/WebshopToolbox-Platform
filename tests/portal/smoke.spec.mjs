@@ -55,16 +55,23 @@ test('every page of the portal renders', async ({ page }) => {
   await expect(page.locator('main')).toContainText(
     /Dashboard|Forbind din virksomhed/,
   );
-  // One card per webshop with today's activity, each read from its own webshop.
+  // One card per webshop with today's activity and shipments, each read from its own webshop.
+  const card = (name) => page.getByRole('article', { name, exact: true });
+  for (const name of ['Webshop A1', 'Webshop A2']) {
+    await expect(card(name)).toContainText('Udbetalinger');
+    await expect(card(name)).toContainText('Forsendelser');
+    await expect(card(name)).toContainText('Afventer afhentning');
+  }
+  await expect(card('Webshop A1')).toContainText('Valgt');
+  await expect(card('Webshop A2')).toContainText('Skift hertil');
+  // Økonomi: a card per webshop (Shopify) and one for the whole company (Dinero).
   for (const name of ['Webshop A1', 'Webshop A2'])
-    await expect(page.getByRole('article', { name })).toContainText(
-      'Udbetalinger',
-    );
-  await expect(page.getByRole('article', { name: 'Webshop A1' })).toContainText(
-    'Valgt',
+    await expect(card('Økonomi for ' + name)).toContainText('Lagerværdi');
+  await expect(card('Økonomi for Testvirksomhed A')).toContainText(
+    'Samlet for alle webshops',
   );
-  await expect(page.getByRole('article', { name: 'Webshop A2' })).toContainText(
-    'Skift hertil',
+  await expect(card('Økonomi for Testvirksomhed A')).toContainText(
+    'Omsætning år til dato',
   );
   // "Kræver handling" lists the fixture's failed sale and opens Salg.
   const attention = page.getByRole('region', { name: /Kræver handling/ });

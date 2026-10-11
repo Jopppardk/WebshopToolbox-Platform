@@ -2,6 +2,7 @@ import { handleShipmondo } from './shipmondo';
 import { paymentProviderPattern } from './catalog';
 import { handlePerformance } from './performance-source';
 import { handleShipments } from './shipments-source';
+import { handleShopFinance } from './dashboard-shop';
 import { demoTier1, isDemoCompany } from './demo';
 import { handleReconciliation } from './booking-onboarding';
 import { handleTier1Emballage } from './tier1-emballage';
@@ -71,6 +72,8 @@ export async function handleTier1(
       shop,
       path,
     );
+  if (path === '/dashboard/shop')
+    return handleShopFinance(request, env, actor, company.company_id, shop);
   if (path === '/shipments' || path === '/shipments/refresh')
     return handleShipments(request, env, actor, company.company_id, shop, path);
   if (path === '/feeds' || path.startsWith('/feeds/'))

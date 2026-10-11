@@ -670,6 +670,23 @@ export function demoFinance(today = danishDate()) {
       'Demodata · bogførte posteringer · resultat før skat · lagerværdi fra konto 5820',
   };
 }
+// The demo has one webshop, so its card shows the Dinero turnover as Shopify revenue and the demo stock.
+export function demoShopFinance(today = danishDate()) {
+  const finance = demoFinance(today).data;
+  return {
+    periods: finance.periods,
+    startDate: demoLedger(today).start,
+    currency: 'DKK',
+    revenue: {
+      revenueMtd: finance.revenueMtd,
+      revenueYtd: finance.revenueYtd,
+      previousMtd: finance.previousMtd,
+      previousYtd: finance.previousYtd,
+    },
+    inventory: { valueMinor: demoInventory().totalValueMinor, incomplete: 0 },
+    checkedAt: new Date().toISOString(),
+  };
+}
 export function demoPerformance(
   kind: 'finance' | 'shop',
   year: number,
@@ -1020,6 +1037,7 @@ export async function demoTier1(
         demo: true,
       });
     if (path === '/dashboard/finance') return reply(demoFinance());
+    if (path === '/dashboard/shop') return reply(demoShopFinance());
     if (path === '/dinero/suppliers')
       return reply({
         suppliers: suppliers.map(([id, name]) => ({
