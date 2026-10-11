@@ -1,8 +1,15 @@
 'use client';
-import { formatDate } from '@/lib/format';
+import { formatDate, listNames } from '@/lib/format';
 import { tier1Fetch as fetch } from '@/platform/transport';
 import { useEffect, useState } from 'react';
-import { CheckCircle2, Download, RefreshCw, Send, Plug } from 'lucide-react';
+import {
+  CheckCircle2,
+  Download,
+  RefreshCw,
+  Send,
+  Plug,
+  Store,
+} from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -26,12 +33,16 @@ type Quarter = {
   warning?: string;
   canSubmit: boolean;
   unresolved: number;
+  // Each webshop's share, when several webshops share the organisation and are reported together.
+  webshops?: Array<{ id: string; name: string; reportableGrams: number }>;
 };
 type Overview = {
   connected: boolean;
   testMode?: boolean;
   organisation?: string;
   startDate?: string;
+  // The webshops sharing the organisation, when more than one: one report covers them all.
+  webshops?: string[];
   quarters: Quarter[];
   error?: string;
   providerError?: string;
@@ -121,6 +132,7 @@ export function PackagingReporting({
     data?.quarters.filter(
       (q) => !data.startDate || q.start >= data.startDate,
     ) ?? [];
+  const shared = (data?.webshops?.length || 0) > 1;
   const kg = (g: number) =>
     new Intl.NumberFormat('da-DK', {
       minimumFractionDigits: 3,
@@ -141,11 +153,20 @@ export function PackagingReporting({
     <section className="rounded-2xl border bg-white">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5">
         <div>
-          <h2 className="text-lg font-semibold">Kvartalsindberetninger</h2>
+          <h2 className="text-lg font-semibold">
+            {shared ? 'Fælles kvartalsindberetning' : 'Kvartalsindberetninger'}
+          </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Op til fem afsluttede kvartaler fra integrationens startdato ·{' '}
             {data?.organisation || 'Henter…'}
           </p>
+          {shared && (
+            <p className="mt-2 inline-flex flex-wrap items-center gap-1.5 rounded-lg bg-[#f7efe3] px-3 py-1.5 text-sm text-[#5c4320]">
+              <Store className="size-4" />
+              Samlet for {listNames(data!.webshops!)}, som deler organisationen.
+              Kvartalet indberettes én gang for dem alle.
+            </p>
+          )}
           {data?.testMode && (
             <p className="mt-2 font-medium text-amber-700">
               Testtilstand — ingen endelig indberetning eller fakturering
@@ -236,6 +257,15 @@ export function PackagingReporting({
                 </td>
                 <td className="p-4 text-right tabular-nums">
                   {kg(q.reportableGrams)}
+                  {(q.webshops?.length || 0) > 1 && (
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      {q.webshops!.map((w) => (
+                        <span key={w.id} className="block">
+                          {w.name} {kg(w.reportableGrams)}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </td>
                 <td className="p-4 text-right tabular-nums">
                   {kg(q.householdGrams)}

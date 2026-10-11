@@ -1,6 +1,7 @@
 'use client';
 // Fakturaer: invoice generation, PDFs and customer mail for the orders on the page.
 // Moved out of app/page.tsx unchanged.
+import { PageTitle } from '@/platform/workspace';
 import { useCapabilities } from '@/platform/capabilities';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
 import { useEffect, useState } from 'react';
@@ -178,7 +179,7 @@ export function Invoices({
       <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <p className="eyebrow">Dokumenter · Shopify</p>
-          <h1 className="page-title">Fakturaer</h1>
+          <PageTitle title="Fakturaer" />
           <p className="mt-2 text-sm text-muted-foreground">
             Fakturaer oprettes først, når hele ordren er markeret som afsendt i
             Shopify. Opdatér henter nye og ændrede ordrer fra Shopify.

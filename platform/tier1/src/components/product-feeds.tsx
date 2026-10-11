@@ -1,4 +1,5 @@
 import { formatDateTime } from '@/lib/format';
+import { PageTitle } from '@/platform/workspace';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { tier1Fetch, tier1Url } from '@/platform/transport';
 import { Button } from '@/components/ui/button';
@@ -1042,7 +1043,7 @@ export function ProductFeeds() {
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="eyebrow">Tools · PartnerAds</p>
-          <h1 className="page-title">Produktfeeds</h1>
+          <PageTitle title="Produktfeeds" />
           <p className="mt-2 text-sm text-muted-foreground">
             Del webshoppens produkter med PartnerAds som et XML-feed.
           </p>

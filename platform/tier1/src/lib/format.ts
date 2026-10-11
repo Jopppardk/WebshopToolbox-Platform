@@ -59,3 +59,9 @@ export const asText = (value: unknown): string =>
         typeof value === 'bigint'
       ? String(value)
       : '';
+// "A", "A og B", "A, B og C".
+export function listNames(names: string[]) {
+  return names.length < 2
+    ? names.join('')
+    : names.slice(0, -1).join(', ') + ' og ' + names[names.length - 1];
+}

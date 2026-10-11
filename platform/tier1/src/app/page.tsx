@@ -6,8 +6,9 @@ import { IntegrationRequired } from '@/components/integration-required';
 import { Rss, Truck } from 'lucide-react';
 import {
   CustomerIdentity,
-  useAddingWebshop,
+  PageTitle,
   WebshopSelector,
+  useAddingWebshop,
 } from '@/platform/workspace';
 import {
   emptyAccounts,
@@ -798,7 +799,7 @@ export default function Home() {
               <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
                 <div>
                   <p className="eyebrow">Shopify · Dinero</p>
-                  <h1 className="page-title">Salg</h1>
+                  <PageTitle title="Salg" />
                   <p className="mt-2 text-sm text-muted-foreground">
                     Følg salg, realisering og bogføring ét sted.
                   </p>

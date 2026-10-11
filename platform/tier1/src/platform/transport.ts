@@ -21,13 +21,21 @@ function withActor(options?: RequestInit): RequestInit {
   if (actorContext) headers.set('X-Platform-Actor', actorContext);
   return { ...options, headers, credentials: 'same-origin' };
 }
-export function tier1Url(path: string) {
+export function tier1Url(path: string, shop = webshopId) {
   if (!path.startsWith('/api/') || path.startsWith('/api/platform/'))
     throw new Error('Ugyldig integrationsadresse.');
-  return `${portalRoot}/api/platform/tier1/shops/${encodeURIComponent(webshopId || 'none')}${path.slice(4)}`;
+  return `${portalRoot}/api/platform/tier1/shops/${encodeURIComponent(shop || 'none')}${path.slice(4)}`;
 }
 export function tier1Fetch(input: string, options?: RequestInit) {
   return fetch(tier1Url(input), withActor(options));
+}
+// Reads another of the company's webshops (e.g. a card per webshop); the server checks access to it as always.
+export function tier1FetchFor(
+  shop: string,
+  input: string,
+  options?: RequestInit,
+) {
+  return fetch(tier1Url(input, shop), withActor(options));
 }
 export async function platformApi<T>(
   path: string,

@@ -4,7 +4,11 @@
 import { formatDateTime } from '@/lib/format';
 import { useCapabilities } from '@/platform/capabilities';
 import { tier1Fetch as fetch } from '@/platform/transport';
-import { useAddingWebshop, useWorkspace } from '@/platform/workspace';
+import {
+  PageTitle,
+  useAddingWebshop,
+  useWorkspace,
+} from '@/platform/workspace';
 import { IntegrationStartDate } from '@/components/integration-start-date';
 import {
   IntegrationLibrary,
@@ -364,15 +368,17 @@ export function Settings({
     <div className="mx-auto max-w-[1180px] px-5 py-7 md:px-8 md:py-9">
       <div className="mb-7">
         <p className="eyebrow">Opsætning</p>
-        <h1 className="page-title">
-          {mode === 'dashboard'
-            ? 'Indstillinger'
-            : mode === 'integrations'
-              ? 'Integrationer og kontoplan'
-              : mode === 'invoice-email'
-                ? 'Faktura-afsendelse'
-                : 'Lager'}
-        </h1>
+        <PageTitle
+          title={
+            mode === 'dashboard'
+              ? 'Indstillinger'
+              : mode === 'integrations'
+                ? 'Integrationer og kontoplan'
+                : mode === 'invoice-email'
+                  ? 'Faktura-afsendelse'
+                  : 'Lager'
+          }
+        />
         <p className="mt-2 text-sm text-muted-foreground">
           {mode === 'dashboard'
             ? 'Overblik over drift, fejl og automatisk behandling.'

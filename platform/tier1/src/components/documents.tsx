@@ -1,4 +1,5 @@
 'use client';
+import { PageTitle } from '@/platform/workspace';
 import { formatDate } from '@/lib/format';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
 import { useEffect, useState } from 'react';
@@ -80,7 +81,7 @@ export function Documents({ syncRevision = 0 }: { syncRevision?: number }) {
     <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
       <div className="mb-6">
         <p className="eyebrow">Dokumenter</p>
-        <h1 className="page-title">Udbetalingsrapporter</h1>
+        <PageTitle title="Udbetalingsrapporter" />
         <p className="mt-2 text-sm text-muted-foreground">
           Udbetalingsrapporter fra Shopify Payments og Flatpay. Rapporterne
           genereres af Toolbox.

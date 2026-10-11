@@ -55,6 +55,17 @@ test('every page of the portal renders', async ({ page }) => {
   await expect(page.locator('main')).toContainText(
     /Dashboard|Forbind din virksomhed/,
   );
+  // One card per webshop with today's activity, each read from its own webshop.
+  for (const name of ['Webshop A1', 'Webshop A2'])
+    await expect(page.getByRole('article', { name })).toContainText(
+      'Udbetalinger',
+    );
+  await expect(page.getByRole('article', { name: 'Webshop A1' })).toContainText(
+    'Valgt',
+  );
+  await expect(page.getByRole('article', { name: 'Webshop A2' })).toContainText(
+    'Skift hertil',
+  );
   // "Kræver handling" lists the fixture's failed sale and opens Salg.
   const attention = page.getByRole('region', { name: /Kræver handling/ });
   await expect(attention).toContainText('Fejlede poster · 1');
@@ -115,6 +126,20 @@ test('every page of the portal renders', async ({ page }) => {
         name,
       ).toHaveCount(1);
   }
+  // Headings name the webshop the page shows.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    'Indstillinger for Webshop A1',
+  );
+  await nav(page, 'Produktfeeds').click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    'Produktfeeds for Webshop A1',
+  );
+  // Emballage has a card per webshop, like the dashboard.
+  await nav(page, 'Emballage').click();
+  for (const name of ['Webshop A1', 'Webshop A2'])
+    await expect(page.getByRole('article', { name })).toContainText(
+      'Indberetningspligtig',
+    );
 });
 const withRefresh = [
   'Dashboard',
@@ -170,22 +195,36 @@ test('Indstillinger: the Swedish tab mirrors Danmark, and Tilføj webshop opens 
   await expect(page.locator('main')).not.toContainText(
     'ændret i en anden fane',
   );
-  // Danmark: the webshop can have its own invoice settings, and go back to the company's.
+  // Sverige belongs to the webshop; the page heading names it.
+  await expect(page.getByRole('note', { name: 'Du retter' })).toContainText(
+    'Du retter Sverige for Webshop A1.',
+  );
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    'Faktura-afsendelse for Webshop A1',
+  );
+  // Danmark: the webshop can have its own invoice settings, and go back to the company's. A bar says which
+  // invoice is edited and which webshops it reaches.
   await page.getByRole('tab', { name: /Danmark/ }).click();
   const profile = page.getByRole('region', {
     name: 'Fakturaopsætning for webshoppen',
   });
-  await profile.getByRole('switch').click();
-  await expect(profile).toContainText('gælder kun Webshop A1');
+  const editing = page.getByRole('note', { name: 'Du retter' });
+  await expect(editing).toContainText('Du retter den fælles faktura.');
+  await expect(profile).toContainText('Bruges af Webshop A1 og Webshop A2.');
+  await profile
+    .getByRole('radio', { name: /Egen faktura for Webshop A1/ })
+    .click();
+  await expect(editing).toContainText('Du retter fakturaen for Webshop A1.');
+  await expect(editing).toContainText('gælder kun Webshop A1');
   await expect(page.locator('main')).toContainText(
     'Gælder kun denne webshops nye fakturaer.',
   );
-  await profile.getByRole('switch').click();
+  await profile.getByRole('radio', { name: /Fælles faktura/ }).click();
   await page
     .getByRole('dialog')
     .getByRole('button', { name: 'Brug fælles opsætning' })
     .click();
-  await expect(profile).toContainText('bruger virksomhedens fælles opsætning');
+  await expect(editing).toContainText('Du retter den fælles faktura.');
   // Tilføj webshop: from Integrationer straight to the Shopify connection, and back.
   // In this test because logins are rate limited.
   await nav(page, 'Indstillinger').click();
@@ -198,22 +237,28 @@ test('Indstillinger: the Swedish tab mirrors Danmark, and Tilføj webshop opens 
     page.getByRole('button', { name: 'Test og opret webshop' }),
   ).toBeVisible();
   await region.getByRole('button', { name: 'Fortryd' }).click();
-  await expect(
-    page.locator('select[aria-label="Webshop"]').first(),
-  ).toHaveValue('shop-a1');
+  const selector = page
+    .locator('header')
+    .getByRole('button', { name: /^Webshop:/ });
+  await expect(selector).toHaveAccessibleName('Webshop: Webshop A1');
   // Fortryd returns to the webshop the user came from, also when it is not the first.
-  const selector = page.locator('select[aria-label="Webshop"]').first();
-  await selector.selectOption('shop-a2');
-  await selector.selectOption('');
+  const choose = async (name) => {
+    await selector.click();
+    await page.getByRole('menuitem', { name }).click();
+  };
+  await choose(/Webshop A2/);
+  await expect(selector).toHaveAccessibleName('Webshop: Webshop A2');
+  await choose('Tilføj webshop');
+  await expect(selector).toHaveAccessibleName('Webshop: Ny webshop');
   await page
     .getByRole('region', { name: 'Ny webshop' })
     .getByRole('button', { name: 'Fortryd' })
     .click();
-  await expect(selector).toHaveValue('shop-a2');
+  await expect(selector).toHaveAccessibleName('Webshop: Webshop A2');
   // The webshop selector is also in the menu on small screens.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: /menu/i }).first().click();
   await expect(
-    page.getByRole('dialog').getByRole('combobox', { name: 'Webshop' }),
+    page.getByRole('dialog').getByRole('button', { name: /^Webshop:/ }),
   ).toBeVisible();
 });

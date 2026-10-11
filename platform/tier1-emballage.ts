@@ -48,6 +48,40 @@ export async function handleTier1Emballage(
         saved.credentials_encrypted,
       )
     ).apiKey;
+  // The webshops connected to the same organisation as this one (itself included), whose quarterly report is
+  // made together (production-emballage.ts). A webshop the user cannot read, or a deactivated one, is listed
+  // but not readable: its quantities are then missing, and the report cannot be sent from here.
+  const sharing = async (self: string) => {
+    if (!saved) return [];
+    const rows = (
+      await db
+        .prepare(
+          'SELECT e.webshop_id,e.config_json,w.name,w.status FROM emballage_connections e JOIN webshops w ON w.company_id=e.company_id AND w.id=e.webshop_id WHERE e.company_id=? AND e.identity=? ORDER BY e.webshop_id',
+        )
+        .bind(company, saved.identity)
+        .all<{
+          webshop_id: string;
+          config_json: string;
+          name: string;
+          status: string;
+        }>()
+    ).results;
+    return Promise.all(
+      rows.map(async (row) => ({
+        id: row.webshop_id,
+        name: row.name,
+        startDate: String(JSON.parse(row.config_json || '{}').startDate || ''),
+        active: row.status === 'active',
+        readable:
+          row.webshop_id === self ||
+          (row.status === 'active' &&
+            (await requireWebshop(db, actor, company, row.webshop_id).then(
+              () => true,
+              () => false,
+            ))),
+      })),
+    );
+  };
   if (!get) {
     if (request.method !== 'POST') throw new HttpError(405, 'Brug Gem.');
     await requireCompany(db, actor, company, true);
@@ -55,23 +89,27 @@ export async function handleTier1Emballage(
     if (path === '/emballage/reporting') {
       if (b.action !== 'sync')
         return productionEmballage(request, env, actor, company, shop, b);
-      const input = {
-        action: 'sync',
-        start: await dataStartDate(env, company, shop),
-        end: new Date().toISOString().slice(0, 10),
-      };
-      const response = await handlePackaging(
-        new Request(request.url, {
-          method: 'POST',
-          headers: request.headers,
-          body: JSON.stringify(input),
-        }),
-        env,
-        actor,
-        company,
-        shop,
-      );
-      if (!response.ok) return response;
+      // The report covers every webshop sharing the organisation, so their history is fetched together.
+      for (const sharer of await sharing(shop)) {
+        if (!sharer.readable) continue;
+        const input = {
+          action: 'sync',
+          start: await dataStartDate(env, company, sharer.id),
+          end: new Date().toISOString().slice(0, 10),
+        };
+        const response = await handlePackaging(
+          new Request(request.url, {
+            method: 'POST',
+            headers: request.headers,
+            body: JSON.stringify(input),
+          }),
+          env,
+          actor,
+          company,
+          sharer.id,
+        );
+        if (!response.ok) return response;
+      }
     } else if (b.action === 'connect') {
       if (b.copyFrom !== undefined) {
         // The same organisation as another of the company's webshops: the key is copied and sealed on the
@@ -278,6 +316,13 @@ export async function handleTier1Emballage(
       reports,
     });
   }
+  const sharers = await sharing(shop),
+    missing = sharers.find((s) => !s.readable),
+    // Only company administrators may learn the names of webshops they cannot otherwise read.
+    admin = await requireCompany(db, actor, company, true).then(
+      () => true,
+      () => false,
+    );
   const now = new Date(),
     year = now.getUTCFullYear(),
     quarter = Math.floor(now.getUTCMonth() / 3),
@@ -292,37 +337,88 @@ export async function handleTier1Emballage(
     const next = new URL(request.url);
     next.searchParams.set('from', start);
     next.searchParams.set('to', end);
-    const result = await handlePackaging(
-      new Request(next, { headers: request.headers }),
-      env,
-      actor,
-      company,
-      shop,
-    );
-    const value = (await result.json()) as any;
-    if (!result.ok) return reply(value, result.status);
+    // One shared report: the quantities of every webshop sharing the organisation are added up.
+    type Period = Record<string, number>;
+    type Sync = { coverage_start: string; coverage_end: string } | null;
+    const parts: Array<{
+      sharer: (typeof sharers)[number];
+      period: Period;
+      sync: Sync;
+    }> = [];
+    for (const sharer of sharers.length
+      ? sharers
+      : [
+          {
+            id: shop,
+            name: '',
+            startDate: config.startDate,
+            active: true,
+            readable: true,
+          },
+        ]) {
+      if (!sharer.readable) continue;
+      const result = await handlePackaging(
+        new Request(next, { headers: request.headers }),
+        env,
+        actor,
+        company,
+        sharer.id,
+      );
+      const value = (await result.json()) as {
+        period: Period;
+        sync?: Sync;
+      };
+      if (!result.ok) return reply(value, result.status);
+      parts.push({ sharer, period: value.period, sync: value.sync ?? null });
+    }
+    const sum = (field: string) =>
+        parts.reduce((total, part) => total + (part.period[field] || 0), 0),
+      p = {
+        householdGrams: sum('householdGrams'),
+        commercialGrams: sum('commercialGrams'),
+        reportableGrams: sum('reportableGrams'),
+        unknownAudienceGrams: sum('unknownAudienceGrams'),
+        unresolved: sum('unresolved'),
+        unconfiguredProductLines: sum('unconfiguredProductLines'),
+      };
     const report = reports.find(
       (r) =>
         r.period.start_date === start &&
         r.period.end_date === end &&
         r.responsibility.code === config.responsibility,
     );
-    const p = value.period;
+    const named = (s: { name: string }) =>
+      parts.length > 1 ? ` for ${s.name}` : '';
+    const early = parts.find(
+        (part) => !part.sharer.startDate || start < part.sharer.startDate,
+      ),
+      incomplete = parts.find(
+        (part) =>
+          !part.sync ||
+          part.sync.coverage_start > start ||
+          part.sync.coverage_end < end,
+      );
     const reason = !productionWrites(env)
       ? 'Dev: ekstern indberetning er blokeret.'
       : !config.startDate || start < config.startDate
         ? 'Før integrationens startdato.'
-        : !report
-          ? 'Perioden findes ikke hos udbyderen.'
-          : !report.accepts_writes
-            ? 'Perioden er lukket.'
-            : !value.sync ||
-                value.sync.coverage_start > start ||
-                value.sync.coverage_end < end
-              ? 'Hent komplet historik først.'
-              : p.unknownAudienceGrams
-                ? 'Afklar emballagelinjerne først: kundetypen (husholdning/erhverv) mangler for nogle linjer.'
-                : '';
+        : early
+          ? `Før integrationens startdato${named(early.sharer)}.`
+          : missing
+            ? !admin
+              ? 'En anden webshop deler organisationen. Indberetningen kræver adgang til alle webshops, der deler den.'
+              : missing.active
+                ? `Kræver adgang til ${missing.name}, som deler organisationen.`
+                : `${missing.name} er ikke aktiv, men deler organisationen.`
+            : !report
+              ? 'Perioden findes ikke hos udbyderen.'
+              : !report.accepts_writes
+                ? 'Perioden er lukket.'
+                : incomplete
+                  ? `Hent komplet historik først${named(incomplete.sharer)}.`
+                  : p.unknownAudienceGrams
+                    ? 'Afklar emballagelinjerne først: kundetypen (husholdning/erhverv) mangler for nogle linjer.'
+                    : '';
     quarters.push({
       id:
         start.slice(0, 4) +
@@ -331,10 +427,10 @@ export async function handleTier1Emballage(
       label: start + ' – ' + end,
       start,
       end,
-      householdGrams: p.householdGrams || 0,
-      commercialGrams: p.commercialGrams || 0,
+      householdGrams: p.householdGrams,
+      commercialGrams: p.commercialGrams,
       reportableGrams: p.reportableGrams,
-      unknownAudienceGrams: p.unknownAudienceGrams || 0,
+      unknownAudienceGrams: p.unknownAudienceGrams,
       warning: p.unresolved
         ? `${p.unresolved} ${p.unresolved === 1 ? 'linje mangler' : 'linjer mangler'} emballagevægt eller indberetningspligt og kommer ikke med. Mængden kan derfor være for lav.`
         : '',
@@ -343,6 +439,17 @@ export async function handleTier1Emballage(
       reason,
       canSubmit: !reason && !!report && !isSubmitted(report.status),
       unresolved: p.unconfiguredProductLines,
+      // Each webshop's share of the report, when several share the organisation.
+      webshops:
+        parts.length > 1
+          ? parts.map((part) => ({
+              id: part.sharer.id,
+              name: part.sharer.name,
+              reportableGrams: part.period.reportableGrams || 0,
+              householdGrams: part.period.householdGrams || 0,
+              commercialGrams: part.period.commercialGrams || 0,
+            }))
+          : [],
     });
   }
   return reply({
@@ -350,6 +457,10 @@ export async function handleTier1Emballage(
     testMode: context?.api_key.is_test,
     organisation: context?.organisation.name,
     startDate: config.startDate,
+    webshops:
+      sharers.length > 1
+        ? sharers.filter((s) => admin || s.readable).map((s) => s.name)
+        : [],
     quarters,
   });
 }

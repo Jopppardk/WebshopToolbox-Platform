@@ -13,6 +13,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { CountryFlag, countryName } from '@/components/country-flag';
 import { InvoiceIssuer } from '@/components/invoice-issuer';
 import { InvoiceSender } from '@/components/invoice-sender';
+import { EditingBar } from '@/components/webshop-invoice-profile';
+import { useWebshopName, useWorkspace } from '@/platform/workspace';
 
 type Locale = 'da' | 'sv' | 'en';
 type MarketSettings = {
@@ -79,6 +81,8 @@ function MarketTab({
     setDirty(true);
     setMessage(null);
   };
+  const { webshops } = useWorkspace(),
+    shop = useWebshopName();
   const name = display(market),
     language = languageName[value.locale];
   async function save() {
@@ -144,6 +148,13 @@ function MarketTab({
   );
   return (
     <>
+      {webshops.length > 1 && shop && (
+        <EditingBar
+          own
+          label={`${name} for ${shop}`}
+          text={`Markeder hører til den enkelte webshop, så ændringer herunder gælder kun ${shop}.`}
+        />
+      )}
       <section className="mb-6 overflow-hidden rounded-2xl border bg-white">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b p-5">
           <div className="flex items-start gap-3">

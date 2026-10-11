@@ -22,7 +22,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { RefreshButton } from '@/components/refresh-button';
 import { tier1Fetch } from '@/platform/transport';
-import { useWorkspace } from '@/platform/workspace';
+import { PageTitle, useWorkspace } from '@/platform/workspace';
 import { danishDate } from '@/lib/history-policy';
 import { formatDate, formatDateTime } from '@/lib/format';
 import {
@@ -139,7 +139,7 @@ export function Performance({
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="eyebrow">Tools · Årsoversigt</p>
-          <h1 className="page-title">Performance</h1>
+          <PageTitle title="Performance" />
           <p className="mt-2 text-sm text-muted-foreground">
             Følg udviklingen måned for måned og sammenlign med året før.
           </p>
