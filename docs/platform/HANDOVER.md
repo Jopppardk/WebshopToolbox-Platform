@@ -21,7 +21,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 1. Branch fra en frisk main, og opret en lille PR.
 2. CI skal være grøn: tests, begge typechecks, `npm run lint` (lint og formatering må kun blive bedre), Tier 1-build og portalens browsertest.
 3. Squash-merge.
-4. Er der en migration, køres den først med workflowet *Vedligehold: D1-migrering* (dev, derefter prod). Seneste migration er `0050_shop_sync.sql` (0049 custom apps og 0050 webshop-synkronisering er endnu ikke kørt på dev og prod).
+4. Er der en migration, køres den først med workflowet *Vedligehold: D1-migrering* (dev, derefter prod). Seneste migration er `0050_shop_sync.sql` (kørt på dev og prod 12. oktober 2026).
 5. Udgiv: `node scripts/platform-release.mjs dev --sha <sha>`, derefter `prod`. Udgivelsen genbruger den grønne testkørsel for samme commit.
 6. Skriv en note i CHANGELOG.md.
 
@@ -56,9 +56,9 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 - **Overblik med flere webshops (udgivet 11. oktober 2026, dev og prod, run 38133154668, main `3f2a9bd`):** webshopvælger, kort pr. webshop på dashboard og Emballage, fælles Emballage-indberetning i oversigten, tydelig fælles/egen faktura og webshopnavn i overskrifter. Kun afprøvet med testdata.
 - **Flere webshops (udgivet 10. oktober 2026, dev og prod, run 38064862126, main `15bf3cd`):** faktura og afsender pr. webshop, genbrug af Shipmondo/Emballage med samlet Emballage-indberetning og mellemregningskonti pr. webshop. Kun afprøvet med testdata; ikke mod rigtig afsendelse fra eget domæne, Shipmondo, Emballage Indberetning eller Dinero.
 
-- **Custom apps pr. virksomhed (PR, ikke udgivet):** menuen "Custom apps" og registrering af en app til præcis én virksomhed i Tier 0. Kræver migration 0049 på dev og prod før udgivelsen. Ingen rigtig app endnu; testappen "Eksempel" findes kun på dev.
+- **Custom apps pr. virksomhed (udgivet 12. oktober):** menuen "Custom apps" og registrering af en app til præcis én virksomhed i Tier 0. Testappen "Eksempel" findes kun på dev.
 
-- **Webshop-synkronisering (custom app til LA Trading, ikke udgivet):** opretter og synkroniserer valgte produkter og kollektioner fra én webshop til en anden, lager begge veje, udeladt af modtagerens lagerværdi. Kræver migration 0050 og nye Shopify-scopes i modtageren. Første rigtige kørsel sker i prod.
+- **Webshop-synkronisering (custom app til LA Trading, udgivet 12. oktober):** opretter og synkroniserer valgte produkter og kollektioner fra én webshop til en anden, lager begge veje, udeladt af modtagerens lagerværdi. Mangler: en platformadministrator slår appen til for LA Trading i Tier 0, og modtagerens Shopify-app skal have write_products, write_inventory og read_locations (kilden read_locations). Første rigtige kørsel er ikke set.
 
 **Mangler**
 - **Svenske produktnavne på fakturaer:** kræver read_translations i kundens Shopify-app; ellers danske navne.
