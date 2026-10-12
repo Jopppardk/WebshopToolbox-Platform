@@ -693,7 +693,10 @@ async function company(c) {
         }[e.action] || e.action,
         shops.find((s) => s.id === e.resource_id)?.name ||
           memberData.members.find((u) => u.id === e.resource_id)?.email ||
-          (e.resource_id === c.id ? c.name : 'Tidligere registrering'),
+          (e.resource_id === c.id
+            ? c.name
+            : JSON.parse(e.details_json || '{}').app ||
+              'Tidligere registrering'),
         e.actor_email +
           (JSON.parse(e.details_json || '{}').supportSession
             ? ' (support som ' +
