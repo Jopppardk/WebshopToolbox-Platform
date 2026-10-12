@@ -2,7 +2,7 @@
 
 Aktuel status på én side. Læs den før hver opgave. Historikken står i [CHANGELOG.md](CHANGELOG.md), planen i [ROADMAP.md](ROADMAP.md) og arbejdsreglerne i [AGENTS.md](../../AGENTS.md). Opdatér denne side, når status eller åbne punkter ændrer sig. Skriv selve ændringen som en note øverst i CHANGELOG.md.
 
-_Senest opdateret 11. oktober 2026._
+_Senest opdateret 12. oktober 2026._
 
 ## Miljøer
 
@@ -56,6 +56,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 - **Overblik med flere webshops (udgivet 11. oktober 2026, dev og prod, run 38133154668, main `3f2a9bd`):** webshopvælger, kort pr. webshop på dashboard og Emballage, fælles Emballage-indberetning i oversigten, tydelig fælles/egen faktura og webshopnavn i overskrifter. Kun afprøvet med testdata.
 - **Flere webshops (udgivet 10. oktober 2026, dev og prod, run 38064862126, main `15bf3cd`):** faktura og afsender pr. webshop, genbrug af Shipmondo/Emballage med samlet Emballage-indberetning og mellemregningskonti pr. webshop. Kun afprøvet med testdata; ikke mod rigtig afsendelse fra eget domæne, Shipmondo, Emballage Indberetning eller Dinero.
 
+- **Performance: salg pr. dag (udgivet 12. oktober 2026, dev og prod, run 38295423966, main `e2220ba`):** graf med alle dage i måneden mod samme dage sidste år (Shopify `total_sales − taxes`, kræver read_reports), og siden viser webshoppens tal øverst og virksomhedens nederst. Kun afprøvet med testdata.
 - **Custom apps pr. virksomhed (udgivet 12. oktober):** menuen "Custom apps" og registrering af en app til præcis én virksomhed i Tier 0. Testappen "Eksempel" findes kun på dev.
 
 - **Webshop-synkronisering (custom app til LA Trading, udgivet 12. oktober):** opretter og synkroniserer valgte produkter og kollektioner fra én webshop til en anden, lager begge veje, udeladt af modtagerens lagerværdi. Mangler: en platformadministrator slår appen til for LA Trading i Tier 0, og modtagerens Shopify-app skal have write_products, write_inventory og read_locations (kilden read_locations). Første rigtige kørsel er ikke set.
