@@ -1,5 +1,6 @@
 import { jsonBody } from './invitations';
 import { requireCompany } from './auth';
+import { handleShopSync, runDueShopSyncs, shopSyncAppId } from './shop-sync';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 
 // Custom apps: functions built for one customer. The code lives here in the repository; a platform administrator
@@ -24,9 +25,20 @@ export type CustomApp = {
   // false: only offered in dev and local test, never in production.
   production: boolean;
   handle?: (context: CustomAppContext) => Promise<Response>;
+  // Automatic work, called from the scheduled run (worker.ts). It only acts for companies with the app on.
+  scheduled?: (env: PlatformEnv) => Promise<unknown>;
 };
 
 const apps: CustomApp[] = [
+  {
+    id: shopSyncAppId,
+    name: 'Webshop-synkronisering',
+    description:
+      'Opretter udvalgte kollektioner og produkter fra én webshop i en anden og holder tekster, billeder, priser og lager synkroniseret.',
+    production: true,
+    handle: handleShopSync,
+    scheduled: runDueShopSyncs,
+  },
   {
     // Shows that the frame works on dev before a real app exists. Reads nothing and changes nothing.
     id: 'eksempel',
@@ -46,6 +58,13 @@ export function availableApps(env: PlatformEnv) {
   return apps.filter(
     (app) => app.production || env.PLATFORM_ENV !== 'production',
   );
+}
+export async function runCustomApps(env: PlatformEnv) {
+  for (const app of availableApps(env))
+    if (app.scheduled)
+      await app
+        .scheduled(env)
+        .catch((error) => console.error('Custom app fejlede', app.id, error));
 }
 const describe = ({ id, name, description }: CustomApp) => ({
   id,

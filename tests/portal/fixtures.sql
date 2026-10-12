@@ -18,3 +18,4 @@ INSERT OR REPLACE INTO production_attempts(company_id,webshop_id,job,external_id
 INSERT INTO record_events(company_id,webshop_id,provider,module,external_id,event,details_json) VALUES('company-a','shop-a1','shopify','orders','gid://shopify/Order/902701','error','{"stage":"smoke","message":"Momsen stemmer ikke."}');
 -- The example custom app is on for company A, so the menu "Custom apps" is shown.
 INSERT OR REPLACE INTO custom_apps(app_id,company_id,enabled_by) VALUES('eksempel','company-a','local-admin');
+INSERT OR REPLACE INTO custom_apps(app_id,company_id,enabled_by) VALUES('webshop-sync','company-a','local-admin');

@@ -116,6 +116,7 @@ test('every page of the portal renders', async ({ page }) => {
     ['Emballage', /Emballage/],
     ['Produktfeeds', /Produktfeeds/],
     ['Eksempel', /Forbindelsen til appen virker/],
+    ['Webshop-synkronisering', /mindst to webshops forbundet til Shopify/],
     ['Support', /Support/],
     ['Indstillinger', /Indstillinger|Generelt/],
   ];
