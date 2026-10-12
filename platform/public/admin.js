@@ -503,6 +503,7 @@ async function company(c) {
     ]),
   );
   content.append(box);
+  if (actor.platformAdmin && !c.demo) content.append(await customAppsPanel(c));
   if (canManage) {
     const members = panel(
       'Brugere',
@@ -687,10 +688,15 @@ async function company(c) {
           'membership.removed': 'Virksomhedsadgang fjernet',
           'grant.saved': 'Webshopadgang gemt',
           'grant.removed': 'Webshopadgang fjernet',
+          'custom_app.enabled': 'Custom app slået til',
+          'custom_app.disabled': 'Custom app slået fra',
         }[e.action] || e.action,
         shops.find((s) => s.id === e.resource_id)?.name ||
           memberData.members.find((u) => u.id === e.resource_id)?.email ||
-          (e.resource_id === c.id ? c.name : 'Tidligere registrering'),
+          (e.resource_id === c.id
+            ? c.name
+            : JSON.parse(e.details_json || '{}').app ||
+              'Tidligere registrering'),
         e.actor_email +
           (JSON.parse(e.details_json || '{}').supportSession
             ? ' (support som ' +
@@ -703,6 +709,47 @@ async function company(c) {
     );
     content.append(history);
   }
+}
+// Custom apps are built for one customer; each can be on for exactly one company (platform/custom-apps.ts).
+async function customAppsPanel(c) {
+  const box = panel('Custom apps');
+  box.append(
+    el(
+      'p',
+      'Apps udviklet til én kunde. Slås en app til, får virksomheden menuen Custom apps i portalen. En app kan kun være slået til for én virksomhed ad gangen.',
+      'hint',
+    ),
+  );
+  const apps = (await api(`/companies/${c.id}/custom-apps`)).apps;
+  table(
+    box,
+    ['App', 'Beskrivelse', 'Status', ''],
+    apps.map((a) => {
+      const mine = a.companyId === c.id;
+      return [
+        a.name,
+        a.description,
+        mine
+          ? 'Slået til siden ' + fmtDateTime(a.enabledAt)
+          : a.companyId
+            ? 'Bruges af ' + a.companyName
+            : 'Ikke slået til',
+        a.companyId && !mine
+          ? el('span', '')
+          : actions(
+              button(mine ? 'Slå fra' : 'Slå til', async () => {
+                await api(
+                  `/companies/${c.id}/custom-apps/${a.id}`,
+                  mine ? 'DELETE' : 'PUT',
+                  {},
+                );
+                await refreshCompany(c);
+              }),
+            ),
+      ];
+    }),
+  );
+  return box;
 }
 let catalogExpiry;
 async function integrationCatalog() {

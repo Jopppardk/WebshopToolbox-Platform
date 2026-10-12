@@ -21,7 +21,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 1. Branch fra en frisk main, og opret en lille PR.
 2. CI skal være grøn: tests, begge typechecks, `npm run lint` (lint og formatering må kun blive bedre), Tier 1-build og portalens browsertest.
 3. Squash-merge.
-4. Er der en migration, køres den først med workflowet *Vedligehold: D1-migrering* (dev, derefter prod). Seneste migration er `0048_webshop_invoice_profiles.sql`.
+4. Er der en migration, køres den først med workflowet *Vedligehold: D1-migrering* (dev, derefter prod). Seneste migration er `0049_custom_apps.sql` (custom apps, endnu ikke kørt på dev og prod).
 5. Udgiv: `node scripts/platform-release.mjs dev --sha <sha>`, derefter `prod`. Udgivelsen genbruger den grønne testkørsel for samme commit.
 6. Skriv en note i CHANGELOG.md.
 
@@ -55,6 +55,8 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 - **Lager uden read_locations (udgivet 11. oktober 2026, dev og prod, run 38149276433, main `42c7229`):** lokationer vises med Shopifys id uden read_locations, og en anden webshops fejl nævner webshoppen. Ikke afprøvet mod rigtig Shopify.
 - **Overblik med flere webshops (udgivet 11. oktober 2026, dev og prod, run 38133154668, main `3f2a9bd`):** webshopvælger, kort pr. webshop på dashboard og Emballage, fælles Emballage-indberetning i oversigten, tydelig fælles/egen faktura og webshopnavn i overskrifter. Kun afprøvet med testdata.
 - **Flere webshops (udgivet 10. oktober 2026, dev og prod, run 38064862126, main `15bf3cd`):** faktura og afsender pr. webshop, genbrug af Shipmondo/Emballage med samlet Emballage-indberetning og mellemregningskonti pr. webshop. Kun afprøvet med testdata; ikke mod rigtig afsendelse fra eget domæne, Shipmondo, Emballage Indberetning eller Dinero.
+
+- **Custom apps pr. virksomhed (PR, ikke udgivet):** menuen "Custom apps" og registrering af en app til præcis én virksomhed i Tier 0. Kræver migration 0049 på dev og prod før udgivelsen. Ingen rigtig app endnu; testappen "Eksempel" findes kun på dev.
 
 **Mangler**
 - **Svenske produktnavne på fakturaer:** kræver read_translations i kundens Shopify-app; ellers danske navne.
