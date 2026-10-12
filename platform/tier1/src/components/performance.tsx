@@ -13,6 +13,7 @@ import {
 import {
   ArrowUpRight,
   Banknote,
+  CalendarDays,
   Eye,
   ShoppingBag,
   RefreshCw,
@@ -28,23 +29,56 @@ import { formatDate, formatDateTime } from '@/lib/format';
 import {
   performanceMonths,
   type MonthComparison,
+  type PerformanceDaily,
   type PerformanceFinance,
-  type PerformanceMetric,
   type PerformanceShop,
 } from '@/lib/performance';
 
 const number = new Intl.NumberFormat('da-DK', { maximumFractionDigits: 0 });
-const money = new Intl.NumberFormat('da-DK', {
-  style: 'currency',
-  currency: 'DKK',
-  maximumFractionDigits: 2,
-});
-const total = (months: MonthComparison[], key: 'current' | 'previous') => {
-  const known = months
-    .map((m) => m[key])
+const monthName = (month: number) =>
+  new Intl.DateTimeFormat('da-DK', { month: 'long', timeZone: 'UTC' }).format(
+    Date.UTC(2026, month - 1, 1),
+  );
+const sum = (points: ChartPoint[], key: 'current' | 'previous') => {
+  const known = points
+    .map((p) => p[key])
     .filter((value): value is number => value !== null);
-  return known.length ? known.reduce((sum, value) => sum + value, 0) : null;
+  return known.length ? known.reduce((total, value) => total + value, 0) : null;
 };
+export type ChartPoint = {
+  label: string;
+  title: string;
+  current: number | null;
+  previous: number | null;
+};
+const monthPoints = (months?: MonthComparison[]): ChartPoint[] =>
+  performanceMonths.map((label, i) => ({
+    label,
+    title: label,
+    current: months?.[i]?.current ?? null,
+    previous: months?.[i]?.previous ?? null,
+  }));
+// Another tab or user may be fetching the same numbers; wait for them instead of failing.
+async function fetchReport<T>(path: string, signal: AbortSignal): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    const response = await tier1Fetch(path, {
+      cache: 'no-store',
+      signal: AbortSignal.any([signal, AbortSignal.timeout(90000)]),
+    });
+    const value = (await response.json()) as T & { error?: string };
+    if (
+      response.status === 409 &&
+      /hentes allerede/.test(value.error || '') &&
+      attempt < 30
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      if (signal.aborted) throw Error('Afbrudt.');
+      continue;
+    }
+    if (!response.ok) throw Error(value.error || 'Tallene kunne ikke hentes.');
+    return value;
+  }
+}
 
 export function Performance({
   onIntegrations,
@@ -52,17 +86,37 @@ export function Performance({
   onIntegrations: () => void;
 }) {
   const { company, webshopId, webshops } = useWorkspace();
-  const currentYear = Number(danishDate().slice(0, 4));
+  const today = danishDate(),
+    currentYear = Number(today.slice(0, 4)),
+    currentMonth = Number(today.slice(5, 7));
   const [year, setYear] = useState(currentYear),
+    [selectedMonth, setMonth] = useState(currentMonth),
     [supplier, setSupplier] = useState('all');
+  // A month that has not begun cannot be chosen; going back to this year shows the latest month.
+  const month =
+    year === currentYear
+      ? Math.min(selectedMonth, currentMonth)
+      : selectedMonth;
   const [revision, setRevision] = useState(0),
     [loading, setLoading] = useState(true),
-    refresh = useRef(false);
+    refresh = useRef(-1);
   // Revenue and costs cover the whole company's bookkeeping and are only for company administrators.
   const admin = company.role === 'admin';
   const [finance, setFinance] = useState<PerformanceFinance | null>(null),
     [shop, setShop] = useState<PerformanceShop | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Daily sales belong to the request that fetched them, so a new month or webshop never shows old numbers.
+  const dailyKey = [year, month, revision, webshopId, company.id].join(':');
+  const [dailyResult, setDailyResult] = useState<{
+    key: string;
+    value?: PerformanceDaily;
+    error?: string;
+  } | null>(null);
+  const current = dailyResult?.key === dailyKey ? dailyResult : null,
+    daily = current?.value ?? null,
+    dailyLoading = !current;
+  const message = (error: unknown) =>
+    error instanceof Error ? error.message : 'Tallene kunne ikke hentes.';
   useEffect(() => {
     const controller = new AbortController();
     setFinance(null);
@@ -70,36 +124,13 @@ export function Performance({
     setErrors({});
     setLoading(true);
     setSupplier('all');
-    const forced = refresh.current;
-    refresh.current = false;
+    const forced = refresh.current === revision ? '&refresh=1' : '';
     const load = async (source: 'finance' | 'shop') => {
       try {
-        let response: Response,
-          value: PerformanceFinance & PerformanceShop & { error?: string };
-        // Another tab or user may be fetching the same numbers; wait for them instead of failing.
-        for (let attempt = 0; ; attempt++) {
-          response = await tier1Fetch(
-            `/api/performance/${source}?year=${year}${forced ? '&refresh=1' : ''}`,
-            {
-              cache: 'no-store',
-              signal: AbortSignal.any([
-                controller.signal,
-                AbortSignal.timeout(90000),
-              ]),
-            },
-          );
-          value = await response.json();
-          if (
-            response.status !== 409 ||
-            !/hentes allerede/.test(value.error || '') ||
-            attempt >= 30
-          )
-            break;
-          await new Promise((resolve) => setTimeout(resolve, 3000));
-          if (controller.signal.aborted) return;
-        }
-        if (!response.ok)
-          throw Error(value.error || 'Tallene kunne ikke hentes.');
+        const value = await fetchReport<PerformanceFinance & PerformanceShop>(
+          `/api/performance/${source}?year=${year}${forced}`,
+          controller.signal,
+        );
         if (controller.signal.aborted) return;
         if (source === 'finance') setFinance(value);
         else setShop(value);
@@ -107,10 +138,7 @@ export function Performance({
         if (!controller.signal.aborted)
           setErrors((previous) => ({
             ...previous,
-            [source]:
-              error instanceof Error
-                ? error.message
-                : 'Tallene kunne ikke hentes.',
+            [source]: message(error),
           }));
       }
     };
@@ -122,6 +150,24 @@ export function Performance({
     });
     return () => controller.abort();
   }, [year, revision, webshopId, company.id, admin]);
+  useEffect(() => {
+    const controller = new AbortController();
+    const forced = refresh.current === revision ? '&refresh=1' : '';
+    fetchReport<PerformanceDaily>(
+      `/api/performance/daily?year=${year}&month=${month}${forced}`,
+      controller.signal,
+    ).then(
+      (value) => {
+        if (!controller.signal.aborted)
+          setDailyResult({ key: dailyKey, value });
+      },
+      (error) => {
+        if (!controller.signal.aborted)
+          setDailyResult({ key: dailyKey, error: message(error) });
+      },
+    );
+    return () => controller.abort();
+  }, [year, month, revision, webshopId, company.id, dailyKey]);
   const shopName =
     webshops.find((s) => s.id === webshopId)?.name || 'Valgt webshop';
   const expenseMonths =
@@ -134,6 +180,15 @@ export function Performance({
     checked
       ? `Hentet ${formatDateTime(checked)} · Historik fra ${formatDate(start!)}`
       : '';
+  const name = monthName(month),
+    dayPoints: ChartPoint[] = (daily?.days || []).map((d) => ({
+      label: String(d.day),
+      title: `${d.day}. ${name}`,
+      current: d.current,
+      previous: d.previous,
+    }));
+  const financeLoading = loading && !finance && !errors.finance,
+    shopLoading = loading && !shop && !errors.shop;
   return (
     <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -141,7 +196,8 @@ export function Performance({
           <p className="eyebrow">Tools · Årsoversigt</p>
           <PageTitle title="Performance" />
           <p className="mt-2 text-sm text-muted-foreground">
-            Følg udviklingen måned for måned og sammenlign med året før.
+            Følg udviklingen dag for dag og måned for måned, og sammenlign med
+            året før.
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
@@ -164,17 +220,17 @@ export function Performance({
           </label>
           <RefreshButton
             onRefresh={() => {
-              refresh.current = true;
-              setRevision((v) => v + 1);
+              refresh.current = revision + 1;
+              setRevision(revision + 1);
             }}
-            disabled={loading}
+            disabled={loading || dailyLoading}
           />
         </div>
       </header>
       <div className="mb-7 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e9e2d7] bg-[#faf8f5] px-4 py-3 text-xs text-muted-foreground">
         <p className="flex items-center gap-2">
           <Info className="size-4 shrink-0" />
-          Regnskab: {company.name} · Webshop: {shopName}
+          Webshop: {shopName} · Regnskab: {company.name}
         </p>
         <Button
           variant="link"
@@ -185,111 +241,185 @@ export function Performance({
           <ArrowUpRight className="size-3" />
         </Button>
       </div>
-      <div className="grid gap-6 xl:grid-cols-2">
-        {admin ? (
-          <>
+      <section aria-labelledby="performance-webshop">
+        <SectionHeading
+          id="performance-webshop"
+          title={`Webshop · ${shopName}`}
+          description="Tal fra Shopify for den valgte webshop."
+        />
+        <div className="grid gap-6 xl:grid-cols-2">
+          <div className="min-w-0 xl:col-span-2">
             <PerformanceChart
-              title="Omsætning"
-              icon={<Banknote className="size-5" />}
-              source="Dinero · Hele virksomheden"
-              description="Bogført omsætning ekskl. moms."
+              title="Salg pr. dag"
+              icon={<CalendarDays className="size-5" />}
+              source={`Shopify · ${shopName}`}
+              description="Salg ekskl. moms (inkl. fragt, efter rabatter og returneringer), som på Dashboardet."
               color="#9a7440"
               year={year}
               monetary
-              metric={finance?.revenue}
-              error={errors.finance}
-              loading={loading && !finance && !errors.finance}
-              note={sourceNote(finance?.startDate, finance?.checkedAt)}
-            />
-            <PerformanceChart
-              title="Omkostninger"
-              icon={<ArrowUpRight className="size-5" />}
-              source="Dinero · Hele virksomheden"
-              description="Bogførte omkostninger før skat, uden fradragsberettiget moms."
-              color="#ba7046"
-              year={year}
-              monetary
-              metric={expenseMonths ? { months: expenseMonths } : undefined}
-              error={errors.finance}
-              loading={loading && !finance && !errors.finance}
-              note={sourceNote(finance?.startDate, finance?.checkedAt)}
+              currency={daily?.currency}
+              points={dayPoints}
+              unit="day"
+              summary={`${name[0].toLocaleUpperCase('da')}${name.slice(1)} ${year}${year === currentYear && month === currentMonth ? ' · Til dato' : ''}`}
+              error={current?.error}
+              loading={dailyLoading}
+              note={sourceNote(daily?.startDate, daily?.checkedAt)}
               controls={
                 <label className="grid min-w-0 gap-1 text-xs text-muted-foreground">
-                  Leverandør
+                  Måned
                   <select
-                    className="h-9 w-full max-w-full rounded-lg border border-border bg-white px-2 text-sm text-foreground sm:max-w-64"
-                    aria-label="Filtrér omkostninger efter leverandør"
-                    disabled={!finance}
-                    value={supplier}
-                    onChange={(event) => setSupplier(event.target.value)}
+                    className="h-9 w-full max-w-full rounded-lg border border-border bg-white px-2 text-sm text-foreground sm:max-w-48"
+                    aria-label="Måned for salg pr. dag"
+                    value={month}
+                    onChange={(event) => setMonth(Number(event.target.value))}
                   >
-                    <option value="all">Alle leverandører</option>
-                    <option value="unassigned">Uden leverandør</option>
-                    {finance?.suppliers.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
+                    {performanceMonths.map((_, i) =>
+                      year === currentYear && i + 1 > currentMonth ? null : (
+                        <option key={i} value={i + 1}>
+                          {monthName(i + 1)}
+                        </option>
+                      ),
+                    )}
                   </select>
                 </label>
               }
             />
-            <div className="min-w-0 xl:col-span-2">
+          </div>
+          <PerformanceChart
+            title="Besøg"
+            icon={<Eye className="size-5" />}
+            source={`Shopify · ${shopName}`}
+            description="Besøg (sessioner) i webshoppens analyser."
+            color="#37867b"
+            year={year}
+            points={monthPoints(shop?.visits.months)}
+            error={errors.shop || shop?.visits.error}
+            loading={shopLoading}
+            note={sourceNote(shop?.startDate, shop?.checkedAt)}
+          />
+          <PerformanceChart
+            title="Antal ordrer"
+            icon={<ShoppingBag className="size-5" />}
+            source={`Shopify · ${shopName}`}
+            description="Antal ordrer ifølge webshoppens salgsrapport."
+            color="#567da3"
+            year={year}
+            points={monthPoints(shop?.orders.months)}
+            error={errors.shop || shop?.orders.error}
+            loading={shopLoading}
+            note={sourceNote(shop?.startDate, shop?.checkedAt)}
+          />
+        </div>
+      </section>
+      <section aria-labelledby="performance-company" className="mt-10">
+        <SectionHeading
+          id="performance-company"
+          title={`Virksomhed · ${company.name}`}
+          description="Bogførte tal fra Dinero for hele virksomheden, på tværs af webshops."
+        />
+        <div className="grid gap-6 xl:grid-cols-2">
+          {admin ? (
+            <>
               <PerformanceChart
-                title="Overskud"
-                icon={<Wallet className="size-5" />}
+                title="Omsætning"
+                icon={<Banknote className="size-5" />}
                 source="Dinero · Hele virksomheden"
-                description="Resultat før skat pr. måned, som på Dashboardet."
-                color="#6f8f4e"
+                description="Bogført omsætning ekskl. moms."
+                color="#9a7440"
                 year={year}
                 monetary
-                metric={finance?.profit}
-                error={errors.finance}
-                loading={loading && !finance && !errors.finance}
+                points={monthPoints(finance?.revenue.months)}
+                error={errors.finance || finance?.revenue.error}
+                loading={financeLoading}
                 note={sourceNote(finance?.startDate, finance?.checkedAt)}
               />
-            </div>
-          </>
-        ) : (
-          <p className="flex items-center gap-2 rounded-2xl border border-dashed border-[#e0d6c6] bg-white p-5 text-sm text-muted-foreground xl:col-span-2">
-            <Info className="size-4 shrink-0" />
-            Omsætning og omkostninger kommer fra virksomhedens regnskab og kan
-            kun ses af virksomhedens administratorer.
-          </p>
-        )}
-        <PerformanceChart
-          title="Besøg"
-          icon={<Eye className="size-5" />}
-          source={`Shopify · ${shopName}`}
-          description="Besøg (sessioner) i webshoppens analyser."
-          color="#37867b"
-          year={year}
-          metric={shop?.visits}
-          error={errors.shop}
-          loading={loading && !shop && !errors.shop}
-          note={sourceNote(shop?.startDate, shop?.checkedAt)}
-        />
-        <PerformanceChart
-          title="Antal ordrer"
-          icon={<ShoppingBag className="size-5" />}
-          source={`Shopify · ${shopName}`}
-          description="Antal ordrer ifølge webshoppens salgsrapport."
-          color="#567da3"
-          year={year}
-          metric={shop?.orders}
-          error={errors.shop}
-          loading={loading && !shop && !errors.shop}
-          note={sourceNote(shop?.startDate, shop?.checkedAt)}
-        />
-      </div>
+              <PerformanceChart
+                title="Omkostninger"
+                icon={<ArrowUpRight className="size-5" />}
+                source="Dinero · Hele virksomheden"
+                description="Bogførte omkostninger før skat, uden fradragsberettiget moms."
+                color="#ba7046"
+                year={year}
+                monetary
+                points={monthPoints(expenseMonths)}
+                error={errors.finance}
+                loading={financeLoading}
+                note={sourceNote(finance?.startDate, finance?.checkedAt)}
+                controls={
+                  <label className="grid min-w-0 gap-1 text-xs text-muted-foreground">
+                    Leverandør
+                    <select
+                      className="h-9 w-full max-w-full rounded-lg border border-border bg-white px-2 text-sm text-foreground sm:max-w-64"
+                      aria-label="Filtrér omkostninger efter leverandør"
+                      disabled={!finance}
+                      value={supplier}
+                      onChange={(event) => setSupplier(event.target.value)}
+                    >
+                      <option value="all">Alle leverandører</option>
+                      <option value="unassigned">Uden leverandør</option>
+                      {finance?.suppliers.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                }
+              />
+              <div className="min-w-0 xl:col-span-2">
+                <PerformanceChart
+                  title="Overskud"
+                  icon={<Wallet className="size-5" />}
+                  source="Dinero · Hele virksomheden"
+                  description="Resultat før skat pr. måned, som på Dashboardet."
+                  color="#6f8f4e"
+                  year={year}
+                  monetary
+                  points={monthPoints(finance?.profit?.months)}
+                  error={errors.finance || finance?.profit?.error}
+                  loading={financeLoading}
+                  note={sourceNote(finance?.startDate, finance?.checkedAt)}
+                />
+              </div>
+            </>
+          ) : (
+            <p className="flex items-center gap-2 rounded-2xl border border-dashed border-[#e0d6c6] bg-white p-5 text-sm text-muted-foreground xl:col-span-2">
+              <Info className="size-4 shrink-0" />
+              Omsætning og omkostninger kommer fra virksomhedens regnskab og kan
+              kun ses af virksomhedens administratorer.
+            </p>
+          )}
+        </div>
+      </section>
       <p className="mt-6 text-xs leading-6 text-muted-foreground">
-        Indeværende måned vises til dato. Den stiplede linje viser hele måneder
-        fra {year - 1}. Fremtidige måneder og måneder uden tilstrækkelig
-        historik vises som —. Leverandørfilteret gælder kun omkostninger; “Uden
-        leverandør” omfatter posteringer uden tilknyttet leverandør. Tal
-        genbruges i op til 15 minutter.
+        Salg pr. dag viser alle dage i den valgte måned; dage efter i dag er
+        tomme for {year}, mens den stiplede linje viser hele måneden i{' '}
+        {year - 1}. Indeværende måned vises til dato i månedsgraferne, og den
+        stiplede linje viser hele måneder fra {year - 1}. Fremtidige perioder og
+        perioder uden tilstrækkelig historik vises som —. Leverandørfilteret
+        gælder kun omkostninger; “Uden leverandør” omfatter posteringer uden
+        tilknyttet leverandør. Tal genbruges i op til 15 minutter.
         {shop?.timezone && ` Webshoppen opgøres i tidszonen ${shop.timezone}.`}
       </p>
+    </div>
+  );
+}
+
+function SectionHeading({
+  id,
+  title,
+  description,
+}: {
+  id: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="mb-4">
+      <h2 id={id} className="text-base font-semibold">
+        {title}
+      </h2>
+      <p className="mt-1 text-xs text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -302,7 +432,10 @@ export function PerformanceChart({
   color,
   year,
   monetary = false,
-  metric,
+  currency = 'DKK',
+  points,
+  unit = 'month',
+  summary,
   error,
   loading,
   controls,
@@ -315,26 +448,30 @@ export function PerformanceChart({
   color: string;
   year: number;
   monetary?: boolean;
-  metric?: PerformanceMetric;
+  currency?: string;
+  points: ChartPoint[];
+  unit?: 'month' | 'day';
+  summary?: string;
   error?: string;
   loading: boolean;
   controls?: ReactNode;
   note: string;
 }) {
-  const months = metric?.months || [],
-    failure = error || metric?.error;
+  const failure = error,
+    data = points,
+    daily = unit === 'day',
+    money = new Intl.NumberFormat('da-DK', {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 2,
+    });
   const format = (value: number | null) =>
     value === null
       ? '—'
       : monetary
         ? money.format(value / 100)
         : number.format(value);
-  const data = performanceMonths.map((label, i) => ({
-    label,
-    current: months[i]?.current ?? null,
-    previous: months[i]?.previous ?? null,
-  }));
-  const anyData = months.some((m) => m.current !== null || m.previous !== null);
+  const anyData = data.some((m) => m.current !== null || m.previous !== null);
   const tick = (value: number) =>
     new Intl.NumberFormat('da-DK', {
       notation: 'compact',
@@ -364,10 +501,10 @@ export function PerformanceChart({
         <div className="my-5 flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-[11px] text-muted-foreground">
-              {year} · Sum af viste måneder
+              {summary || `${year} · Sum af viste måneder`}
             </p>
             <p className="mt-1 text-2xl font-semibold tabular-nums sm:text-3xl">
-              {loading || failure ? '—' : format(total(months, 'current'))}
+              {loading || failure ? '—' : format(sum(data, 'current'))}
             </p>
           </div>
           <div className="flex gap-4 pb-1 text-xs text-muted-foreground">
@@ -404,14 +541,16 @@ export function PerformanceChart({
         <>
           {!anyData && (
             <p className="mx-5 mb-3 rounded-lg bg-slate-50 p-3 text-xs text-muted-foreground">
-              Ingen komplette månedstal i den valgte periode. Kontrollér
-              historik og integration.
+              {daily
+                ? 'Ingen dagstal i den valgte måned.'
+                : 'Ingen komplette månedstal i den valgte periode.'}{' '}
+              Kontrollér historik og integration.
             </p>
           )}
           <div
             className="h-64 pr-3 sm:h-72 sm:pr-5"
             role="img"
-            aria-label={`${title}: søjler for ${year}, stiplet linje for ${year - 1}. Månedstal findes i tabellen nedenfor.`}
+            aria-label={`${title}: søjler for ${year}, stiplet linje for ${year - 1}. ${daily ? 'Dagstal' : 'Månedstal'} findes i tabellen nedenfor.`}
           >
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart
@@ -424,7 +563,8 @@ export function PerformanceChart({
                   dataKey="label"
                   tickLine={false}
                   axisLine={false}
-                  interval={0}
+                  interval={daily ? 'preserveStartEnd' : 0}
+                  minTickGap={daily ? 6 : 0}
                   tick={{ fontSize: 10, fill: '#77736d' }}
                 />
                 <YAxis
@@ -440,6 +580,9 @@ export function PerformanceChart({
                     format(typeof value === 'number' ? value : null),
                     name,
                   ]}
+                  labelFormatter={(label, payload) =>
+                    payload?.[0]?.payload?.title ?? label
+                  }
                   contentStyle={{
                     borderRadius: 12,
                     borderColor: '#e9e2d7',
@@ -452,7 +595,7 @@ export function PerformanceChart({
                   name={String(year)}
                   fill={color}
                   radius={[4, 4, 0, 0]}
-                  maxBarSize={26}
+                  maxBarSize={daily ? 18 : 26}
                   isAnimationActive={false}
                 />
                 <Line
@@ -471,14 +614,16 @@ export function PerformanceChart({
           </div>
           <details className="mx-5 mb-4 border-t border-[#f0ece6] pt-3 sm:mx-6">
             <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
-              Se månedstal
+              {daily ? 'Se dagstal' : 'Se månedstal'}
             </summary>
             <div className="mt-3 overflow-x-auto">
               <table className="w-full text-left text-xs tabular-nums">
-                <caption className="sr-only">{title} pr. måned</caption>
+                <caption className="sr-only">
+                  {title} pr. {daily ? 'dag' : 'måned'}
+                </caption>
                 <thead>
                   <tr>
-                    <th className="py-2">Måned</th>
+                    <th className="py-2">{daily ? 'Dag' : 'Måned'}</th>
                     <th className="text-right">{year}</th>
                     <th className="text-right">{year - 1}</th>
                   </tr>
@@ -487,7 +632,7 @@ export function PerformanceChart({
                   {data.map((row) => (
                     <tr key={row.label} className="border-t border-[#f0ece6]">
                       <th scope="row" className="py-2 font-normal">
-                        {row.label}
+                        {row.title}
                       </th>
                       <td className="text-right">{format(row.current)}</td>
                       <td className="text-right">{format(row.previous)}</td>
