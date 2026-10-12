@@ -1,4 +1,5 @@
 import { handleShipmondo } from './shipmondo';
+import { handleTier1CustomApps } from './custom-apps';
 import { paymentProviderPattern } from './catalog';
 import { handlePerformance } from './performance-source';
 import { handleShipments } from './shipments-source';
@@ -55,6 +56,15 @@ export async function handleTier1(
     const demo = await demoTier1(request, path);
     if (demo) return demo;
   }
+  if (path === '/custom-apps' || path.startsWith('/custom-apps/'))
+    return handleTier1CustomApps(
+      request,
+      env,
+      actor,
+      company.company_id,
+      shop,
+      path,
+    );
   if (path === '/markets/settings')
     return handleMarkets(request, env, actor, company.company_id, shop);
   if (path === '/shipmondo/printer')

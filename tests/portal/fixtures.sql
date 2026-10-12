@@ -16,3 +16,5 @@ INSERT OR REPLACE INTO accounting_connections(company_id,organization_id,credent
 INSERT OR REPLACE INTO operation_snapshots(company_id,webshop_id,module,external_id,occurred_at,payload_json) VALUES('company-a','shop-a1','orders','gid://shopify/Order/902701',strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day'),'{"id":"gid://shopify/Order/902701","name":"#2701","createdAt":"2026-10-06T10:00:00Z","currentTotalPriceSet":{"shopMoney":{"amount":"100.00","currencyCode":"DKK"}},"lineItems":{"nodes":[]}}');
 INSERT OR REPLACE INTO production_attempts(company_id,webshop_id,job,external_id,attempted_at,next_attempt_at,failures) VALUES('company-a','shop-a1','sales','gid://shopify/Order/902701',1791300000000,4102444800000,2);
 INSERT INTO record_events(company_id,webshop_id,provider,module,external_id,event,details_json) VALUES('company-a','shop-a1','shopify','orders','gid://shopify/Order/902701','error','{"stage":"smoke","message":"Momsen stemmer ikke."}');
+-- The example custom app is on for company A, so the menu "Custom apps" is shown.
+INSERT OR REPLACE INTO custom_apps(app_id,company_id,enabled_by) VALUES('eksempel','company-a','local-admin');

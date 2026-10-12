@@ -3,6 +3,11 @@ import { tier1Fetch as fetch } from '@/platform/transport';
 import { NotificationBell } from '@/components/notification-bell';
 import { Dashboard } from '@/components/dashboard';
 import { IntegrationRequired } from '@/components/integration-required';
+import {
+  CustomAppPage,
+  CustomAppsNav,
+  useCustomApps,
+} from '@/components/custom-apps';
 import { Rss, Truck } from 'lucide-react';
 import {
   CustomerIdentity,
@@ -182,7 +187,19 @@ export default function Home() {
     | 'performance'
     | 'shipments'
     | 'settings'
+    | 'custom-app'
   >(adding ? 'settings' : 'dashboard');
+  const customApps = useCustomApps();
+  const [customAppId, setCustomAppId] = useState<string | null>(null);
+  const openCustomApp = (id: string) => {
+    setMobileOpen(false);
+    setCustomAppId(id);
+    setView('custom-app');
+  };
+  const customApp =
+    view === 'custom-app'
+      ? customApps.find((app) => app.id === customAppId)
+      : undefined;
   const [integrationTarget, setIntegrationTarget] = useState<
     'shopify' | 'dinero' | 'emballage' | null
   >(adding ? 'shopify' : null);
@@ -505,6 +522,11 @@ export default function Home() {
             <Rss />
             Produktfeeds
           </button>
+          <CustomAppsNav
+            apps={customApps}
+            active={view === 'custom-app' ? customAppId : null}
+            onOpen={openCustomApp}
+          />
           <p className="nav-label mt-7">System</p>
           <button
             className={`nav-item w-full ${view === 'support' ? 'active' : ''}`}
@@ -679,6 +701,11 @@ export default function Home() {
                     <Rss />
                     Produktfeeds
                   </button>
+                  <CustomAppsNav
+                    apps={customApps}
+                    active={view === 'custom-app' ? customAppId : null}
+                    onOpen={openCustomApp}
+                  />
                   <p className="nav-label mt-7">System</p>
                   <button
                     className={`nav-item w-full ${view === 'support' ? 'active' : ''}`}
@@ -733,6 +760,7 @@ export default function Home() {
           </div>
         </header>
         <Suspense fallback={viewLoading}>
+          {customApp && <CustomAppPage key={customApp.id} app={customApp} />}
           {view === 'performance' && (
             <Performance
               onIntegrations={() => {

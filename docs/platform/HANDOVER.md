@@ -56,6 +56,8 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 - **Overblik med flere webshops (udgivet 11. oktober 2026, dev og prod, run 38133154668, main `3f2a9bd`):** webshopvælger, kort pr. webshop på dashboard og Emballage, fælles Emballage-indberetning i oversigten, tydelig fælles/egen faktura og webshopnavn i overskrifter. Kun afprøvet med testdata.
 - **Flere webshops (udgivet 10. oktober 2026, dev og prod, run 38064862126, main `15bf3cd`):** faktura og afsender pr. webshop, genbrug af Shipmondo/Emballage med samlet Emballage-indberetning og mellemregningskonti pr. webshop. Kun afprøvet med testdata; ikke mod rigtig afsendelse fra eget domæne, Shipmondo, Emballage Indberetning eller Dinero.
 
+- **Custom apps pr. virksomhed (PR, ikke udgivet):** menuen "Custom apps" og registrering af en app til præcis én virksomhed i Tier 0. Kræver migration 0049 på dev og prod før udgivelsen. Ingen rigtig app endnu; testappen "Eksempel" findes kun på dev.
+
 **Mangler**
 - **Svenske produktnavne på fakturaer:** kræver read_translations i kundens Shopify-app; ellers danske navne.
 - **Ekstern overvågning:** `/healthz/scheduler` overvåges ikke eksternt endnu (ejerens opgave).

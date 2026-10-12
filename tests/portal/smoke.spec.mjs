@@ -115,6 +115,7 @@ test('every page of the portal renders', async ({ page }) => {
     ['Forsendelser', /Forsendelser/],
     ['Emballage', /Emballage/],
     ['Produktfeeds', /Produktfeeds/],
+    ['Eksempel', /Forbindelsen til appen virker/],
     ['Support', /Support/],
     ['Indstillinger', /Indstillinger|Generelt/],
   ];

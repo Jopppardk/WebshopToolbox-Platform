@@ -9,6 +9,7 @@ import { handlePackaging } from './packaging';
 import { handleAccounting } from './accounting';
 import { handleOperations, dashboardData } from './operations';
 import { handleTickets } from './tickets';
+import { handleAdminCustomApps } from './custom-apps';
 import { handleInvoices } from './invoices';
 import { handleMail } from './mail';
 import { connectionStatement, website } from './connections';
@@ -133,6 +134,17 @@ export async function handleAdmin(
       '/admin/insights',
     ))!;
   }
+  const customApps = path.match(
+    /^\/api\/platform\/companies\/([\w-]+)\/custom-apps(?:\/([\w-]+))?$/,
+  );
+  if (customApps)
+    return handleAdminCustomApps(
+      request,
+      env,
+      actor,
+      customApps[1],
+      customApps[2],
+    );
   const finance = path.match(/^\/api\/platform\/companies\/([\w-]+)\/finance$/);
   if (finance) {
     await requireCompany(db, actor, finance[1], true);
