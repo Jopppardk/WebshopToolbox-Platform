@@ -23,6 +23,23 @@ export type PerformanceShop = {
   visits: PerformanceMetric;
   orders: PerformanceMetric;
 };
+export type DayComparison = {
+  day: number;
+  current: number | null;
+  previous: number | null;
+};
+/** Sales per day of one month in the webshop's currency (minor units), against the same days last year. */
+export type PerformanceDaily = {
+  year: number;
+  month: number;
+  checkedAt: string;
+  startDate: string;
+  timezone: string;
+  currency: string;
+  days: DayComparison[];
+  /** Days until today without a number; the month's total then only covers the other days. */
+  missingDays: number;
+};
 export const performanceMonths = [
   'Jan',
   'Feb',

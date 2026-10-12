@@ -4,7 +4,10 @@ import {
   resultCategories,
   type LedgerYear,
 } from './finance-calculations';
-import type { MonthComparison } from './tier1/src/lib/performance';
+import type {
+  DayComparison,
+  MonthComparison,
+} from './tier1/src/lib/performance';
 
 const guid = /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i;
 export const expenseCategories = [
@@ -253,4 +256,84 @@ export function parseShopifyMetric(
         row[key] = null;
     }
   return { months };
+}
+const salesAmount = (raw: unknown) =>
+  typeof raw === 'number'
+    ? raw
+    : typeof raw === 'string' && /^-?\d+(\.\d+)?$/.test(raw)
+      ? Number(raw)
+      : NaN;
+/** Daily sales excl. tax in minor units (total_sales − taxes, as on the dashboard) from a TIMESERIES day report. */
+export function parseDailySales(payload: unknown, from: string, to: string) {
+  const result = payload as {
+    parseErrors?: unknown[];
+    tableData?: {
+      columns?: Array<{ name: string }>;
+      rows?: Array<Record<string, unknown>>;
+    };
+  } | null;
+  if (
+    !Array.isArray(result?.parseErrors) ||
+    result.parseErrors.length ||
+    !Array.isArray(result.tableData?.rows) ||
+    !['day', 'total_sales', 'taxes'].every((name) =>
+      result.tableData!.columns?.some((c) => c.name === name),
+    )
+  )
+    throw Error(
+      'Shopify kunne ikke levere salget pr. dag. Kontrollér rapportadgang under Integrationer.',
+    );
+  const sums = new Map<string, number>();
+  for (const row of result.tableData.rows) {
+    const date = row.day,
+      minor = Math.round(
+        (salesAmount(row.total_sales) - salesAmount(row.taxes)) * 100,
+      );
+    if (
+      !validDate(date) ||
+      date < from ||
+      date > to ||
+      !Number.isSafeInteger(minor) ||
+      sums.has(date)
+    )
+      throw Error('Shopify returnerede ufuldstændige eller ugyldige dagstal.');
+    sums.set(date, minor);
+  }
+  return sums;
+}
+/** Every day of the month: this year until today, last year the whole month. Days without a row are unknown, never 0. */
+export function dailyComparison(
+  year: number,
+  month: number,
+  today: string,
+  start: string,
+  current: Map<string, number>,
+  previous: Map<string, number>,
+): DayComparison[] {
+  const value = (y: number, day: number, sums: Map<string, number>) => {
+    const range = monthRange(y, month),
+      date = `${range.from.slice(0, 8)}${String(day).padStart(2, '0')}`;
+    if (date > range.to || date > today || date < start) return null;
+    return sums.get(date) ?? null;
+  };
+  const days = Number(monthRange(year, month).to.slice(8));
+  return Array.from({ length: days }, (_, i) => ({
+    day: i + 1,
+    current: value(year, i + 1, current),
+    previous: value(year - 1, i + 1, previous),
+  }));
+}
+/** Days of this year's month up to today without a number (before the history start or missing in Shopify). */
+export function missingDays(
+  year: number,
+  month: number,
+  today: string,
+  days: DayComparison[],
+) {
+  const prefix = monthRange(year, month).from.slice(0, 8);
+  return days.filter(
+    (d) =>
+      d.current === null &&
+      `${prefix}${String(d.day).padStart(2, '0')}` <= today,
+  ).length;
 }

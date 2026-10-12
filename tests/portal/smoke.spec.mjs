@@ -147,6 +147,14 @@ test('every page of the portal renders', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
     'Produktfeeds for Webshop A1',
   );
+  // Performance: the webshop's own charts come first, the company's bookkeeping last.
+  await nav(page, 'Performance').click();
+  const sections = page.locator('main section[aria-labelledby]');
+  await expect(sections.nth(0)).toContainText('Webshop · Webshop A1');
+  await expect(sections.nth(0)).toContainText('Salg pr. dag');
+  await expect(sections.nth(0)).toContainText('Besøg');
+  await expect(sections.nth(1)).toContainText(/Virksomhed · /);
+  await expect(sections.nth(1)).toContainText('Omsætning');
   // Emballage has a card per webshop, like the dashboard.
   await nav(page, 'Emballage').click();
   for (const name of ['Webshop A1', 'Webshop A2'])

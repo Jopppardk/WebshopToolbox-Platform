@@ -5,7 +5,13 @@ import type { InvoiceSource } from './order-check';
 import { productXml, type Product, type Variant } from './feed-format';
 import type { PayoutTransaction } from './payout-source';
 import { calculateFinance, type LedgerEntry } from './finance-calculations';
-import { aggregateFinance, comparison } from './performance-calculations';
+import {
+  aggregateFinance,
+  comparison,
+  dailyComparison,
+  missingDays,
+  monthRange,
+} from './performance-calculations';
 import {
   inventoryValueMinor,
   type InventoryRow,
@@ -739,6 +745,39 @@ export function demoPerformance(
     orders: series(orders),
   };
 }
+// Performance → Salg pr. dag: fictitious daily sales with a weekly rhythm, a little higher this year.
+export function demoDailySales(
+  year: number,
+  month: number,
+  today = danishDate(),
+) {
+  const { start } = demoLedger(today),
+    rand = random(year * 100 + month),
+    sums = [new Map<string, number>(), new Map<string, number>()];
+  for (const [i, y] of [year, year - 1].entries()) {
+    const range = monthRange(y, month);
+    for (let d = 1; d <= Number(range.to.slice(8)); d++) {
+      const date = `${range.from.slice(0, 8)}${String(d).padStart(2, '0')}`,
+        weekday = new Date(date + 'T12:00:00Z').getUTCDay(),
+        rhythm = [1.35, 1.2, 0.95, 0.9, 0.95, 1.05, 0.8][weekday];
+      sums[i].set(
+        date,
+        Math.round(420000 * rhythm * (i ? 1 : 1.15) * (0.75 + rand() * 0.5)),
+      );
+    }
+  }
+  const days = dailyComparison(year, month, today, start, sums[0], sums[1]);
+  return {
+    year,
+    month,
+    startDate: start,
+    checkedAt: new Date().toISOString(),
+    timezone: 'Europe/Copenhagen',
+    currency: 'DKK',
+    days,
+    missingDays: missingDays(year, month, today, days),
+  };
+}
 // Forsendelser: fictitious tracking for the fulfilled demo orders, spread over every step and carrier,
 // including parcels waiting in a parcel shop close to being returned.
 export function demoShipments(
@@ -1060,6 +1099,21 @@ export async function demoTier1(
       return reply(
         demoPerformance(path.endsWith('finance') ? 'finance' : 'shop', year),
       );
+    }
+    if (path === '/performance/daily') {
+      const year = Number(url.searchParams.get('year')),
+        month = Number(url.searchParams.get('month')),
+        today = danishDate();
+      if (
+        !Number.isInteger(year) ||
+        !Number.isInteger(month) ||
+        year < Number(today.slice(0, 4)) - 9 ||
+        month < 1 ||
+        month > 12 ||
+        `${year}-${String(month).padStart(2, '0')}` > today.slice(0, 7)
+      )
+        throw new HttpError(400, 'Vælg en måned, der er begyndt.');
+      return reply(demoDailySales(year, month, today));
     }
     if (path === '/shipments') {
       const days = Number(url.searchParams.get('days') || 30);

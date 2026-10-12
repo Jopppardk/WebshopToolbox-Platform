@@ -5,12 +5,17 @@ import { dataStartDate } from './tier1-history';
 import { danishDate } from './tier1/src/lib/history-policy';
 import {
   aggregateFinance,
+  dailyComparison,
+  missingDays,
+  monthRange,
+  parseDailySales,
   parsePerformanceEntries,
   parseShopifyMetric,
   validDate,
 } from './performance-calculations';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 import type {
+  PerformanceDaily,
   PerformanceFinance,
   PerformanceShop,
   PerformanceMetric,
@@ -365,6 +370,64 @@ export async function readPerformanceShop(
   };
 }
 
+export async function readPerformanceDaily(
+  env: PlatformEnv,
+  company: string,
+  shop: string,
+  year: number,
+  month: number,
+  start: string,
+): Promise<PerformanceDaily> {
+  const access = await shopAccess(env, company, shop);
+  const metadata = await orderQuery<{
+    shop: { ianaTimezone: string; currencyCode: string };
+  }>(
+    access,
+    'query PerformanceDailyShop { shop { ianaTimezone currencyCode } }',
+    {},
+  );
+  const timezone = metadata.shop?.ianaTimezone,
+    currency = metadata.shop?.currencyCode;
+  if (typeof timezone !== 'string')
+    throw Error('Shopify returnerede ikke butikkens tidszone.');
+  // Sales are in the store's currency; without it the amounts are not shown rather than shown as DKK.
+  if (!/^[A-Z]{3}$/.test(String(currency)))
+    throw Error('Shopify oplyste ikke butikkens valuta, så salget vises ikke.');
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  const sales = async (y: number) => {
+    const range = monthRange(y, month),
+      from = start > range.from ? start : range.from,
+      to = today < range.to ? today : range.to;
+    if (from > to) return new Map<string, number>();
+    const data = await orderQuery<{ shopifyqlQuery: unknown }>(
+      access,
+      'query PerformanceDaily($query: String!) { shopifyqlQuery(query: $query) { tableData { columns { name } rows } parseErrors } }',
+      {
+        query: `FROM sales SHOW total_sales, taxes TIMESERIES day SINCE ${from} UNTIL ${to} ORDER BY day ASC`,
+      },
+      reportAccess,
+    );
+    return parseDailySales(data.shopifyqlQuery, from, to);
+  };
+  const [current, previous] = await Promise.all([sales(year), sales(year - 1)]);
+  const days = dailyComparison(year, month, today, start, current, previous);
+  return {
+    year,
+    month,
+    startDate: start,
+    checkedAt: new Date().toISOString(),
+    timezone,
+    currency: currency as string,
+    days,
+    missingDays: missingDays(year, month, today, days),
+  };
+}
+
 export async function handlePerformance(
   request: Request,
   env: PlatformEnv,
@@ -375,7 +438,13 @@ export async function handlePerformance(
 ) {
   if (request.method !== 'GET')
     throw new HttpError(405, 'Performance understøtter kun læsning.');
-  if (!['/performance/finance', '/performance/shop'].includes(path))
+  if (
+    ![
+      '/performance/finance',
+      '/performance/shop',
+      '/performance/daily',
+    ].includes(path)
+  )
     throw new HttpError(404, 'Rapporten findes ikke.');
   const rawYear = new URL(request.url).searchParams.get('year'),
     current = Number(danishDate().slice(0, 4));
@@ -388,6 +457,17 @@ export async function handlePerformance(
     throw new HttpError(400, 'Vælg et af de seneste ti kalenderår.');
   const year = Number(rawYear),
     force = new URL(request.url).searchParams.get('refresh') === '1';
+  const rawMonth = new URL(request.url).searchParams.get('month'),
+    month = Number(rawMonth);
+  if (
+    path === '/performance/daily' &&
+    (!rawMonth ||
+      !/^\d{1,2}$/.test(rawMonth) ||
+      month < 1 ||
+      month > 12 ||
+      `${year}-${String(month).padStart(2, '0')}` > danishDate().slice(0, 7))
+  )
+    throw new HttpError(400, 'Vælg en måned, der er begyndt.');
   await requireCompany(
     env.PLATFORM_DB,
     actor,
@@ -433,7 +513,10 @@ export async function handlePerformance(
     );
   }
   if (shop === 'none')
-    throw new HttpError(409, 'Vælg en webshop for at se besøg og ordrer.');
+    throw new HttpError(
+      409,
+      'Vælg en webshop for at se salg, besøg og ordrer.',
+    );
   const saved = await env.PLATFORM_DB.prepare(
     "SELECT shop_domain,credentials_encrypted FROM webshop_connections WHERE company_id=? AND webshop_id=? AND provider='shopify'",
   )
@@ -442,9 +525,21 @@ export async function handlePerformance(
   if (!saved)
     throw new HttpError(
       409,
-      'Forbind webshoppen under Integrationer for at se besøg og ordrer.',
+      'Forbind webshoppen under Integrationer for at se salg, besøg og ordrer.',
     );
   const start = await dataStartDate(env, company, shop, 'shopify');
+  if (path === '/performance/daily')
+    return reply(
+      await cached(
+        env,
+        company,
+        ['shopify-daily', shop, year, month],
+        [saved.shop_domain, saved.credentials_encrypted, start, danishDate()],
+        () => readPerformanceDaily(env, company, shop, year, month, start),
+        undefined,
+        force,
+      ),
+    );
   return reply(
     await cached(
       env,
