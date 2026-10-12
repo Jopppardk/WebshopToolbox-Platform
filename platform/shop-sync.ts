@@ -19,6 +19,7 @@ import {
   intervals,
   pairVariants,
   productData,
+  productMetafields,
   productSetInput,
   resolvePending,
   stockStep,
@@ -314,9 +315,29 @@ export async function syncCompany(
   env: PlatformEnv,
   company: string,
   dryRun: boolean,
+  lock?: { until: number },
 ): Promise<SyncResult> {
   const db = env.PLATFORM_DB,
     settings = await loadSettings(env, company);
+  // The lock is renewed before each product, stock removal and collection, however long the reads took. A run that
+  // lost it stops before it writes anything more, so two runs never create the same product.
+  const holdLock = async () => {
+    if (!lock) return;
+    const at = Math.floor(Date.now() / 1000);
+    if (lock.until - at > lockSeconds - 60) return;
+    const renewed = await db
+      .prepare(
+        'UPDATE shop_sync_settings SET lock_until=? WHERE company_id=? AND lock_until=?',
+      )
+      .bind(at + lockSeconds, company, lock.until)
+      .run();
+    if (!renewed.meta.changes)
+      throw new HttpError(
+        409,
+        'Synkroniseringen blev stoppet, fordi en anden kørsel overtog den.',
+      );
+    lock.until = at + lockSeconds;
+  };
   if (!settings) throw new HttpError(409, 'Gem opsætningen først.');
   const deadline = Date.now() + runMs,
     names = await webshopNames(env, company),
@@ -429,6 +450,7 @@ export async function syncCompany(
       result.waiting++;
       continue;
     }
+    await holdLock();
     let row: ProductRow = rows.get(id) ?? {
       source_product_id: id,
       target_product_id: null,
@@ -577,11 +599,17 @@ export async function syncCompany(
           },
           'productSet',
         );
-        if (updated.outcome !== 'ok') {
+        // The sync's metafields are written on their own, so the target product's other metafields are kept.
+        const meta =
+          updated.outcome === 'ok'
+            ? await writeMetafields(row.target_product_id, product)
+            : updated;
+        if (updated.outcome !== 'ok' || meta.outcome !== 'ok') {
           // An update sends the whole product again, so it is simply retried at the next run.
+          const failed = updated.outcome === 'ok' ? meta : updated;
           row.error =
-            updated.outcome === 'failed'
-              ? updated.message
+            failed.outcome === 'failed'
+              ? failed.message
               : 'Shopify svarede ikke sikkert; prøves igen.';
           fail(`"${product.title}": ${row.error}`);
           await saveProduct(row);
@@ -604,6 +632,23 @@ export async function syncCompany(
     }
     await linkVariants(product, targetVariants, false);
     await syncStock(product, targetVariants);
+  }
+
+  async function writeMetafields(ownerId: string, product: SourceProduct) {
+    const fields = productMetafields(product, sourceName);
+    const set = await mutate(
+      target,
+      'mutation SyncMetafields($metafields: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $metafields) { metafields { id } userErrors { field message } } }',
+      { metafields: fields.set.map((f) => ({ ownerId, ...f })) },
+      'metafieldsSet',
+    );
+    if (set.outcome !== 'ok' || !fields.remove.length) return set;
+    return mutate(
+      target,
+      'mutation SyncMetafieldsRemove($metafields: [MetafieldIdentifierInput!]!) { metafieldsDelete(metafields: $metafields) { deletedMetafields { key } userErrors { field message } } }',
+      { metafields: fields.remove.map((f) => ({ ownerId, ...f })) },
+      'metafieldsDelete',
+    );
   }
 
   async function linkVariants(
@@ -855,6 +900,7 @@ export async function syncCompany(
     )
       continue;
     if (Date.now() > deadline || writes >= writeCap) break;
+    await holdLock();
     writes++;
     if (dryRun) {
       note(
@@ -913,8 +959,21 @@ export async function syncCompany(
         .all<{ source_product_id: string; target_product_id: string }>()
     ).results.map((r) => [r.source_product_id, r.target_product_id]),
   );
+  // Every target product the sync made (also ones no longer chosen). Only these are ever taken out of a collection,
+  // so products a person added to it in the target stay.
+  const syncedTargets = new Set(
+    (
+      await db
+        .prepare(
+          'SELECT target_product_id FROM shop_sync_products WHERE company_id=? AND target_product_id IS NOT NULL',
+        )
+        .bind(company)
+        .all<{ target_product_id: string }>()
+    ).results.map((r) => r.target_product_id),
+  );
   for (const c of collections.values()) {
     if (Date.now() > deadline) break;
+    await holdLock();
     const input = {
       title: c.title,
       descriptionHtml: c.descriptionHtml,
@@ -1011,15 +1070,36 @@ export async function syncCompany(
           .run();
       continue;
     }
-    const missing = c.productIds
-      .map((id) => productTargets.get(id))
-      .filter((id): id is string => !!id && !members.has(id));
-    if (!missing.length) continue;
+    const expected = new Set(
+      c.productIds
+        .map((id) => productTargets.get(id))
+        .filter((id): id is string => !!id),
+    );
+    const missing = [...expected].filter((id) => !members.has(id));
+    // A product that left the source collection leaves the target collection too. Removing is safe to send again.
+    const extra = [...members].filter(
+      (id) => syncedTargets.has(id) && !expected.has(id),
+    );
     if (dryRun) {
-      note(
-        `Tilføjer ${missing.length} produkter til kollektionen "${c.title}".`,
-      );
+      if (missing.length)
+        note(
+          `Tilføjer ${missing.length} produkter til kollektionen "${c.title}".`,
+        );
+      if (extra.length)
+        note(
+          `Fjerner ${extra.length} produkter fra kollektionen "${c.title}".`,
+        );
       continue;
+    }
+    for (let i = 0; i < extra.length; i += 250) {
+      const removed = await mutate(
+        target,
+        'mutation SyncCollectionRemove($id: ID!, $productIds: [ID!]!) { collectionRemoveProducts(id: $id, productIds: $productIds) { job { id } userErrors { field message } } }',
+        { id: targetId, productIds: extra.slice(i, i + 250) },
+        'collectionRemoveProducts',
+      );
+      if (removed.outcome === 'failed')
+        fail(`Kollektionen "${c.title}": ${removed.message}`);
     }
     for (let i = 0; i < missing.length; i += 250) {
       const added = await mutate(
@@ -1052,9 +1132,10 @@ async function run(env: PlatformEnv, company: string, dryRun: boolean) {
       409,
       'Synkroniseringen kører allerede. Prøv igen om lidt.',
     );
+  const lock = { until: at + lockSeconds };
   let result: SyncResult;
   try {
-    result = await syncCompany(env, company, false);
+    result = await syncCompany(env, company, false, lock);
   } catch (error) {
     const text =
       error instanceof HttpError
@@ -1078,9 +1159,10 @@ async function run(env: PlatformEnv, company: string, dryRun: boolean) {
   const settings = await loadSettings(env, company);
   await db
     .prepare(
-      'UPDATE shop_sync_settings SET lock_until=0,last_run_at=?,next_run_at=?,last_result_json=? WHERE company_id=?',
+      'UPDATE shop_sync_settings SET lock_until=CASE WHEN lock_until=? THEN 0 ELSE lock_until END,last_run_at=?,next_run_at=?,last_result_json=? WHERE company_id=?',
     )
     .bind(
+      lock.until,
       result.finishedAt,
       Math.floor(Date.now() / 1000) + (settings?.interval_minutes ?? 60) * 60,
       JSON.stringify(result),
@@ -1136,6 +1218,28 @@ export async function handleShopSync({
         .bind(company)
         .all<{ id: string; name: string }>()
     ).results;
+  // The app shows two webshops' products, so a person must have access to both (or be a company admin).
+  const allowed = (shop: string) =>
+    requireWebshop(db, actor, company, shop).then(
+      () => true,
+      (error) => {
+        if (error instanceof HttpError && error.status < 500) return false;
+        throw error;
+      },
+    );
+  const requireBoth = async (settings: Settings | null) => {
+    if (
+      settings &&
+      !(
+        (await allowed(settings.source_webshop_id)) &&
+        (await allowed(settings.target_webshop_id))
+      )
+    )
+      throw new HttpError(
+        403,
+        'Du skal have adgang til begge webshops i synkroniseringen.',
+      );
+  };
   const shopParam = async () => {
     const shop = url.searchParams.get('shop') || '';
     if (!/^[\w-]{1,80}$/.test(shop))
@@ -1145,6 +1249,10 @@ export async function handleShopSync({
   };
   if (path === '/settings' && get) {
     const settings = await loadSettings(env, company);
+    await requireBoth(settings);
+    const shops = [];
+    for (const shop of await webshops())
+      if (await allowed(shop.id)) shops.push(shop);
     const membership = actor.platformAdmin
       ? null
       : await db
@@ -1173,7 +1281,7 @@ export async function handleShopSync({
               : null,
           }
         : null,
-      webshops: await webshops(),
+      webshops: shops,
       canManage: !actor.support && membership?.role === 'admin',
       writes: productionWrites(env),
       intervals,
@@ -1361,6 +1469,7 @@ export async function handleShopSync({
     return reply({ ok: true, revision });
   }
   if (path === '/status' && get) {
+    await requireBoth(await loadSettings(env, company));
     const [products, collections, uncertain] = await Promise.all([
       db
         .prepare(

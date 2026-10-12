@@ -151,6 +151,39 @@ export function productData(
   };
 }
 
+// The sync's own metafields: the source webshop's name and the packaging fields (packaging is reported from the sales
+// in each webshop, so the target needs the same values). A packaging field emptied in the source is removed.
+export function productMetafields(product: SourceProduct, sourceName: string) {
+  const packaging = [
+    {
+      key: 'emballage_vaegt_gram',
+      type: 'number_integer',
+      value: product.weight?.value ?? null,
+    },
+    {
+      key: 'emballage_indberetning',
+      type: 'boolean',
+      value: product.reportable?.value ?? null,
+    },
+  ];
+  return {
+    set: [
+      {
+        namespace: 'webshoptoolbox',
+        key: 'synkroniseret_fra',
+        type: 'single_line_text_field',
+        value: sourceName,
+      },
+      ...packaging
+        .filter((f) => f.value !== null)
+        .map((f) => ({ namespace: 'custom', ...f, value: f.value! })),
+    ],
+    remove: packaging
+      .filter((f) => f.value === null)
+      .map((f) => ({ namespace: 'custom', key: f.key })),
+  };
+}
+
 // productSet input. A new product gets the source's quantity at the target location in the same call; afterwards
 // stock is only changed by the stock step. Existing target variants are matched on their options, so they keep
 // their id and inventory item (a variant without a match would be deleted and created again by productSet).
@@ -169,34 +202,6 @@ export function productSetInput(
   const existing = new Map(
     options.targetVariants.map((v) => [optionKey(v.selectedOptions), v.id]),
   );
-  const metafields = [
-    {
-      namespace: 'webshoptoolbox',
-      key: 'synkroniseret_fra',
-      type: 'single_line_text_field',
-      value: options.sourceName,
-    },
-    ...(data.packaging.weight !== null
-      ? [
-          {
-            namespace: 'custom',
-            key: 'emballage_vaegt_gram',
-            type: 'number_integer',
-            value: data.packaging.weight,
-          },
-        ]
-      : []),
-    ...(data.packaging.reportable !== null
-      ? [
-          {
-            namespace: 'custom',
-            key: 'emballage_indberetning',
-            type: 'boolean',
-            value: data.packaging.reportable,
-          },
-        ]
-      : []),
-  ];
   return {
     title: data.title,
     descriptionHtml: data.descriptionHtml,
@@ -210,12 +215,17 @@ export function productSetInput(
         ? { status: 'DRAFT' }
         : {}),
     ...(options.create ? { handle: product.handle } : {}),
-    ...(data.category ? { category: data.category } : {}),
+    // A category removed in the source is cleared in the target (a field left out would be kept).
+    ...(data.category || !options.create ? { category: data.category } : {}),
     seo: {
       title: product.seo.title || null,
       description: product.seo.description || null,
     },
-    metafields,
+    // productSet replaces the whole metafields list, so they are only sent with a new product. An existing product's
+    // own metafields (from a person or another app) are kept, and the sync's are written by productMetafields.
+    ...(options.create
+      ? { metafields: productMetafields(product, options.sourceName).set }
+      : {}),
     productOptions: product.options.map((o) => ({
       name: o.name,
       position: o.position,
