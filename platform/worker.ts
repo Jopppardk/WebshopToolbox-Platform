@@ -16,6 +16,7 @@ import { customerActor, customerLogin, customerLogout } from './customer-auth';
 import { publicSignup } from './signup';
 import { publicFeed, refreshDueFeeds } from './feeds';
 import { handleTier1 } from './tier1-api';
+import { runCustomApps } from './custom-apps';
 import { InvoiceCheckError } from './invoice-check';
 import { handleSupport, supportActor, supportToken } from './support';
 import { identity } from './auth';
@@ -539,6 +540,7 @@ export default {
           refreshDueFeeds(env).catch((error) =>
             console.error('Feeds kunne ikke laves', error),
           ),
+          runCustomApps(env),
         ]);
         await markTick(env, 'ok');
         return jobs;

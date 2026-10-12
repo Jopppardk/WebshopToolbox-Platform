@@ -42,6 +42,8 @@ type Result = {
   locations: Array<{ id: string; name: string }>;
   totalValueMinor: number;
   incomplete?: Incomplete[];
+  // Products synced from another webshop (custom app Webshop-synkronisering): shown, not counted.
+  synced?: Array<InventoryRow & { from: string }>;
   dinero?: Dinero;
   company?: Company;
   fetchedAt: string;
@@ -584,6 +586,58 @@ export function Inventory() {
                         </td>
                         <td>{item.location}</td>
                         <td className="pr-4">{item.reason}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          )}
+          {!!data.synced?.length && (
+            <details className="group mt-6 overflow-hidden rounded-2xl border bg-white">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm font-semibold">
+                <span>
+                  Synkroniseret fra en anden webshop ({data.synced.length})
+                </span>
+                <span className="text-xs font-normal text-muted-foreground group-open:hidden">
+                  Vis
+                </span>
+                <span className="hidden text-xs font-normal text-muted-foreground group-open:inline">
+                  Skjul
+                </span>
+              </summary>
+              <p className="border-t px-4 pt-3 text-xs text-muted-foreground">
+                Varerne er kopier af varer i en anden webshop og deler dens
+                lager. De indgår ikke i lagerværdien og optælles i den webshop,
+                de er synkroniseret fra.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-sm">
+                  <thead>
+                    <tr className="border-b text-left">
+                      <th className="p-4">Produkt</th>
+                      <th>Variant / SKU</th>
+                      <th>Antal</th>
+                      <th className="pr-4">Synkroniseret fra</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.synced.map((item) => (
+                      <tr
+                        key={item.inventoryItemId + ':' + item.locationId}
+                        className="border-b last:border-0"
+                      >
+                        <td className="p-4 font-medium">{item.product}</td>
+                        <td>
+                          {item.variant}
+                          {item.sku ? (
+                            <span className="block text-xs text-muted-foreground">
+                              {item.sku}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td>{item.quantity}</td>
+                        <td className="pr-4">{item.from}</td>
                       </tr>
                     ))}
                   </tbody>

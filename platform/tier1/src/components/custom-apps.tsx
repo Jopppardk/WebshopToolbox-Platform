@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType } from 'react';
+import { lazy, useEffect, useState, type ComponentType } from 'react';
 import { AppWindow } from 'lucide-react';
 import { tier1Fetch as fetch } from '@/platform/transport';
 
@@ -23,8 +23,13 @@ function ExampleApp() {
   return <p className="text-sm">{status}</p>;
 }
 
+// Each app's page is its own file, loaded when it is opened (the portal shows it inside its Suspense).
+const ShopSync = lazy(() =>
+  import('@/components/shop-sync').then((m) => ({ default: m.ShopSync })),
+);
 const customAppViews: Record<string, ComponentType<{ app: CustomApp }>> = {
   eksempel: ExampleApp,
+  'webshop-sync': ShopSync,
 };
 
 export function useCustomApps() {

@@ -1,4 +1,5 @@
 import { orderQuery, shopAccess, type Access } from './invoice-source';
+import { syncedTargetProducts } from './shop-sync';
 import { HttpError, type PlatformEnv } from './types';
 import {
   inventoryValueMinor,
@@ -13,7 +14,7 @@ type Page = {
       variant: null | {
         title: string;
         sku: string;
-        product: { title: string; status: string };
+        product: { id: string; title: string; status: string };
       };
       inventoryLevels: {
         nodes: Array<{
@@ -89,6 +90,10 @@ export async function readInventory(
     );
   const rows: InventoryRow[] = [],
     locations = new Map<string, string>();
+  // Products synced from another webshop (custom app Webshop-synkronisering) are the same goods as in that webshop.
+  // They are shown, but left out of the value and the stocktake, so the goods are counted once.
+  const syncedFrom = await syncedTargetProducts(env, company, shop),
+    synced: Array<InventoryRow & { from: string }> = [];
   // Tracked items Shopify gives no quantity or cost for; shown on Lager instead of failing the read.
   const incomplete: Array<{
     inventoryItemId: string;
@@ -103,7 +108,7 @@ export async function readInventory(
   for (let page = 0; page < 25; page++) {
     const data: Page = await inventoryPage(
       access,
-      `query InventoryStatus($after:String) { inventoryItems(first:100,after:$after) { nodes { id tracked unitCost { amount currencyCode } variant { title sku product { title status } } inventoryLevels(first:100) { nodes { location { ${named ? 'id name isActive' : 'id'} } quantities(names:["on_hand"]) { name quantity } } pageInfo { hasNextPage endCursor } } } pageInfo { hasNextPage endCursor } } }`,
+      `query InventoryStatus($after:String) { inventoryItems(first:100,after:$after) { nodes { id tracked unitCost { amount currencyCode } variant { title sku product { id title status } } inventoryLevels(first:100) { nodes { location { ${named ? 'id name isActive' : 'id'} } quantities(names:["on_hand"]) { name quantity } } pageInfo { hasNextPage endCursor } } } pageInfo { hasNextPage endCursor } } }`,
       { after },
     );
     for (const item of data.inventoryItems.nodes) {
@@ -124,6 +129,21 @@ export async function readInventory(
           amount = Number(item.unitCost?.amount);
         const noQuantity = !Number.isSafeInteger(quantity),
           noCost = !item.unitCost || !Number.isFinite(amount) || amount < 0;
+        const from = syncedFrom.get(item.variant.product.id);
+        if (from) {
+          synced.push({
+            inventoryItemId: item.id,
+            locationId: level.location.id,
+            product: item.variant.product.title,
+            variant: item.variant.title,
+            sku: item.variant.sku || '',
+            quantity: noQuantity ? 0 : quantity!,
+            unitCostMinor: noCost ? 0 : Math.round(amount * 100),
+            currency: item.unitCost?.currencyCode || '',
+            from,
+          });
+          continue;
+        }
         if (noQuantity || noCost) {
           incomplete.push({
             inventoryItemId: item.id,
@@ -185,6 +205,7 @@ export async function readInventory(
     locations: [...locations].map(([id, name]) => ({ id, name })),
     totalValueMinor: inventoryValueMinor(rows),
     incomplete,
+    synced,
     fetchedAt: new Date().toISOString(),
   };
 }
