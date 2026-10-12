@@ -6,6 +6,7 @@ import { danishDate } from './tier1/src/lib/history-policy';
 import {
   aggregateFinance,
   dailyComparison,
+  missingDays,
   monthRange,
   parseDailySales,
   parsePerformanceEntries,
@@ -414,6 +415,7 @@ export async function readPerformanceDaily(
     return parseDailySales(data.shopifyqlQuery, from, to);
   };
   const [current, previous] = await Promise.all([sales(year), sales(year - 1)]);
+  const days = dailyComparison(year, month, today, start, current, previous);
   return {
     year,
     month,
@@ -421,7 +423,8 @@ export async function readPerformanceDaily(
     checkedAt: new Date().toISOString(),
     timezone,
     currency: currency as string,
-    days: dailyComparison(year, month, today, start, current, previous),
+    days,
+    missingDays: missingDays(year, month, today, days),
   };
 }
 

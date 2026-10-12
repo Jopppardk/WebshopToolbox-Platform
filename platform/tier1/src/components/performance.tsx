@@ -153,6 +153,8 @@ export function Performance({
   useEffect(() => {
     const controller = new AbortController();
     const forced = refresh.current === revision ? '&refresh=1' : '';
+    // Opdatér applies to this fetch only; later changes of month, year or webshop use the cache again.
+    refresh.current = -1;
     fetchReport<PerformanceDaily>(
       `/api/performance/daily?year=${year}&month=${month}${forced}`,
       controller.signal,
@@ -260,7 +262,7 @@ export function Performance({
               currency={daily?.currency}
               points={dayPoints}
               unit="day"
-              summary={`${name[0].toLocaleUpperCase('da')}${name.slice(1)} ${year}${year === currentYear && month === currentMonth ? ' · Til dato' : ''}`}
+              summary={`${name[0].toLocaleUpperCase('da')}${name.slice(1)} ${year}${year === currentYear && month === currentMonth ? ' · Til dato' : ''}${daily?.missingDays ? ` · Delsum, ${daily.missingDays} ${daily.missingDays === 1 ? 'dag' : 'dage'} uden tal` : ''}`}
               error={current?.error}
               loading={dailyLoading}
               note={sourceNote(daily?.startDate, daily?.checkedAt)}

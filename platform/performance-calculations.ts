@@ -323,3 +323,17 @@ export function dailyComparison(
     previous: value(year - 1, i + 1, previous),
   }));
 }
+/** Days of this year's month up to today without a number (before the history start or missing in Shopify). */
+export function missingDays(
+  year: number,
+  month: number,
+  today: string,
+  days: DayComparison[],
+) {
+  const prefix = monthRange(year, month).from.slice(0, 8);
+  return days.filter(
+    (d) =>
+      d.current === null &&
+      `${prefix}${String(d.day).padStart(2, '0')}` <= today,
+  ).length;
+}

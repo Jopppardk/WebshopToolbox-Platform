@@ -37,6 +37,8 @@ export type PerformanceDaily = {
   timezone: string;
   currency: string;
   days: DayComparison[];
+  /** Days until today without a number; the month's total then only covers the other days. */
+  missingDays: number;
 };
 export const performanceMonths = [
   'Jan',

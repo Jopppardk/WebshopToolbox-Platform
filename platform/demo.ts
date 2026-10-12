@@ -9,6 +9,7 @@ import {
   aggregateFinance,
   comparison,
   dailyComparison,
+  missingDays,
   monthRange,
 } from './performance-calculations';
 import {
@@ -765,6 +766,7 @@ export function demoDailySales(
       );
     }
   }
+  const days = dailyComparison(year, month, today, start, sums[0], sums[1]);
   return {
     year,
     month,
@@ -772,7 +774,8 @@ export function demoDailySales(
     checkedAt: new Date().toISOString(),
     timezone: 'Europe/Copenhagen',
     currency: 'DKK',
-    days: dailyComparison(year, month, today, start, sums[0], sums[1]),
+    days,
+    missingDays: missingDays(year, month, today, days),
   };
 }
 // Forsendelser: fictitious tracking for the fulfilled demo orders, spread over every step and carrier,
