@@ -15,6 +15,7 @@ import {
   minor,
   pageNumber,
 } from './tier1-data-shared';
+import { danishDate } from './tier1/src/lib/history-policy';
 
 export async function providerRecordData({
   request,
@@ -117,7 +118,7 @@ export async function providerRecordData({
     ]
       .sort()
       .at(-1)!;
-    const end = asText(b.to || b.end || new Date().toISOString().slice(0, 10));
+    const end = asText(b.to || b.end || danishDate());
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(start) ||
       !Number.isFinite(Date.parse(start)) ||

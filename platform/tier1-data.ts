@@ -25,6 +25,7 @@ import { orderData } from './tier1-orders';
 import { orderRefundData } from './tier1-order-refunds';
 import { documentData } from './tier1-documents';
 import { providerRecordData } from './tier1-provider-records';
+import { danishDate } from './tier1/src/lib/history-policy';
 
 export async function handleTier1Data(
   request: Request,
@@ -352,7 +353,7 @@ export async function handleTier1Data(
         .prepare(
           'SELECT module,sum(CASE WHEN substr(occurred_at,1,10)=? THEN 1 ELSE 0 END) AS total,max(imported_at) AS updated FROM operation_snapshots WHERE company_id=? AND webshop_id=? GROUP BY module',
         )
-        .bind(new Date().toISOString().slice(0, 10), company, shop)
+        .bind(danishDate(), company, shop)
         .all<any>()
     ).results;
     const today = new Intl.DateTimeFormat('en-CA', {
@@ -474,7 +475,7 @@ export async function handleTier1Data(
   }
   if (path === '/shopify/packaging') {
     if (shop === 'none') throw new HttpError(409, 'Forbind webshoppen først.');
-    const today = new Date().toISOString().slice(0, 10),
+    const today = danishDate(),
       year = Number(today.slice(0, 4)),
       month = Number(today.slice(5, 7)) - 1,
       q = Math.floor(month / 3) * 3;

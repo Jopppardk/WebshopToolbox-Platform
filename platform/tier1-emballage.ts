@@ -16,6 +16,7 @@ import { handlePackaging } from './packaging';
 import { syncPackaging } from './packaging-source';
 import { dataStartDate } from './tier1-history';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
+import { danishDate } from './tier1/src/lib/history-policy';
 
 export async function handleTier1Emballage(
   request: Request,
@@ -95,7 +96,7 @@ export async function handleTier1Emballage(
         const input = {
           action: 'sync',
           start: await dataStartDate(env, company, sharer.id),
-          end: new Date().toISOString().slice(0, 10),
+          end: danishDate(),
         };
         const response = await handlePackaging(
           new Request(request.url, {
@@ -252,7 +253,7 @@ export async function handleTier1Emballage(
             company,
             shop,
             config.startDate,
-            new Date().toISOString().slice(0, 10),
+            danishDate(),
           );
         } catch (e) {
           if (e instanceof HttpError) throw e;

@@ -1,4 +1,5 @@
 import { TransferError, type Voucher } from './dinero-sale';
+import { danishDate } from './tier1/src/lib/history-policy';
 /** The settlement numbers a Flatpay payment lists ("123", "123,124", "123 124"); null when not a clean list. */
 export function flatpaySettlementNumbers(value: unknown): string[] | null {
   const text =
@@ -59,7 +60,7 @@ export function flatpayDraft(
     !/^\d{1,30}$/.test(payment.paymentID) ||
     typeof payment.paidDate !== 'string' ||
     !Number.isFinite(Date.parse(payment.paidDate)) ||
-    payment.paidDate.slice(0, 10) > new Date().toISOString().slice(0, 10) ||
+    payment.paidDate.slice(0, 10) > danishDate() ||
     payment.currency !== 'DKK'
   )
     fail(
