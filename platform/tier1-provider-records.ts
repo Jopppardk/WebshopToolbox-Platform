@@ -12,6 +12,7 @@ import { HttpError, reply } from './types';
 import {
   type DataContext,
   forwarded,
+  maxListRows,
   minor,
   pageNumber,
 } from './tier1-data-shared';
@@ -234,12 +235,12 @@ export async function providerRecordData({
   const rows = (
     await db
       .prepare(
-        'SELECT payload_json FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module=? AND occurred_at>=? ORDER BY occurred_at DESC,external_id LIMIT 10001',
+        `SELECT payload_json FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module=? AND occurred_at>=? ORDER BY occurred_at DESC,external_id LIMIT ${maxListRows + 1}`,
       )
       .bind(company, shop, module, from)
       .all<{ payload_json: string }>()
   ).results.map((r) => JSON.parse(r.payload_json));
-  if (rows.length > 10000)
+  if (rows.length > maxListRows)
     throw new HttpError(409, 'Vælg en kortere historik.');
   // Receipts only for the posts this overview can show (Shopify Payments and the providers' own records in the
   // period), not every sales receipt of the webshop.
@@ -260,7 +261,7 @@ export async function providerRecordData({
     const payments = (
       await db
         .prepare(
-          "SELECT provider,kind,payload_json,occurred_at,external_id FROM payment_records WHERE company_id=? AND webshop_id=? AND ((provider='flatpay' AND kind='payments') OR (provider='viabill' AND kind='payout') OR (provider='pensopay' AND kind='settlements')) AND occurred_at>=? ORDER BY occurred_at DESC LIMIT 10001",
+          `SELECT provider,kind,payload_json,occurred_at,external_id FROM payment_records WHERE company_id=? AND webshop_id=? AND ((provider='flatpay' AND kind='payments') OR (provider='viabill' AND kind='payout') OR (provider='pensopay' AND kind='settlements')) AND occurred_at>=? ORDER BY occurred_at DESC LIMIT ${maxListRows + 1}`,
         )
         .bind(company, shop, from)
         .all<any>()
@@ -359,12 +360,12 @@ export async function providerRecordData({
       const records = (
         await db
           .prepare(
-            "SELECT external_id,payload_json FROM payment_records WHERE company_id=? AND webshop_id=? AND provider='flatpay' AND kind='transactions' AND occurred_at>=? LIMIT 10001",
+            `SELECT external_id,payload_json FROM payment_records WHERE company_id=? AND webshop_id=? AND provider='flatpay' AND kind='transactions' AND occurred_at>=? LIMIT ${maxListRows + 1}`,
           )
           .bind(company, shop, cutoff)
           .all<{ external_id: string; payload_json: string }>()
       ).results;
-      if (records.length > 10000)
+      if (records.length > maxListRows)
         throw new HttpError(409, 'Vælg en kortere historik.');
       for (const r of records) {
         try {
