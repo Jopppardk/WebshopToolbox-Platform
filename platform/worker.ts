@@ -1,6 +1,10 @@
 import { refreshPublicTracking } from './public-tracking';
 import { shipmondoWebhook } from './shipmondo';
-import { runProductionJobs } from './production-jobs';
+import {
+  queueDueShops,
+  runProductionJobs,
+  runQueuedShop,
+} from './production-jobs';
 import { demoMessage, isDemoCompany, isDemoUser } from './demo';
 import { resetDemoIfDue } from './demo-reset';
 import { cleanupRuns } from './run-cleanup';
@@ -24,7 +28,7 @@ import { onboarding, saveProfile } from './invitations';
 import { authenticate } from './auth';
 import { handleAdmin } from './admin';
 import { assertTestRuntime, scheduled } from './safety';
-import { HttpError, reply, type PlatformEnv } from './types';
+import { HttpError, reply, type PlatformEnv, type ShopJob } from './types';
 
 async function asset(
   request: Request,
@@ -533,7 +537,9 @@ export default {
       try {
         await markTick(env, 'start');
         const [jobs] = await Promise.all([
-          runProductionJobs(env),
+          env.PLATFORM_JOBS
+            ? queueDueShops(env, env.PLATFORM_JOBS)
+            : runProductionJobs(env),
           refreshPublicTracking(env).catch((error) =>
             console.error('Tracking kunne ikke opdateres', error),
           ),
@@ -560,5 +566,36 @@ export default {
       }
     }
     return scheduled();
+  },
+  // One due webshop per message (queueDueShops). Never retried by the queue: a run that stopped halfway leaves
+  // uncertain writes to the receipts, and the next scheduler tick sends the webshop again when it is due.
+  // The consumer is meant to get one message per batch; a larger batch runs its webshops side by side, so one
+  // slow webshop cannot use up the invocation's time before the others start.
+  async queue(batch: MessageBatch<unknown>, env: PlatformEnv) {
+    assertTestRuntime(env);
+    await Promise.all(
+      batch.messages.map(async (message) => {
+        const job = message.body as ShopJob;
+        try {
+          if (
+            job?.kind === 'shop' &&
+            typeof job.company === 'string' &&
+            typeof job.webshop === 'string'
+          )
+            await runQueuedShop(env, job);
+        } catch (error) {
+          logUnexpected(
+            {
+              queue: 'shop',
+              company: String(job?.company),
+              webshop: String(job?.webshop),
+            },
+            error,
+          );
+        } finally {
+          message.ack();
+        }
+      }),
+    );
   },
 };

@@ -2,7 +2,7 @@
 
 Aktuel status på én side. Læs den før hver opgave. Historikken står i [CHANGELOG.md](CHANGELOG.md), planen i [ROADMAP.md](ROADMAP.md) og arbejdsreglerne i [AGENTS.md](../../AGENTS.md). Opdatér denne side, når status eller åbne punkter ændrer sig. Skriv selve ændringen som en note øverst i CHANGELOG.md.
 
-_Senest opdateret 12. oktober 2026._
+_Senest opdateret 14. oktober 2026._
 
 ## Miljøer
 
@@ -48,6 +48,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 ## Åbne punkter
 
 **Ikke verificeret i drift**
+- **Dansk dato og 100.000 rækker (udgivet 14. oktober 2026, dev og prod, run 38519352806, main `3b87b07`):** "i dag" er dansk dato overalt (bl.a. lagerreguleringens bilagsdato), lister og Emballage-perioder rummer 100.000 rækker, og den daglige Emballage-hentning læser kun ændrede ordrer. Ikke set med rigtige data over 10.000 rækker.
 - **Shipmondo-labels fra Salg:** ikke afprøvet mod en rigtig konto. Den første rigtige ordre er testen (aftalt).
 - **Daglig driftsmail:** modtagelsen er ikke bekræftet.
 - **Webshopnavn på udbetalingsrapporter og Dinero-linjer (udgivet 11. oktober 2026, dev og prod, run 38143685177, main `c70bc7b`):** "Webshop: {navn}" på rapporten og " · {webshop}" sidst på hver bilagslinje. Ikke afprøvet mod rigtig Dinero.
@@ -62,6 +63,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 - **Webshop-synkronisering (custom app til LA Trading, udgivet 12. oktober):** opretter og synkroniserer valgte produkter og kollektioner fra én webshop til en anden, lager begge veje, udeladt af modtagerens lagerværdi. Mangler: en platformadministrator slår appen til for LA Trading i Tier 0, og modtagerens Shopify-app skal have write_products, write_inventory og read_locations (kilden read_locations). Første rigtige kørsel er ikke set.
 
 **Mangler**
+- **Kø til den automatiske kørsel:** koden kan sende én besked pr. webshop til Cloudflare Queues (`PLATFORM_JOBS`, `queueDueShops`/`runQueuedShop` i `production-jobs.ts`, `queue` i `worker.ts`), men køen er ikke oprettet, og prod-konfigurationen har ingen binding endnu. Uden binding kører cron som før (højst 10 webshops pr. 5 minutter).
 - **Svenske produktnavne på fakturaer:** kræver read_translations i kundens Shopify-app; ellers danske navne.
 - **Ekstern overvågning:** `/healthz/scheduler` overvåges ikke eksternt endnu (ejerens opgave).
 - **Backup:** gendannelsen er ikke øvet, og R2-dokumenterne har ingen backup.

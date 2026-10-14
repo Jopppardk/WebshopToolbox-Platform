@@ -24,7 +24,7 @@ import { sendCreditNote } from './credit-notes';
 import { productionWrites, bookingDate } from './production-policy';
 import { dataStartDate, historyPolicy, providerStart } from './tier1-history';
 import { InvoiceCheckError } from './order-check';
-import { HttpError, type Actor, type PlatformEnv } from './types';
+import { HttpError, type Actor, type PlatformEnv, type ShopJob } from './types';
 import { danishDate } from './tier1/src/lib/history-policy';
 // The reason shown in the bell: our own explanations (also the invoice check's), never raw internal errors.
 // Unexpected errors are logged, and their ID is shown with the reason so the run can be found in Workers Logs.
@@ -76,6 +76,39 @@ export async function runProductionJobs(env: PlatformEnv) {
     if (await runShop(env, shop, deadline, 'scheduled')) processed++;
   }
   return { status: 'completed', processed };
+}
+
+// With Cloudflare Queues the scheduler only finds the webshops that are due and not running, and sends one message
+// per webshop; each message runs in its own invocation (runQueuedShop), so one slow webshop no longer holds up the
+// others or the whole run. Messages carry IDs only: the webshop, its actor and its trial are checked again when run,
+// and the lease in runShop keeps a webshop from running twice if a message arrives twice.
+export async function queueDueShops(env: PlatformEnv, queue: Queue<ShopJob>) {
+  if (!productionWrites(env)) return { status: 'disabled', queued: 0 };
+  const now = Date.now();
+  const due = (
+    await env.PLATFORM_DB.prepare(`SELECT w.company_id,w.id FROM webshops w JOIN companies c ON c.id=w.company_id AND c.status='active' AND c.demo=0
+ LEFT JOIN production_jobs j ON j.company_id=w.company_id AND j.webshop_id=w.id AND j.job='runtime'
+ WHERE w.status='active' AND ${jobActorSql} IS NOT NULL AND NOT ${trialEndedSql} AND COALESCE(j.next_run_at,0)<=? AND COALESCE(j.lease_until,0)<?
+ ORDER BY COALESCE(j.next_run_at,0),w.id LIMIT 1000`)
+      .bind(now, now)
+      .all<{ company_id: string; id: string }>()
+  ).results;
+  for (let i = 0; i < due.length; i += 100)
+    await queue.sendBatch(
+      due.slice(i, i + 100).map((row) => ({
+        body: { kind: 'shop', company: row.company_id, webshop: row.id },
+      })),
+    );
+  return { status: 'queued', queued: due.length };
+}
+export async function runQueuedShop(env: PlatformEnv, job: ShopJob) {
+  if (!productionWrites(env)) return false;
+  const [row] = await shopRows(env, {
+    company: job.company,
+    shop: job.webshop,
+  });
+  if (!row) return false;
+  return !!(await runShop(env, row, Date.now() + 240000, 'scheduled'));
 }
 
 // Which webshops the scheduler runs (w = webshops of active, non-demo companies): those with a live company
