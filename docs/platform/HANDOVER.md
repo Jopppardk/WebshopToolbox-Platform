@@ -49,6 +49,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 
 **Ikke verificeret i drift**
 - **Driftsoverblikkets "venter på nyt forsøg" (udgivet 14. oktober 2026, dev og prod, run 38523869306, main `e4d9081`):** afviste poster, senere bogførte poster og annullerede, fuldt refunderede ordrer, der ikke nåede Dinero, tælles ikke længere med i morgenmailen og Tier 0 → Driftsoverblik.
+- **Kø til den automatiske kørsel (udgivet 14. oktober 2026, dev og prod, run 38525600682, main `912e1d9`):** cron sender forfaldne webshops som én besked hver til Cloudflare Queues `webshop-toolbox-platform-production-jobs` (`PLATFORM_JOBS`, `queueDueShops`/`runQueuedShop` i `production-jobs.ts`, `queue` i `worker.ts`; consumer `max_batch_size: 1`, `max_retries: 0`, `max_concurrency: 10`, `limits.cpu_ms: 300000`). Første kørsel via køen er ikke set; følg forsinkelsen i Driftsoverblikket.
 - **Dansk dato og 100.000 rækker (udgivet 14. oktober 2026, dev og prod, run 38519352806, main `3b87b07`):** "i dag" er dansk dato overalt (bl.a. lagerreguleringens bilagsdato), lister og Emballage-perioder rummer 100.000 rækker, og den daglige Emballage-hentning læser kun ændrede ordrer. Ikke set med rigtige data over 10.000 rækker.
 - **Shipmondo-labels fra Salg:** ikke afprøvet mod en rigtig konto. Den første rigtige ordre er testen (aftalt).
 - **Daglig driftsmail:** modtagelsen er ikke bekræftet.
@@ -64,7 +65,6 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 - **Webshop-synkronisering (custom app til LA Trading, udgivet 12. oktober):** opretter og synkroniserer valgte produkter og kollektioner fra én webshop til en anden, lager begge veje, udeladt af modtagerens lagerværdi. Mangler: en platformadministrator slår appen til for LA Trading i Tier 0, og modtagerens Shopify-app skal have write_products, write_inventory og read_locations (kilden read_locations). Første rigtige kørsel er ikke set.
 
 **Mangler**
-- **Kø til den automatiske kørsel:** koden sender én besked pr. webshop til Cloudflare Queues (`PLATFORM_JOBS`, `queueDueShops`/`runQueuedShop` i `production-jobs.ts`, `queue` i `worker.ts`), udgivet 14. oktober. Køen `webshop-toolbox-platform-production-jobs` er oprettet af René, og prod-konfigurationen binder den (consumer `max_batch_size: 1`, `max_retries: 0`, `max_concurrency: 10`) med `limits.cpu_ms: 300000`. Udgivelsen kræver, at prod-deploy-tokenet har "Queues: Edit". Første kørsel via køen er ikke set; følg forsinkelsen i Driftsoverblikket. Uden binding kører cron som før (højst 10 webshops pr. 5 minutter).
 - **Svenske produktnavne på fakturaer:** kræver read_translations i kundens Shopify-app; ellers danske navne.
 - **Ekstern overvågning:** `/healthz/scheduler` overvåges ikke eksternt endnu (ejerens opgave).
 - **Backup:** gendannelsen er ikke øvet, og R2-dokumenterne har ingen backup.
