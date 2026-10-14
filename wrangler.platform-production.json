@@ -42,6 +42,25 @@
   "triggers": {
     "crons": ["*/5 * * * *"]
   },
+  "limits": {
+    "cpu_ms": 300000
+  },
+  "queues": {
+    "producers": [
+      {
+        "binding": "PLATFORM_JOBS",
+        "queue": "webshop-toolbox-platform-production-jobs"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "webshop-toolbox-platform-production-jobs",
+        "max_batch_size": 1,
+        "max_retries": 0,
+        "max_concurrency": 10
+      }
+    ]
+  },
   "observability": {
     "enabled": true
   },
