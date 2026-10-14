@@ -57,6 +57,14 @@ const jobs: Record<string, [string, string]> = {
   invoice: ['invoice', 'orders'],
   credit: ['credit', 'order_refunds'],
 };
+// A failed attempt (production_attempts row `a`) that no longer needs anything: the post has been booked since
+// (e.g. manually), or its order was cancelled and refunded before anything reached Dinero. Shared with the
+// operations overview, so "venter på nyt forsøg" there counts the same posts as the customer's list.
+export const settledFailureSql = (a: string) =>
+  `(EXISTS(SELECT 1 FROM production_receipts b WHERE b.company_id=${a}.company_id AND b.webshop_id=${a}.webshop_id AND b.external_id=${a}.external_id AND b.phase='booked'
+  AND b.provider=json_extract('${JSON.stringify(jobs)}','$.'||${a}.job||'[0]') AND b.module=json_extract('${JSON.stringify(jobs)}','$.'||${a}.job||'[1]'))
+ OR (${a}.job IN ('sales','invoice') AND ${voidOrderSql(a, a + '.external_id')})
+ OR (${a}.job IN ('order_refunds','credit') AND ${voidOrderSql(a, `(SELECT vf.order_id FROM order_refunds vf WHERE vf.company_id=${a}.company_id AND vf.webshop_id=${a}.webshop_id AND vf.external_id=${a}.external_id)`)}))`;
 const short = (id: string) => String(id).split(/[/:]/).pop() || id;
 
 export async function attention(
@@ -85,19 +93,10 @@ export async function attention(
         `SELECT a.job,a.external_id,a.failures,a.attempted_at,${orderName} order_name,${refundOrder} refund_order,
  (SELECT json_extract(e.details_json,'$.message') FROM record_events e WHERE e.company_id=a.company_id AND e.webshop_id=a.webshop_id AND e.external_id=a.external_id AND e.event='error' ORDER BY e.id DESC LIMIT 1) reason
  FROM production_attempts a WHERE a.company_id=? AND a.webshop_id=? AND a.failures>0 AND a.job IN (SELECT value FROM json_each(?))
- AND NOT EXISTS(SELECT 1 FROM production_receipts b WHERE b.company_id=a.company_id AND b.webshop_id=a.webshop_id AND b.external_id=a.external_id AND b.phase='booked'
-  AND b.provider=json_extract(?,'$.'||a.job||'[0]') AND b.module=json_extract(?,'$.'||a.job||'[1]'))
- AND NOT (a.job IN ('sales','invoice') AND ${voidOrderSql('a', 'a.external_id')})
- AND NOT (a.job IN ('order_refunds','credit') AND ${voidOrderSql('a', '(SELECT vf.order_id FROM order_refunds vf WHERE vf.company_id=a.company_id AND vf.webshop_id=a.webshop_id AND vf.external_id=a.external_id)')})
+ AND NOT ${settledFailureSql('a')}
  ORDER BY a.attempted_at DESC`,
       )
-      .bind(
-        company,
-        shop,
-        JSON.stringify(Object.keys(jobs)),
-        JSON.stringify(jobs),
-        JSON.stringify(jobs),
-      )
+      .bind(company, shop, JSON.stringify(Object.keys(jobs)))
       .all<{
         job: string;
         external_id: string;
@@ -253,10 +252,10 @@ const key = (kind: string, job: string, id: string) =>
   kind + '|' + job + '|' + id;
 
 // "Afvis": the customer has checked the post and wants it off the list. Besides hiding it, its automatic attempts
-// stop (next attempt set to never), so it cannot be booked later, e.g. after it was handled directly in Dinero;
+// stop (next attempt set to neverRetry), so it cannot be booked later, e.g. after it was handled directly in Dinero;
 // "Bogfør manuelt" still works. "Fortryd" removes the dismissal and queues the post again. Only posts on the list
 // can be dismissed, and an uncertain post is never retried automatically anyway.
-const never = 32503680000000; // year 3000
+export const neverRetry = 32503680000000; // year 3000
 const blockedJobs = (item: { kind: string; job: string }) =>
   item.kind === 'failed'
     ? [item.job]
@@ -317,7 +316,7 @@ export async function dismissAttention(
           .prepare(
             'INSERT INTO production_attempts(company_id,webshop_id,job,external_id,attempted_at,next_attempt_at,failures) VALUES(?,?,?,?,?,?,0) ON CONFLICT(company_id,webshop_id,job,external_id) DO UPDATE SET next_attempt_at=excluded.next_attempt_at',
           )
-          .bind(company, shop, job, i.externalId, now, never),
+          .bind(company, shop, job, i.externalId, now, neverRetry),
       ),
     ]),
   );
@@ -343,7 +342,7 @@ export async function restoreAttention(
         .prepare(
           'UPDATE production_attempts SET next_attempt_at=0 WHERE company_id=? AND webshop_id=? AND job=? AND external_id=? AND next_attempt_at=?',
         )
-        .bind(company, shop, job, i.externalId, never),
+        .bind(company, shop, job, i.externalId, neverRetry),
     ),
   ]);
   const results = await db.batch(statements.flat());

@@ -7,6 +7,7 @@
 // daily mail at 7 (Danish time) sums up the last day. Single posts that fail stay in the customer's bell.
 // If the cron stops altogether nothing here runs: the daily mail then stays away, and GET /healthz/scheduler
 // answers 503 for an external uptime monitor.
+import { neverRetry, settledFailureSql } from './attention';
 import { jobActorSql, trialEndedSql } from './production-jobs';
 import { productionWrites } from './production-policy';
 import { HttpError, type Actor, type PlatformEnv } from './types';
@@ -419,9 +420,11 @@ export async function overview(env: PlatformEnv) {
       .all<{ company_id: string; webshop_id: string; n: number }>(),
     db
       .prepare(
-        'SELECT company_id,webshop_id,count(*) n FROM production_attempts WHERE failures>0 AND next_attempt_at>? GROUP BY company_id,webshop_id',
+        // Posts the customer dismissed (stopped until Fortryd), or that were booked or voided since, wait for nothing.
+        `SELECT company_id,webshop_id,count(*) n FROM production_attempts a WHERE failures>0 AND next_attempt_at>? AND next_attempt_at<>?
+ AND NOT ${settledFailureSql('a')} GROUP BY company_id,webshop_id`,
       )
-      .bind(Date.now())
+      .bind(Date.now(), neverRetry)
       .all<{ company_id: string; webshop_id: string; n: number }>(),
     db
       .prepare(
