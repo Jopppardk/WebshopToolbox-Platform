@@ -569,29 +569,33 @@ export default {
   },
   // One due webshop per message (queueDueShops). Never retried by the queue: a run that stopped halfway leaves
   // uncertain writes to the receipts, and the next scheduler tick sends the webshop again when it is due.
+  // The consumer is meant to get one message per batch; a larger batch runs its webshops side by side, so one
+  // slow webshop cannot use up the invocation's time before the others start.
   async queue(batch: MessageBatch<unknown>, env: PlatformEnv) {
     assertTestRuntime(env);
-    for (const message of batch.messages) {
-      const job = message.body as ShopJob;
-      try {
-        if (
-          job?.kind === 'shop' &&
-          typeof job.company === 'string' &&
-          typeof job.webshop === 'string'
-        )
-          await runQueuedShop(env, job);
-      } catch (error) {
-        logUnexpected(
-          {
-            queue: 'shop',
-            company: String(job?.company),
-            webshop: String(job?.webshop),
-          },
-          error,
-        );
-      } finally {
-        message.ack();
-      }
-    }
+    await Promise.all(
+      batch.messages.map(async (message) => {
+        const job = message.body as ShopJob;
+        try {
+          if (
+            job?.kind === 'shop' &&
+            typeof job.company === 'string' &&
+            typeof job.webshop === 'string'
+          )
+            await runQueuedShop(env, job);
+        } catch (error) {
+          logUnexpected(
+            {
+              queue: 'shop',
+              company: String(job?.company),
+              webshop: String(job?.webshop),
+            },
+            error,
+          );
+        } finally {
+          message.ack();
+        }
+      }),
+    );
   },
 };
