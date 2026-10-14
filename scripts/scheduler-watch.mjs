@@ -35,8 +35,16 @@ export async function checkScheduler({
     } catch {
       /* Not the Worker's JSON answer. */
     }
-    if (response.status === 200 && data?.ok === true)
-      return `Den automatiske kørsel er sund (seneste gennemførte kørsel for ${data.minutesSinceLastRun ?? '?'} minutter siden).`;
+    if (response.status === 200 && data?.scheduler === 'disabled')
+      throw Error(
+        'Den automatiske kørsel er slået fra på portal.webshoptoolbox.dk (eksterne writes blokeret eller forkert Worker).',
+      );
+    if (
+      response.status === 200 &&
+      data?.ok === true &&
+      Number.isFinite(data.minutesSinceLastRun)
+    )
+      return `Den automatiske kørsel er sund (seneste gennemførte kørsel for ${data.minutesSinceLastRun} minutter siden).`;
     if (response.status === 503 && data?.ok === false)
       throw Error(
         data.minutesSinceLastRun === null
