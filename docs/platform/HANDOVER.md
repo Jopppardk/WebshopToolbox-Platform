@@ -48,6 +48,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 ## Åbne punkter
 
 **Ikke verificeret i drift**
+- **Driftsoverblikkets "venter på nyt forsøg" (udgivet 14. oktober 2026, dev og prod, run 38523869306, main `e4d9081`):** afviste, senere bogførte og annullerede poster tælles ikke længere med i morgenmailen og Tier 0 → Driftsoverblik.
 - **Dansk dato og 100.000 rækker (udgivet 14. oktober 2026, dev og prod, run 38519352806, main `3b87b07`):** "i dag" er dansk dato overalt (bl.a. lagerreguleringens bilagsdato), lister og Emballage-perioder rummer 100.000 rækker, og den daglige Emballage-hentning læser kun ændrede ordrer. Ikke set med rigtige data over 10.000 rækker.
 - **Shipmondo-labels fra Salg:** ikke afprøvet mod en rigtig konto. Den første rigtige ordre er testen (aftalt).
 - **Daglig driftsmail:** modtagelsen er ikke bekræftet.
