@@ -13,7 +13,7 @@ import {
 } from './order-refunds';
 import { ensureCreditNote } from './credit-notes';
 import { HttpError, reply } from './types';
-import { type DataContext, pageNumber } from './tier1-data-shared';
+import { type DataContext, maxListRows, pageNumber } from './tier1-data-shared';
 
 export async function orderRefundData({
   request,
@@ -102,11 +102,11 @@ export async function orderRefundData({
  (SELECT r.phase FROM production_receipts r WHERE r.company_id=s.company_id AND r.webshop_id=s.webshop_id AND r.provider='invoice' AND r.module='credit_email' AND r.external_id=c.id) mail
  FROM order_refunds s LEFT JOIN platform_credit_notes c ON c.company_id=s.company_id AND c.webshop_id=s.webshop_id AND c.external_id=s.external_id AND c.status='generated'
  LEFT JOIN order_markets m ON m.company_id=s.company_id AND m.webshop_id=s.webshop_id AND m.external_id=s.order_id
- WHERE s.company_id=? AND s.webshop_id=? AND s.occurred_at>=? ORDER BY s.occurred_at DESC,s.external_id LIMIT 5001`)
+ WHERE s.company_id=? AND s.webshop_id=? AND s.occurred_at>=? ORDER BY s.occurred_at DESC,s.external_id LIMIT ${maxListRows + 1}`)
         .bind(company, shop, from)
         .all<any>()
     ).results;
-    if (rows.length > 5000)
+    if (rows.length > maxListRows)
       throw new HttpError(409, 'Vælg en kortere historik.');
     // Statuses only for the refunds read here, not for every order of the webshop.
     const status = await bookingStatuses(

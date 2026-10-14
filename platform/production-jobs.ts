@@ -25,6 +25,7 @@ import { productionWrites, bookingDate } from './production-policy';
 import { dataStartDate, historyPolicy, providerStart } from './tier1-history';
 import { InvoiceCheckError } from './order-check';
 import { HttpError, type Actor, type PlatformEnv } from './types';
+import { danishDate } from './tier1/src/lib/history-policy';
 // The reason shown in the bell: our own explanations (also the invoice check's), never raw internal errors.
 // Unexpected errors are logged, and their ID is shown with the reason so the run can be found in Workers Logs.
 const reason = (error: unknown, context: Record<string, string>) =>
@@ -199,7 +200,7 @@ async function runShop(
     // every 4 hours; packaging history once a day (below). Synkronisér nu on a page always reads at once.
     const lastRun = async (group: string) =>
         Number((await cursor('pace.' + group)).lastAt) || 0,
-      today = new Date().toISOString().slice(0, 10);
+      today = danishDate();
     const expecting = !!(await db
       .prepare(
         "SELECT 1 FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module='payouts' AND json_extract(payload_json,'$.status') IN ('SCHEDULED','IN_TRANSIT') AND substr(occurred_at,1,10)<=? UNION ALL SELECT 1 FROM payment_records WHERE company_id=? AND webshop_id=? AND provider='flatpay' AND external_id LIKE 'upcoming:%' AND substr(occurred_at,1,10)<=? LIMIT 1",
@@ -325,7 +326,7 @@ async function runShop(
         await run('auto.import.' + provider + '.' + kind, async () => {
           const job = provider + '.' + kind,
             stored = await cursor(job),
-            today = new Date().toISOString().slice(0, 10),
+            today = danishDate(),
             boundary = [
               connection.start_date,
               await dataStartDate(env, company, id, provider),
@@ -399,7 +400,7 @@ async function runShop(
       await saveCursor('pace.inventory', { lastAt: Date.now() });
     if (packaging && mode === 'scheduled') {
       const config = JSON.parse(packaging.config_json),
-        today = new Date().toISOString().slice(0, 10),
+        today = danishDate(),
         state = await cursor('packaging.history');
       if (config.startDate && state.day !== today)
         await run('auto.packaging.history', async () => {

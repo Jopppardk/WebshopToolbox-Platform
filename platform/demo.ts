@@ -891,7 +891,7 @@ export function demoInventory() {
       }) as InventoryRow,
   );
   const totalValueMinor = inventoryValueMinor(rows),
-    today = new Date().toISOString().slice(0, 10);
+    today = danishDate();
   // A fictional Dinero balance a little off, so the demo shows a difference to regulate.
   return {
     rows,

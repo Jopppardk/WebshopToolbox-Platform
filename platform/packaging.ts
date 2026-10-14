@@ -9,6 +9,7 @@ import {
   validatePackagingPrice,
   type ManualPackaging,
 } from './packaging-calculations';
+import { maxListRows } from './tier1-data-shared';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 import { danishDate } from './tier1/src/lib/history-policy';
 function date(value: string) {
@@ -37,11 +38,11 @@ export async function handlePackaging(
     const cutoff = await dataStartDate(env, company, shop);
     const rows = await db
       .prepare(
-        "SELECT payload_json,version FROM platform_packaging WHERE company_id=? AND webshop_id=? AND json_extract(payload_json,'$.date')>=? AND json_extract(payload_json,'$.date')<=? LIMIT 5001",
+        `SELECT payload_json,version FROM platform_packaging WHERE company_id=? AND webshop_id=? AND json_extract(payload_json,'$.date')>=? AND json_extract(payload_json,'$.date')<=? LIMIT ${maxListRows + 1}`,
       )
       .bind(company, shop, start > cutoff ? start : cutoff, end)
       .all<{ payload_json: string; version: number }>();
-    if (rows.results.length > 5000)
+    if (rows.results.length > maxListRows)
       throw new HttpError(409, 'Vælg en kortere periode.');
     const entries = rows.results.map((r) => ({
       ...JSON.parse(r.payload_json),
@@ -58,11 +59,11 @@ export async function handlePackaging(
     };
     const products = await db
       .prepare(
-        "SELECT payload_json FROM packaging_snapshots WHERE company_id=? AND webshop_id=? AND json_extract(payload_json,'$.date') BETWEEN ? AND ? LIMIT 10001",
+        `SELECT payload_json FROM packaging_snapshots WHERE company_id=? AND webshop_id=? AND json_extract(payload_json,'$.date') BETWEEN ? AND ? LIMIT ${maxListRows + 1}`,
       )
       .bind(company, shop, start > cutoff ? start : cutoff, end)
       .all<{ payload_json: string }>();
-    if (products.results.length > 10000)
+    if (products.results.length > maxListRows)
       throw new HttpError(409, 'Vælg en kortere periode.');
     const sync = await db
       .prepare(

@@ -1,4 +1,5 @@
 'use client';
+import { danishDate } from '@/lib/history-policy';
 import { PageTitle } from '@/platform/workspace';
 import { formatDate, asText } from '@/lib/format';
 import { useStackTable } from '@/lib/stack-table';
@@ -63,7 +64,7 @@ export function UnifiedPayouts({
   // 30 days, which covers payouts still on their way; older ones are fetched by the automatic run. A provider that
   // fails does not stop the others; their errors are shown together.
   async function syncProvider(provider: string) {
-    const to = new Date().toISOString().slice(0, 10),
+    const to = danishDate(),
       from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
     // Flatpay walks forward in 30-day steps from `next`; it starts 30 days back instead of at the history start.
     let next: unknown = provider === 'flatpay' ? from : null;

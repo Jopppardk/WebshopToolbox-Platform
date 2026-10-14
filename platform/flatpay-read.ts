@@ -1,4 +1,5 @@
 import { asText } from './tier1/src/lib/format';
+import { danishDate } from './tier1/src/lib/history-policy';
 // Contract: Saga ExternalPanthroAPI v1, retrieved 2026-09-10.
 export type FlatpayAccess = { username: string; password: string };
 export type FlatpayAgreement = {
@@ -169,7 +170,7 @@ export function flatpayDateRange(
     start < startDate ||
     end < start ||
     Date.parse(end) - Date.parse(start) > 30 * 86400000 ||
-    end > new Date().toISOString().slice(0, 10)
+    end > danishDate()
   )
     throw Error(
       'Vælg højst 31 dage fra integrationens startdato og frem til i dag.',

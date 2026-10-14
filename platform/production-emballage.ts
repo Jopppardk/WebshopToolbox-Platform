@@ -18,6 +18,7 @@ import {
   type ReceiptKey,
 } from './production-receipts';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
+import { danishDate } from './tier1/src/lib/history-policy';
 const fail = (message: string): never => {
   throw new HttpError(409, message);
 };
@@ -43,7 +44,7 @@ export async function productionEmballage(
       .toISOString()
       .slice(0, 10),
     end = new Date(Date.UTC(year, quarter * 3, 0)).toISOString().slice(0, 10);
-  if (year < 2000 || end >= new Date().toISOString().slice(0, 10))
+  if (year < 2000 || end >= danishDate())
     fail('Kvartalet er endnu ikke afsluttet.');
   const db = env.PLATFORM_DB,
     saved = await db

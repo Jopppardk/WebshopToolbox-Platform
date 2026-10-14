@@ -11,6 +11,8 @@ export type DataContext = {
   url: URL;
   get: boolean;
 };
+// The most rows a list or period in the portal reads at once (payments, payouts, refunds, packaging).
+export const maxListRows = 100_000;
 export const forwarded = (request: Request, body: unknown, method = 'POST') =>
   new Request(request.url, {
     method,

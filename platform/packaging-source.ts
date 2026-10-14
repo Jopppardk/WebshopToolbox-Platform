@@ -3,6 +3,7 @@ import {
   normalizeReportable,
   type PackagingRow,
 } from './packaging-calculations';
+import { maxListRows } from './tier1-data-shared';
 import { HttpError, type PlatformEnv } from './types';
 const day = (d: Date) =>
   new Intl.DateTimeFormat('en-CA', {
@@ -19,6 +20,35 @@ const stable = (r: PackagingRow) =>
     ),
   );
 const same = (a: PackagingRow, b: PackagingRow) => stable(a) === stable(b);
+const plusDays = (date: string, days: number) =>
+  new Date(Date.parse(date + 'T12:00:00Z') + days * 86400000)
+    .toISOString()
+    .slice(0, 10);
+// What a stored line takes from its product: the packaging fields, set in Shopify, possibly after the line was stored.
+type PackagingProduct = {
+  id?: string;
+  title?: string;
+  packagingWeight?: { value?: string | null } | null;
+  packagingReportable?: { value?: string | null } | null;
+  packagingSupplier?: { value?: string | null } | null;
+  packagingSupplierCountry?: { value?: string | null } | null;
+  packagingSupplierCvr?: { value?: string | null } | null;
+};
+function productFields(pd: PackagingProduct | undefined, fallback: string) {
+  const w = pd?.packagingWeight?.value,
+    weight = w === null || w === undefined || w === '' ? null : Number(w);
+  if (weight !== null && (!Number.isSafeInteger(weight) || weight < 0))
+    throw new Error(`Ugyldig emballagevægt på ${pd?.title || fallback}.`);
+  return {
+    productId: pd?.id || null,
+    product: pd?.title || fallback,
+    weightGrams: weight,
+    reportable: normalizeReportable(pd?.packagingReportable?.value),
+    supplier: pd?.packagingSupplier?.value || '',
+    supplierCountry: pd?.packagingSupplierCountry?.value || '',
+    supplierCvr: pd?.packagingSupplierCvr?.value || '',
+  };
+}
 const orderAudience = (o: any): 'commercial' | 'household' =>
   o.billingAddress?.company?.trim() || o.shippingAddress?.company?.trim()
     ? 'commercial'
@@ -71,21 +101,26 @@ export async function syncPackaging(
   end: string,
 ) {
   const db = env.PLATFORM_DB;
-  const saved = (
-    await db
-      .prepare(
-        'SELECT event_id,payload_json FROM packaging_snapshots WHERE company_id=? AND webshop_id=?',
-      )
-      .bind(company, shop)
-      .all<{ event_id: string; payload_json: string }>()
-  ).results;
-  const queryStart = start;
+  // Once the stored history covers the period from its start, only orders changed since the covered end (with two
+  // days' margin) are read from Shopify again. Packaging fields set on a product later still reach its stored lines
+  // (incomplete lines below), so a large history is not read again every day.
+  const coverage = await db
+    .prepare(
+      'SELECT coverage_start,coverage_end FROM packaging_sync WHERE company_id=? AND webshop_id=?',
+    )
+    .bind(company, shop)
+    .first<{ coverage_start: string; coverage_end: string }>();
+  const since =
+      coverage && coverage.coverage_start <= start
+        ? plusDays(coverage.coverage_end, -2)
+        : '',
+    queryStart = since > start ? since : start;
   const access = await shopAccess(env, company, shop),
     query = `status:any updated_at:>='${queryStart + 'T00:00:00Z'}'`,
     source: any[] = [];
   let after: null | string = null;
   const cursors = new Set<string>();
-  if (start < day(new Date(Date.now() - 59 * 86400000))) {
+  if (queryStart < day(new Date(Date.now() - 59 * 86400000))) {
     const scopes = await orderQuery<{
       currentAppInstallation: { accessScopes: Array<{ handle: string }> };
     }>(
@@ -131,11 +166,26 @@ export async function syncPackaging(
       );
     cursors.add(after);
   }
-  if (source.length > 10000)
+  if (source.length > maxListRows)
+    throw new HttpError(409, 'Vælg en kortere periode.');
+  // Stored lines in the period still missing a weight or reportability: their products are read again.
+  const incomplete = (
+    await db
+      .prepare(
+        `SELECT payload_json FROM packaging_snapshots WHERE company_id=? AND webshop_id=? AND json_extract(payload_json,'$.date') BETWEEN ? AND ?
+         AND (json_extract(payload_json,'$.weightGrams') IS NULL OR json_extract(payload_json,'$.reportable')='unknown') LIMIT ${maxListRows + 1}`,
+      )
+      .bind(company, shop, start, end)
+      .all<{ payload_json: string }>()
+  ).results.map((r) => JSON.parse(r.payload_json) as PackagingRow);
+  if (incomplete.length > maxListRows)
     throw new HttpError(409, 'Vælg en kortere periode.');
   const productIds = [
       ...new Set(
-        source.map(({ x }) => x.lineItem?.variant?.product?.id).filter(Boolean),
+        [
+          ...source.map(({ x }) => x.lineItem?.variant?.product?.id),
+          ...incomplete.map((r) => r.productId),
+        ].filter(Boolean),
       ),
     ] as string[],
     products = new Map<string, any>();
@@ -153,13 +203,7 @@ export async function syncPackaging(
   const rows: PackagingRow[] = source.map(({ o, f, x }) => {
     const v = x.lineItem?.variant,
       base = v?.product,
-      pd = products.get(base?.id) || base,
-      w = pd?.packagingWeight?.value,
-      weight = w === null || w === undefined || w === '' ? null : Number(w);
-    if (weight !== null && (!Number.isSafeInteger(weight) || weight < 0))
-      throw new Error(
-        `Ugyldig emballagevægt på ${pd?.title || x.lineItem.title}.`,
-      );
+      fields = productFields(products.get(base?.id) || base, x.lineItem.title);
     return {
       test: Boolean(o.test),
       audience: orderAudience(o),
@@ -169,26 +213,35 @@ export async function syncPackaging(
       date: day(new Date(f.createdAt)),
       orderId: o.id,
       orderName: o.name,
-      productId: pd?.id || null,
-      product: pd?.title || x.lineItem.title,
+      productId: fields.productId,
+      product: fields.product,
       variantId: v?.id || null,
       variant: v?.title || '',
       quantity: x.quantity,
-      weightGrams: weight,
-      reportable: normalizeReportable(pd?.packagingReportable?.value),
-      supplier: pd?.packagingSupplier?.value || '',
-      supplierCountry: pd?.packagingSupplierCountry?.value || '',
-      supplierCvr: pd?.packagingSupplierCvr?.value || '',
+      weightGrams: fields.weightGrams,
+      reportable: fields.reportable,
+      supplier: fields.supplier,
+      supplierCountry: fields.supplierCountry,
+      supplierCvr: fields.supplierCvr,
       snapshottedAt: new Date().toISOString(),
     };
   });
-  const old = new Map(
-      saved.map((x) => [
-        x.event_id,
-        JSON.parse(x.payload_json) as PackagingRow,
-      ]),
-    ),
-    writes: Array<{ key: string; value: PackagingRow }> = [];
+  // Only the stored lines this sync read again are compared, not the whole history.
+  const old = new Map<string, PackagingRow>();
+  const ids = [...new Set(rows.map((r) => r.eventId))];
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    for (const x of (
+      await db
+        .prepare(
+          `SELECT event_id,payload_json FROM packaging_snapshots WHERE company_id=? AND webshop_id=? AND event_id IN (${chunk.map(() => '?').join(',')})`,
+        )
+        .bind(company, shop, ...chunk)
+        .all<{ event_id: string; payload_json: string }>()
+    ).results)
+      old.set(x.event_id, JSON.parse(x.payload_json) as PackagingRow);
+  }
+  const writes: Array<{ key: string; value: PackagingRow }> = [];
   for (const row of rows) {
     const before = old.get(row.eventId);
     if (
@@ -213,6 +266,19 @@ export async function syncPackaging(
         }
       : row;
     writes.push({ key: row.eventId, value: next });
+  }
+  // Incomplete lines this sync did not read again get their product's fields now; date, order and quantity stay.
+  const read = new Set(ids);
+  for (const before of incomplete) {
+    if (read.has(before.eventId) || !before.productId) continue;
+    const pd = products.get(before.productId);
+    if (!pd) continue;
+    const next = {
+      ...before,
+      ...productFields(pd, before.product),
+      refreshedAt: new Date().toISOString(),
+    };
+    if (!same(before, next)) writes.push({ key: before.eventId, value: next });
   }
 
   const seen = new Set<string>();

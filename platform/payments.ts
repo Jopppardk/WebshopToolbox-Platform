@@ -6,6 +6,7 @@ import { flatpayRead, safeAgreement, flatpayDateRange } from './flatpay-read';
 import * as vb from './viabill-read';
 import * as pp from './pensopay-read';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
+import { danishDate } from './tier1/src/lib/history-policy';
 
 type Saved = {
   identity: string;
@@ -154,7 +155,7 @@ export async function handlePayments(
                 : await vb.accounts(credentials as vb.ViaBillKeys),
         });
       const start = date(b.startDate);
-      if (start > new Date().toISOString().slice(0, 10))
+      if (start > danishDate())
         throw new HttpError(400, 'Startdato må ikke ligge i fremtiden.');
       let metadata: Record<string, unknown>, identity: string;
       if (provider === 'flatpay') {
@@ -242,11 +243,7 @@ export async function handlePayments(
     );
   const start = date(b.start),
     end = date(b.end);
-  if (
-    start < saved.start_date ||
-    end < start ||
-    end > new Date().toISOString().slice(0, 10)
-  )
+  if (start < saved.start_date || end < start || end > danishDate())
     throw new HttpError(
       400,
       'Vælg en periode fra integrationens startdato til i dag.',
@@ -442,7 +439,7 @@ export async function handlePayments(
     } else if (provider === 'pensopay') {
       if (!['payments', 'settlements'].includes(kind))
         throw new HttpError(400, 'Vælg betalinger eller afregninger.');
-      const today = new Date().toISOString().slice(0, 10),
+      const today = danishDate(),
         cursor = b.cursor as Record<string, unknown> | undefined,
         pageNumber = cursor?.page ?? 1;
       // Settlements are selected by payout date; look ahead so upcoming payouts are shown as such.

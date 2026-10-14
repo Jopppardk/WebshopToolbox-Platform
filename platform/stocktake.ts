@@ -14,6 +14,7 @@ import { jsonBody } from './invitations';
 import { readInventory } from './inventory-source';
 import { validateStocktakeChanges } from './inventory-calculations';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
+import { danishDate } from './tier1/src/lib/history-policy';
 type Saved = {
   id: string;
   version: string;
@@ -182,7 +183,7 @@ export async function handleStocktake(
       throw new HttpError(409, 'Ugyldig reguleringsværdi.');
     const id = crypto.randomUUID(),
       version = crypto.randomUUID(),
-      date = new Date().toISOString().slice(0, 10);
+      date = danishDate();
     const voucher =
       adjustmentMinor === 0
         ? null
