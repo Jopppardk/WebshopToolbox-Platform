@@ -48,6 +48,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 ## Åbne punkter
 
 **Ikke verificeret i drift**
+- **Ekstern overvågning af den automatiske kørsel:** workflowet *Overvågning: automatisk kørsel i prod* (`.github/workflows/platform-scheduler-watch.yml`, `scripts/scheduler-watch.mjs`) kalder `/healthz/scheduler` hvert 15. minut og fejler, når cron ikke har gennemført en kørsel i 30 minutter, så GitHub mailer den, der senest har ændret workflowets tidsplan. GitHub kan forsinke planlagte kørsler, så alarmen kommer typisk efter 30-45 minutter. Første kørsel og mailen er ikke set.
 - **Driftsoverblikkets "venter på nyt forsøg" (udgivet 14. oktober 2026, dev og prod, run 38523869306, main `e4d9081`):** afviste poster, senere bogførte poster og annullerede, fuldt refunderede ordrer, der ikke nåede Dinero, tælles ikke længere med i morgenmailen og Tier 0 → Driftsoverblik.
 - **Kø til den automatiske kørsel (udgivet 14. oktober 2026, dev og prod, run 38525600682, main `912e1d9`):** cron sender forfaldne webshops som én besked hver til Cloudflare Queues `webshop-toolbox-platform-production-jobs` (`PLATFORM_JOBS`, `queueDueShops`/`runQueuedShop` i `production-jobs.ts`, `queue` i `worker.ts`; consumer `max_batch_size: 1`, `max_retries: 0`, `max_concurrency: 10`, `limits.cpu_ms: 300000`). Første kørsel via køen er ikke set; følg forsinkelsen i Driftsoverblikket.
 - **Dansk dato og 100.000 rækker (udgivet 14. oktober 2026, dev og prod, run 38519352806, main `3b87b07`):** "i dag" er dansk dato overalt (bl.a. lagerreguleringens bilagsdato), lister og Emballage-perioder rummer 100.000 rækker, og den daglige Emballage-hentning læser kun ændrede ordrer. Ikke set med rigtige data over 10.000 rækker.
@@ -66,7 +67,6 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 
 **Mangler**
 - **Svenske produktnavne på fakturaer:** kræver read_translations i kundens Shopify-app; ellers danske navne.
-- **Ekstern overvågning:** `/healthz/scheduler` overvåges ikke eksternt endnu (ejerens opgave).
 - **Backup:** gendannelsen er ikke øvet, og R2-dokumenterne har ingen backup.
 
 - **Fakturanumre ved flere webshops:** fakturanummeret er Shopify-ordrenavnet (`#1001` → `1001`, kreditnota `1001-K1`). Besluttet 10. oktober 2026: hver webshop får sit eget ordre-præfiks i Shopify (Indstillinger → Generelt → ordre-ID-format), før den tilsluttes som webshop nr. 2 eller senere. Platformen kontrollerer det ikke.
