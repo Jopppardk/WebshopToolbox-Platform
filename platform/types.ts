@@ -1,5 +1,9 @@
+// One message per webshop the scheduler hands to Cloudflare Queues (production-jobs.ts).
+export type ShopJob = { kind: 'shop'; company: string; webshop: string };
 export interface PlatformEnv {
   PLATFORM_DB: D1Database;
+  // Optional: with a queue bound, each due webshop runs in its own invocation instead of one after another in cron.
+  PLATFORM_JOBS?: Queue<ShopJob>;
   PLATFORM_DOCUMENTS: R2Bucket;
   ASSETS: Fetcher;
   PLATFORM_ENV: 'local-test' | 'remote-test' | 'production';
