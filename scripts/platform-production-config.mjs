@@ -51,6 +51,28 @@ export function validateProductionConfig(config) {
     })
   )
     fail();
+  // The job queue and CPU limit exist only in production and only in this exact shape:
+  // one message per invocation and no retries, so an uncertain external write is never
+  // repeated by the queue.
+  const queue = config.name + '-jobs';
+  if (
+    (config.queues !== undefined &&
+      JSON.stringify(config.queues) !==
+        JSON.stringify({
+          producers: [{ binding: 'PLATFORM_JOBS', queue }],
+          consumers: [
+            {
+              queue,
+              max_batch_size: 1,
+              max_retries: 0,
+              max_concurrency: 10,
+            },
+          ],
+        })) ||
+    (config.limits !== undefined &&
+      JSON.stringify(config.limits) !== JSON.stringify({ cpu_ms: 300000 }))
+  )
+    fail();
   // Enforce all existing restrictions (blocked writes/mail, bindings, assets, cron, account)
   // after normalizing ONLY the explicitly validated production resource identifiers.
   const normalized = structuredClone(config);
@@ -67,6 +89,8 @@ export function validateProductionConfig(config) {
   normalized.vars.PLATFORM_EXTERNAL_WRITES = 'blocked';
   normalized.vars.PLATFORM_CUSTOMER_EMAIL = 'blocked';
   normalized.triggers = { crons: [] };
+  delete normalized.queues;
+  delete normalized.limits;
   normalized.vars.PLATFORM_MAIL_TEST_RECIPIENTS =
     'rj@itm8.com,rene.jeppesen@live.dk';
   if (config.vars.PLATFORM_CUSTOMER_LOGIN === 'enabled') {
