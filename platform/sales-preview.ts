@@ -52,10 +52,6 @@ export function salesDraft(
   if (clearing?.vatCode)
     blockers.push('Mellemregningskontoen skal være uden momskode.');
   const lines = invoice.lines.map((line) => {
-    if (line.kind === 'unclassified')
-      blockers.push(
-        `“${line.title}” er ikke klassificeret som en fysisk vare; kontoen skal afklares.`,
-      );
     const rate =
       line.rates.length === 0 && line.tax === 0
         ? 0
@@ -65,6 +61,12 @@ export function salesDraft(
     if (![0, 0.25].includes(rate) || line.channelLiable)
       blockers.push(
         `“${line.title}” har en momstype, som kræver særskilt gennemgang.`,
+      );
+    // A taxable line without shipping (for example engraving, a service sold with a product) is booked as
+    // product sales without inventory cost. Other unclassified lines still need a decision on the account.
+    if (line.kind === 'unclassified' && rate !== 0.25)
+      blockers.push(
+        `“${line.title}” er ikke klassificeret som en fysisk vare; kontoen skal afklares.`,
       );
     if (Math.abs(Math.round(line.net * rate) - line.tax) > 1)
       blockers.push(`“${line.title}”: Momsbeløbet stemmer ikke med satsen.`);
