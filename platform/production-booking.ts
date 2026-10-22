@@ -4,7 +4,12 @@ import { recordFailure } from './record-history';
 import { requireCompany, requireWebshop } from './auth';
 import { unseal } from './connections';
 import { jsonBody } from './invitations';
-import { verifyVoucher, withWebshop, type Voucher } from './dinero-sale';
+import {
+  TransferError,
+  verifyVoucher,
+  withWebshop,
+  type Voucher,
+} from './dinero-sale';
 import { dineroClient } from './dinero-write';
 import {
   readReceipt,
@@ -362,7 +367,13 @@ export async function handleProductionBooking(
     copy = request.clone();
   try {
     return await productionBooking(...args);
-  } catch (error) {
+  } catch (caught) {
+    // The voucher checks explain what does not add up (for example an unclassified order line); show
+    // that reason in the post's log and to the user instead of an unexpected error.
+    const error =
+      caught instanceof TransferError
+        ? new HttpError(409, caught.message)
+        : caught;
     try {
       await requireWebshop(env.PLATFORM_DB, actor, company, shop);
       const body = (await copy.json()) as any;
