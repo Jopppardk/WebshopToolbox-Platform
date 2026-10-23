@@ -19,7 +19,7 @@ Forsendelser bruger nu én fælles kilde: `window.tracking`-JSON i den offentlig
 - Migration 0040 opretter en separat cache/arbejdskø. Nøgler afgrænses til virksomhed, webshop, afsendelse, tidspunkt og trackinglink. Udskiftede Shopify-credentials invaliderer gamle snapshots. Demo, inaktive kunder/webshops og udløbne prøvekunder behandles ikke i cron. Ingen ændring i bogføring eller kundemail.
 - Atomiske leases beskytter samtidige faner/cron. Et fejlet opslag bevarer sidste gode snapshot, viser fejlen og venter seks timer før nyt forsøg. DELIVERED stopper polling. Ukendte statusser vises som kildetekst og antages ikke leveret/returneret. Ikke-afsluttet cache udløber 90 dage efter afsendelse og ryddes af cron. Leveringsbekræftelser bevares indtil webshop-/kundedata slettes og overlever credentialudskiftning for samme pakke. Shopify-bekræftet levering afslutter også polling uden et opslag hos Shipmondo.
 - Kun fast HTTPS-origin, ingen redirects, cookies eller API-nøgler. 8 sekunders timeout, maks. 512 KB HTML og 300 hændelser. Kun status, hændelsestekst, tidspunkt og forsendelses-ID gemmes; afsender/modtager fra siden gemmes ikke.
-- Sidens danske tidsstempler fortolkes som Europe/Copenhagen med sommertid. Ved efterårets dobbelte klokkeslæt vælges den sene forekomst. Ingen opfundne trintidspunkter. Afhentningsfrister er fortsat skøn.
+- Sidens danske tidsstempler (yyyy/MM-dd, dd/MM/yyyy, dd.MM.yyyy og yyyy-MM-dd) fortolkes som Europe/Copenhagen med sommertid; ISO 8601 med tidszone bruges, som det er. Hændelser med samme tidspunkt accepteres, når pakkens status er én af dem. Ved efterårets dobbelte klokkeslæt vælges den sene forekomst. Ingen opfundne trintidspunkter. Afhentningsfrister er fortsat skøn.
 
 ## Verifikation
 
