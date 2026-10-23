@@ -92,18 +92,54 @@ export function trackingTarget(
 }
 
 // The Danish public page supplies wall-clock timestamps, without an offset. Convert explicitly (including DST).
+// Each carrier has its own layout (DAO yyyy/MM-dd, GLS/PostNord dd/MM/yyyy, Bring dd.MM.yyyy or ISO 8601); an ISO
+// timestamp with an offset is taken as is.
 export function trackingTime(value: unknown): string {
-  const european =
-    typeof value === 'string' &&
-    value.match(/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2}):(\d{2})$/);
-  const normalized = european
-    ? `${european[3]}/${european[2]}-${european[1]} ${european[4]}:${european[5]}:${european[6]}`
-    : value;
-  const m =
-    typeof normalized === 'string' &&
-    normalized.match(/^(\d{4})\/(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+  if (typeof value !== 'string') throw Error('date');
+  const text = value.trim();
+  const zoned = text.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(Z|[+-]\d{2}:?\d{2})$/,
+  );
+  if (zoned) {
+    const wall = `${zoned[1]}-${zoned[2]}-${zoned[3]}T${zoned[4]}:${zoned[5]}:${zoned[6] || '00'}`;
+    const fraction = zoned[7] ? '.' + zoned[7].slice(0, 3).padEnd(3, '0') : '';
+    const offset =
+      zoned[8] === 'Z'
+        ? 'Z'
+        : zoned[8].replace(/^([+-]\d{2}):?(\d{2})$/, '$1:$2');
+    const ms = Date.parse(wall + fraction + offset);
+    // Date.parse may roll 31 February over to March; the calendar date must survive a round trip.
+    if (
+      !Number.isFinite(ms) ||
+      new Date(Date.parse(wall + 'Z') || 0).toISOString().slice(0, 19) !==
+        wall ||
+      ms > Date.now() + 300000
+    )
+      throw Error('date');
+    return new Date(ms).toISOString();
+  }
+  const local =
+    text.match(/^(\d{4})\/(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/) ||
+    text.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/);
+  const european = local
+    ? null
+    : text.match(
+        /^(\d{2})([/.])(\d{2})\2(\d{4}),? (\d{2})[:.](\d{2})(?:[:.](\d{2}))?$/,
+      );
+  const m = local
+    ? [local[1], local[2], local[3], local[4], local[5], local[6] || '00']
+    : european
+      ? [
+          european[4],
+          european[3],
+          european[1],
+          european[5],
+          european[6],
+          european[7] || '00',
+        ]
+      : null;
   if (!m) throw Error('date');
-  const target = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`,
+  const target = `${m[0]}-${m[1]}-${m[2]}T${m[3]}:${m[4]}:${m[5]}`,
     base = Date.parse(target + 'Z');
   if (!Number.isFinite(base)) throw Error('date');
   const fmt = new Intl.DateTimeFormat('sv-SE', {
@@ -183,7 +219,14 @@ export function parsePublicTracking(
     .sort((a: ShipmentEvent, b: ShipmentEvent) => a.at.localeCompare(b.at));
   if (Date.parse(events.at(-1)!.at) < Date.parse(shippedAt) - 86400000)
     throw Error('old parcel');
-  if (events.at(-1)!.status !== data.status) throw Error('inconsistent');
+  // Scans in the same minute (Bring lists newest first, often without seconds) tie on time. The parcel's status must
+  // be one of the latest scans, and that scan is placed last.
+  const latest = events.at(-1)!.at,
+    current = events.findLastIndex(
+      (e) => e.at === latest && e.status === data.status,
+    );
+  if (current < 0) throw Error('inconsistent');
+  events.push(...events.splice(current, 1));
   return {
     status: clean(data.status, 80),
     text: clean(data.statusText),
