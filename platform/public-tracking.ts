@@ -98,15 +98,16 @@ export function trackingTime(value: unknown): string {
   if (typeof value !== 'string') throw Error('date');
   const text = value.trim();
   const zoned = text.match(
-    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(Z|[+-]\d{2}:?\d{2})$/,
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(Z|[+-]\d{2}:?\d{2})$/,
   );
   if (zoned) {
     const wall = `${zoned[1]}-${zoned[2]}-${zoned[3]}T${zoned[4]}:${zoned[5]}:${zoned[6] || '00'}`;
+    const fraction = zoned[7] ? '.' + zoned[7].slice(0, 3).padEnd(3, '0') : '';
     const offset =
-      zoned[7] === 'Z'
+      zoned[8] === 'Z'
         ? 'Z'
-        : zoned[7].replace(/^([+-]\d{2}):?(\d{2})$/, '$1:$2');
-    const ms = Date.parse(wall + offset);
+        : zoned[8].replace(/^([+-]\d{2}):?(\d{2})$/, '$1:$2');
+    const ms = Date.parse(wall + fraction + offset);
     // Date.parse may roll 31 February over to March; the calendar date must survive a round trip.
     if (
       !Number.isFinite(ms) ||
