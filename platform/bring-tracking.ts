@@ -128,7 +128,12 @@ export function parseBringTracking(
   if (!parcel || !Array.isArray(parcel.eventSet) || !parcel.eventSet.length)
     throw Error('no events');
   if (parcel.eventSet.length > 300) throw Error('size');
-  const scans: Array<{ raw: string; event: ShipmentEvent }> = parcel.eventSet
+  // Bring lists the newest event first. Reversed before the stable sort, events with the same time keep Bring's
+  // order with the newest last, so it decides the status.
+  const scans: Array<{ raw: string; event: ShipmentEvent }> = [
+    ...parcel.eventSet,
+  ]
+    .reverse()
     .map((e: BringEvent) => {
       const raw = text(e?.status, 80),
         at = text(e?.dateIso, 40);
