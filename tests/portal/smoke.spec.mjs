@@ -155,6 +155,10 @@ test('every page of the portal renders', async ({ page }) => {
   await expect(sections.nth(0)).toContainText('Besøg');
   await expect(sections.nth(1)).toContainText(/Virksomhed · /);
   await expect(sections.nth(1)).toContainText('Omsætning');
+  // Every month of the year can be chosen for Salg pr. dag, also those that have not begun.
+  await expect(
+    page.getByLabel('Måned for salg pr. dag').locator('option'),
+  ).toHaveCount(12);
   // Emballage has a card per webshop, like the dashboard.
   await nav(page, 'Emballage').click();
   for (const name of ['Webshop A1', 'Webshop A2'])
