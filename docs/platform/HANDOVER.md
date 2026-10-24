@@ -60,6 +60,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 - **Overblik med flere webshops (udgivet 11. oktober 2026, dev og prod, run 38133154668, main `3f2a9bd`):** webshopvælger, kort pr. webshop på dashboard og Emballage, fælles Emballage-indberetning i oversigten, tydelig fælles/egen faktura og webshopnavn i overskrifter. Kun afprøvet med testdata.
 - **Flere webshops (udgivet 10. oktober 2026, dev og prod, run 38064862126, main `15bf3cd`):** faktura og afsender pr. webshop, genbrug af Shipmondo/Emballage med samlet Emballage-indberetning og mellemregningskonti pr. webshop. Kun afprøvet med testdata; ikke mod rigtig afsendelse fra eget domæne, Shipmondo, Emballage Indberetning eller Dinero.
 
+- **Performance: sidste års totaler og kommende måneder (udgivet 24. oktober 2026, dev og prod, run 40069678864, main `fae71e2`):** alle grafer viser "{år−1} samme periode" og "Hele {år−1}" under årets sum; Salg pr. dag kan vælge alle 12 måneder. Kun afprøvet med testdata.
 - **Performance: salg pr. dag (udgivet 12. oktober 2026, dev og prod, run 38295423966, main `e2220ba`):** graf med alle dage i måneden mod samme dage sidste år (Shopify `total_sales − taxes`, kræver read_reports), og siden viser webshoppens tal øverst og virksomhedens nederst. Kun afprøvet med testdata.
 - **Custom apps pr. virksomhed (udgivet 12. oktober):** menuen "Custom apps" og registrering af en app til præcis én virksomhed i Tier 0. Testappen "Eksempel" findes kun på dev.
 
