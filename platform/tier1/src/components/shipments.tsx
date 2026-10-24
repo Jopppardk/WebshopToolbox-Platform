@@ -194,7 +194,10 @@ function TrackingNotice({ s }: { s: Shipment }) {
   if (!t) return null;
   return (
     <p className="rounded-lg border p-3 text-xs text-muted-foreground">
-      <strong>Tracking via Shipmondo</strong> · {t.text}
+      <strong>
+        Tracking via {s.carrier === 'bring' ? 'Bring' : 'Shipmondo'}
+      </strong>{' '}
+      · {t.text}
       {t.checkedAt
         ? ` · Hentet ${formatDateTime(t.checkedAt)}`
         : s.delivered

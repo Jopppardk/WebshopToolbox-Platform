@@ -1,3 +1,4 @@
+import { bringConnection, fetchBringTracking } from './bring-tracking';
 import { HttpError } from './types';
 import type { PlatformEnv } from './types';
 import type {
@@ -320,10 +321,20 @@ async function refreshRow(env: PlatformEnv, row: Row, manual = false) {
     owner,
   ];
   try {
-    const data = await fetchPublicTracking(
-      { url: row.url, carrier: row.carrier, number: row.tracking_number },
-      row.shipped_at,
-    );
+    // Shipmondo only redirects Bring parcels to Bring's own site; they are read from the Mybring API instead.
+    const data =
+      row.carrier === 'bring'
+        ? await fetchBringTracking(
+            env,
+            row.company_id,
+            row.webshop_id,
+            row.tracking_number,
+            row.shipped_at,
+          )
+        : await fetchPublicTracking(
+            { url: row.url, carrier: row.carrier, number: row.tracking_number },
+            row.shipped_at,
+          );
     const previous = row.data_json
       ? (JSON.parse(row.data_json) as PublicTracking)
       : null;
@@ -353,10 +364,26 @@ async function refreshRow(env: PlatformEnv, row: Row, manual = false) {
   }
 }
 
-export function applyPublicTracking(s: Shipment, row: Row | null): Shipment {
+export function applyPublicTracking(
+  s: Shipment,
+  row: Row | null,
+  bringConnected = true,
+): Shipment {
   if (s.current === 'manual' || s.current === 'untracked')
     return { ...s, publicTracking: undefined };
   const target = trackingTarget(s);
+  const source = target?.carrier === 'bring' ? 'Bring' : 'Shipmondo';
+  if (target?.carrier === 'bring' && !bringConnected && !row?.data_json)
+    return {
+      ...s,
+      trackingUrl: s.trackingUrl || target.url,
+      publicTracking: {
+        checkedAt: null,
+        error: null,
+        state: 'unavailable',
+        text: 'Forbind Bring under Integrationer for at hente tracking på Bring-pakker.',
+      },
+    };
   if (!target)
     return {
       ...s,
@@ -376,8 +403,8 @@ export function applyPublicTracking(s: Shipment, row: Row | null): Shipment {
         error: row?.error || null,
         state: row?.error ? 'error' : 'pending',
         text: row?.error
-          ? 'Tracking kunne ikke hentes fra Shipmondo.'
-          : 'Afventer første trackingopslag fra Shipmondo.',
+          ? `Tracking kunne ikke hentes fra ${source}.`
+          : `Afventer første trackingopslag fra ${source}.`,
       },
     };
   const data = JSON.parse(row.data_json) as PublicTracking;
@@ -480,7 +507,18 @@ export async function enrichPublicTracking(
       'Forsendelsen mangler et understøttet trackingnummer eller trackinglink.',
     );
   const db = env.PLATFORM_DB,
-    sourceKey = await trackingSourceKey(source);
+    sourceKey = await trackingSourceKey(source),
+    bring = Boolean(await bringConnection(db, company, shop));
+  if (
+    manualId !== undefined &&
+    !bring &&
+    trackingTarget(list.shipments.find((s) => s.id === manualId)!)!.carrier ===
+      'bring'
+  )
+    throw new HttpError(
+      409,
+      'Forbind Bring under Integrationer for at hente tracking på Bring-pakker.',
+    );
   await db
     .prepare(
       'DELETE FROM shipment_tracking_cache WHERE company_id=? AND webshop_id=? AND source_key<>? AND terminal=0',
@@ -550,6 +588,7 @@ export async function enrichPublicTracking(
               (r) =>
                 needed.has(r.parcel_key) &&
                 !r.terminal &&
+                (bring || r.carrier !== 'bring') &&
                 r.next_check <= Date.now() &&
                 (!r.attempted_at ||
                   Date.parse(r.attempted_at) <= Date.now() - checkInterval),
@@ -577,7 +616,7 @@ export async function enrichPublicTracking(
     ...list,
     shipmondo: undefined,
     shipments: list.shipments.map((s) =>
-      applyPublicTracking(s, map.get(keys.get(s.id) || '') || null),
+      applyPublicTracking(s, map.get(keys.get(s.id) || '') || null, bring),
     ),
   };
 }
@@ -597,7 +636,8 @@ export async function refreshPublicTracking(env: PlatformEnv) {
  JOIN companies c ON c.id=t.company_id AND c.status='active' AND c.demo=0
  JOIN webshops w ON w.company_id=t.company_id AND w.id=t.webshop_id AND w.status='active'
  JOIN webshop_connections k ON k.company_id=t.company_id AND k.webshop_id=t.webshop_id AND k.provider='shopify'
- WHERE t.terminal=0 AND t.next_check<=? AND t.lease_until<=? AND COALESCE(unixepoch(t.attempted_at)*1000,0)<=? AND NOT EXISTS(SELECT 1 FROM public_signups p WHERE p.company_id=t.company_id AND p.trial_ends_at<=unixepoch())
+ WHERE t.terminal=0 AND t.next_check<=?
+ AND (t.carrier<>'bring' OR EXISTS(SELECT 1 FROM carrier_connections b WHERE b.company_id=t.company_id AND b.webshop_id=t.webshop_id AND b.provider='bring')) AND t.lease_until<=? AND COALESCE(unixepoch(t.attempted_at)*1000,0)<=? AND NOT EXISTS(SELECT 1 FROM public_signups p WHERE p.company_id=t.company_id AND p.trial_ends_at<=unixepoch())
  ORDER BY t.next_check,t.company_id,t.webshop_id LIMIT 40`)
       .bind(now, now, now - checkInterval)
       .all<Row & { shop_domain: string; credentials_encrypted: string }>()

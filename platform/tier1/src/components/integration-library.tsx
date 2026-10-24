@@ -91,6 +91,7 @@ export function useIntegrationLibrary() {
 type State = ReturnType<typeof useIntegrationLibrary>;
 const icons = {
   shipmondo: PackageCheck,
+  bring: PackageCheck,
   flatpay: CreditCard,
   shopify: ShoppingBag,
   dinero: Landmark,
