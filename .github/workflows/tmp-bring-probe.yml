@@ -1,0 +1,31 @@
+# Midlertidig diagnose af Bring-tracking (godkendt af René). Merges ikke; PR lukkes og branch slettes.
+name: tmp-bring-probe
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hent offentlig Shipmondo-side (kun status og hændelser udskrives)
+        run: |
+          cat > probe.mjs <<'JS'
+          for (const path of ['bring/70722152851273244', 'dao/00057151273846000122']) {
+            const r = await fetch('https://track.shipmondo.com/' + path, { redirect: 'manual', headers: { Accept: 'text/html', 'Accept-Language': 'da-DK,da;q=0.9' } });
+            const html = await r.text();
+            console.log('==', path, r.status, r.headers.get('content-type'), r.headers.get('location'), html.length);
+            const i = html.search(/window\.tracking\s*=/);
+            console.log('window.tracking at', i);
+            if (i < 0) continue;
+            const s = html.slice(i).replace(/^window\.tracking\s*=\s*/, '');
+            let d = 0, q = false, e = false, end = -1;
+            for (let k = 0; k < s.length; k++) { const c = s[k]; if (q) { if (e) e = false; else if (c === '\\') e = true; else if (c === '"') q = false; } else if (c === '"') q = true; else if (c === '{') d++; else if (c === '}' && --d === 0) { end = k + 1; break; } }
+            console.log('start char', JSON.stringify(s[0]), 'after object', JSON.stringify(s.slice(end, end + 10)));
+            const data = JSON.parse(s.slice(0, end));
+            console.log('keys', Object.keys(data));
+            const { tracking, shipping_agent, status, statusText, shipment_id } = data;
+            console.log(JSON.stringify({ tracking, shipping_agent, status, statusText, shipment_id }));
+            console.log('events', JSON.stringify((data.events || []).map((x) => ({ keys: Object.keys(x), status: x.status, statusText: x.statusText, datetime: x.datetime }))));
+          }
+          JS
+          node probe.mjs
