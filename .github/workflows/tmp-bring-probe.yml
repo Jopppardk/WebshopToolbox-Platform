@@ -7,25 +7,38 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Hent offentlig Shipmondo-side (kun status og hændelser udskrives)
+      - name: Læs Brings offentlige trackingdata (kun status og hændelser udskrives)
         run: |
           cat > probe.mjs <<'JS'
-          for (const path of ['bring/70722152851273244', 'dao/00057151273846000122']) {
-            const r = await fetch('https://track.shipmondo.com/' + path, { redirect: 'manual', headers: { Accept: 'text/html', 'Accept-Language': 'da-DK,da;q=0.9' } });
-            const html = await r.text();
-            console.log('==', path, r.status, r.headers.get('content-type'), r.headers.get('location'), html.length);
-            const i = html.search(/window\.tracking\s*=/);
-            console.log('window.tracking at', i);
-            if (i < 0) continue;
-            const s = html.slice(i).replace(/^window\.tracking\s*=\s*/, '');
-            let d = 0, q = false, e = false, end = -1;
-            for (let k = 0; k < s.length; k++) { const c = s[k]; if (q) { if (e) e = false; else if (c === '\\') e = true; else if (c === '"') q = false; } else if (c === '"') q = true; else if (c === '{') d++; else if (c === '}' && --d === 0) { end = k + 1; break; } }
-            console.log('start char', JSON.stringify(s[0]), 'after object', JSON.stringify(s.slice(end, end + 10)));
-            const data = JSON.parse(s.slice(0, end));
-            console.log('keys', Object.keys(data));
-            const { tracking, shipping_agent, status, statusText, shipment_id } = data;
-            console.log(JSON.stringify({ tracking, shipping_agent, status, statusText, shipment_id }));
-            console.log('events', JSON.stringify((data.events || []).map((x) => ({ keys: Object.keys(x), status: x.status, statusText: x.statusText, datetime: x.datetime }))));
+          const n = '70722152851273244';
+          const urls = [
+            'https://tracking.bring.com/api/v2/tracking.json?q=' + n + '&lang=da',
+            'https://tracking.bring.com/tracking/' + n + '?lang=da',
+            'https://api.bring.com/tracking/api/v2/tracking.json?q=' + n,
+          ];
+          const shape = (v, d = 0) =>
+            Array.isArray(v)
+              ? [v.length ? shape(v[0], d + 1) : 'empty', 'len=' + v.length]
+              : v && typeof v === 'object'
+                ? d > 6
+                  ? 'obj'
+                  : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, shape(x, d + 1)]))
+                : typeof v;
+          for (const url of urls) {
+            const r = await fetch(url, { redirect: 'manual', headers: { Accept: 'application/json, text/html' } });
+            const text = await r.text();
+            console.log('==', url, r.status, r.headers.get('content-type'), r.headers.get('location'), text.length);
+            try {
+              const data = JSON.parse(text);
+              console.log('shape', JSON.stringify(shape(data)));
+              for (const p of data.consignmentSet?.[0]?.packageSet || []) {
+                console.log('package', JSON.stringify({ packageNumber: p.packageNumber, statusDescription: p.statusDescription }));
+                console.log('events', JSON.stringify((p.eventSet || []).map((e) => ({ status: e.status, description: e.description, dateIso: e.dateIso, displayDate: e.displayDate, displayTime: e.displayTime, country: e.countryCode }))));
+              }
+            } catch {
+              console.log('not json; script srcs', [...text.matchAll(/<script[^>]*src="([^"]+)"/g)].map((m) => m[1]).slice(0, 10));
+              console.log('api paths', [...new Set([...text.matchAll(/["'](\/[a-z0-9/_.-]*api[a-z0-9/_.?=-]*)["']/gi)].map((m) => m[1]))].slice(0, 20));
+            }
           }
           JS
           node probe.mjs
