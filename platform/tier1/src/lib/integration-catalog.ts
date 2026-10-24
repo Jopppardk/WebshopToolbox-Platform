@@ -7,6 +7,13 @@ export const integrationCatalog = [
     category: 'Fragt',
   },
   {
+    id: 'bring',
+    name: 'Bring',
+    description:
+      'Hent trackingstatus for Bring-pakker på Forsendelser med en Mybring API-nøgle.',
+    category: 'Fragt',
+  },
+  {
     id: 'flatpay',
     name: 'Flatpay',
     description:

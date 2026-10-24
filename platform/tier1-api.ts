@@ -1,3 +1,4 @@
+import { handleBring } from './bring';
 import { handleShipmondo } from './shipmondo';
 import { handleTier1CustomApps } from './custom-apps';
 import { paymentProviderPattern } from './catalog';
@@ -73,6 +74,8 @@ export async function handleTier1(
     return handleLabel(request, env, actor, company.company_id, shop);
   if (path === '/shipmondo/connection')
     return handleShipmondo(request, env, actor, company.company_id, shop);
+  if (path === '/bring/connection')
+    return handleBring(request, env, actor, company.company_id, shop);
   if (path.startsWith('/performance/'))
     return handlePerformance(
       request,
