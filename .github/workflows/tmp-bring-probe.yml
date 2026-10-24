@@ -11,34 +11,15 @@ jobs:
         run: |
           cat > probe.mjs <<'JS'
           const n = '70722152851273244';
-          const urls = [
-            'https://tracking.bring.com/api/v2/tracking.json?q=' + n + '&lang=da',
-            'https://tracking.bring.com/tracking/' + n + '?lang=da',
-            'https://api.bring.com/tracking/api/v2/tracking.json?q=' + n,
-          ];
-          const shape = (v, d = 0) =>
-            Array.isArray(v)
-              ? [v.length ? shape(v[0], d + 1) : 'empty', 'len=' + v.length]
-              : v && typeof v === 'object'
-                ? d > 6
-                  ? 'obj'
-                  : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, shape(x, d + 1)]))
-                : typeof v;
-          for (const url of urls) {
-            const r = await fetch(url, { redirect: 'manual', headers: { Accept: 'application/json, text/html' } });
-            const text = await r.text();
-            console.log('==', url, r.status, r.headers.get('content-type'), r.headers.get('location'), text.length);
-            try {
-              const data = JSON.parse(text);
-              console.log('shape', JSON.stringify(shape(data)));
-              for (const p of data.consignmentSet?.[0]?.packageSet || []) {
-                console.log('package', JSON.stringify({ packageNumber: p.packageNumber, statusDescription: p.statusDescription }));
-                console.log('events', JSON.stringify((p.eventSet || []).map((e) => ({ status: e.status, description: e.description, dateIso: e.dateIso, displayDate: e.displayDate, displayTime: e.displayTime, country: e.countryCode }))));
-              }
-            } catch {
-              console.log('not json; script srcs', [...text.matchAll(/<script[^>]*src="([^"]+)"/g)].map((m) => m[1]).slice(0, 10));
-              console.log('api paths', [...new Set([...text.matchAll(/["'](\/[a-z0-9/_.-]*api[a-z0-9/_.?=-]*)["']/gi)].map((m) => m[1]))].slice(0, 20));
-            }
+          const r = await fetch('https://tracking.bring.com/tracking/' + n + '?lang=da', { redirect: 'manual', headers: { Accept: 'text/html' } });
+          const html = await r.text();
+          console.log('status', r.status, html.length);
+          for (const m of ['__NEXT_DATA__', 'self.__next_f', 'eventSet', 'dateIso', 'statusDescription', 'application/json', 'application/ld+json', '/api/']) {
+            const i = html.indexOf(m);
+            console.log(m, i);
           }
+          const i = html.indexOf('dateIso');
+          if (i >= 0) console.log('around dateIso', JSON.stringify(html.slice(Math.max(0, i - 300), i + 300).replace(/"(recipient|sender|name|address[^"]*|postalCode|city)"\s*:\s*"[^"]*"/gi, '"$1":"…"')));
+          console.log('scripts', [...html.matchAll(/<script([^>]*)>/g)].map((m) => m[1]).slice(0, 15));
           JS
           node probe.mjs
