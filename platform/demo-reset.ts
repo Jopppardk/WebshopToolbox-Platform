@@ -45,6 +45,7 @@ export const demoTables = [
   'shipment_tracking_cache',
   'shipping_events',
   'shipping_connections',
+  'carrier_connections',
   'order_refunds',
   'order_refund_checks',
   'platform_credit_notes',

@@ -27,9 +27,9 @@ export async function connectedIntegrations(
       : (
           await db
             .prepare(
-              'SELECT provider FROM shipping_connections WHERE company_id=? AND webshop_id=?',
+              'SELECT provider FROM shipping_connections WHERE company_id=? AND webshop_id=? UNION ALL SELECT provider FROM carrier_connections WHERE company_id=? AND webshop_id=?',
             )
-            .bind(company, shop)
+            .bind(company, shop, company, shop)
             .all<{ provider: string }>()
         ).results;
   const accounting = await db
@@ -70,7 +70,7 @@ export async function connectedIntegrations(
   return [
     ...shipping.map((p) => ({
       provider: p.provider,
-      display_name: 'Shipmondo',
+      display_name: p.provider === 'bring' ? 'Bring' : 'Shipmondo',
     })),
     ...(packaging
       ? [{ provider: 'emballage', display_name: 'Emballage Indberetning' }]
@@ -163,6 +163,20 @@ export async function handleTier1Connections(
         throw new HttpError(
           409,
           'Afbryd Shipmondo på virksomhedens webshops først.',
+        );
+      if (
+        b.action === 'remove' &&
+        b.provider === 'bring' &&
+        (await db
+          .prepare(
+            'SELECT 1 FROM carrier_connections WHERE company_id=? LIMIT 1',
+          )
+          .bind(company)
+          .first())
+      )
+        throw new HttpError(
+          409,
+          'Afbryd Bring på virksomhedens webshops først.',
         );
       await db.batch([
         db

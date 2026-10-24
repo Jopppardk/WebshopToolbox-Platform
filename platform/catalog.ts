@@ -17,6 +17,16 @@ export const catalog = [
     booking: false,
   },
   {
+    id: 'bring',
+    name: 'Bring',
+    category: 'Fragt',
+    description: 'Trackingstatus for Bring-pakker via Mybring på Forsendelser.',
+    kind: 'shipping',
+    optional: true,
+    history: false,
+    booking: false,
+  },
+  {
     id: 'shopify',
     name: 'Shopify',
     category: 'Webshop',
@@ -91,6 +101,7 @@ export const paymentProviderPattern = paymentProviders.join('|');
 // API base addresses the adapters call. The probe sends no credentials and reads no body.
 const endpoints: Record<(typeof catalog)[number]['id'], string> = {
   shipmondo: 'https://app.shipmondo.com/api/public/v3/shipments',
+  bring: 'https://api.bring.com/tracking/api/v2/tracking.json',
   shopify: 'https://admin.shopify.com/',
   dinero: 'https://api.dinero.dk/v1',
   flatpay: 'https://api.saga.valitor.com/panthro',
@@ -133,6 +144,7 @@ export async function integrationUsage(db: D1Database) {
   const row = await db
     .prepare(`SELECT
     (${active('shipping_connections', " AND t.provider='shipmondo'")}) AS shipmondo,
+    (${active('carrier_connections', " AND t.provider='bring'")}) AS bring,
     (${active('webshop_connections', " AND t.provider='shopify'")}) AS shopify,
     (${active('accounting_connections')}) AS dinero,
     (${active('payment_connections', " AND t.provider='flatpay'")}) AS flatpay,
