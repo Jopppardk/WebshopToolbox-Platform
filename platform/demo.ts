@@ -1108,11 +1108,11 @@ export async function demoTier1(
         !Number.isInteger(year) ||
         !Number.isInteger(month) ||
         year < Number(today.slice(0, 4)) - 9 ||
+        year > Number(today.slice(0, 4)) ||
         month < 1 ||
-        month > 12 ||
-        `${year}-${String(month).padStart(2, '0')}` > today.slice(0, 7)
+        month > 12
       )
-        throw new HttpError(400, 'Vælg en måned, der er begyndt.');
+        throw new HttpError(400, 'Vælg en måned fra 1 til 12.');
       return reply(demoDailySales(year, month, today));
     }
     if (path === '/shipments') {

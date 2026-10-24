@@ -45,6 +45,12 @@ const sum = (points: ChartPoint[], key: 'current' | 'previous') => {
     .filter((value): value is number => value !== null);
   return known.length ? known.reduce((total, value) => total + value, 0) : null;
 };
+// Last year's numbers for the months that have a number this year.
+const samePeriod = (points: ChartPoint[]) =>
+  sum(
+    points.filter((p) => p.current !== null),
+    'previous',
+  );
 export type ChartPoint = {
   label: string;
   title: string;
@@ -90,13 +96,8 @@ export function Performance({
     currentYear = Number(today.slice(0, 4)),
     currentMonth = Number(today.slice(5, 7));
   const [year, setYear] = useState(currentYear),
-    [selectedMonth, setMonth] = useState(currentMonth),
+    [month, setMonth] = useState(currentMonth),
     [supplier, setSupplier] = useState('all');
-  // A month that has not begun cannot be chosen; going back to this year shows the latest month.
-  const month =
-    year === currentYear
-      ? Math.min(selectedMonth, currentMonth)
-      : selectedMonth;
   const [revision, setRevision] = useState(0),
     [loading, setLoading] = useState(true),
     refresh = useRef(-1);
@@ -261,8 +262,9 @@ export function Performance({
               monetary
               currency={daily?.currency}
               points={dayPoints}
+              previousTotals
               unit="day"
-              summary={`${name[0].toLocaleUpperCase('da')}${name.slice(1)} ${year}${year === currentYear && month === currentMonth ? ' · Til dato' : ''}${daily?.missingDays ? ` · Delsum, ${daily.missingDays} ${daily.missingDays === 1 ? 'dag' : 'dage'} uden tal` : ''}`}
+              summary={`${name[0].toLocaleUpperCase('da')}${name.slice(1)} ${year}${year === currentYear && month === currentMonth ? ' · Til dato' : year === currentYear && month > currentMonth ? ' · Ikke begyndt' : ''}${daily?.missingDays ? ` · Delsum, ${daily.missingDays} ${daily.missingDays === 1 ? 'dag' : 'dage'} uden tal` : ''}`}
               error={current?.error}
               loading={dailyLoading}
               note={sourceNote(daily?.startDate, daily?.checkedAt)}
@@ -275,13 +277,11 @@ export function Performance({
                     value={month}
                     onChange={(event) => setMonth(Number(event.target.value))}
                   >
-                    {performanceMonths.map((_, i) =>
-                      year === currentYear && i + 1 > currentMonth ? null : (
-                        <option key={i} value={i + 1}>
-                          {monthName(i + 1)}
-                        </option>
-                      ),
-                    )}
+                    {performanceMonths.map((_, i) => (
+                      <option key={i} value={i + 1}>
+                        {monthName(i + 1)}
+                      </option>
+                    ))}
                   </select>
                 </label>
               }
@@ -295,6 +295,7 @@ export function Performance({
             color="#37867b"
             year={year}
             points={monthPoints(shop?.visits.months)}
+            previousTotals
             error={errors.shop || shop?.visits.error}
             loading={shopLoading}
             note={sourceNote(shop?.startDate, shop?.checkedAt)}
@@ -307,6 +308,7 @@ export function Performance({
             color="#567da3"
             year={year}
             points={monthPoints(shop?.orders.months)}
+            previousTotals
             error={errors.shop || shop?.orders.error}
             loading={shopLoading}
             note={sourceNote(shop?.startDate, shop?.checkedAt)}
@@ -331,6 +333,7 @@ export function Performance({
                 year={year}
                 monetary
                 points={monthPoints(finance?.revenue.months)}
+                previousTotals
                 error={errors.finance || finance?.revenue.error}
                 loading={financeLoading}
                 note={sourceNote(finance?.startDate, finance?.checkedAt)}
@@ -344,6 +347,7 @@ export function Performance({
                 year={year}
                 monetary
                 points={monthPoints(expenseMonths)}
+                previousTotals
                 error={errors.finance}
                 loading={financeLoading}
                 note={sourceNote(finance?.startDate, finance?.checkedAt)}
@@ -378,6 +382,7 @@ export function Performance({
                   year={year}
                   monetary
                   points={monthPoints(finance?.profit?.months)}
+                  previousTotals
                   error={errors.finance || finance?.profit?.error}
                   loading={financeLoading}
                   note={sourceNote(finance?.startDate, finance?.checkedAt)}
@@ -398,9 +403,12 @@ export function Performance({
         tomme for {year}, mens den stiplede linje viser hele måneden i{' '}
         {year - 1}. Indeværende måned vises til dato i månedsgraferne, og den
         stiplede linje viser hele måneder fra {year - 1}. Fremtidige perioder og
-        perioder uden tilstrækkelig historik vises som —. Leverandørfilteret
-        gælder kun omkostninger; “Uden leverandør” omfatter posteringer uden
-        tilknyttet leverandør. Tal genbruges i op til 15 minutter.
+        perioder uden tilstrækkelig historik vises som —. “{year - 1} samme
+        periode” summerer sidste års tal for de dage eller måneder, der har tal
+        i {year}, mens “Hele {year - 1}” og “Hele måneden {year - 1}” summerer
+        hele sidste års linje. Leverandørfilteret gælder kun omkostninger; “Uden
+        leverandør” omfatter posteringer uden tilknyttet leverandør. Tal
+        genbruges i op til 15 minutter.
         {shop?.timezone && ` Webshoppen opgøres i tidszonen ${shop.timezone}.`}
       </p>
     </div>
@@ -442,6 +450,7 @@ export function PerformanceChart({
   loading,
   controls,
   note,
+  previousTotals = false,
 }: {
   title: string;
   source: string;
@@ -458,6 +467,7 @@ export function PerformanceChart({
   loading: boolean;
   controls?: ReactNode;
   note: string;
+  previousTotals?: boolean;
 }) {
   const failure = error,
     data = points,
@@ -508,6 +518,19 @@ export function PerformanceChart({
             <p className="mt-1 text-2xl font-semibold tabular-nums sm:text-3xl">
               {loading || failure ? '—' : format(sum(data, 'current'))}
             </p>
+            {previousTotals && !loading && !failure && (
+              <p className="mt-1 text-xs text-muted-foreground tabular-nums">
+                {year - 1} samme periode:{' '}
+                <span className="font-medium text-foreground">
+                  {format(samePeriod(data))}
+                </span>
+                {' · '}
+                {daily ? `Hele måneden ${year - 1}` : `Hele ${year - 1}`}:{' '}
+                <span className="font-medium text-foreground">
+                  {format(sum(data, 'previous'))}
+                </span>
+              </p>
+            )}
           </div>
           <div className="flex gap-4 pb-1 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5">

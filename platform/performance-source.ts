@@ -461,13 +461,9 @@ export async function handlePerformance(
     month = Number(rawMonth);
   if (
     path === '/performance/daily' &&
-    (!rawMonth ||
-      !/^\d{1,2}$/.test(rawMonth) ||
-      month < 1 ||
-      month > 12 ||
-      `${year}-${String(month).padStart(2, '0')}` > danishDate().slice(0, 7))
+    (!rawMonth || !/^\d{1,2}$/.test(rawMonth) || month < 1 || month > 12)
   )
-    throw new HttpError(400, 'Vælg en måned, der er begyndt.');
+    throw new HttpError(400, 'Vælg en måned fra 1 til 12.');
   await requireCompany(
     env.PLATFORM_DB,
     actor,
