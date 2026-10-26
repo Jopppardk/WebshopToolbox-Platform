@@ -6,6 +6,7 @@ export type Tax = {
 };
 export type Address = {
   name?: string | null;
+  company?: string | null;
   address1?: string | null;
   address2?: string | null;
   zip?: string | null;
@@ -327,7 +328,7 @@ export function checkInvoice(order: InvoiceSource): CheckedInvoice {
     number: order.name,
     date: shipmentDate(order),
     currency,
-    customer: { ...address, name },
+    customer: customerOf(address, name),
     countryCode: (order.shippingAddress || address).countryCodeV2 || null,
     paid: order.displayFinancialStatus === 'PAID',
     lines,
@@ -338,9 +339,17 @@ export function checkInvoice(order: InvoiceSource): CheckedInvoice {
     taxesIncluded: order.taxesIncluded,
   };
 }
+// The company name is only set when the customer entered one, and is left out of the fingerprint, so invoices
+// issued before it was shown keep their fingerprint (and can still be sent and booked).
+function customerOf(address: Address, name: string) {
+  const { company, ...rest } = address;
+  const firm = company?.trim();
+  return firm ? { ...rest, name, company: firm } : { ...rest, name };
+}
 export async function invoiceFingerprint(invoice: CheckedInvoice) {
   // Payment state may change without changing the invoice's commercial content.
-  const { paid: _paid, ...content } = invoice;
+  const { company: _company, ...customer } = invoice.customer;
+  const { paid: _paid, ...content } = { ...invoice, customer };
   return Array.from(
     new Uint8Array(
       await crypto.subtle.digest(

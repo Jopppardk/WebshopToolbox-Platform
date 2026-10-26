@@ -333,8 +333,13 @@ export async function buildInvoicePdf(
     height += rowHeight;
   }
   if (chunk.length) chunks.push(chunk);
+  // A business customer's company name heads the address (only when one is entered), the contact person follows.
+  const company = checked.customer.company?.trim();
   const customerLines = [
-    checked.customer.name,
+    company,
+    company?.toLowerCase() === checked.customer.name.toLowerCase()
+      ? undefined
+      : checked.customer.name,
     address.address1,
     address.address2,
     [address.zip, address.city].filter(Boolean).join(' '),
