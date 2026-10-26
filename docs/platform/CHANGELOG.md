@@ -2,6 +2,8 @@
 
 Nyeste først. Skriv en ny note øverst for hver udgivet ændring: dato, hvem (Codex/Claude), hvad, filer/endpoints, migrering og hvad der ikke er verificeret. Indtil 6. oktober 2026 hed filen HANDOVER.md; noterne og de historiske afsnit nedenfor er flyttet hertil uændret. Aktuel status står i [HANDOVER.md](HANDOVER.md).
 
+> 26. oktober 2026 – Udgivet (Claude): PR #182 (firmanavn på fakturaer) er udgivet på dev og prod fra main `39f2761a82336087bca1e469de29394310e5b9d2` (workflow-run 40336190725, begge HTTP-efterkontroller grønne). Ingen migrering. Ikke set på en rigtig faktura med firmanavn efter udgivelsen.
+
 > 26. oktober 2026 – Firmanavn på fakturaer (Claude): firmanavnet fra Shopify-adressen kom aldrig med på fakturaen, fordi `company` ikke blev hentet (`orderFields` i `platform/invoice-source.ts`). Nu hentes det på faktura- og leveringsadressen; `checkInvoice` sætter `customer.company` kun, når kunden har udfyldt et firmanavn, og faktura-PDF'en (`invoice-pdf.ts`) viser det øverst i kundeadressen med fed, efterfulgt af kontaktpersonen (ikke gentaget, hvis navnene er ens). Salgsforhåndsvisningen viser det også. Firmanavnet indgår ikke i `invoiceFingerprint`, så allerede udstedte fakturaer kan stadig sendes og bogføres; de ændres ikke og får ikke firmanavnet. Mailens {{kundenavn}} er fortsat personens navn. Ingen migrering. Fundet på Sablens ordre #2715; ikke set mod rigtige Shopify-data.
 
 > 24. oktober 2026 – Udgivet (Claude): PR #179 (Performance: sidste års totaler på alle seks grafer og kommende måneder i Salg pr. dag) er udgivet på dev og prod fra main `fae71e291e8d991e726c2143512cf0172e420ad2` (workflow-run 40069678864, begge HTTP-efterkontroller grønne). Ingen migrering. Ikke set med rigtige Shopify-/Dinero-tal efter udgivelsen.
