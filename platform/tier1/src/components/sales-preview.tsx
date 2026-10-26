@@ -123,6 +123,9 @@ export function SalesPreview({
             {invoice && result && (
               <>
                 <div className="rounded-xl border p-4">
+                  {invoice.customer.company && (
+                    <p className="font-semibold">{invoice.customer.company}</p>
+                  )}
                   <p className="font-semibold">{invoice.customer.name}</p>
                   <p>
                     {invoice.customer.address1} {invoice.customer.address2}

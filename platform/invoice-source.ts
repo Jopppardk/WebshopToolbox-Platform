@@ -13,8 +13,8 @@ const page = 'pageInfo { hasNextPage endCursor }';
 export const orderFields = `id name email createdAt updatedAt processedAt test edited cancelledAt taxesIncluded presentmentCurrencyCode paymentGatewayNames displayFinancialStatus displayFulfillmentStatus
   fulfillments { createdAt status }
   customer { displayName firstName lastName }
-  billingAddress { name address1 address2 zip city country countryCodeV2 }
-  shippingAddress { name address1 address2 zip city country countryCodeV2 }
+  billingAddress { name company address1 address2 zip city country countryCodeV2 }
+  shippingAddress { name company address1 address2 zip city country countryCodeV2 }
   currentTotalPriceSet ${money} currentSubtotalPriceSet ${money} currentTotalTaxSet ${money} totalRefundedSet ${money} totalPriceSet ${money} totalTaxSet ${money} subtotalPriceSet ${money}
   lineItems(first:100) { nodes { ${itemFields} } ${page} }
   shippingLines(first:25) { nodes { ${shippingFields} } ${page} }`;

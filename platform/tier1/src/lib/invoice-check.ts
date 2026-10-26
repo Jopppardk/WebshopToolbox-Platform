@@ -6,6 +6,7 @@ export type Tax = {
 };
 export type Address = {
   name?: string | null;
+  company?: string | null;
   address1?: string | null;
   address2?: string | null;
   zip?: string | null;
