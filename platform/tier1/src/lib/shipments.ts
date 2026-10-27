@@ -353,7 +353,7 @@ export function buildShipment(order: RawOrder, f: RawFulfillment): Shipment {
 /** Successful fulfillments of an order, newest first. Cancelled orders and fulfillments are left out. */
 export function orderShipments(order: RawOrder): Shipment[] {
   if (order.cancelledAt) return [];
-  return (order.fulfillments || [])
+  const all = (order.fulfillments || [])
     .filter((f) => f && f.status === 'SUCCESS' && validTime(f.createdAt))
     .flatMap((f) => {
       const parcels = (f.trackingInfo || []).filter((t) => t.number || t.url);
@@ -366,6 +366,39 @@ export function orderShipments(order: RawOrder): Shipment[] {
         }),
       );
     });
+  // Shopify splits an order into one fulfillment per fulfillment order (e.g. an engraving line and the product), and
+  // Shipmondo reports the same parcel on each. One parcel is one shipment: the furthest-tracked copy is kept, then the
+  // first created, so its id stays the same between reads.
+  const rank = (s: Shipment) => [
+    s.delivered ? 1 : 0,
+    s.steps.filter((x) => x.reached).length,
+    s.events.length,
+    -Date.parse(s.shippedAt),
+  ];
+  const better = (a: Shipment, b: Shipment) => {
+    const x = rank(a),
+      y = rank(b);
+    const i = x.findIndex((v, n) => v !== y[n]);
+    return i >= 0 ? x[i] > y[i] : a.id < b.id;
+  };
+  const parcels = new Map<string, Shipment>(),
+    out: Shipment[] = [];
+  for (const s of all) {
+    if (!s.trackingNumber) {
+      out.push(s);
+      continue;
+    }
+    const key = (s.carrier || s.carrierName || '') + '|' + s.trackingNumber,
+      kept = parcels.get(key);
+    if (!kept) {
+      parcels.set(key, s);
+      out.push(s);
+    } else if (better(s, kept)) {
+      parcels.set(key, s);
+      out[out.indexOf(kept)] = s;
+    }
+  }
+  return out;
 }
 
 const day = (value: string) =>

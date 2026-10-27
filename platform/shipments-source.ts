@@ -30,7 +30,7 @@ const safe = (error: unknown) =>
     ? error.message
     : 'Forsendelserne kunne ikke hentes fra Shopify. Prøv igen senere.';
 const cache = {
-  prefix: 'shipments:v2:',
+  prefix: 'shipments:v3:',
   busy: 'Forsendelserne hentes allerede. Prøv igen om lidt.',
   safe,
 };
