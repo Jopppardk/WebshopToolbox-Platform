@@ -367,38 +367,42 @@ export function orderShipments(order: RawOrder): Shipment[] {
       );
     });
   // Shopify splits an order into one fulfillment per fulfillment order (e.g. an engraving line and the product), and
-  // Shipmondo reports the same parcel on each. One parcel is one shipment: the furthest-tracked copy is kept, then the
-  // first created, so its id stays the same between reads.
-  const rank = (s: Shipment) => [
+  // Shipmondo reports the same parcel on each. One parcel is one shipment: the tracking comes from the furthest-tracked
+  // copy, while id and shippedAt come from the first created, so the parcel (and its tracking cache) keeps its identity.
+  const progress = (s: Shipment) => [
     s.delivered ? 1 : 0,
     s.steps.filter((x) => x.reached).length,
     s.events.length,
-    -Date.parse(s.shippedAt),
   ];
-  const better = (a: Shipment, b: Shipment) => {
-    const x = rank(a),
-      y = rank(b);
-    const i = x.findIndex((v, n) => v !== y[n]);
-    return i >= 0 ? x[i] > y[i] : a.id < b.id;
+  const further = (a: Shipment, b: Shipment) => {
+    const x = progress(a),
+      y = progress(b),
+      i = x.findIndex((v, n) => v !== y[n]);
+    return i >= 0 && x[i] > y[i];
   };
-  const parcels = new Map<string, Shipment>(),
-    out: Shipment[] = [];
+  const earlier = (a: Shipment, b: Shipment) =>
+    Date.parse(a.shippedAt) - Date.parse(b.shippedAt) || (a.id < b.id ? -1 : 1);
+  const groups = new Map<string, Shipment[]>(),
+    out: Array<Shipment | Shipment[]> = [];
   for (const s of all) {
     if (!s.trackingNumber) {
       out.push(s);
       continue;
     }
     const key = (s.carrier || s.carrierName || '') + '|' + s.trackingNumber,
-      kept = parcels.get(key);
-    if (!kept) {
-      parcels.set(key, s);
-      out.push(s);
-    } else if (better(s, kept)) {
-      parcels.set(key, s);
-      out[out.indexOf(kept)] = s;
+      group = groups.get(key);
+    if (group) group.push(s);
+    else {
+      groups.set(key, [s]);
+      out.push(groups.get(key)!);
     }
   }
-  return out;
+  return out.map((x) => {
+    if (!Array.isArray(x)) return x;
+    const first = [...x].sort(earlier)[0],
+      tracked = x.reduce((best, s) => (further(s, best) ? s : best), first);
+    return { ...tracked, id: first.id, shippedAt: first.shippedAt };
+  });
 }
 
 const day = (value: string) =>
