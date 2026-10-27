@@ -353,7 +353,7 @@ export function buildShipment(order: RawOrder, f: RawFulfillment): Shipment {
 /** Successful fulfillments of an order, newest first. Cancelled orders and fulfillments are left out. */
 export function orderShipments(order: RawOrder): Shipment[] {
   if (order.cancelledAt) return [];
-  return (order.fulfillments || [])
+  const all = (order.fulfillments || [])
     .filter((f) => f && f.status === 'SUCCESS' && validTime(f.createdAt))
     .flatMap((f) => {
       const parcels = (f.trackingInfo || []).filter((t) => t.number || t.url);
@@ -366,6 +366,43 @@ export function orderShipments(order: RawOrder): Shipment[] {
         }),
       );
     });
+  // Shopify splits an order into one fulfillment per fulfillment order (e.g. an engraving line and the product), and
+  // Shipmondo reports the same parcel on each. One parcel is one shipment: the tracking comes from the furthest-tracked
+  // copy, while id and shippedAt come from the first created, so the parcel (and its tracking cache) keeps its identity.
+  const progress = (s: Shipment) => [
+    s.delivered ? 1 : 0,
+    s.steps.filter((x) => x.reached).length,
+    s.events.length,
+  ];
+  const further = (a: Shipment, b: Shipment) => {
+    const x = progress(a),
+      y = progress(b),
+      i = x.findIndex((v, n) => v !== y[n]);
+    return i >= 0 && x[i] > y[i];
+  };
+  const earlier = (a: Shipment, b: Shipment) =>
+    Date.parse(a.shippedAt) - Date.parse(b.shippedAt) || (a.id < b.id ? -1 : 1);
+  const groups = new Map<string, Shipment[]>(),
+    out: Array<Shipment | Shipment[]> = [];
+  for (const s of all) {
+    if (!s.trackingNumber) {
+      out.push(s);
+      continue;
+    }
+    const key = (s.carrier || s.carrierName || '') + '|' + s.trackingNumber,
+      group = groups.get(key);
+    if (group) group.push(s);
+    else {
+      groups.set(key, [s]);
+      out.push(groups.get(key)!);
+    }
+  }
+  return out.map((x) => {
+    if (!Array.isArray(x)) return x;
+    const first = [...x].sort(earlier)[0],
+      tracked = x.reduce((best, s) => (further(s, best) ? s : best), first);
+    return { ...tracked, id: first.id, shippedAt: first.shippedAt };
+  });
 }
 
 const day = (value: string) =>
