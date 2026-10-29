@@ -58,6 +58,8 @@ export type ShipmentList = {
   since: string;
   truncated: boolean;
   shipments: Shipment[];
+  // The last list read from Shopify, shown while a fresh one is fetched.
+  stale?: boolean;
   shipmondo?: {
     connected: boolean;
     lastEventAt: string | null;
