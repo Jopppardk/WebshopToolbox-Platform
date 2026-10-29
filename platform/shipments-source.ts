@@ -1,5 +1,5 @@
 import { jsonBody } from './invitations';
-import { enrichPublicTracking } from './public-tracking';
+import { enrichPublicTracking, trackingSourceKey } from './public-tracking';
 import { requireCompany, requireWebshop } from './auth';
 import { shopAccess, orderQuery } from './invoice-source';
 import { dataStartDate } from './tier1-history';
@@ -34,6 +34,12 @@ const cache = {
   busy: 'Forsendelserne hentes allerede. Prøv igen om lidt.',
   safe,
 };
+// The last list read from Shopify outlives the five-minute cache. The first visit of the day (or after a pause) shows
+// it at once when asked (stale=1, only Forsendelser on opening), marked stale and without foreground tracking lookups,
+// while the browser asks again for the fresh list. Other readers, such as the dashboard counts, always get the fresh one.
+// It is only reused for the same webshop connection and data start, and for at most three days.
+const lastPrefix = 'shipments:last:v1:';
+const lastMaxAge = 3 * 86400000;
 const copenhagenDay = (value: string) =>
   new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/Copenhagen',
@@ -170,6 +176,54 @@ export async function handleShipments(
       'Forbind webshoppen under Integrationer for at se forsendelser.',
     );
   const start = await dataStartDate(env, company, shop, 'shopify');
+  const connection = JSON.stringify([
+      saved.shop_domain,
+      saved.credentials_encrypted,
+    ]),
+    lastKey =
+      lastPrefix +
+      (await trackingSourceKey(JSON.stringify([env.PLATFORM_ENV, shop, days]))),
+    lastSource = await trackingSourceKey(JSON.stringify([connection, start]));
+  const ttl = 5 * 60000;
+  if (!manual && !force && url.searchParams.get('stale') === '1') {
+    const row = await env.PLATFORM_DB.prepare(
+      'SELECT setting_value FROM finance_state WHERE tenant=? AND setting_key=?',
+    )
+      .bind(company, lastKey)
+      .first<{ setting_value: string }>();
+    const last = row
+      ? (JSON.parse(row.setting_value) as {
+          source: string;
+          savedAt: number;
+          data: ShipmentList;
+        })
+      : null;
+    const age = last ? Date.now() - last.savedAt : Infinity;
+    // A list younger than the cache is served by the cache below, with the usual tracking lookups.
+    if (last?.source === lastSource && age >= ttl && age < lastMaxAge) {
+      const window = addDays(danishDate(), -days),
+        since = window > start ? window : start;
+      const list: ShipmentList = {
+        ...last.data,
+        since,
+        shipments: last.data.shipments.filter(
+          (s) => copenhagenDay(s.shippedAt) >= since,
+        ),
+      };
+      return reply({
+        ...(await enrichPublicTracking(
+          env,
+          company,
+          shop,
+          list,
+          connection,
+          undefined,
+          false,
+        )),
+        stale: true,
+      });
+    }
+  }
   // Tracking changes during the day, so the list is reused for five minutes; Opdatér fetches again after a minute.
   const list = await cachedRead(
     env,
@@ -177,18 +231,27 @@ export async function handleShipments(
     cache,
     ['shopify', shop, days],
     [saved.shop_domain, saved.credentials_encrypted, start, danishDate()],
-    () => readShipments(env, company, shop, days, start),
-    () => 5 * 60000,
+    async () => {
+      const read = await readShipments(env, company, shop, days, start);
+      await env.PLATFORM_DB.prepare(
+        'INSERT INTO finance_state(tenant,setting_key,setting_value) VALUES(?,?,?) ON CONFLICT(tenant,setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=CURRENT_TIMESTAMP',
+      )
+        .bind(
+          company,
+          lastKey,
+          JSON.stringify({
+            source: lastSource,
+            savedAt: Date.now(),
+            data: read,
+          }),
+        )
+        .run();
+      return read;
+    },
+    () => ttl,
     force,
   );
   return reply(
-    await enrichPublicTracking(
-      env,
-      company,
-      shop,
-      list,
-      JSON.stringify([saved.shop_domain, saved.credentials_encrypted]),
-      manualId,
-    ),
+    await enrichPublicTracking(env, company, shop, list, connection, manualId),
   );
 }

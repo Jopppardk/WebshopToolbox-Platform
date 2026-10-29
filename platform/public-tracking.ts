@@ -492,6 +492,7 @@ export async function enrichPublicTracking(
   list: ShipmentList,
   source: string,
   manualId?: string,
+  lookup = true,
 ) {
   if (manualId !== undefined && !list.shipments.some((s) => s.id === manualId))
     throw new HttpError(
@@ -580,8 +581,9 @@ export async function enrichPublicTracking(
       .all<Row>()
   ).results;
   const needed = new Set(keys.values()),
-    due =
-      manualId !== undefined
+    due = !lookup
+      ? []
+      : manualId !== undefined
         ? rows.filter((r) => r.parcel_key === keys.get(manualId) && !r.terminal)
         : rows
             .filter(

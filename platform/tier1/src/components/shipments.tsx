@@ -461,7 +461,8 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
       key = `${webshopId}:${days}`;
     refresh.current = false;
     // Another webshop or period is never shown under this one's name while it loads.
-    if (loadedFor.current !== key) {
+    const first = loadedFor.current !== key;
+    if (first) {
       setData(null);
       setOpen(new Set());
       setTracking(null);
@@ -470,34 +471,41 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
     }
     setLoading(true);
     setError('');
+    const load = async (stale: boolean) => {
+      let response: Response, value: ShipmentList & { error?: string };
+      // Another tab or user may be fetching the same list; wait for them instead of failing.
+      for (let attempt = 0; ; attempt++) {
+        response = await tier1Fetch(
+          `/api/shipments?days=${days}${forced ? '&refresh=1' : stale ? '&stale=1' : ''}`,
+          {
+            cache: 'no-store',
+            signal: AbortSignal.any([
+              controller.signal,
+              AbortSignal.timeout(120000),
+            ]),
+          },
+        );
+        value = await response.json();
+        if (
+          response.status !== 409 ||
+          !/hentes allerede/.test(value.error || '') ||
+          attempt >= 30
+        )
+          break;
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        if (controller.signal.aborted) return null;
+      }
+      if (!response.ok)
+        throw Error(value.error || 'Forsendelserne kunne ikke hentes.');
+      if (!controller.signal.aborted) setData(value);
+      return value;
+    };
     void (async () => {
       try {
-        let response: Response, value: ShipmentList & { error?: string };
-        // Another tab or user may be fetching the same list; wait for them instead of failing.
-        for (let attempt = 0; ; attempt++) {
-          response = await tier1Fetch(
-            `/api/shipments?days=${days}${forced ? '&refresh=1' : ''}`,
-            {
-              cache: 'no-store',
-              signal: AbortSignal.any([
-                controller.signal,
-                AbortSignal.timeout(120000),
-              ]),
-            },
-          );
-          value = await response.json();
-          if (
-            response.status !== 409 ||
-            !/hentes allerede/.test(value.error || '') ||
-            attempt >= 30
-          )
-            break;
-          await new Promise((resolve) => setTimeout(resolve, 3000));
-          if (controller.signal.aborted) return;
-        }
-        if (!response.ok)
-          throw Error(value.error || 'Forsendelserne kunne ikke hentes.');
-        if (!controller.signal.aborted) setData(value);
+        // On opening the page the server may answer at once with the last list it read (stale); the fresh list
+        // from Shopify replaces it when it arrives. A list already on screen is only ever replaced by a fresh one.
+        const value = await load(first);
+        if (value?.stale && !controller.signal.aborted) await load(false);
       } catch (e) {
         if (!controller.signal.aborted) {
           setData(null);
@@ -660,6 +668,7 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
           {data
             ? ` · Hentet ${formatDateTime(data.checkedAt)} · Ordrer fra ${formatDate(data.since)}`
             : ''}
+          {data?.stale ? ' · Henter nyeste fra Shopify…' : ''}
         </p>
         <Button
           variant="link"
