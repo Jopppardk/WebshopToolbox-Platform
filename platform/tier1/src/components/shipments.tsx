@@ -471,12 +471,12 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
     }
     setLoading(true);
     setError('');
-    const load = async (fresh: boolean) => {
+    const load = async (stale: boolean) => {
       let response: Response, value: ShipmentList & { error?: string };
       // Another tab or user may be fetching the same list; wait for them instead of failing.
       for (let attempt = 0; ; attempt++) {
         response = await tier1Fetch(
-          `/api/shipments?days=${days}${forced ? '&refresh=1' : fresh ? '&fresh=1' : ''}`,
+          `/api/shipments?days=${days}${forced ? '&refresh=1' : stale ? '&stale=1' : ''}`,
           {
             cache: 'no-store',
             signal: AbortSignal.any([
@@ -504,8 +504,8 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
       try {
         // On opening the page the server may answer at once with the last list it read (stale); the fresh list
         // from Shopify replaces it when it arrives. A list already on screen is only ever replaced by a fresh one.
-        const value = await load(!first);
-        if (value?.stale && !controller.signal.aborted) await load(true);
+        const value = await load(first);
+        if (value?.stale && !controller.signal.aborted) await load(false);
       } catch (e) {
         if (!controller.signal.aborted) {
           setData(null);

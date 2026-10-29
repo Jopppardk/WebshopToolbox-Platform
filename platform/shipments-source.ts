@@ -35,7 +35,8 @@ const cache = {
   safe,
 };
 // The last list read from Shopify outlives the five-minute cache. The first visit of the day (or after a pause) shows
-// it at once, marked stale and without foreground tracking lookups, while the browser asks for a fresh list (fresh=1).
+// it at once when asked (stale=1, only Forsendelser on opening), marked stale and without foreground tracking lookups,
+// while the browser asks again for the fresh list. Other readers, such as the dashboard counts, always get the fresh one.
 // It is only reused for the same webshop connection and data start, and for at most three days.
 const lastPrefix = 'shipments:last:v1:';
 const lastMaxAge = 3 * 86400000;
@@ -184,7 +185,7 @@ export async function handleShipments(
       (await trackingSourceKey(JSON.stringify([env.PLATFORM_ENV, shop, days]))),
     lastSource = await trackingSourceKey(JSON.stringify([connection, start]));
   const ttl = 5 * 60000;
-  if (!manual && !force && url.searchParams.get('fresh') !== '1') {
+  if (!manual && !force && url.searchParams.get('stale') === '1') {
     const row = await env.PLATFORM_DB.prepare(
       'SELECT setting_value FROM finance_state WHERE tenant=? AND setting_key=?',
     )
