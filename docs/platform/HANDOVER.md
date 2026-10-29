@@ -66,7 +66,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 
 - **Webshop-synkronisering (custom app til LA Trading, udgivet 12. oktober):** opretter og synkroniserer valgte produkter og kollektioner fra én webshop til en anden, lager begge veje, udeladt af modtagerens lagerværdi. Mangler: en platformadministrator slår appen til for LA Trading i Tier 0, og modtagerens Shopify-app skal have write_products, write_inventory og read_locations (kilden read_locations). Første rigtige kørsel er ikke set.
 
-- **B2B-kunder, der betaler på faktura (ikke udgivet):** debitorkonto, bogføring af salg på betalingsbetingelser på den, automatiske indbetalingsbilag (bank eller mellemregning mod debitor) og forfaldsdato/betalingsoplysninger på fakturaen. Kræver migration 0052 og read_payment_terms i kundens Shopify-app. Ikke afprøvet mod rigtig Shopify B2B eller Dinero.
+- **B2B-kunder, der betaler på faktura (udgivet 29. oktober 2026, dev og prod, run 40860338370, main `d0d700c`, migration 0052 kørt):** debitorkonto, bogføring af salg på betalingsbetingelser på den, automatiske indbetalingsbilag (bank eller mellemregning mod debitor) og forfaldsdato/betalingsoplysninger på fakturaen. Slås til ved at vælge debitorkontoen; kræver read_payment_terms i kundens Shopify-app. Ikke afprøvet mod rigtig Shopify B2B eller Dinero.
 
 **Mangler**
 - **Svenske produktnavne på fakturaer:** kræver read_translations i kundens Shopify-app; ellers danske navne.
