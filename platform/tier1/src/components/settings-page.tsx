@@ -279,7 +279,18 @@ export function Settings({
       webshops.length > 1
         ? webshops.find((shop) => shop.id === webshopId)?.name
         : undefined;
-  const Field = ({ name, label }: { name: keyof Accounts; label: string }) => (
+  const Field = ({
+    name,
+    label,
+    optional,
+    hint,
+  }: {
+    name: keyof Accounts;
+    label: string;
+    /** Shown as the empty choice, so an optional account can be cleared again. */
+    optional?: string;
+    hint?: string;
+  }) => (
     <label className="block">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       {name === 'vatCode' || name === 'noVatCode' ? (
@@ -333,8 +344,11 @@ export function Settings({
             setAccounts((a) => ({ ...a, [name]: e.target.value }))
           }
         >
+          {optional && accounts[name] && (
+            <NativeSelectOption value="">{optional}</NativeSelectOption>
+          )}
           <NativeSelectOption value={accounts[name]}>
-            {accounts[name]}
+            {accounts[name] || optional}
           </NativeSelectOption>
           {chart.map((item) => (
             <NativeSelectOption
@@ -358,6 +372,9 @@ export function Settings({
           />
           <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#c09960]" />
         </div>
+      )}
+      {hint && (
+        <span className="mt-1 block text-xs text-muted-foreground">{hint}</span>
       )}
       {perShop && (webshopAccountKeys as readonly string[]).includes(name) && (
         <span className="mt-1 block text-xs text-muted-foreground">
@@ -1190,6 +1207,13 @@ export function Settings({
                   <Field name="fees" label="Gebyrkonto" />
                   <Field name="clearing" label="Mellemregningskonto" />
                   <Field name="bank" label="Bankkonto til udbetalinger" />
+                  {/* Called as a plain render helper (Field has no hooks). */}
+                  {Field({
+                    name: 'receivables',
+                    label: 'Debitorkonto til salg på faktura (B2B)',
+                    optional: 'Ingen – bogfør som andre ordrer',
+                    hint: 'Ordrer med betalingsbetingelser i Shopify bogføres her i stedet for på mellemregningskontoen, og indbetalingerne bogføres fra den til bankkontoen (manuel betaling) eller mellemregningskontoen (betaling via en betalingsudbyder). Kræver read_payment_terms i Shopify-appen.',
+                  })}
                 </div>
                 <div className="flex justify-end border-t p-4">
                   <Button className="h-10 rounded-xl px-4" onClick={onSave}>

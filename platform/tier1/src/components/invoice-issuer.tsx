@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react';
 import { tier1Fetch as fetch, tier1Url } from '@/platform/transport';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-type Design = { accent: string; layout: 'classic' | 'modern'; footer: string };
+type Design = {
+  accent: string;
+  layout: 'classic' | 'modern';
+  footer: string;
+  payment?: string;
+};
 type Settings = {
   name: string;
   address: string;
@@ -299,6 +304,24 @@ export function InvoiceIssuer({
                 change({ design: { ...value.design, footer: e.target.value } })
               }
             />
+          </label>
+          <label className="block text-sm">
+            Betalingsoplysninger til fakturaer med betalingsbetingelser
+            (valgfri)
+            <Input
+              maxLength={180}
+              placeholder="Reg.nr. 1234 · Kontonr. 1234567890"
+              value={value?.design.payment || ''}
+              onChange={(e) =>
+                value &&
+                change({ design: { ...value.design, payment: e.target.value } })
+              }
+            />
+            <span className="mt-1 block text-xs text-muted-foreground">
+              Vises sammen med forfaldsdatoen på fakturaer til kunder, der
+              betaler på faktura (betalingsbetingelser i Shopify), så længe
+              ordren ikke er betalt.
+            </span>
           </label>
           <Button onClick={() => void save()}>
             {busy ? 'Gemmer…' : 'Gem fakturadesign'}

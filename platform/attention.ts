@@ -41,17 +41,20 @@ const place = (
     : provider === 'shopify' &&
         (module === 'order_refunds' || module === 'refunds')
       ? { view: 'refunds', noun: 'Tilbagebetaling' }
-      : provider === 'shopify' && module === 'stocktake'
-        ? { view: 'inventory', noun: 'Lagerregulering' }
-        : provider === 'invoice' || provider === 'credit'
-          ? {
-              view: 'orders',
-              noun: provider === 'credit' ? 'Kreditnotamail' : 'Fakturamail',
-            }
-          : { view: 'payouts', noun: 'Udbetaling' };
+      : provider === 'shopify' && module === 'order_payments'
+        ? { view: 'orders', noun: 'Indbetaling' }
+        : provider === 'shopify' && module === 'stocktake'
+          ? { view: 'inventory', noun: 'Lagerregulering' }
+          : provider === 'invoice' || provider === 'credit'
+            ? {
+                view: 'orders',
+                noun: provider === 'credit' ? 'Kreditnotamail' : 'Fakturamail',
+              }
+            : { view: 'payouts', noun: 'Udbetaling' };
 const jobs: Record<string, [string, string]> = {
   sales: ['shopify', 'orders'],
   order_refunds: ['shopify', 'order_refunds'],
+  order_payments: ['shopify', 'order_payments'],
   payouts: ['shopify', 'payouts'],
   flatpay: ['flatpay', 'payments'],
   invoice: ['invoice', 'orders'],
@@ -86,7 +89,8 @@ export async function attention(
     wantsRefunds = !!automation.refunds;
   // Names for orders and refunds, so the list says "Ordre #2701" rather than an ID.
   const orderName = `(SELECT json_extract(o.payload_json,'$.name') FROM operation_snapshots o WHERE o.company_id=a.company_id AND o.webshop_id=a.webshop_id AND o.module='orders' AND o.external_id=a.external_id)`;
-  const refundOrder = `(SELECT json_extract(o.payload_json,'$.name') FROM order_refunds r JOIN operation_snapshots o ON o.company_id=r.company_id AND o.webshop_id=r.webshop_id AND o.module='orders' AND o.external_id=r.order_id WHERE r.company_id=a.company_id AND r.webshop_id=a.webshop_id AND r.external_id=a.external_id)`;
+  // A refund's or a payment's order (they have their own tables).
+  const refundOrder = `COALESCE((SELECT json_extract(o.payload_json,'$.name') FROM order_refunds r JOIN operation_snapshots o ON o.company_id=r.company_id AND o.webshop_id=r.webshop_id AND o.module='orders' AND o.external_id=r.order_id WHERE r.company_id=a.company_id AND r.webshop_id=a.webshop_id AND r.external_id=a.external_id),(SELECT json_extract(r.payload_json,'$.orderName') FROM order_payments r WHERE r.company_id=a.company_id AND r.webshop_id=a.webshop_id AND r.external_id=a.external_id))`;
   const [failed, uncertain, marketRows, waiting] = await Promise.all([
     db
       .prepare(
@@ -374,6 +378,7 @@ export async function dismissedAttention(
 const automationFor: Record<string, (a: Record<string, unknown>) => boolean> = {
   sales: (a) => !!a.sales,
   order_refunds: (a) => !!a.refunds,
+  order_payments: (a) => !!a.sales,
   payouts: (a) => !!a.payouts,
   flatpay: (a) => !!a.payouts,
   invoice: (a) => !!a.invoiceEmails,

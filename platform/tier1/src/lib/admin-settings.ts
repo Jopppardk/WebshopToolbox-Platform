@@ -21,6 +21,8 @@ export const accountKeys = [
   'flatpayClearing',
   'inventory',
   'inventoryAdjustment',
+  // Debitorer: sales on payment terms (B2B invoices) are booked here instead of the clearing account. Optional.
+  'receivables',
 ] as const;
 export type Accounts = Record<(typeof accountKeys)[number], string>;
 // Mellemregningskonti are chosen per webshop: each webshop has its own payment providers. A webshop
@@ -120,6 +122,7 @@ export function validateSettings(input: unknown): AdminSettings {
         'flatpayClearing',
         'inventory',
         'inventoryAdjustment',
+        'receivables',
       ].includes(key)
     )
       continue;

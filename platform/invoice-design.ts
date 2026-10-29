@@ -3,30 +3,34 @@ export type InvoiceDesign = {
   accent: string;
   layout: 'classic' | 'modern';
   footer: string;
+  /** Where to pay (e.g. bank account), shown on invoices for orders on payment terms that are not yet paid. */
+  payment: string;
 };
 export const defaultDesign: InvoiceDesign = {
   accent: '#ad8030',
   layout: 'classic',
   footer: '',
+  payment: '',
 };
 export function invoiceDesign(value: unknown): InvoiceDesign {
   const v = value as Partial<InvoiceDesign> | null;
   const accent = v?.accent ?? defaultDesign.accent,
     layout = v?.layout ?? defaultDesign.layout,
-    footer = v?.footer ?? '';
+    footer = v?.footer ?? '',
+    payment = v?.payment ?? '';
   if (
     typeof accent !== 'string' ||
     !/^#[a-f0-9]{6}$/i.test(accent) ||
     !['classic', 'modern'].includes(layout) ||
     typeof footer !== 'string' ||
-    footer.length > 180 ||
-    /[\x00-\x1f]/.test(footer)
+    typeof payment !== 'string' ||
+    [footer, payment].some((t) => t.length > 180 || /[\x00-\x1f]/.test(t))
   )
     throw new HttpError(
       400,
-      'Vælg farve og layout. Bundtekst må højst være 180 tegn på én linje.',
+      'Vælg farve og layout. Bundtekst og betalingsoplysninger må højst være 180 tegn på én linje.',
     );
-  return { accent, layout, footer: footer.trim() };
+  return { accent, layout, footer: footer.trim(), payment: payment.trim() };
 }
 // Synthetic preview data only. Never saved or sent; no provider requests.
 const money = (amount: string) => ({

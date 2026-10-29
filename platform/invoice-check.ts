@@ -79,6 +79,8 @@ export type InvoiceSource = {
   totalTaxSet: MoneyBag;
   lineItems: Connection<SourceLine>;
   shippingLines: Connection<SourceShipping>;
+  /** Payment terms (B2B invoice), read separately and only for unpaid orders when the invoice is made. */
+  paymentTerms?: { name: string; dueAt: string | null } | null;
 };
 export type CheckedLine = {
   id: string;

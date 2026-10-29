@@ -2,7 +2,7 @@
 
 Aktuel status på én side. Læs den før hver opgave. Historikken står i [CHANGELOG.md](CHANGELOG.md), planen i [ROADMAP.md](ROADMAP.md) og arbejdsreglerne i [AGENTS.md](../../AGENTS.md). Opdatér denne side, når status eller åbne punkter ændrer sig. Skriv selve ændringen som en note øverst i CHANGELOG.md.
 
-_Senest opdateret 14. oktober 2026._
+_Senest opdateret 29. oktober 2026._
 
 ## Miljøer
 
@@ -21,7 +21,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 1. Branch fra en frisk main, og opret en lille PR.
 2. CI skal være grøn: tests, begge typechecks, `npm run lint` (lint og formatering må kun blive bedre), Tier 1-build og portalens browsertest.
 3. Squash-merge.
-4. Er der en migration, køres den først med workflowet *Vedligehold: D1-migrering* (dev, derefter prod). Seneste migration er `0051_carrier_connections.sql` (Bring-tracking, oktober 2026).
+4. Er der en migration, køres den først med workflowet *Vedligehold: D1-migrering* (dev, derefter prod). Seneste migration er `0052_order_payments.sql` (indbetalinger på B2B-fakturaer, oktober 2026).
 5. Udgiv: `node scripts/platform-release.mjs dev --sha <sha>`, derefter `prod`. Udgivelsen genbruger den grønne testkørsel for samme commit.
 6. Skriv en note i CHANGELOG.md.
 
@@ -65,6 +65,8 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 - **Custom apps pr. virksomhed (udgivet 12. oktober):** menuen "Custom apps" og registrering af en app til præcis én virksomhed i Tier 0. Testappen "Eksempel" findes kun på dev.
 
 - **Webshop-synkronisering (custom app til LA Trading, udgivet 12. oktober):** opretter og synkroniserer valgte produkter og kollektioner fra én webshop til en anden, lager begge veje, udeladt af modtagerens lagerværdi. Mangler: en platformadministrator slår appen til for LA Trading i Tier 0, og modtagerens Shopify-app skal have write_products, write_inventory og read_locations (kilden read_locations). Første rigtige kørsel er ikke set.
+
+- **B2B-kunder, der betaler på faktura (ikke udgivet):** debitorkonto, bogføring af salg på betalingsbetingelser på den, automatiske indbetalingsbilag (bank eller mellemregning mod debitor) og forfaldsdato/betalingsoplysninger på fakturaen. Kræver migration 0052 og read_payment_terms i kundens Shopify-app. Ikke afprøvet mod rigtig Shopify B2B eller Dinero.
 
 **Mangler**
 - **Svenske produktnavne på fakturaer:** kræver read_translations i kundens Shopify-app; ellers danske navne.
