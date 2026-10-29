@@ -27,6 +27,7 @@ export const accountKeys = [
   'flatpayClearing',
   'inventory',
   'inventoryAdjustment',
+  'receivables',
 ];
 export async function handleAccounting(
   request: Request,

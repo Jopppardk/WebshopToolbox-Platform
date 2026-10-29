@@ -4,6 +4,7 @@ import { dataCutoff } from './tier1-history';
 import { payoutSummaryFields } from './payout-calculations';
 import { checkInvoice } from './order-check';
 import { salesDraft } from './sales-preview';
+import { saleAccounts } from './order-payments';
 import { requireCompany, requireWebshop } from './auth';
 import { jsonBody } from './invitations';
 import { orderQuery, shopAccess, loadCompleteOrder } from './invoice-source';
@@ -101,11 +102,8 @@ export async function handleOperations(
     const b = await jsonBody(request);
     if (typeof b.externalId !== 'string')
       throw new HttpError(400, 'Vælg en ordre.');
-    const order = await loadCompleteOrder(
-      b.externalId,
-      await shopAccess(env, company, shop),
-      checkInvoice,
-    );
+    const access = await shopAccess(env, company, shop);
+    const order = await loadCompleteOrder(b.externalId, access, checkInvoice);
     const invoice = checkInvoice(order);
     const connection = await db
       .prepare(
@@ -125,16 +123,31 @@ export async function handleOperations(
       )
       .bind(company, shop)
       .first<{ preferences_json: string }>();
+    // On payment terms (B2B invoice) the sale goes to the receivables account, as when it is booked.
+    let accounts: Record<string, string> = mapping
+        ? accountsForWebshop(mapping.accounts_json, prefs?.preferences_json)
+        : {},
+      termsProblem = '';
+    try {
+      accounts = (await saleAccounts(access, b.externalId, accounts)).accounts;
+    } catch (error) {
+      if (!(error instanceof HttpError)) throw error;
+      termsProblem = error.message;
+    }
+    const draft = salesDraft(
+      invoice,
+      accounts,
+      connection ? JSON.parse(connection.chart_json) : [],
+      false,
+    );
+    if (termsProblem)
+      Object.assign(draft, {
+        ready: false,
+        blockers: [...draft.blockers, termsProblem],
+      });
     return reply({
       invoice,
-      draft: salesDraft(
-        invoice,
-        mapping
-          ? accountsForWebshop(mapping.accounts_json, prefs?.preferences_json)
-          : {},
-        connection ? JSON.parse(connection.chart_json) : [],
-        false,
-      ),
+      draft,
       externalWrites: 'blocked',
     });
   }

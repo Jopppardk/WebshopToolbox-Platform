@@ -38,6 +38,11 @@ function details(value: Record<string, unknown>) {
     )
     .join(' · ');
 }
+/** The table of a Shopify post: order refunds and order payments have their own, with the same shape as operation_snapshots. */
+export const shopifyTable = (module: string) =>
+  module === 'order_refunds' || module === 'order_payments'
+    ? module
+    : 'operation_snapshots';
 export async function recordFailure(
   env: PlatformEnv,
   company: string,
@@ -55,11 +60,7 @@ export async function recordFailure(
     return;
   // Only log an existing scoped record. Do not persist request bodies or raw upstream errors.
   const table =
-      provider === 'shopify'
-        ? module === 'order_refunds'
-          ? 'order_refunds'
-          : 'operation_snapshots'
-        : 'payment_records',
+      provider === 'shopify' ? shopifyTable(module) : 'payment_records',
     filter = provider === 'shopify' ? 'module=?' : 'provider=? AND kind=?';
   const exists = await env.PLATFORM_DB.prepare(
     `SELECT 1 FROM ${table} WHERE company_id=? AND webshop_id=? AND ${filter} AND external_id=?`,
@@ -111,7 +112,7 @@ export async function recordHistory(
         .first<any>()
     : await db
         .prepare(
-          `SELECT payload_json,imported_at FROM ${module === 'order_refunds' ? 'order_refunds' : 'operation_snapshots'} WHERE company_id=? AND webshop_id=? AND module=? AND external_id=?`,
+          `SELECT payload_json,imported_at FROM ${shopifyTable(module)} WHERE company_id=? AND webshop_id=? AND module=? AND external_id=?`,
         )
         .bind(company, shop, module, id)
         .first<any>();
@@ -245,7 +246,9 @@ export async function recordHistory(
           ? ['refunds']
           : module === 'order_refunds'
             ? ['order_refunds', 'credit']
-            : ['payouts']
+            : module === 'order_payments'
+              ? ['order_payments']
+              : ['payouts']
       : provider === 'flatpay' && module === 'payments'
         ? ['flatpay']
         : [];
@@ -280,7 +283,12 @@ export async function recordHistory(
     ['Transaktions-ID', source.transactionID],
     ['Afregningsnummer', source.settlementNumber],
     ['Faktura-ID', invoice?.id],
-    ['Ordre', module === 'order_refunds' ? source.orderName : undefined],
+    [
+      'Ordre',
+      module === 'order_refunds' || module === 'order_payments'
+        ? source.orderName
+        : undefined,
+    ],
     ['Kreditnota', credit?.number],
   ])
     if (value) info.push({ label, value: String(value) });
@@ -313,7 +321,9 @@ export async function recordHistory(
       source.name ||
       (module === 'order_refunds' && source.orderName
         ? 'Tilbagebetaling på ordre ' + source.orderName
-        : id),
+        : module === 'order_payments' && source.orderName
+          ? 'Indbetaling på ordre ' + source.orderName
+          : id),
     events: page.slice(0, 50).map((e) => ({
       id: e.id,
       at: e.at,

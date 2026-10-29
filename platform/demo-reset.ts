@@ -46,6 +46,8 @@ export const demoTables = [
   'shipping_events',
   'shipping_connections',
   'carrier_connections',
+  'order_payments',
+  'order_payment_checks',
   'order_refunds',
   'order_refund_checks',
   'platform_credit_notes',

@@ -1,6 +1,6 @@
 import { asText } from './tier1/src/lib/format';
 import { accountsForWebshop } from './tier1/src/lib/admin-settings';
-import { recordFailure } from './record-history';
+import { recordFailure, shopifyTable } from './record-history';
 import { requireCompany, requireWebshop } from './auth';
 import { unseal } from './connections';
 import { jsonBody } from './invitations';
@@ -132,12 +132,12 @@ async function productionBooking(
       message: 'Eksisterende bogføring er verificeret i Dinero.',
     });
   }
-  // Order refunds have their own table with the same shape (see migration 0038).
+  // Order refunds and order payments have their own tables with the same shape (see migrations 0038 and 0052).
   const sourceRow =
     provider === 'shopify'
       ? await db
           .prepare(
-            `SELECT payload_json,occurred_at FROM ${module === 'order_refunds' ? 'order_refunds' : 'operation_snapshots'} WHERE company_id=? AND webshop_id=? AND module=? AND external_id=?`,
+            `SELECT payload_json,occurred_at FROM ${shopifyTable(module)} WHERE company_id=? AND webshop_id=? AND module=? AND external_id=?`,
           )
           .bind(company, shop, module, id)
           .first<any>()

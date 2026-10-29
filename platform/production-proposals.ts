@@ -23,6 +23,11 @@ import {
   type OrderRefund,
 } from './order-refunds';
 import { ensureCreditNote } from './credit-notes';
+import {
+  paymentVoucher,
+  readOrderPayments,
+  type OrderPayment,
+} from './order-payments';
 import { foreignHold, isForeignOrder } from './order-markets';
 import { HttpError, type Actor, type PlatformEnv } from './types';
 const fail = (message: string): never => {
@@ -315,7 +320,8 @@ async function refund(ctx: BookingContext): Promise<PreparedBooking> {
     },
   };
 }
-// A refund of a Shopify order, whatever the gateway: credits the same clearing account the sale debited,
+// A refund of a Shopify order, whatever the gateway: credits the clearing account (also for an order on payment
+// terms, whose payments were moved from the receivables account to the bank or the clearing account),
 // against the refund accounts per line, with the refund's credit note attached when the order was invoiced.
 async function orderRefund(ctx: BookingContext): Promise<PreparedBooking> {
   const { env, company, shop, id } = ctx,
@@ -417,6 +423,58 @@ async function orderRefund(ctx: BookingContext): Promise<PreparedBooking> {
           }
         : null,
       book: automation.refundsBookDinero === true,
+    },
+  };
+}
+// A payment of an order sold on payment terms (B2B invoice): from the receivables account the sale debited, to the
+// bank (manual payment such as a bank transfer) or to the clearing account (a gateway, whose payout clears it).
+async function orderPayment(ctx: BookingContext): Promise<PreparedBooking> {
+  const { env, company, shop, id } = ctx,
+    db = env.PLATFORM_DB,
+    stored = JSON.parse(ctx.sourceRow.payload_json) as OrderPayment;
+  if (await isForeignOrder(db, company, shop, stored.orderId))
+    fail(foreignHold);
+  const sale = await db
+    .prepare(
+      "SELECT json_extract(payload_json,'$.receivable.account') account FROM production_receipts WHERE company_id=? AND webshop_id=? AND provider='shopify' AND module='orders' AND external_id=? AND phase IN ('draft','booking','booked')",
+    )
+    .bind(company, shop, stored.orderId)
+    .first<{ account: string | null }>();
+  if (!sale?.account)
+    fail(
+      'Salget på ordren er ikke bogført på debitorkontoen. Betalingen bogføres, når salget er bogført.',
+    );
+  // Always booked from Shopify's current data, never from the stored copy alone.
+  const p = (
+    await readOrderPayments(
+      await shopAccess(env, company, shop),
+      stored.orderId,
+    )
+  ).find((x) => x.id === id);
+  if (!p) fail('Betalingen findes ikke længere på ordren i Shopify.');
+  const date = await bookingDate(env, company, shop, 'shopify', p!.processedAt);
+  let proposal: ReturnType<typeof paymentVoucher>;
+  try {
+    proposal = paymentVoucher(
+      p!,
+      date,
+      sale!.account!,
+      JSON.parse(ctx.mapping.accounts_json),
+    );
+  } catch (error) {
+    if (error instanceof TransferError) throw new HttpError(409, error.message);
+    throw error;
+  }
+  await chartFor(ctx, proposal.accounts);
+  proposal.voucher.ExternalReference = `wtb:${shop}:orderpayment:${id.split('/').pop()}`;
+  return {
+    snapshot: {
+      voucher: proposal.voucher,
+      expected: proposal.expected,
+      source: { payment: p },
+      book:
+        JSON.parse(ctx.prefs.preferences_json).automation.salesBookDinero ===
+        true,
     },
   };
 }
@@ -528,6 +586,19 @@ export function handleProductionOther(
       'shopify',
       /^gid:\/\/shopify\/Refund\/\d{1,30}$/,
       orderRefund,
+    );
+  if (kind === 'order_payment')
+    return handleProductionBooking(
+      request,
+      env,
+      actor,
+      company,
+      shop,
+      kind,
+      'order_payments',
+      'shopify',
+      /^gid:\/\/shopify\/OrderTransaction\/\d{1,30}$/,
+      orderPayment,
     );
   if (kind === 'flatpay')
     return handleProductionBooking(

@@ -3,6 +3,7 @@ import { shipmentDate } from './invoice-check';
 import { shopAccess, loadCompleteOrder } from './invoice-source';
 import { readDineroAccounts } from './dinero-read';
 import { salesDraft } from './sales-preview';
+import { saleAccounts } from './order-payments';
 import { voucherFor } from './dinero-sale';
 import {
   handleProductionBooking,
@@ -48,12 +49,15 @@ async function prepareSale({
   const db = env.PLATFORM_DB;
   if (await isForeignOrder(db, company, shop, id))
     throw new HttpError(409, foreignHold);
-  const order = await loadCompleteOrder(
-      id,
-      await shopAccess(env, company, shop),
-      checkInvoice,
-    ),
+  const access = await shopAccess(env, company, shop);
+  const order = await loadCompleteOrder(id, access, checkInvoice),
     invoice = checkInvoice(order);
+  // On payment terms (B2B invoice) the sale is booked on the receivables account, when one is chosen.
+  const { accounts, receivable } = await saleAccounts(
+    access,
+    id,
+    JSON.parse(mapping.accounts_json),
+  );
   const date = await bookingDate(
     env,
     company,
@@ -67,7 +71,7 @@ async function prepareSale({
   const market = await orderMarketSettings(db, company, shop, id);
   const draft = salesDraft(
     invoice,
-    JSON.parse(mapping.accounts_json),
+    accounts,
     await readDineroAccounts(credentials),
     automation?.inventory === true,
     market?.countries ?? [],
@@ -92,6 +96,8 @@ async function prepareSale({
   return {
     snapshot: {
       ...proposal,
+      // Kept on the receipt: the order's payments are booked against this account (see order-payments.ts).
+      ...(receivable ? { receivable } : {}),
       fingerprint,
       pdfKey: pdf.r2_key,
       pdfEtag: file.etag,

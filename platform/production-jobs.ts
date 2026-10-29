@@ -1,4 +1,4 @@
-import { recordFailure } from './record-history';
+import { recordFailure, shopifyTable } from './record-history';
 import { logUnexpected } from './error-log';
 import { collapseRepeat } from './run-cleanup';
 import { normalizeSyncInterval } from './tier1/src/lib/sync-schedule';
@@ -21,6 +21,7 @@ import {
   syncOrderRefunds,
 } from './order-refunds';
 import { sendCreditNote } from './credit-notes';
+import { receivableSaleSql, syncOrderPayments } from './order-payments';
 import { productionWrites, bookingDate } from './production-policy';
 import { dataStartDate, historyPolicy, providerStart } from './tier1-history';
 import { InvoiceCheckError } from './order-check';
@@ -554,11 +555,7 @@ async function runShop(
         );
       const boundary = [sourceDate, dineroDate].sort()[1];
       const table =
-          provider === 'shopify'
-            ? module === 'order_refunds'
-              ? 'order_refunds'
-              : 'operation_snapshots'
-            : 'payment_records',
+          provider === 'shopify' ? shopifyTable(module) : 'payment_records',
         filter =
           provider === 'shopify' ? 's.module=?' : 's.kind=? AND s.provider=?';
       // Orders wait until their market is known, and only domestic ones are invoiced, mailed or booked (see order-markets.ts).
@@ -582,24 +579,30 @@ async function runShop(
           : // Payouts are only booked once paid out; upcoming ones are skipped instead of counted as failures.
             // Refunds of domestic orders that add up (others are shown for control), never one the earlier flow booked;
             // credit notes are only mailed for refunds from the last 14 days, so customers never get an old one out of the blue.
-            module === 'order_refunds'
-            ? ' AND ' +
+            module === 'order_payments'
+            ? // Payments of orders on payment terms, once their sale is in Dinero on the receivables account.
+              ' AND ' +
               domesticOrderOfSql('s.order_id') +
-              ' AND NOT ' +
-              legacyRefundSql +
-              " AND json_extract(s.payload_json,'$.problem') IS NULL" +
-              // Nothing is booked or mailed for an order cancelled and fully refunded before its sale was booked.
-              ' AND NOT ' +
-              voidOrderSql('s', 's.order_id') +
-              (job === 'order_refunds' ? ' AND ' + saleBookedSql : '') +
-              (job === 'credit'
-                ? " AND s.occurred_at>=strftime('%Y-%m-%dT%H:%M:%SZ','now','-14 days')"
-                : '')
-            : module === 'payouts'
-              ? " AND json_extract(s.payload_json,'$.status')='PAID'"
-              : provider === 'flatpay' && module === 'payments'
-                ? " AND json_extract(s.payload_json,'$.paidDate') IS NOT NULL"
-                : '');
+              " AND json_extract(s.payload_json,'$.problem') IS NULL AND " +
+              receivableSaleSql()
+            : module === 'order_refunds'
+              ? ' AND ' +
+                domesticOrderOfSql('s.order_id') +
+                ' AND NOT ' +
+                legacyRefundSql +
+                " AND json_extract(s.payload_json,'$.problem') IS NULL" +
+                // Nothing is booked or mailed for an order cancelled and fully refunded before its sale was booked.
+                ' AND NOT ' +
+                voidOrderSql('s', 's.order_id') +
+                (job === 'order_refunds' ? ' AND ' + saleBookedSql : '') +
+                (job === 'credit'
+                  ? " AND s.occurred_at>=strftime('%Y-%m-%dT%H:%M:%SZ','now','-14 days')"
+                  : '')
+              : module === 'payouts'
+                ? " AND json_extract(s.payload_json,'$.status')='PAID'"
+                : provider === 'flatpay' && module === 'payments'
+                  ? " AND json_extract(s.payload_json,'$.paidDate') IS NOT NULL"
+                  : '');
       const rows = (
         await db
           .prepare(`SELECT s.external_id,s.occurred_at,json_extract(s.payload_json,'$.name') name,json_extract(s.payload_json,'$.orderName') order_name FROM ${table} s
@@ -629,9 +632,11 @@ async function runShop(
             ? 'Ordre ' + (row.name || short)
             : module === 'order_refunds'
               ? 'Tilbagebetaling på ordre ' + (row.order_name || short)
-              : provider === 'flatpay'
-                ? 'Flatpay-udbetaling ' + short
-                : 'Udbetaling ' + short;
+              : module === 'order_payments'
+                ? 'Indbetaling på ordre ' + (row.order_name || short)
+                : provider === 'flatpay'
+                  ? 'Flatpay-udbetaling ' + short
+                  : 'Udbetaling ' + short;
         await run('auto.' + job, async () => {
           let succeeded = false,
             recorded = false;
@@ -829,6 +834,22 @@ async function runShop(
           automation.refundsBookDinero,
         ),
       );
+    // Payments of orders sold on payment terms (B2B invoices), whose sale was booked on the receivables account.
+    if (automation.sales && mode === 'scheduled') {
+      if (shop.shopify)
+        await run('auto.import.order_payments', async () => {
+          await syncOrderPayments(env, company, id);
+        });
+      await run('auto.order_payments.queue', () =>
+        processRows(
+          'order_payments',
+          'shopify',
+          'order_payments',
+          'order_payment',
+          automation.salesBookDinero,
+        ),
+      );
+    }
     if (automation.payouts && mode === 'scheduled') {
       await run('auto.payouts.queue', () =>
         processRows(

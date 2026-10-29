@@ -15,6 +15,7 @@ import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 import { jsonBody } from './invitations';
 import { handleMail, sendCustomerInvoice, senderSettings } from './mail';
 import { buildInvoicePdf } from './invoice-pdf';
+import { readPaymentTerms } from './order-payments';
 import {
   shopAccess,
   listInvoiceOrders,
@@ -904,7 +905,7 @@ async function invoices(
     // language and currency, from its store (e.g. Sabeln.se). Danish orders use the company's settings as before.
     const market = await orderMarketSettings(db, company, shop, id);
     // In the market's language, product names too where the shop has translations (Shopify keeps Danish ones).
-    const source =
+    const translated =
       market && market.locale !== 'da'
         ? await withTranslatedLines(
             await shopAccess(env, company, shop),
@@ -912,6 +913,18 @@ async function invoices(
             market.locale,
           )
         : invoicedOrder(order, market);
+    // An unpaid order on payment terms (B2B invoice) shows its terms and due date. Without read_payment_terms the
+    // invoice is made as before, without them.
+    const terms =
+      order.displayFinancialStatus === 'PAID'
+        ? null
+        : await readPaymentTerms(await shopAccess(env, company, shop), id);
+    const source = terms
+      ? {
+          ...translated,
+          paymentTerms: { name: terms.name, dueAt: terms.dueAt },
+        }
+      : translated;
     const profile = market
       ? profileOf(
           await danishSettings(env, company, shop),

@@ -55,6 +55,9 @@ const texts = {
     inclVat: 'inkl. moms',
     paid: 'BETALT',
     unpaid: 'AFVENTER BETALING',
+    payment: 'BETALING',
+    terms: 'Betalingsbetingelser',
+    due: 'Forfaldsdato',
     continued: 'FORTSAT',
     page: (n: number, of: number) => `Side ${n} af ${of}`,
     prices: 'Priser er inkl. moms og efter rabatter',
@@ -84,6 +87,9 @@ const texts = {
     inclVat: 'inkl. moms',
     paid: 'BETALD',
     unpaid: 'INVÄNTAR BETALNING',
+    payment: 'BETALNING',
+    terms: 'Betalningsvillkor',
+    due: 'Förfallodatum',
     continued: 'FORTSÄTTNING',
     page: (n: number, of: number) => `Sida ${n} av ${of}`,
     prices: 'Priser inkl. moms och efter rabatter',
@@ -113,6 +119,9 @@ const texts = {
     inclVat: 'incl. VAT',
     paid: 'PAID',
     unpaid: 'AWAITING PAYMENT',
+    payment: 'PAYMENT',
+    terms: 'Payment terms',
+    due: 'Due date',
     continued: 'CONTINUED',
     page: (n: number, of: number) => `Page ${n} of ${of}`,
     prices: 'Prices incl. VAT and after discounts',
@@ -368,6 +377,34 @@ export async function buildInvoicePdf(
     timeZone: 'Europe/Copenhagen',
   }).format(new Date(checked.date));
   const paid = !!credit || order.displayFinancialStatus === 'PAID';
+  // An unpaid order on payment terms (B2B invoice) says when and where to pay, left of the totals on the last page.
+  const terms = !paid && order.paymentTerms ? order.paymentTerms : null;
+  const paymentLines = terms
+    ? [
+        ...(terms.name
+          ? [{ text: `${t.terms}: ${terms.name}`, font: regular }]
+          : []),
+        ...(terms.dueAt
+          ? [
+              {
+                text: `${t.due}: ${new Intl.DateTimeFormat(t.intl, { timeZone: 'Europe/Copenhagen' }).format(new Date(terms.dueAt))}`,
+                font: bold,
+              },
+            ]
+          : []),
+        ...wrap(design.payment, 210, 8.5).map((text) => ({
+          text,
+          font: regular,
+        })),
+      ]
+    : [];
+  if (
+    paymentLines.length > 4 ||
+    paymentLines.some((l) => l.font.widthOfTextAtSize(l.text, 8.5) > 215)
+  )
+    throw new InvoiceCheckError(
+      'Betalingsoplysningerne er for lange til PDF-layoutet.',
+    );
   chunks.forEach((pageRows, pageIndex) => {
     const page = pdf.addPage([595.28, 841.89]);
     if (!classic)
@@ -669,6 +706,24 @@ export async function buildInvoicePdf(
         color: black,
       });
       amount(total, 523, 89, 13, bold);
+      if (paymentLines.length) {
+        page.drawText(t.payment, {
+          x: 54,
+          y: 130,
+          size: 7.5,
+          font: bold,
+          color: gold,
+        });
+        paymentLines.forEach((l, i) =>
+          page.drawText(l.text, {
+            x: 54,
+            y: 114 - i * 12,
+            size: 8.5,
+            font: l.font,
+            color: ink,
+          }),
+        );
+      }
       if (!classic)
         page.drawRectangle({
           x: 281,
