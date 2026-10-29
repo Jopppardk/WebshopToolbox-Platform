@@ -228,7 +228,10 @@ export async function readOrderPayments(access: Access, orderId: string) {
 export const receivableSaleSql = (order = 's.order_id') =>
   `EXISTS(SELECT 1 FROM production_receipts rs WHERE rs.company_id=s.company_id AND rs.webshop_id=s.webshop_id AND rs.provider='shopify' AND rs.module='orders' AND rs.external_id=${order} AND rs.phase IN ('draft','booking','booked') AND json_extract(rs.payload_json,'$.receivable.account') IS NOT NULL)`;
 
-/** Reads the payments of orders sold on payment terms whose payment status changed since they were last read. */
+/**
+ * Reads the payments of orders sold on payment terms whose payment status changed since they were last read, and
+ * of orders not yet paid in full every 6 hours (a second instalment can leave the status at PARTIALLY_PAID).
+ */
 export async function syncOrderPayments(
   env: PlatformEnv,
   company: string,
@@ -241,8 +244,9 @@ export async function syncOrderPayments(
       .prepare(`SELECT s.external_id,COALESCE(json_extract(s.payload_json,'$.displayFinancialStatus'),'') status FROM operation_snapshots s
  LEFT JOIN order_payment_checks c ON c.company_id=s.company_id AND c.webshop_id=s.webshop_id AND c.order_id=s.external_id
  WHERE s.company_id=? AND s.webshop_id=? AND s.module='orders' AND ${receivableSaleSql('s.external_id')}
- AND (c.order_id IS NULL OR c.financial_status<>COALESCE(json_extract(s.payload_json,'$.displayFinancialStatus'),''))
- ORDER BY s.occurred_at DESC LIMIT ?`)
+ AND (c.order_id IS NULL OR c.financial_status<>COALESCE(json_extract(s.payload_json,'$.displayFinancialStatus'),'')
+  OR (c.financial_status<>'PAID' AND c.checked_at<datetime('now','-6 hours')))
+ ORDER BY (c.order_id IS NULL OR c.financial_status<>COALESCE(json_extract(s.payload_json,'$.displayFinancialStatus'),'')) DESC,c.checked_at,s.occurred_at DESC LIMIT ?`)
       .bind(company, shop, limit)
       .all<{ external_id: string; status: string }>()
   ).results;
