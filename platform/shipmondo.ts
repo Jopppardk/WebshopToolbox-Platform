@@ -420,15 +420,40 @@ export function enrichShipmentList(
       const own = shipment.publicTracking?.state === 'ok';
       if (!own) {
         result.publicTracking = undefined;
-        const key = monitorSteps[latest.status],
-          at = shipment.steps.findIndex((step) => step.key === key),
-          now = shipment.steps.findIndex(
-            (step) => step.key === shipment.current,
+        // A parcel Shipmondo reports as available for pickup waits in a parcel shop, even when Shopify's
+        // shipping method was not recognised as one. That gives the collection deadline and return warnings.
+        const ready = matches.find((e) => monitorSteps[e.status] === 'ready');
+        if (ready) {
+          result.pickupPoint = true;
+          result.readyAt = shipment.readyAt || ready.occurred_at;
+          if (!result.steps.some((step) => step.key === 'ready')) {
+            const end = result.steps.findIndex(
+              (step) => step.key === 'delivered',
+            );
+            result.steps = [
+              ...result.steps.slice(0, end),
+              {
+                key: 'ready',
+                label: 'Klar i pakkeshop',
+                at: null,
+                reached: false,
+              },
+              ...result.steps.slice(end),
+            ];
+          }
+          result.steps = result.steps.map((step) =>
+            step.key === 'delivered'
+              ? { ...step, label: 'Afhentet af kunden' }
+              : step,
           );
+        }
+        const key = monitorSteps[latest.status],
+          at = result.steps.findIndex((step) => step.key === key),
+          now = result.steps.findIndex((step) => step.key === shipment.current);
         if (key && key !== 'delivered' && at > now) {
           result.current = key;
           result.issue = null;
-          result.steps = shipment.steps.map((step, i) => ({
+          result.steps = result.steps.map((step, i) => ({
             ...step,
             reached: step.reached || i <= at,
             at: i === at ? step.at || latest.occurred_at : step.at,
@@ -446,7 +471,7 @@ export function enrichShipmentList(
         result.deliveredAt = latest.occurred_at;
         result.current = 'delivered';
         result.issue = null;
-        result.steps = shipment.steps.map((step) => ({
+        result.steps = result.steps.map((step) => ({
           ...step,
           reached: true,
           at: step.key === 'delivered' ? latest.occurred_at : step.at,
