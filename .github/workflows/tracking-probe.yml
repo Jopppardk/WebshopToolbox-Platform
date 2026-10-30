@@ -16,3 +16,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node scripts/carrier-probe.mjs
+      - run: |
+          curl -sSL -o dao.pdf "https://api.dao.as/docs/DAO%20pakkeprotokol%20ver%20129.pdf"
+          (command -v pdftotext || sudo apt-get install -y -qq poppler-utils >/dev/null) && pdftotext -layout dao.pdf dao.txt
+          grep -n -i -E "track|status|hændelse|haendelse|kundeid|kode=|https://api" dao.txt | head -150
