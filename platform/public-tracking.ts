@@ -255,6 +255,11 @@ export async function fetchPublicTracking(
     signal: AbortSignal.timeout(8000),
     headers: { Accept: 'text/html', 'Accept-Language': 'da-DK,da;q=0.9' },
   });
+  // Shipmondo sends some carriers on to their own site (Bring since October 2026, GLS and DAO since 29 October 2026).
+  if (response.status >= 300 && response.status < 400) {
+    await response.body?.cancel();
+    throw Error('redirect');
+  }
   if (
     !response.ok ||
     !response.headers.get('content-type')?.includes('text/html')
@@ -282,6 +287,9 @@ export async function fetchPublicTracking(
 
 const safeError =
   'Tracking kunne ikke opdateres. Senest kendte oplysninger vises; prøv det originale trackinglink.';
+// Not a failure the user can act on: the public page only links on to the carrier. Shown calmly, and Opdatér skips it.
+const redirectedError =
+  'Shipmondo viser ikke længere status for dette fragtfirma. Følg pakken via trackinglinket.';
 async function refreshRow(env: PlatformEnv, row: Row, manual = false) {
   const db = env.PLATFORM_DB,
     owner = crypto.randomUUID(),
@@ -353,13 +361,20 @@ async function refreshRow(env: PlatformEnv, row: Row, manual = false) {
         ...suffix,
       )
       .run();
-  } catch {
+  } catch (error) {
     // Keep the last good snapshot even when the source changes layout, rate-limits, times out or goes down.
     await db
       .prepare(
         'UPDATE shipment_tracking_cache SET attempted_at=?,error=?,next_check=?,lease_until=0,lease_owner=NULL WHERE company_id=? AND webshop_id=? AND parcel_key=? AND source_key=? AND lease_owner=?',
       )
-      .bind(new Date().toISOString(), safeError, now + checkInterval, ...suffix)
+      .bind(
+        new Date().toISOString(),
+        error instanceof Error && error.message === 'redirect'
+          ? redirectedError
+          : safeError,
+        now + checkInterval,
+        ...suffix,
+      )
       .run();
   }
 }
@@ -392,6 +407,17 @@ export function applyPublicTracking(
         error: null,
         state: 'unavailable',
         text: 'Automatisk tracking er ikke tilgængelig for dette pakkenummer.',
+      },
+    };
+  if (!row?.data_json && row?.error === redirectedError)
+    return {
+      ...s,
+      trackingUrl: s.trackingUrl || target.url,
+      publicTracking: {
+        checkedAt: null,
+        error: null,
+        state: 'unavailable',
+        text: redirectedError,
       },
     };
   if (!row?.data_json)
