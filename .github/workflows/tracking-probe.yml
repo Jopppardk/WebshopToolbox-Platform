@@ -15,4 +15,4 @@ jobs:
           node-version: 22.23.2
           cache: npm
       - run: npm ci
-      - run: node scripts/tracking-probe.mjs
+      - run: node scripts/carrier-probe.mjs
