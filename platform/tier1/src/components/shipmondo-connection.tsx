@@ -280,7 +280,7 @@ export function ShipmondoConnection({
               onClick={() => {
                 if (
                   window.confirm(
-                    'Afbryd API-forbindelsen til Shipmondo? Automatisk tracking via de offentlige links fortsætter.',
+                    'Afbryd API-forbindelsen til Shipmondo? Tracking via Shipment Monitor stopper.',
                   )
                 )
                   void save(true);
@@ -290,9 +290,34 @@ export function ShipmondoConnection({
             </Button>
           </>
         )}
-        <p className="text-xs text-muted-foreground">
-          Webhooks bruges ikke længere til visningen på Forsendelser.
-        </p>
+        {state?.connected && state.webhookUrl && (
+          <div className="grid gap-2 rounded-lg border p-3 text-xs">
+            <p className="font-medium">
+              Tracking på Forsendelser (Shipment Monitor)
+            </p>
+            <p className="text-muted-foreground">
+              Shipmondos offentlige trackinglink viser ikke længere status for
+              fx GLS og DAO. Med Shipmondo Essentials eller Pro sender Shipmondo
+              pakkens status hertil én gang i døgnet. Opret en webhook i
+              Shipmondo under Indstillinger → Webhooks: vælg ressourcen Shipment
+              Monitor og handlingen Latest, indsæt URL og nøgle herunder, og
+              aktivér den.
+            </p>
+            <label className="grid gap-1">
+              Webhook-URL
+              <Input readOnly value={state.webhookUrl} />
+            </label>
+            <label className="grid gap-1">
+              Nøgle
+              <Input readOnly value={state.webhookSecret || ''} />
+            </label>
+            <p className="text-muted-foreground">
+              {state.lastEventAt
+                ? `Seneste trackinghændelse modtaget ${new Date(state.lastEventAt.replace(' ', 'T') + (state.lastEventAt.includes('T') ? '' : 'Z')).toLocaleString('da-DK')}.`
+                : 'Endnu ingen trackinghændelser modtaget.'}
+            </p>
+          </div>
+        )}
         {error && (
           <p role="alert" className="text-sm text-red-700">
             {error}

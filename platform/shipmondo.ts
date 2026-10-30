@@ -3,7 +3,7 @@ import { requireCompany, requireWebshop } from './auth';
 import { seal, unseal } from './connections';
 import { jsonBody } from './invitations';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
-import type { ShipmentList } from './tier1/src/lib/shipments';
+import type { ShipmentList, StepKey } from './tier1/src/lib/shipments';
 
 type Credentials = { apiUser: string; apiKey: string; sandbox: boolean };
 type Connection = {
@@ -361,6 +361,17 @@ export async function shipmondoWebhook(request: Request, env: PlatformEnv) {
   return reply({ received: true });
 }
 
+// The Shipment Monitor statuses with a known place on the timeline; others are shown as Shipmondo's text.
+const monitorSteps: Record<string, StepKey> = Object.assign(
+  Object.create(null),
+  {
+    INFORMED: 'printed',
+    EN_ROUTE: 'transit',
+    AVAILABLE_FOR_DELIVERY: 'ready',
+    DELIVERED: 'delivered',
+  },
+);
+
 export function enrichShipmentList(
   list: ShipmentList,
   events: MonitorEvent[],
@@ -404,6 +415,28 @@ export function enrichShipmentList(
           })),
         ].sort((a, b) => a.at.localeCompare(b.at)),
       };
+      // Without tracking data of its own (GLS and DAO since Shipmondo's public page only links on), the parcel
+      // follows Shipmondo's status: a known status moves the timeline forward, never back.
+      const own = shipment.publicTracking?.state === 'ok';
+      if (!own) {
+        result.publicTracking = undefined;
+        const key = monitorSteps[latest.status],
+          at = shipment.steps.findIndex((step) => step.key === key),
+          now = shipment.steps.findIndex(
+            (step) => step.key === shipment.current,
+          );
+        if (key && key !== 'delivered' && at > now) {
+          result.current = key;
+          result.issue = null;
+          result.steps = shipment.steps.map((step, i) => ({
+            ...step,
+            reached: step.reached || i <= at,
+            at: i === at ? step.at || latest.occurred_at : step.at,
+          }));
+        }
+        if (!key && latest.state === 'DANGER')
+          result.issue = latest.status_text || latest.status;
+      }
       if (
         delivered &&
         (!shipment.deliveredAt ||

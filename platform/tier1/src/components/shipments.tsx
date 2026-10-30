@@ -680,11 +680,12 @@ export function Shipments({ onIntegrations }: { onIntegrations: () => void }) {
         </Button>
       </div>
       <p className="mb-4 text-xs text-muted-foreground">
-        Tracking hentes fra Shipmondos offentlige trackingside på tværs af
-        fragtfirmaer. Ingen API-nøgle eller Pro-abonnement kræves. Aktive pakker
-        kontrolleres automatisk hver sjette time. “Opdatér” henter ny status på
-        op til 15 pakker, der ikke er leveret (hver pakke højst én gang pr.
-        minut). Leverede pakker kontrolleres ikke igen.
+        Bring-pakker spores via Mybring. GLS og DAO følger Shipmondos Shipment
+        Monitor (kræver Essentials eller Pro og en webhook, se Integrationer),
+        som opdateres én gang i døgnet. Aktive pakker kontrolleres automatisk
+        hver sjette time. “Opdatér” henter ny status på op til 15 pakker, der
+        ikke er leveret (hver pakke højst én gang pr. minut). Leverede pakker
+        kontrolleres ikke igen.
       </p>
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         {(

@@ -1,6 +1,7 @@
 import { jsonBody } from './invitations';
 import { enrichPublicTracking, trackingSourceKey } from './public-tracking';
 import { requireCompany, requireWebshop } from './auth';
+import { enrichShipmondo } from './shipmondo';
 import { shopAccess, orderQuery } from './invoice-source';
 import { dataStartDate } from './tier1-history';
 import { cachedRead } from './performance-source';
@@ -211,14 +212,19 @@ export async function handleShipments(
         ),
       };
       return reply({
-        ...(await enrichPublicTracking(
+        ...(await enrichShipmondo(
           env,
           company,
           shop,
-          list,
-          connection,
-          undefined,
-          false,
+          await enrichPublicTracking(
+            env,
+            company,
+            shop,
+            list,
+            connection,
+            undefined,
+            false,
+          ),
         )),
         stale: true,
       });
@@ -251,7 +257,20 @@ export async function handleShipments(
     () => ttl,
     force,
   );
+  // Shipmondo's Shipment Monitor (webhook, daily) covers carriers whose public page only links on, such as GLS and DAO.
   return reply(
-    await enrichPublicTracking(env, company, shop, list, connection, manualId),
+    await enrichShipmondo(
+      env,
+      company,
+      shop,
+      await enrichPublicTracking(
+        env,
+        company,
+        shop,
+        list,
+        connection,
+        manualId,
+      ),
+    ),
   );
 }
