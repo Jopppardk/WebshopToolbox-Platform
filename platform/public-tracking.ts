@@ -1,4 +1,5 @@
 import { bringConnection, fetchBringTracking } from './bring-tracking';
+import { fetchDaoTracking, fetchGlsTracking, notYet } from './carrier-tracking';
 import { HttpError } from './types';
 import type { PlatformEnv } from './types';
 import type {
@@ -329,7 +330,10 @@ async function refreshRow(env: PlatformEnv, row: Row, manual = false) {
     owner,
   ];
   try {
-    // Shipmondo only redirects Bring parcels to Bring's own site; they are read from the Mybring API instead.
+    const previous = row.data_json
+      ? (JSON.parse(row.data_json) as PublicTracking)
+      : null;
+    // Shipmondo only redirects Bring, GLS and DAO parcels to the carrier's own site; they are read from there instead.
     const data =
       row.carrier === 'bring'
         ? await fetchBringTracking(
@@ -339,14 +343,28 @@ async function refreshRow(env: PlatformEnv, row: Row, manual = false) {
             row.tracking_number,
             row.shipped_at,
           )
-        : await fetchPublicTracking(
-            { url: row.url, carrier: row.carrier, number: row.tracking_number },
-            row.shipped_at,
-          );
-    const previous = row.data_json
-      ? (JSON.parse(row.data_json) as PublicTracking)
-      : null;
-    if (previous && previous.events.at(-1)!.at > data.events.at(-1)!.at)
+        : row.carrier === 'gls'
+          ? await fetchGlsTracking(
+              row.tracking_number,
+              row.shipped_at,
+              previous?.confirmedBy ? null : previous,
+            )
+          : row.carrier === 'dao'
+            ? await fetchDaoTracking(row.tracking_number, row.shipped_at)
+            : await fetchPublicTracking(
+                {
+                  url: row.url,
+                  carrier: row.carrier,
+                  number: row.tracking_number,
+                },
+                row.shipped_at,
+              );
+    // GLS gives only a delivery time, which can precede when an earlier status was first seen here.
+    if (
+      row.carrier !== 'gls' &&
+      previous &&
+      previous.events.at(-1)!.at > data.events.at(-1)!.at
+    )
       throw Error('regression');
     await db
       .prepare(
@@ -369,9 +387,11 @@ async function refreshRow(env: PlatformEnv, row: Row, manual = false) {
       )
       .bind(
         new Date().toISOString(),
-        error instanceof Error && error.message === 'redirect'
-          ? redirectedError
-          : safeError,
+        error instanceof Error && error.message === notYet
+          ? null
+          : error instanceof Error && error.message === 'redirect'
+            ? redirectedError
+            : safeError,
         now + checkInterval,
         ...suffix,
       )
@@ -387,7 +407,9 @@ export function applyPublicTracking(
   if (s.current === 'manual' || s.current === 'untracked')
     return { ...s, publicTracking: undefined };
   const target = trackingTarget(s);
-  const source = target?.carrier === 'bring' ? 'Bring' : 'Shipmondo';
+  const source =
+    { bring: 'Bring', gls: 'GLS', dao: 'DAO' }[target?.carrier || ''] ||
+    'Shipmondo';
   if (target?.carrier === 'bring' && !bringConnected && !row?.data_json)
     return {
       ...s,

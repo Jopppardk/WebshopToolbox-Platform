@@ -296,12 +296,12 @@ export function ShipmondoConnection({
               Tracking på Forsendelser (Shipment Monitor)
             </p>
             <p className="text-muted-foreground">
-              Shipmondos offentlige trackinglink viser ikke længere status for
-              fx GLS og DAO. Med Shipmondo Essentials eller Pro sender Shipmondo
-              pakkens status hertil én gang i døgnet. Opret en webhook i
-              Shipmondo under Indstillinger → Webhooks: vælg ressourcen Shipment
-              Monitor og handlingen Latest, indsæt URL og nøgle herunder, og
-              aktivér den.
+              Valgfrit, og kun hvis dit Shipmondo-abonnement har webhooks (ikke
+              Essentials): Shipmondo sender så pakkens status hertil én gang i
+              døgnet. GLS og DAO hentes ellers direkte fra fragtfirmaerne. Opret
+              en webhook i Shipmondo under Indstillinger → Webhooks: vælg
+              ressourcen Shipment Monitor og handlingen Latest, indsæt URL og
+              nøgle herunder, og aktivér den.
             </p>
             <label className="grid gap-1">
               Webhook-URL
