@@ -291,6 +291,15 @@ const safeError =
 // Not a failure the user can act on: the public page only links on to the carrier. Shown calmly, and Opdatér skips it.
 const redirectedError =
   'Shipmondo viser ikke længere status for dette fragtfirma. Følg pakken via trackinglinket.';
+// GLS and DAO parcels Shipmondo forwarded before they were read from the carriers are looked up again at once,
+// instead of waiting up to six hours for their next check.
+const retryForwarded = (db: D1Database, company?: string, shop?: string) =>
+  db
+    .prepare(
+      "UPDATE shipment_tracking_cache SET next_check=0,attempted_at=NULL,error=NULL WHERE error=? AND data_json IS NULL AND terminal=0 AND carrier IN ('gls','dao') AND (? IS NULL OR (company_id=? AND webshop_id=?))",
+    )
+    .bind(redirectedError, company ?? null, company ?? null, shop ?? null)
+    .run();
 async function refreshRow(env: PlatformEnv, row: Row, manual = false) {
   const db = env.PLATFORM_DB,
     owner = crypto.randomUUID(),
@@ -574,6 +583,7 @@ export async function enrichPublicTracking(
     )
     .bind(company, shop, sourceKey)
     .run();
+  await retryForwarded(db, company, shop);
   const keys = new Map<string, string>();
   const statements = [];
   for (const s of list.shipments) {
@@ -680,6 +690,7 @@ export async function refreshPublicTracking(env: PlatformEnv) {
     )
     .bind(now)
     .run();
+  await retryForwarded(db);
   const rows = (
     await db
       .prepare(`SELECT t.*,k.shop_domain,k.credentials_encrypted FROM shipment_tracking_cache t
