@@ -2,6 +2,8 @@
 
 Nyeste først. Skriv en ny note øverst for hver udgivet ændring: dato, hvem (Codex/Claude), hvad, filer/endpoints, migrering og hvad der ikke er verificeret. Indtil 6. oktober 2026 hed filen HANDOVER.md; noterne og de historiske afsnit nedenfor er flyttet hertil uændret. Aktuel status står i [HANDOVER.md](HANDOVER.md).
 
+> 1. november 2026 – Udgivet (Claude): PR #197 (GLS/DAO-pakker med gammel videresendelsesfejl slås op med det samme) er udgivet på dev og prod fra main `29b359c21c1e094f80e65e15eb63d03941290a0a` (workflow-run 41349882710, grøn). Ingen migrering. Ikke set på Forsendelser i prod efter udgivelsen.
+
 > 1. november 2026 – GLS/DAO-pakker med gammel videresendelses-markering slås op med det samme (Claude): René så stadig "Shipmondo viser ikke længere status for dette fragtfirma" på DAO-pakke #2719 efter udgivelsen af PR #195. Rækken havde fejlen fra før skiftet og ventede op til 6 timer på næste tjek. `retryForwarded` i `public-tracking.ts` nulstiller sådanne GLS/DAO-rækker (fejlteksten, uden data) ved visning af Forsendelser og i den automatiske kørsel, så de slås op hos fragtfirmaet med det samme. Ingen migrering.
 
 > 1. november 2026 – Udgivet (Claude): PR #195 (GLS og DAO hentes direkte hos fragtfirmaet) er udgivet på dev og prod fra main `a3f478f81af7d868bd20df8ff210fc2aa3d3c580` (workflow-run 41347989175, grøn). Ingen migrering. Eksisterende GLS/DAO-pakker opdateres ved næste automatiske kontrol (højst 6 timer) eller med Opdatér. Ikke set på Forsendelser i prod efter udgivelsen.
