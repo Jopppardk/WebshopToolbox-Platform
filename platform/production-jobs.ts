@@ -640,8 +640,6 @@ async function runShop(
           )
           .all<any>()
       ).results;
-      if (sweep && rows.length < batchRows)
-        await saveCursor(sweepKey, { at: Date.now() });
       for (const row of rows) {
         await owns();
         const externalId = row.external_id;
@@ -823,6 +821,9 @@ async function runShop(
           }
         });
       }
+      // Only once the whole batch is handled: a sweep cut short (deadline or lost lease) continues on the next run.
+      if (sweep && rows.length < batchRows)
+        await saveCursor(sweepKey, { at: Date.now() });
       return result;
     };
     // Country and currency for new orders (and, in portions, older ones) right after they are imported.
