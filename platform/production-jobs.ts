@@ -51,6 +51,10 @@ const plusDay = (value: string, days: number) =>
 // means "not ready": it waits as Afventer and retries every 2 hours without ringing the bell.
 const payoutGraceMs = 2 * 86400000,
   notReadyRetryMs = 2 * 3600000;
+// Posts handled per job and run, and how far back a normal run looks for due orders (see processRows).
+const batchRows = 10,
+  recentOrderDays = 90,
+  orderSweepMs = 6 * 3600000;
 const payoutNotReady = (date: string) =>
   Date.now() - Date.parse(date.length === 10 ? date + 'T23:59:59Z' : date) <
   payoutGraceMs;
@@ -603,24 +607,41 @@ async function runShop(
                 : provider === 'flatpay' && module === 'payments'
                   ? " AND json_extract(s.payload_json,'$.paidDate') IS NOT NULL"
                   : '');
+      // Orders are found by their fulfilment date, so an order placed long ago can still become due. Reading every
+      // order on every run grows with the history, though, so a run normally looks only at orders placed within
+      // recentOrderDays (an index on occurred_at keeps that cheap). A sweep through all orders runs when the last
+      // complete sweep is older than orderSweepMs, and repeats each run until it finds fewer than a batch, so a
+      // backlog of old orders is worked off before the next quiet period.
+      const sweepKey = 'sweep.' + job,
+        sweep =
+          module === 'orders' &&
+          Date.now() - Number((await cursor(sweepKey)).at || 0) > orderSweepMs,
+        since =
+          module !== 'orders'
+            ? plusDay(boundary, -1)
+            : sweep
+              ? '1970-01-01'
+              : plusDay(danishDate(), -recentOrderDays);
       const rows = (
         await db
           .prepare(`SELECT s.external_id,s.occurred_at,json_extract(s.payload_json,'$.name') name,json_extract(s.payload_json,'$.orderName') order_name FROM ${table} s
  LEFT JOIN production_attempts a ON a.company_id=s.company_id AND a.webshop_id=s.webshop_id AND a.job=? AND a.external_id=s.external_id
- WHERE s.company_id=? AND s.webshop_id=? AND ${filter}${eligible} AND substr(s.occurred_at,1,10)>=? AND COALESCE(a.next_attempt_at,0)<=?
- ORDER BY COALESCE(a.attempted_at,0),s.occurred_at,s.external_id LIMIT 10`)
+ WHERE s.company_id=? AND s.webshop_id=? AND ${filter} AND ${module === 'orders' ? 's.occurred_at>=?' : 'substr(s.occurred_at,1,10)>=?'}${eligible} AND COALESCE(a.next_attempt_at,0)<=?
+ ORDER BY COALESCE(a.attempted_at,0),s.occurred_at,s.external_id LIMIT ${batchRows}`)
           .bind(
             job,
             company,
             id,
             ...(provider === 'shopify' ? [module] : [module, provider]),
+            since,
             ...(job === 'sales' ? [book ? 1 : 0] : []),
             ...(module === 'orders' ? [plusDay(boundary, -1)] : []),
-            module === 'orders' ? '1970-01-01' : plusDay(boundary, -1),
             Date.now(),
           )
           .all<any>()
       ).results;
+      if (sweep && rows.length < batchRows)
+        await saveCursor(sweepKey, { at: Date.now() });
       for (const row of rows) {
         await owns();
         const externalId = row.external_id;

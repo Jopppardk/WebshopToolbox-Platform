@@ -1,4 +1,5 @@
 import { refreshPublicTracking } from './public-tracking';
+import { scheduledTick } from './scheduler-tick';
 import { shipmondoWebhook } from './shipmondo';
 import {
   queueDueShops,
@@ -12,7 +13,6 @@ import { logUnexpected } from './error-log';
 import {
   checkOperations,
   handleOperationsOverview,
-  markTick,
   schedulerHealth,
 } from './ops-monitor';
 import { productionWrites } from './production-policy';
@@ -532,39 +532,22 @@ export default {
     } catch (error) {
       console.error('Kørselsloggen kunne ikke ryddes op', error);
     }
-    if (productionWrites(env)) {
-      // A heartbeat around the jobs, then the operations check (alerts and the daily mail to the platform admins).
-      try {
-        await markTick(env, 'start');
-        const [jobs] = await Promise.all([
+    if (productionWrites(env))
+      // The heartbeat follows the webshop jobs only; tracking, feeds and custom apps run after it, each logged on its
+      // own (scheduler-tick.ts). Then the operations check (alerts and the daily mail to the platform admins).
+      return scheduledTick(
+        env,
+        (): Promise<unknown> =>
           env.PLATFORM_JOBS
             ? queueDueShops(env, env.PLATFORM_JOBS)
             : runProductionJobs(env),
-          refreshPublicTracking(env).catch((error) =>
-            console.error('Tracking kunne ikke opdateres', error),
-          ),
-          refreshDueFeeds(env).catch((error) =>
-            console.error('Feeds kunne ikke laves', error),
-          ),
-          runCustomApps(env),
-        ]);
-        await markTick(env, 'ok');
-        return jobs;
-      } catch (error) {
-        try {
-          await markTick(env, 'error', error);
-        } catch {
-          /* The original error is what matters. */
-        }
-        throw error;
-      } finally {
-        try {
-          await checkOperations(env);
-        } catch (error) {
-          console.error('Driftsovervågningen fejlede', error);
-        }
-      }
-    }
+        {
+          tracking: () => refreshPublicTracking(env),
+          feeds: () => refreshDueFeeds(env),
+          customApps: () => runCustomApps(env),
+        },
+        () => checkOperations(env),
+      );
     return scheduled();
   },
   // One due webshop per message (queueDueShops). Never retried by the queue: a run that stopped halfway leaves

@@ -21,7 +21,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 1. Branch fra en frisk main, og opret en lille PR.
 2. CI skal være grøn: tests, begge typechecks, `npm run lint` (lint og formatering må kun blive bedre), Tier 1-build og portalens browsertest.
 3. Squash-merge.
-4. Er der en migration, køres den først med workflowet *Vedligehold: D1-migrering* (dev, derefter prod). Seneste migration er `0052_order_payments.sql` (indbetalinger på B2B-fakturaer, oktober 2026).
+4. Er der en migration, køres den først med workflowet *Vedligehold: D1-migrering* (dev, derefter prod). Seneste migration er `0053_snapshot_occurred_index.sql` (indeks til bogføringens ordreopslag, november 2026).
 5. Udgiv: `node scripts/platform-release.mjs dev --sha <sha>`, derefter `prod`. Udgivelsen genbruger den grønne testkørsel for samme commit.
 6. Skriv en note i CHANGELOG.md.
 
@@ -48,7 +48,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 ## Åbne punkter
 
 **Ikke verificeret i drift**
-- **Ekstern overvågning af den automatiske kørsel:** workflowet *Overvågning: automatisk kørsel i prod* (`.github/workflows/platform-scheduler-watch.yml`, `scripts/scheduler-watch.mjs`) kalder `/healthz/scheduler` hvert 15. minut og fejler, når cron ikke har gennemført en kørsel i 30 minutter, så GitHub mailer den, der senest har ændret workflowets tidsplan. GitHub kan forsinke planlagte kørsler, så alarmen kommer typisk efter 30-45 minutter. Første kørsel og mailen er ikke set.
+- **Ekstern overvågning af den automatiske kørsel:** workflowet *Overvågning: automatisk kørsel i prod* (`.github/workflows/platform-scheduler-watch.yml`, `scripts/scheduler-watch.mjs`) kalder `/healthz/scheduler` hvert 15. minut og fejler, når cron ikke har gennemført en kørsel i 30 minutter, så GitHub mailer den, der senest har ændret workflowets tidsplan. GitHub forsinker planlagte kørsler meget: 26 kørsler 3.-10. november, ofte 6-8 timer imellem, så det er ikke en reel alarm. Mangler: en ekstern oppetidstjeneste (fx UptimeRobot) mod `/healthz/scheduler` hvert 5. minut.
 - **Driftsoverblikkets "venter på nyt forsøg" (udgivet 14. oktober 2026, dev og prod, run 38523869306, main `e4d9081`):** afviste poster, senere bogførte poster og annullerede, fuldt refunderede ordrer, der ikke nåede Dinero, tælles ikke længere med i morgenmailen og Tier 0 → Driftsoverblik.
 - **Kø til den automatiske kørsel (udgivet 14. oktober 2026, dev og prod, run 38525600682, main `912e1d9`):** cron sender forfaldne webshops som én besked hver til Cloudflare Queues `webshop-toolbox-platform-production-jobs` (`PLATFORM_JOBS`, `queueDueShops`/`runQueuedShop` i `production-jobs.ts`, `queue` i `worker.ts`; consumer `max_batch_size: 1`, `max_retries: 0`, `max_concurrency: 10`, `limits.cpu_ms: 300000`). Første kørsel via køen er ikke set; følg forsinkelsen i Driftsoverblikket.
 - **Dansk dato og 100.000 rækker (udgivet 14. oktober 2026, dev og prod, run 38519352806, main `3b87b07`):** "i dag" er dansk dato overalt (bl.a. lagerreguleringens bilagsdato), lister og Emballage-perioder rummer 100.000 rækker, og den daglige Emballage-hentning læser kun ændrede ordrer. Ikke set med rigtige data over 10.000 rækker.
