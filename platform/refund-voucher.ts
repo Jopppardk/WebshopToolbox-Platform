@@ -14,6 +14,8 @@ export type RefundVoucherInput = {
   parts: RefundPart[];
   /** A cancelled order that was never paid: the whole sale is credited, and no money was returned. */
   cancellation?: boolean;
+  /** The sale's cost of goods, reversed when the cancelled items went back in stock (accounts as the sale used them). */
+  inventory?: { account: number; adjustment: number; cost: number };
 };
 type Mapping = {
   clearing: string;
@@ -107,6 +109,17 @@ export function refundVoucher(
     );
   const clearing = account(mapping.clearing),
     id = input.transactionId.split('/').pop()!;
+  const inventory = input.inventory;
+  if (
+    inventory &&
+    (!Number.isSafeInteger(inventory.cost) ||
+      inventory.cost <= 0 ||
+      !Number.isSafeInteger(inventory.account) ||
+      !Number.isSafeInteger(inventory.adjustment) ||
+      inventory.account <= 0 ||
+      inventory.adjustment <= 0)
+  )
+    rejectTransfer('Vareforbruget på salget har ugyldige kontroldata.');
   const labels = {
     goods: 'Produktrefundering',
     shipping: 'Fragtrefundering',
@@ -129,6 +142,18 @@ export function refundVoucher(
           Amount: line.gross / 100,
           AccountVatCode: line.vat,
         })),
+        ...(inventory
+          ? [
+              {
+                Description: `Vareforbrug tilbageført, ordre: ${input.orderName}`,
+                AccountNumber: inventory.adjustment,
+                BalancingAccountNumber: inventory.account,
+                Amount: -inventory.cost / 100,
+                AccountVatCode: 'none',
+                BalancingAccountVatCode: 'none',
+              },
+            ]
+          : []),
       ],
     },
     expected: [
@@ -138,7 +163,14 @@ export function refundVoucher(
         tax: line.tax,
         gross: line.gross,
       })),
+      ...(inventory
+        ? [{ net: -inventory.cost, tax: 0, gross: -inventory.cost }]
+        : []),
     ],
-    accounts: [clearing, ...lines.map((line) => line.account)],
+    accounts: [
+      clearing,
+      ...lines.map((line) => line.account),
+      ...(inventory ? [inventory.adjustment, inventory.account] : []),
+    ],
   };
 }
