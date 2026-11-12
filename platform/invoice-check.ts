@@ -62,6 +62,8 @@ export type InvoiceSource = {
   displayFinancialStatus: string | null;
   displayFulfillmentStatus: string;
   fulfillments: { createdAt: string; status: string }[];
+  /** The order's payment transactions, to see a payment that could not be captured. */
+  transactions?: { kind?: string; status?: string; test?: boolean }[];
   customer?: {
     displayName?: string | null;
     firstName?: string | null;
@@ -157,6 +159,20 @@ const sum = (values: number[]) => {
   if (!Number.isSafeInteger(result)) return fail('Summen er for stor.');
   return result;
 };
+/**
+ * The payment could not be captured: an attempt to capture (or a sale) failed and none succeeded. Shopify may still
+ * show such an order as paid, so it is neither invoiced nor booked until the money is actually there (e.g. fraud).
+ */
+export function captureFailed(transactions: InvoiceSource['transactions']) {
+  if (!Array.isArray(transactions)) return false;
+  const payments = transactions.filter(
+    (t) => ['SALE', 'CAPTURE'].includes(String(t?.kind)) && !t.test,
+  );
+  return (
+    payments.some((t) => ['FAILURE', 'ERROR'].includes(String(t.status))) &&
+    !payments.some((t) => t.status === 'SUCCESS')
+  );
+}
 export function checkInvoice(order: InvoiceSource): CheckedInvoice {
   if (order?.displayFulfillmentStatus !== 'FULFILLED')
     return fail(
@@ -175,6 +191,10 @@ export function checkInvoice(order: InvoiceSource): CheckedInvoice {
   if (order.test || order.cancelledAt)
     return fail(
       'Testordrer og annullerede ordrer kan ikke faktureres i dette forløb.',
+    );
+  if (captureFailed(order.transactions))
+    return fail(
+      'Betalingen kunne ikke hæves. Ordren faktureres og bogføres først, når betalingen er hævet. Er ordren svindel, så annullér den i Shopify.',
     );
   if (
     !/^gid:\/\/shopify\/Order\/\d+$/.test(order.id) ||

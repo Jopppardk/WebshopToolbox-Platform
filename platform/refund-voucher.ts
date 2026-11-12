@@ -12,6 +12,8 @@ export type RefundVoucherInput = {
   date: string;
   gross: number;
   parts: RefundPart[];
+  /** A cancelled order that was never paid: the whole sale is credited, and no money was returned. */
+  cancellation?: boolean;
 };
 type Mapping = {
   clearing: string;
@@ -116,7 +118,7 @@ export function refundVoucher(
       ExternalReference: `sablen:refund:${id}`,
       Lines: [
         {
-          Description: `Tilbagebetaling, ordre: ${input.orderName}`,
+          Description: `${input.cancellation ? 'Annullering' : 'Tilbagebetaling'}, ordre: ${input.orderName}`,
           AccountNumber: clearing,
           Amount: -input.gross / 100,
           AccountVatCode: 'none',
