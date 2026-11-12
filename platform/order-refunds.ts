@@ -39,6 +39,8 @@ export type OrderRefund = {
    * credit note is booked and attached in Dinero, but never mailed to the customer.
    */
   cancellation?: true;
+  /** For a cancellation: whether Shopify put the items back in stock (true all, false none, null only some). */
+  restocked?: boolean | null;
 };
 
 const money =
@@ -47,7 +49,7 @@ const refundQuery = `query ToolboxOrderRefunds($id:ID!){order(id:$id){id name ca
  transactions(first:100){kind status test}
  shippingLines(first:20){nodes{title discountedPriceSet${money} taxLines{priceSet${money}}} pageInfo{hasNextPage}}
  refunds{id createdAt processedAt note
- refundLineItems(first:100){nodes{quantity lineItem{name} subtotalSet${money} totalTaxSet${money}} pageInfo{hasNextPage}}
+ refundLineItems(first:100){nodes{quantity restockType lineItem{name} subtotalSet${money} totalTaxSet${money}} pageInfo{hasNextPage}}
  refundShippingLines(first:20){nodes{shippingLine{title} subtotalAmountSet${money} taxAmountSet${money}} pageInfo{hasNextPage}}
  orderAdjustments(first:20){nodes{reason amountSet${money} taxAmountSet${money}} pageInfo{hasNextPage}}
  transactions(first:20){nodes{id kind status test gateway formattedGateway amountSet${money}} pageInfo{hasNextPage}}}}}`;
@@ -288,9 +290,25 @@ export function normalizeRefund(
           ? 'Annulleringens linjer kunne ikke læses.'
           : 'Refunderingslinjerne stemmer ikke med det tilbagebetalte beløb.',
       );
+    // Items put back in stock by the cancellation: the sale's cost of goods is reversed with the credit.
+    let restocked: { restocked?: boolean | null } = {};
+    if (cancellation) {
+      const back = refund.refundLineItems.nodes.map(
+        (x: { restockType?: string } | null) =>
+          !!x?.restockType && x.restockType !== 'NO_RESTOCK',
+      );
+      restocked = {
+        restocked: back.every(Boolean)
+          ? true
+          : back.some(Boolean)
+            ? null
+            : false,
+      };
+    }
     return {
       ...base,
       ...marker,
+      ...restocked,
       gross,
       full,
       gateways,

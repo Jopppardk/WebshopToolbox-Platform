@@ -383,13 +383,20 @@ async function orderRefund(ctx: BookingContext): Promise<PreparedBooking> {
   // order on payment terms (nothing was paid, so nothing moved it on), otherwise the clearing account.
   // It must credit exactly what the sale booked (its first line is the debit of the whole sale); a sale reconciled
   // by hand, or another amount, is credited by hand in Dinero.
+  let inventory:
+    | { account: number; adjustment: number; cost: number }
+    | undefined;
   if (r!.cancellation) {
     const sale = await db
       .prepare(
-        "SELECT json_extract(payload_json,'$.receivable.account') account,json_extract(payload_json,'$.voucher.Lines[0].Amount') amount FROM production_receipts WHERE company_id=? AND webshop_id=? AND provider='shopify' AND module='orders' AND external_id=? AND phase IN ('draft','booking','booked')",
+        "SELECT json_extract(payload_json,'$.receivable.account') account,json_extract(payload_json,'$.voucher.Lines[0].Amount') amount,json_extract(payload_json,'$.voucher.Lines') lines FROM production_receipts WHERE company_id=? AND webshop_id=? AND provider='shopify' AND module='orders' AND external_id=? AND phase IN ('draft','booking','booked')",
       )
       .bind(company, shop, r!.orderId)
-      .first<{ account: string | null; amount: number | null }>();
+      .first<{
+        account: string | null;
+        amount: number | null;
+        lines: string | null;
+      }>();
     if (
       typeof sale?.amount !== 'number' ||
       Math.round(sale.amount * 100) !== r!.gross
@@ -398,6 +405,30 @@ async function orderRefund(ctx: BookingContext): Promise<PreparedBooking> {
         'Annulleringen stemmer ikke med det bogførte salg. Kreditér salget manuelt i Dinero.',
       );
     if (sale!.account) mapping.clearing = sale!.account;
+    // The sale moved the items' cost from the inventory account to cost of goods; items Shopify put back in stock
+    // move it back, so Dinero's inventory follows Shopify's (Lagerregulering). Only some items back: by hand.
+    const cost = (
+      JSON.parse(sale!.lines || '[]') as Array<{
+        Description?: string;
+        AccountNumber?: number;
+        BalancingAccountNumber?: number;
+        Amount?: number;
+      }>
+    ).find(
+      (l) =>
+        typeof l.BalancingAccountNumber === 'number' &&
+        String(l.Description || '').startsWith('Vareforbrug'),
+    );
+    if (cost && r!.restocked === null)
+      fail(
+        'Kun nogle af varerne er lagt på lager igen ved annulleringen. Kreditér salget manuelt i Dinero.',
+      );
+    if (cost && r!.restocked === true)
+      inventory = {
+        account: cost.BalancingAccountNumber!,
+        adjustment: Number(cost.AccountNumber),
+        cost: Math.round(Number(cost.Amount) * 100),
+      };
   }
   const proposal = refundVoucher(
     {
@@ -407,6 +438,7 @@ async function orderRefund(ctx: BookingContext): Promise<PreparedBooking> {
       gross: r!.gross,
       parts,
       cancellation: r!.cancellation === true,
+      inventory,
     },
     mapping,
   );
