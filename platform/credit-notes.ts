@@ -225,8 +225,10 @@ export async function sendCreditNote(
     .first<{ payload_json: string }>();
   if (!row)
     throw new HttpError(404, 'Hent tilbagebetalingen fra Shopify først.');
-  const refund = JSON.parse(row.payload_json) as OrderRefund,
-    note = await ensureCreditNote(env, company, shop, refund);
+  const refund = JSON.parse(row.payload_json) as OrderRefund;
+  // A cancelled order no one paid for (often fraud): its credit note is only for the bookkeeping.
+  if (refund.cancellation) return { sent: false };
+  const note = await ensureCreditNote(env, company, shop, refund);
   if (!note) return { sent: false };
   if (!note.email)
     throw new HttpError(

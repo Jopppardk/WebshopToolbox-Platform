@@ -594,9 +594,17 @@ async function runShop(
                 // Nothing is booked or mailed for an order cancelled and fully refunded before its sale was booked.
                 ' AND NOT ' +
                 voidOrderSql('s', 's.order_id') +
-                (job === 'order_refunds' ? ' AND ' + saleBookedSql : '') +
+                (job === 'order_refunds'
+                  ? ' AND ' +
+                    saleBookedSql +
+                    // A cancellation of an unpaid order (see order-refunds.ts) is only credited automatically within
+                    // 30 days; older ones may already be credited by hand in Dinero and are booked from Tilbagebetalinger.
+                    " AND (json_extract(s.payload_json,'$.cancellation') IS NULL OR s.occurred_at>=strftime('%Y-%m-%dT%H:%M:%SZ','now','-30 days'))"
+                  : '') +
                 (job === 'credit'
-                  ? " AND s.occurred_at>=strftime('%Y-%m-%dT%H:%M:%SZ','now','-14 days')"
+                  ? " AND s.occurred_at>=strftime('%Y-%m-%dT%H:%M:%SZ','now','-14 days')" +
+                    // The credit note of a cancelled, unpaid order is never mailed: the customer paid nothing (often fraud).
+                    " AND json_extract(s.payload_json,'$.cancellation') IS NULL"
                   : '')
               : module === 'payouts'
                 ? " AND json_extract(s.payload_json,'$.status')='PAID'"

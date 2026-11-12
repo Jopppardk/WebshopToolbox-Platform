@@ -12,6 +12,7 @@ const shippingFields = `id title isRemoved originalPriceSet ${money} discountedP
 const page = 'pageInfo { hasNextPage endCursor }';
 export const orderFields = `id name email createdAt updatedAt processedAt test edited cancelledAt taxesIncluded presentmentCurrencyCode paymentGatewayNames displayFinancialStatus displayFulfillmentStatus
   fulfillments { createdAt status }
+  transactions(first:100) { kind status test }
   customer { displayName firstName lastName }
   billingAddress { name company address1 address2 zip city country countryCodeV2 }
   shippingAddress { name company address1 address2 zip city country countryCodeV2 }

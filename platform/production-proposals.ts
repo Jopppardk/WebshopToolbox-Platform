@@ -379,6 +379,17 @@ async function orderRefund(ctx: BookingContext): Promise<PreparedBooking> {
     (parts.some((p) => p.tax === 0) && mapping.noVatCode !== 'none')
   )
     fail('Vælg U25 og eksplicit ingen moms til refunderingerne.');
+  // A cancelled order that was never paid credits the account its sale debited: the receivables account for an
+  // order on payment terms (nothing was paid, so nothing moved it on), otherwise the clearing account.
+  if (r!.cancellation) {
+    const sale = await db
+      .prepare(
+        "SELECT json_extract(payload_json,'$.receivable.account') account FROM production_receipts WHERE company_id=? AND webshop_id=? AND provider='shopify' AND module='orders' AND external_id=? AND phase IN ('draft','booking','booked')",
+      )
+      .bind(company, shop, r!.orderId)
+      .first<{ account: string | null }>();
+    if (sale?.account) mapping.clearing = sale.account;
+  }
   const proposal = refundVoucher(
     {
       transactionId: id,
@@ -386,6 +397,7 @@ async function orderRefund(ctx: BookingContext): Promise<PreparedBooking> {
       date,
       gross: r!.gross,
       parts,
+      cancellation: r!.cancellation === true,
     },
     mapping,
   );

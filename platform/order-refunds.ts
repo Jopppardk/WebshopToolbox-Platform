@@ -33,11 +33,20 @@ export type OrderRefund = {
   problem: string | null;
   /** The same refund in the customer's currency when it differs from the shop's (credit notes for other markets). */
   presentment?: { currency: string; gross: number; lines: RefundLine[] } | null;
+  /**
+   * The order was cancelled after its sale was booked, without the customer ever paying (e.g. a payment that could
+   * not be captured). No money moves, but the whole sale is credited so it leaves the clearing account again. The
+   * credit note is booked and attached in Dinero, but never mailed to the customer.
+   */
+  cancellation?: true;
 };
 
 const money =
   '{shopMoney{amount currencyCode} presentmentMoney{amount currencyCode}}';
-const refundQuery = `query ToolboxOrderRefunds($id:ID!){order(id:$id){id name taxesIncluded presentmentCurrencyCode totalPriceSet${money} refunds{id createdAt processedAt note
+const refundQuery = `query ToolboxOrderRefunds($id:ID!){order(id:$id){id name cancelledAt taxesIncluded presentmentCurrencyCode totalPriceSet${money}
+ transactions(first:100){kind status test}
+ shippingLines(first:20){nodes{title discountedPriceSet${money} taxLines{priceSet${money}}} pageInfo{hasNextPage}}
+ refunds{id createdAt processedAt note
  refundLineItems(first:100){nodes{quantity lineItem{name} subtotalSet${money} totalTaxSet${money}} pageInfo{hasNextPage}}
  refundShippingLines(first:20){nodes{shippingLine{title} subtotalAmountSet${money} taxAmountSet${money}} pageInfo{hasNextPage}}
  orderAdjustments(first:20){nodes{reason amountSet${money} taxAmountSet${money}} pageInfo{hasNextPage}}
@@ -66,15 +75,19 @@ export function normalizeRefund(
   order: any,
   refund: any,
   sequence: number,
+  cancellation = false,
 ): OrderRefund | null {
-  // Only money actually returned counts; a refund without a successful transaction (e.g. only a restock) is not booked.
+  // Only money actually returned counts; a refund without a successful transaction (e.g. only a restock) is not booked,
+  // unless it is the cancellation of an order that was never paid (see unpaidCancellation).
   const transactions = Array.isArray(refund?.transactions?.nodes)
     ? refund.transactions.nodes.filter(
         (t: any) => t?.kind === 'REFUND' && t.status === 'SUCCESS' && !t.test,
       )
     : [];
   const currency = order.totalPriceSet?.shopMoney?.currencyCode;
-  if (!transactions.length || typeof currency !== 'string') return null;
+  if (cancellation && transactions.length) cancellation = false;
+  if ((!transactions.length && !cancellation) || typeof currency !== 'string')
+    return null;
   const base = {
     id: String(refund.id),
     orderId: String(order.id),
@@ -89,7 +102,17 @@ export function normalizeRefund(
   };
   let gross = 0;
   const gateways: OrderRefund['gateways'] = [];
+  const marker = cancellation ? { cancellation: true as const } : {};
   try {
+    // A cancellation credits the whole sale: the order's original total, as it was invoiced and booked.
+    if (cancellation) {
+      gross = amount(order.totalPriceSet?.shopMoney, currency);
+      gateways.push({
+        gateway: '',
+        name: 'Annulleret, intet betalt',
+        amount: gross,
+      });
+    }
     for (const t of transactions) {
       const value = amount(t.amountSet?.shopMoney, currency),
         gateway = typeof t.gateway === 'string' ? t.gateway.slice(0, 80) : '';
@@ -110,6 +133,7 @@ export function normalizeRefund(
     if (error instanceof RefundProblem)
       return {
         ...base,
+        ...marker,
         gross: 0,
         full: false,
         gateways,
@@ -120,10 +144,11 @@ export function normalizeRefund(
   }
   if (gross <= 0) return null;
   const full =
+    cancellation ||
     gross ===
-    Math.abs(
-      minorUnits(String(order.totalPriceSet.shopMoney.amount), currency),
-    );
+      Math.abs(
+        minorUnits(String(order.totalPriceSet.shopMoney.amount), currency),
+      );
   try {
     for (const field of [
       'refundLineItems',
@@ -166,6 +191,27 @@ export function normalizeRefund(
         subtotal: amount(x.subtotalAmountSet?.shopMoney, currency),
         tax: amount(x.taxAmountSet?.shopMoney, currency),
       });
+    // Shopify's cancellation returns the items but not always the shipping; the booked sale included it, so a
+    // cancellation credits the order's shipping as well.
+    if (cancellation && !refund.refundShippingLines.nodes.length) {
+      if (
+        !Array.isArray(order.shippingLines?.nodes) ||
+        order.shippingLines.pageInfo?.hasNextPage !== false
+      )
+        problem('Ordrens fragtlinjer kunne ikke læses.');
+      for (const x of order.shippingLines.nodes)
+        raw.push({
+          kind: 'shipping',
+          title: String(x?.title || 'Fragt').slice(0, 300),
+          quantity: 1,
+          subtotal: amount(x?.discountedPriceSet?.shopMoney, currency),
+          tax: (Array.isArray(x?.taxLines) ? x.taxLines : []).reduce(
+            (sum: number, t: { priceSet?: { shopMoney?: Money } } | null) =>
+              sum + amount(t?.priceSet?.shopMoney, currency),
+            0,
+          ),
+        });
+    }
     for (const x of refund.orderAdjustments.nodes) {
       // Older refunds return shipping as an adjustment; everything else is a regulation of the refunded amount.
       if (x.reason === 'SHIPPING_REFUND')
@@ -222,13 +268,24 @@ export function normalizeRefund(
       ) ?? readings.find(Boolean);
     if (!lines?.length)
       problem(
-        'Refunderingslinjerne stemmer ikke med det tilbagebetalte beløb.',
+        cancellation
+          ? 'Annulleringens linjer stemmer ikke med ordrens total.'
+          : 'Refunderingslinjerne stemmer ikke med det tilbagebetalte beløb.',
       );
-    return { ...base, gross, full, gateways, lines: lines!, problem: null };
+    return {
+      ...base,
+      ...marker,
+      gross,
+      full,
+      gateways,
+      lines: lines!,
+      problem: null,
+    };
   } catch (error) {
     if (error instanceof RefundProblem)
       return {
         ...base,
+        ...marker,
         gross,
         full,
         gateways,
@@ -237,6 +294,34 @@ export function normalizeRefund(
       };
     throw error;
   }
+}
+
+/**
+ * The refund that cancelled an order no one ever paid for (no successful sale or capture, e.g. a payment that could
+ * not be captured), or null. Shopify records such a cancellation as a refund without money; it is then booked as a
+ * credit of the whole sale. Only one such refund is expected; with more it is shown with a problem instead.
+ */
+type PaymentState = {
+  cancelledAt?: string | null;
+  transactions?: Array<{
+    kind?: string;
+    status?: string;
+    test?: boolean;
+  } | null>;
+};
+export function unpaidCancellation<T>(order: PaymentState, sorted: T[]) {
+  if (!order?.cancelledAt || !Array.isArray(order.transactions)) return null;
+  if (
+    order.transactions.some(
+      (t) =>
+        ['SALE', 'CAPTURE'].includes(String(t?.kind)) &&
+        t?.status === 'SUCCESS' &&
+        !t.test,
+    )
+  )
+    return null;
+  if (!sorted.length) return null;
+  return { refund: sorted[sorted.length - 1], single: sorted.length === 1 };
 }
 
 /** All refunds of an order, oldest first, numbered 1, 2, … among those that returned money. */
@@ -266,9 +351,19 @@ export async function readOrderRefunds(access: Access, orderId: string) {
     typeof data.order.presentmentCurrencyCode === 'string' &&
     data.order.presentmentCurrencyCode !==
       data.order.totalPriceSet?.shopMoney?.currencyCode;
+  const cancelled = unpaidCancellation(data.order, sorted);
   for (const refund of sorted) {
-    const value = normalizeRefund(data.order, refund, refunds.length + 1);
+    const cancellation = cancelled?.refund === refund,
+      value = normalizeRefund(
+        data.order,
+        refund,
+        refunds.length + 1,
+        cancellation,
+      );
     if (!value) continue;
+    if (cancellation && !cancelled!.single && !value.problem)
+      value.problem =
+        'Ordren har flere refunderinger. Annulleringen bogføres ikke automatisk.';
     // Paid in another currency: the credit note follows the invoice in the customer's currency; booking stays in the shop's.
     if (foreign) {
       let local: OrderRefund | null = null;
@@ -277,6 +372,7 @@ export async function readOrderRefunds(access: Access, orderId: string) {
           inPresentment(data.order),
           inPresentment(refund),
           value.sequence,
+          cancellation,
         );
       } catch {
         local = null;
@@ -291,7 +387,10 @@ export async function readOrderRefunds(access: Access, orderId: string) {
   return refunds;
 }
 
-/** Reads the refunds of orders whose refunded amount changed since they were last read, newest first. */
+/**
+ * Reads the refunds of orders whose refunded amount changed since they were last read, newest first, and of orders
+ * cancelled after their sale was booked (a cancellation without money is a refund too, see unpaidCancellation).
+ */
 export async function syncOrderRefunds(
   env: PlatformEnv,
   company: string,
@@ -301,10 +400,11 @@ export async function syncOrderRefunds(
   const db = env.PLATFORM_DB;
   const orders = (
     await db
-      .prepare(`SELECT s.external_id,json_extract(s.payload_json,'$.totalRefundedSet.shopMoney.amount') refunded FROM operation_snapshots s
+      .prepare(`SELECT s.external_id,${checkedSql} refunded FROM operation_snapshots s
  LEFT JOIN order_refund_checks c ON c.company_id=s.company_id AND c.webshop_id=s.webshop_id AND c.order_id=s.external_id
- WHERE s.company_id=? AND s.webshop_id=? AND s.module='orders' AND CAST(COALESCE(json_extract(s.payload_json,'$.totalRefundedSet.shopMoney.amount'),'0') AS REAL)>0
- AND (c.order_id IS NULL OR c.refunded<>json_extract(s.payload_json,'$.totalRefundedSet.shopMoney.amount'))
+ WHERE s.company_id=? AND s.webshop_id=? AND s.module='orders' AND (CAST(COALESCE(json_extract(s.payload_json,'$.totalRefundedSet.shopMoney.amount'),'0') AS REAL)>0
+ OR (json_extract(s.payload_json,'$.cancelledAt') IS NOT NULL AND ${saleBookedOf('s.external_id')}))
+ AND (c.order_id IS NULL OR c.refunded<>${checkedSql})
  ORDER BY s.occurred_at DESC LIMIT ?`)
       .bind(company, shop, limit)
       .all<{ external_id: string; refunded: string }>()
@@ -339,9 +439,14 @@ export async function syncOrderRefunds(
   return { orders: orders.length, refunds: stored };
 }
 
+/** The sale of the order in column `order` (of a row aliased `s`) is in Dinero: booked or drafted here, or reconciled. */
+const saleBookedOf = (order: string) =>
+  `(EXISTS(SELECT 1 FROM production_receipts b WHERE b.company_id=s.company_id AND b.webshop_id=s.webshop_id AND b.provider='shopify' AND b.module='orders' AND b.external_id=${order} AND b.phase IN ('draft','booking','booked')) OR EXISTS(SELECT 1 FROM accounting_reconciliations b WHERE b.company_id=s.company_id AND b.webshop_id=s.webshop_id AND b.provider='shopify' AND b.module='orders' AND b.external_id=${order}))`;
 /** The refund's sale is in Dinero (booked or drafted here, or reconciled), so the clearing account it credits holds the sale. */
-export const saleBookedSql =
-  "(EXISTS(SELECT 1 FROM production_receipts b WHERE b.company_id=s.company_id AND b.webshop_id=s.webshop_id AND b.provider='shopify' AND b.module='orders' AND b.external_id=s.order_id AND b.phase IN ('draft','booking','booked')) OR EXISTS(SELECT 1 FROM accounting_reconciliations b WHERE b.company_id=s.company_id AND b.webshop_id=s.webshop_id AND b.provider='shopify' AND b.module='orders' AND b.external_id=s.order_id))";
+export const saleBookedSql = saleBookedOf('s.order_id');
+// What an order's refunds were last read for: its refunded amount, and whether it was cancelled.
+const checkedSql =
+  "COALESCE(json_extract(s.payload_json,'$.totalRefundedSet.shopMoney.amount'),'0')||CASE WHEN json_extract(s.payload_json,'$.cancelledAt') IS NOT NULL THEN ':cancelled' ELSE '' END";
 /**
  * An order that needs no bookkeeping at all: cancelled in Shopify and fully refunded, before its sale reached
  * Dinero and before an invoice was made. Sale and refund cancel out, so neither is booked, invoiced or mailed.
