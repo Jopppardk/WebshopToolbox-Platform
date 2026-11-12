@@ -104,15 +104,6 @@ export function normalizeRefund(
   const gateways: OrderRefund['gateways'] = [];
   const marker = cancellation ? { cancellation: true as const } : {};
   try {
-    // A cancellation credits the whole sale: the order's original total, as it was invoiced and booked.
-    if (cancellation) {
-      gross = amount(order.totalPriceSet?.shopMoney, currency);
-      gateways.push({
-        gateway: '',
-        name: 'Annulleret, intet betalt',
-        amount: gross,
-      });
-    }
     for (const t of transactions) {
       const value = amount(t.amountSet?.shopMoney, currency),
         gateway = typeof t.gateway === 'string' ? t.gateway.slice(0, 80) : '';
@@ -142,7 +133,8 @@ export function normalizeRefund(
       };
     throw error;
   }
-  if (gross <= 0) return null;
+  // A cancellation's amount is what its lines add up to (below); the booking checks it against the booked sale.
+  if (gross <= 0 && !cancellation) return null;
   const full =
     cancellation ||
     gross ===
@@ -193,7 +185,13 @@ export function normalizeRefund(
       });
     // Shopify's cancellation returns the items but not always the shipping; the booked sale included it, so a
     // cancellation credits the order's shipping as well.
-    if (cancellation && !refund.refundShippingLines.nodes.length) {
+    if (
+      cancellation &&
+      !refund.refundShippingLines.nodes.length &&
+      !refund.orderAdjustments.nodes.some(
+        (x: { reason?: string } | null) => x?.reason === 'SHIPPING_REFUND',
+      )
+    ) {
       if (
         !Array.isArray(order.shippingLines?.nodes) ||
         order.shippingLines.pageInfo?.hasNextPage !== false
@@ -227,6 +225,24 @@ export function normalizeRefund(
           amount: amount(x.amountSet?.shopMoney, currency),
           tax: amount(x.taxAmountSet?.shopMoney, currency),
         });
+    }
+    // A cancellation credits what the sale was: the items and shipping as Shopify cancelled them (for an edited
+    // order the items it had when it was invoiced), read with the shop's own price setting.
+    if (cancellation) {
+      if (regulations.length)
+        problem('Annulleringen har reguleringer og bogføres ikke automatisk.');
+      gross = raw.reduce(
+        (sum, r) =>
+          sum +
+          (order.taxesIncluded !== false ? r.subtotal : r.subtotal + r.tax),
+        0,
+      );
+      if (gross <= 0) problem('Annulleringen har intet beløb.');
+      gateways.push({
+        gateway: '',
+        name: 'Annulleret, intet betalt',
+        amount: gross,
+      });
     }
     const attempt = (included: boolean) => {
       const lines: RefundLine[] = raw
@@ -269,7 +285,7 @@ export function normalizeRefund(
     if (!lines?.length)
       problem(
         cancellation
-          ? 'Annulleringens linjer stemmer ikke med ordrens total.'
+          ? 'Annulleringens linjer kunne ikke læses.'
           : 'Refunderingslinjerne stemmer ikke med det tilbagebetalte beløb.',
       );
     return {
