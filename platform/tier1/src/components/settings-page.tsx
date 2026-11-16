@@ -1214,6 +1214,12 @@ export function Settings({
                     optional: 'Ingen – bogfør som andre ordrer',
                     hint: 'Ordrer med betalingsbetingelser i Shopify bogføres her i stedet for på mellemregningskontoen, og indbetalingerne bogføres fra den til bankkontoen (manuel betaling) eller mellemregningskontoen (betaling via en betalingsudbyder). Kræver read_payment_terms i Shopify-appen.',
                   })}
+                  {Field({
+                    name: 'exchangeDifferences',
+                    label: 'Konto til kursdifferencer (Shopify Payments)',
+                    optional: 'Ingen – lad forskellen stå på mellemregningen',
+                    hint: 'Ordrer i udenlandsk valuta bogføres i kroner efter kursen, da ordren blev lagt. Shopify Payments veksler pengene lidt senere til en anden kurs. Når en konto er valgt, bogføres forskellen pr. ordre på den ved udbetalingen, så mellemregningskontoen går i nul. Kontoen skal være uden moms. Kun nye udbetalinger; ældre beløb rettes ikke.',
+                  })}
                 </div>
                 <div className="flex justify-end border-t p-4">
                   <Button className="h-10 rounded-xl px-4" onClick={onSave}>

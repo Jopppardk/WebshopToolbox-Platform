@@ -69,6 +69,8 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 
 - **B2B-kunder, der betaler på faktura (udgivet 29. oktober 2026, dev og prod, run 40860338370, main `d0d700c`, migration 0052 kørt):** debitorkonto, bogføring af salg på betalingsbetingelser på den, automatiske indbetalingsbilag (bank eller mellemregning mod debitor) og forfaldsdato/betalingsoplysninger på fakturaen. Slås til ved at vælge debitorkontoen; kræver read_payment_terms i kundens Shopify-app. Ikke afprøvet mod rigtig Shopify B2B eller Dinero.
 
+- **Kursdifferencer på Shopify Payments-udbetalinger (ikke udgivet):** valgfri konto til kursdifferencer; udbetalingsbilaget flytter forskellen pr. udenlandsk ordre fra mellemregningskontoen dertil. Kræver, at kontoen vælges under kontoplanen. Ikke afprøvet mod rigtig Shopify eller Dinero.
+
 **Mangler**
 - **Svenske produktnavne på fakturaer:** kræver read_translations i kundens Shopify-app; ellers danske navne.
 - **Backup:** gendannelsen er ikke øvet, og R2-dokumenterne har ingen backup.

@@ -9,7 +9,14 @@ import { bookingDate } from './production-policy';
 import { shopAccess, orderQuery } from './invoice-source';
 import { readDineroAccounts } from './dinero-read';
 import { payoutBreakdown, payoutSummaryFields } from './payout-calculations';
-import { fetchPayoutTransactions } from './payout-source';
+import { fetchPayoutTransactionsWithSources } from './payout-source';
+import {
+  exchangeDifferenceMovements,
+  exchangeDifferences,
+  orderTransactionsQuery,
+  readOrderTransactions,
+  type OrderTransactionDetail,
+} from './exchange-differences';
 import { buildPayoutReport } from './payout-pdf';
 import { minorUnits } from './money';
 import { refundVoucher, type RefundPart } from './refund-voucher';
@@ -122,8 +129,40 @@ async function payout(ctx: BookingContext): Promise<PreparedBooking> {
   const bank = num(a.bank),
     clearing = num(a.clearing),
     gateway = num(a.shopifyPaymentsClearing),
-    fees = num(a.fees);
-  await chartFor(ctx, [bank, clearing, gateway, fees]);
+    fees = num(a.fees),
+    // Optional: without an account for exchange differences the payout is booked as before.
+    exchange = asText(a.exchangeDifferences || '').trim()
+      ? num(a.exchangeDifferences)
+      : null;
+  await chartFor(
+    ctx,
+    exchange
+      ? [bank, clearing, gateway, fees, exchange]
+      : [bank, clearing, gateway, fees],
+  );
+  const { transactions, sources } = await fetchPayoutTransactionsWithSources(
+    id,
+    'DKK',
+    b.net,
+    access,
+  );
+  const differences = exchange
+    ? exchangeDifferences(
+        transactions,
+        sources,
+        await readOrderTransactions(
+          transactions
+            .filter((t) => t.type === 'CHARGE')
+            .map((t) => sources.get(t.id) || ''),
+          (ids) =>
+            orderQuery<{ nodes?: Array<OrderTransactionDetail | null> }>(
+              access,
+              orderTransactionsQuery,
+              { ids },
+            ),
+        ),
+      )
+    : [];
   const movements = [
     {
       label: 'Betalinger',
@@ -139,6 +178,9 @@ async function payout(ctx: BookingContext): Promise<PreparedBooking> {
     },
     { label: 'Gebyrer', amount: b.fees, account: fees, balancing: gateway },
     { label: 'Udbetaling', amount: b.net, account: bank, balancing: gateway },
+    ...(exchange
+      ? exchangeDifferenceMovements(differences, clearing, exchange)
+      : []),
   ].filter((x) => x.amount);
   const voucher = {
     VoucherDate: date,
@@ -155,7 +197,7 @@ async function payout(ctx: BookingContext): Promise<PreparedBooking> {
   const source = {
     ...p,
     provider: 'shopify_payments',
-    transactions: await fetchPayoutTransactions(id, 'DKK', b.net, access),
+    transactions,
   };
   const companyRow = await env.PLATFORM_DB.prepare(
     'SELECT name FROM companies WHERE id=?',
