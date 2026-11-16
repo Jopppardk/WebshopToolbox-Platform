@@ -53,20 +53,33 @@ const minor = (money: Money, currency: string) => {
 /**
  * Per order, the difference between the DKK the sale booked for the payout's charges and the DKK Shopify Payments
  * paid out. Orders in DKK, transactions without a known order transaction, and implausible differences are left out.
+ * `fromReceivables` names the order transactions (gid) of orders on payment terms: their sale is on Debitorer, and the
+ * payment voucher already moved the payment's own DKK amount to the clearing account, so there is nothing to correct.
  */
 export function exchangeDifferences(
   transactions: PayoutTransaction[],
   sources: Map<string, string>,
   details: Map<string, OrderTransactionDetail>,
   shopCurrency = 'DKK',
+  fromReceivables: Set<string> = new Set(),
 ): ExchangeDifference[] {
-  const result = new Map<string, ExchangeDifference>();
+  const orders = new Map<
+    string,
+    {
+      orderId: string;
+      orderName: string;
+      paid: number;
+      orderShop: number;
+      orderForeign: number;
+      realized: number;
+    }
+  >();
   for (const t of transactions) {
     if (t.type !== 'CHARGE' || t.amount.currencyCode !== shopCurrency) continue;
     const source = sources.get(t.id);
-    const detail = source
-      ? details.get('gid://shopify/OrderTransaction/' + source)
-      : undefined;
+    const gid = source ? 'gid://shopify/OrderTransaction/' + source : '';
+    const detail =
+      gid && !fromReceivables.has(gid) ? details.get(gid) : undefined;
     const order = detail?.order;
     const foreign = order?.presentmentCurrencyCode;
     if (
@@ -82,25 +95,43 @@ export function exchangeDifferences(
       orderShop = minor(order.totalPriceSet?.shopMoney, shopCurrency),
       orderForeign = minor(order.totalPriceSet?.presentmentMoney, foreign);
     if (paid === null || !orderShop || !orderForeign || paid <= 0) continue;
-    // The sale is booked at the order's own rate: its DKK total over its total in the customer's currency.
-    const booked = Math.round((paid * orderShop) / orderForeign),
-      realized = minorUnits(t.amount.amount, shopCurrency);
-    if (!Number.isSafeInteger(booked) || realized <= 0) continue;
-    const known = result.get(order.id) || {
+    const realized = minorUnits(t.amount.amount, shopCurrency);
+    if (realized <= 0) continue;
+    const known = orders.get(order.id) || {
       orderId: order.id,
       orderName: order.name,
-      booked: 0,
+      paid: 0,
+      orderShop,
+      orderForeign,
       realized: 0,
-      difference: 0,
     };
-    known.booked += booked;
+    known.paid += paid;
     known.realized += realized;
-    known.difference = known.realized - known.booked;
-    result.set(order.id, known);
+    orders.set(order.id, known);
   }
-  return [...result.values()]
-    .filter((x) => x.difference !== 0 && plausible(x.booked, x.difference))
-    .sort((a, b) => a.orderName.localeCompare(b.orderName, 'da'));
+  return (
+    [...orders.values()]
+      // The sale is booked at the order's own rate: its DKK total over its total in the customer's currency. The
+      // order's payments in this payout are converted together and rounded once, so payments that add up to the
+      // whole order give exactly the booked sale.
+      .map((x) => {
+        const booked = Math.round((x.paid * x.orderShop) / x.orderForeign);
+        return {
+          orderId: x.orderId,
+          orderName: x.orderName,
+          booked,
+          realized: x.realized,
+          difference: x.realized - booked,
+        };
+      })
+      .filter(
+        (x) =>
+          Number.isSafeInteger(x.booked) &&
+          x.difference !== 0 &&
+          plausible(x.booked, x.difference),
+      )
+      .sort((a, b) => a.orderName.localeCompare(b.orderName, 'da'))
+  );
 }
 
 /** Reads the order transactions behind the payout's charges (amount in the customer's currency and the order's totals). */

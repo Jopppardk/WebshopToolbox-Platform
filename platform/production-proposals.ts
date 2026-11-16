@@ -105,6 +105,18 @@ async function reportFile(
   );
   return { file: file!, pdfKey: key, pdfEtag: file!.etag };
 }
+// Payments of orders on payment terms (B2B): their sale is on Debitorer and their own voucher moves the payment's DKK
+// amount to the clearing account, so the payout leaves no exchange difference for them.
+async function paymentsFromReceivables(ctx: BookingContext) {
+  const rows = (
+    await ctx.env.PLATFORM_DB.prepare(
+      'SELECT external_id FROM order_payments WHERE company_id=? AND webshop_id=?',
+    )
+      .bind(ctx.company, ctx.shop)
+      .all<{ external_id: string }>()
+  ).results;
+  return new Set(rows.map((r) => r.external_id));
+}
 async function payout(ctx: BookingContext): Promise<PreparedBooking> {
   const { env, company, shop, id } = ctx,
     access = await shopAccess(env, company, shop);
@@ -161,6 +173,8 @@ async function payout(ctx: BookingContext): Promise<PreparedBooking> {
               { ids },
             ),
         ),
+        'DKK',
+        await paymentsFromReceivables(ctx),
       )
     : [];
   const movements = [
