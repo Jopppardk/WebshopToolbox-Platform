@@ -172,6 +172,13 @@ export function normalizeRemote(value: unknown): unknown {
     );
   return value;
 }
+// Dinero computes a line's VAT from its amount including VAT, while the proposal's VAT is Shopify's,
+// rounded per order line. With several lines or a discount the two can differ by a few øre (Sablen's
+// order #2736). Amount incl. VAT, account and VAT code must still match exactly; the VAT may differ by
+// at most 1 øre per started 100 kr, and at least 2 øre. Lines without a VAT code must match exactly.
+export function vatRounding(vat: string, gross: number) {
+  return vat === 'none' ? 0 : Math.max(2, Math.ceil(Math.abs(gross) / 10000));
+}
 export function verifyVoucher(
   raw: unknown,
   wanted: Voucher,
@@ -210,6 +217,9 @@ export function verifyVoucher(
     const target = wanted.Lines[i],
       amounts = expected[i];
     const vat = asText(line.AccountVatCode || 'none').toLowerCase();
+    const net = minor(line.AmountExclVatValue),
+      tax = minor(line.VatAmountValue),
+      gross = minor(line.AmountInclVatValue);
     if (
       line.Description !== target.Description ||
       line.AccountNumber !== target.AccountNumber ||
@@ -218,9 +228,9 @@ export function verifyVoucher(
       vat !== target.AccountVatCode.toLowerCase() ||
       asText(line.BalancingAccountVatCode || 'none').toLowerCase() !== 'none' ||
       (line.CurrencyKey && line.CurrencyKey !== 'DKK') ||
-      minor(line.AmountExclVatValue) !== amounts.net ||
-      minor(line.VatAmountValue) !== amounts.tax ||
-      minor(line.AmountInclVatValue) !== amounts.gross
+      gross !== amounts.gross ||
+      net + tax !== gross ||
+      Math.abs(tax - amounts.tax) > vatRounding(vat, amounts.gross)
     )
       rejectTransfer(
         `Dinero-linje ${i + 1} stemmer ikke med konto, moms og beløb. Kladden skal gennemgås.`,

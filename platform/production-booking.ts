@@ -10,7 +10,7 @@ import {
   withWebshop,
   type Voucher,
 } from './dinero-sale';
-import { dineroClient } from './dinero-write';
+import { dineroClient, type DineroHttpError } from './dinero-write';
 import {
   readReceipt,
   saveReceipt,
@@ -342,11 +342,22 @@ async function productionBooking(
         voucherNumber: booked.VoucherNumber,
       });
     }
-  } catch {
+  } catch (caught) {
     await uncertainReceipt(env, key, current);
+    // Keep the reason (Dinero's own rejection or the check that refused the voucher), so the post's log
+    // says why instead of only "uafklaret". Timeouts and other errors are not shown.
+    const rejected = caught as Partial<DineroHttpError>;
+    const reason =
+      caught instanceof TransferError && typeof rejected.status === 'number'
+        ? `Dinero svarede HTTP ${rejected.status}${rejected.detail ? ': ' + rejected.detail : ''}. `
+        : caught instanceof TransferError || caught instanceof HttpError
+          ? caught.message.replace(/\.?$/, '. ')
+          : '';
     throw new HttpError(
       409,
-      'Overførslen er uafklaret. Kontrollér status i Dinero; der oprettes ikke et nyt bilag automatisk.',
+      'Overførslen er uafklaret. ' +
+        reason +
+        'Kontrollér status i Dinero; der oprettes ikke et nyt bilag automatisk.',
     );
   }
   return reply({
