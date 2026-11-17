@@ -115,6 +115,7 @@ test('every page of the portal renders', async ({ page }) => {
     ['Forsendelser', /Forsendelser/],
     ['Emballage', /Emballage/],
     ['Produktfeeds', /Produktfeeds/],
+    ['Anmeldelser', /Trustpilot/],
     ['Eksempel', /Forbindelsen til appen virker/],
     ['Webshop-synkronisering', /mindst to webshops forbundet til Shopify/],
     ['Support', /Support/],
@@ -165,6 +166,32 @@ test('every page of the portal renders', async ({ page }) => {
     await expect(page.getByRole('article', { name })).toContainText(
       'Indberetningspligtig',
     );
+  // Anmeldelser (in this test: the login is rate limited): the invitation mail is edited in place, saved and
+  // sent as a local test.
+  await nav(page, 'Anmeldelser').click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    'Anmeldelser for Webshop A1',
+  );
+  // Write directly in the mail's heading, then add an image below it.
+  const heading = page.getByRole('group', { name: 'Overskrift' }).nth(1);
+  await heading.locator('[data-edit]').click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' Tak for handlen!');
+  await page.getByRole('button', { name: 'Billede', exact: true }).click();
+  await expect(
+    page.getByText('Vælg et billede i panelet til højre'),
+  ).toBeVisible();
+  await expect(page.getByText('Ikke gemt')).toBeVisible();
+  await page.getByRole('button', { name: 'Gem', exact: true }).click();
+  await expect(page.getByText('Ikke gemt')).toHaveCount(0);
+  await page.reload();
+  await nav(page, 'Anmeldelser').click();
+  await expect(page.locator('main')).toContainText('Tak for handlen!');
+  // The Swedish mail has its own text; its test mail is only formed locally, never sent.
+  await page.getByRole('tab', { name: /Svensk/ }).click();
+  await expect(page.locator('main')).toContainText('Hur var din upplevelse');
+  await page.getByRole('button', { name: 'Send testmail' }).click();
+  await expect(page.getByRole('status')).toContainText('Lokal test');
 });
 const withRefresh = [
   'Dashboard',

@@ -19,6 +19,7 @@ import { productionWrites } from './production-policy';
 import { customerActor, customerLogin, customerLogout } from './customer-auth';
 import { publicSignup } from './signup';
 import { publicFeed, refreshDueFeeds } from './feeds';
+import { publicMailImage } from './review-invitations';
 import { handleTier1 } from './tier1-api';
 import { runCustomApps } from './custom-apps';
 import { InvoiceCheckError } from './invoice-check';
@@ -86,7 +87,7 @@ function secure(response: Response, tier1 = false) {
   headers.set(
     'Content-Security-Policy',
     tier1
-      ? "default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; font-src 'self'; connect-src 'self'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+      ? "default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; font-src 'self'; connect-src 'self'; img-src 'self' https:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
       : "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
   );
   return new Response(response.body, { status: response.status, headers });
@@ -158,6 +159,9 @@ export default {
         return secure(await shipmondoWebhook(request, env));
       if (!admin && path.startsWith('/feeds/'))
         return secure(await publicFeed(request, env));
+      // Images in Trustpilot invitation mails: public and cacheable, with their own headers.
+      if (!admin && path.startsWith('/mail-images/'))
+        return await publicMailImage(request, env);
       if (path === '/robots.txt' && ['GET', 'HEAD'].includes(request.method))
         return secure(
           new Response(

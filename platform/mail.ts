@@ -650,3 +650,93 @@ export async function sendCustomerInvoice(
   }
   return reply({ sent: true, recipient, status: 'accepted' });
 }
+
+/**
+ * Sends one HTML mail (with a plain text version) from the sender of the scope: its own verified address via its
+ * Cloudflare account, otherwise the standard sender. Returns the sender and the provider's receipt, and throws when
+ * the provider did not confirm the mail: the caller then treats the send as uncertain and never repeats it on its own.
+ * Callers check access, recipient and whether customer mail is allowed before calling this.
+ */
+export async function deliverMail(
+  env: PlatformEnv,
+  company: string,
+  scope: MailScope,
+  message: { to: string; subject: string; html: string; text: string },
+): Promise<{ from: string; receipt: string }> {
+  const recipient = mailAddress(message.to),
+    { settings, own } = await senderSettings(env, company, scope),
+    from = effectiveSender(settings, standardFrom(env));
+  const name =
+    settings?.sender_name || (await defaultSenderName(env, company, own));
+  const custom = !!settings?.custom_from && from === settings.custom_from;
+  if (custom) {
+    const secret = await unseal(
+      env,
+      [company, 'mail', from, settings!.account_id],
+      settings!.credentials_encrypted!,
+    );
+    const response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${settings!.account_id}/email/sending/send`,
+      {
+        method: 'POST',
+        redirect: 'manual',
+        signal: AbortSignal.timeout(15000),
+        headers: {
+          Authorization: 'Bearer ' + secret.token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: { address: from, name },
+          to: recipient,
+          subject: message.subject,
+          html: message.html,
+          text: message.text,
+          ...(settings?.reply_to ? { reply_to: settings.reply_to } : {}),
+        }),
+      },
+    );
+    const result = (await response.json()) as {
+      success?: boolean;
+      result?: {
+        delivered?: string[];
+        queued?: string[];
+        permanent_bounces?: string[];
+      };
+    };
+    if (
+      !response.ok ||
+      !result.success ||
+      result.result?.permanent_bounces?.includes(recipient) ||
+      !(
+        result.result?.delivered?.includes(recipient) ||
+        result.result?.queued?.includes(recipient)
+      )
+    )
+      throw Error('Unconfirmed');
+    return { from, receipt: JSON.stringify(result.result) };
+  }
+  if (!env.PLATFORM_MAIL_TEST)
+    throw new HttpError(503, 'Mailtjenesten er ikke konfigureret.');
+  const result = await env.PLATFORM_MAIL_TEST.send({
+    from: { email: from, name },
+    to: recipient,
+    ...(settings?.reply_to ? { replyTo: settings.reply_to } : {}),
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+  });
+  if (!result?.messageId) throw Error('Unconfirmed');
+  return { from, receipt: result.messageId };
+}
+/** The address a scope's mails go out from now (its own verified address, or the standard sender). */
+export async function currentSender(
+  env: PlatformEnv,
+  company: string,
+  scope: MailScope,
+) {
+  const { settings, own } = await senderSettings(env, company, scope);
+  return {
+    from: effectiveSender(settings, standardFrom(env)),
+    name: settings?.sender_name || (await defaultSenderName(env, company, own)),
+  };
+}

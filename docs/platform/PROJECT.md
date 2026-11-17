@@ -51,6 +51,7 @@ Den oprindelige Sablen-løsning er lukket ned. Platformen er nu den eneste køre
 - [BOOKING-ONBOARDING.md](BOOKING-ONBOARDING.md): bogføringsopstart.
 - [INVOICE-MIGRATION.md](INVOICE-MIGRATION.md): fakturaer.
 - [MAIL-SENDERS.md](MAIL-SENDERS.md): mailafsendere.
+- [REVIEW-INVITATIONS.md](REVIEW-INVITATIONS.md): egne Trustpilot-invitationer (Tools → Anmeldelser).
 - [ORDER-REFRESH.md](ORDER-REFRESH.md): genhentning af ordrer.
 - [RECORD-HISTORY.md](RECORD-HISTORY.md): posthistorik.
 - [PRODUCT-FEEDS.md](PRODUCT-FEEDS.md): produktfeeds.
