@@ -7,6 +7,7 @@ import {
   Landmark,
   CreditCard,
   PackageCheck,
+  Mail,
   Plus,
   Library,
   Check,
@@ -98,6 +99,7 @@ const icons = {
   viabill: CreditCard,
   pensopay: CreditCard,
   emballage: PackageCheck,
+  cloudflare: Mail,
 };
 export function IntegrationLibrary({
   state,

@@ -19,3 +19,7 @@ INSERT INTO record_events(company_id,webshop_id,provider,module,external_id,even
 -- The example custom app is on for company A, so the menu "Custom apps" is shown.
 INSERT OR REPLACE INTO custom_apps(app_id,company_id,enabled_by) VALUES('eksempel','company-a','local-admin');
 INSERT OR REPLACE INTO custom_apps(app_id,company_id,enabled_by) VALUES('webshop-sync','company-a','local-admin');
+-- Cloudflare E-mail is connected for company A with two approved domains (the token is never read locally).
+INSERT OR REPLACE INTO mail_connections(company_id,account_id,credentials_encrypted,revision,source,discovery) VALUES('company-a','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','x','mail-smoke','token',1);
+INSERT OR REPLACE INTO mail_domains(company_id,domain,source) VALUES('company-a','sablen.dk','cloudflare'),('company-a','sabeln.se','test');
+INSERT OR IGNORE INTO company_integrations(company_id,integration_id) VALUES('company-a','cloudflare');

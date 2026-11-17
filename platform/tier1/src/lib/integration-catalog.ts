@@ -49,6 +49,13 @@ export const integrationCatalog = [
     category: 'Betaling',
   },
   {
+    id: 'cloudflare',
+    name: 'Cloudflare E-mail',
+    description:
+      'Send fakturaer og anmeldelsesmails fra jeres egne domæner, fx kontakt@jeresbutik.dk.',
+    category: 'Mail',
+  },
+  {
     id: 'emballage',
     name: 'Emballage Indberetning',
     description:

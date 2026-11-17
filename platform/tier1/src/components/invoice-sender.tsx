@@ -1,15 +1,8 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, ChevronDown, Mail } from 'lucide-react';
+import { CheckCircle2, Mail } from 'lucide-react';
 import { tier1Fetch as fetch } from '@/platform/transport';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
 type Sender = {
   senderName: string;
   replyTo: string;
@@ -23,6 +16,15 @@ type Sender = {
   testEnabled: boolean;
   localPreview: boolean;
   inherited?: boolean;
+  // Domains approved in Integrationer → Cloudflare E-mail.
+  connected: boolean;
+  domains: string[];
+};
+const split = (address: string) => {
+  const at = address.lastIndexOf('@');
+  return at < 0
+    ? { local: address, domain: '' }
+    : { local: address.slice(0, at), domain: address.slice(at + 1) };
 };
 // Danmark's sender (the company's, or the webshop's own), or a market's own (marketId). A market, and a webshop
 // with its own invoice settings, send from the standard sender until their own is saved.
@@ -35,8 +37,6 @@ export function InvoiceSender({
   const [saved, setSaved] = useState<Sender | null>(null),
     [form, setForm] = useState<Sender | null>(null),
     [custom, setCustom] = useState(false),
-    [token, setToken] = useState(''),
-    [guide, setGuide] = useState(false),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState(''),
     [dirty, setDirty] = useState(false);
@@ -70,18 +70,15 @@ export function InvoiceSender({
           senderName: form?.senderName,
           replyTo: form?.replyTo,
           customFrom: custom ? form?.customFrom : '',
-          accountId: custom ? form?.accountId : '',
-          apiToken: custom ? token : '',
         }),
       });
       const d = (await r.json()) as Sender & { error?: string };
       if (!r.ok) throw Error(d.error);
-      setToken('');
       await load();
       onSaved?.();
       setMessage(
         custom
-          ? 'Gemt. Send testmailen nedenfor for at kontrollere din egen adresse.'
+          ? 'Gemt. Mails sendes nu fra ' + form?.customFrom + '.'
           : 'Standardafsender valgt.',
       );
     } catch (e) {
@@ -121,6 +118,16 @@ export function InvoiceSender({
     }
   }
   const verified = saved?.status === 'verified' && custom && !dirty;
+  const address = split(form?.customFrom || '');
+  // An older own address keeps its domain in the list until it is moved to the integration.
+  const domains = [
+    ...(saved?.domains || []),
+    ...(saved?.customFrom &&
+    saved.credentialsSaved &&
+    !saved.domains.includes(split(saved.customFrom).domain)
+      ? [split(saved.customFrom).domain]
+      : []),
+  ];
   return (
     <section className="mb-6 rounded-2xl border bg-white p-5 sm:p-6">
       <h2 className="text-lg font-semibold">3. Afsender og testmail</h2>
@@ -160,14 +167,10 @@ export function InvoiceSender({
             />
           </label>
         </div>
-        <details className="group rounded-xl border">
-          <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 p-4 [&::-webkit-details-marker]:hidden">
-            <ChevronDown
-              aria-hidden="true"
-              className="size-4 transition-transform group-open:rotate-180"
-            />
+        <div className="space-y-3 rounded-xl border p-4">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="flex-1 text-sm font-semibold">
-              Eget maildomæne via Cloudflare{' '}
+              Egen afsenderadresse{' '}
               <span className="font-normal text-muted-foreground">
                 · valgfrit
               </span>
@@ -175,93 +178,81 @@ export function InvoiceSender({
             {verified ? (
               <span className="inline-flex items-center gap-1 text-sm font-medium text-green-700">
                 <CheckCircle2 aria-hidden="true" className="size-4" />
-                Forbundet
+                Godkendt domæne
               </span>
             ) : (
               <span className="text-sm text-muted-foreground">
                 {dirty
                   ? 'Ændringer ikke gemt'
                   : saved?.status === 'pending'
-                    ? 'Afventer testmail'
+                    ? 'Domænet er ikke godkendt'
                     : saved
-                      ? 'Ikke tilknyttet'
+                      ? 'Standardafsender'
                       : 'Henter status…'}
               </span>
             )}
-          </summary>
-          <div className="space-y-4 border-t p-4">
-            <p className="text-sm text-muted-foreground">
-              Du kan bruge standardafsenderen uden opsætning. Tilføj kun
-              Cloudflare, hvis du vil sende fra din egen fakturaadresse.
-            </p>
-            {!verified && (
-              <p className="text-sm font-medium text-red-700">
-                Eget maildomæne kræver, at dit domæne bruger Cloudflare DNS og
-                har Email Sending aktiveret.
-              </p>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setGuide(true)}
-            >
-              Vis opsætningsguide
-            </Button>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={custom}
-                onChange={(e) => {
-                  setCustom(e.target.checked);
-                  setDirty(true);
-                }}
-              />
-              Brug mit eget afsenderdomæne
-            </label>
-            {custom && (
-              <div className="space-y-3">
-                <label className="block text-sm">
-                  Din fakturaadresse
-                  <Input
-                    type="email"
-                    value={form?.customFrom || ''}
-                    placeholder="faktura@ditfirma.dk"
-                    onChange={(e) => change({ customFrom: e.target.value })}
-                  />
-                </label>
-                <label className="block text-sm">
-                  Cloudflare Account ID
-                  <Input
-                    value={form?.accountId || ''}
-                    autoComplete="off"
-                    onChange={(e) => change({ accountId: e.target.value })}
-                  />
-                </label>
-                <label className="block text-sm">
-                  API-token
-                  <Input
-                    type="password"
-                    autoComplete="new-password"
-                    value={token}
-                    placeholder={
-                      form?.credentialsSaved
-                        ? 'Gemt sikkert · lad stå tomt for at bevare'
-                        : 'Email Sending: Edit'
-                    }
-                    onChange={(e) => {
-                      setToken(e.target.value);
-                      setDirty(true);
-                    }}
-                  />
-                </label>
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Gem opsætningen, og brug testmailen nedenfor. Fluebenet vises, når
-              Cloudflare har accepteret en test med de gemte oplysninger.
-            </p>
           </div>
-        </details>
+          {!domains.length ? (
+            <p className="text-sm text-muted-foreground">
+              Forbind Cloudflare E-mail under Indstillinger → Integrationer for
+              at sende fra jeres eget domæne, fx faktura@jeresbutik.dk. Indtil
+              da bruges standardafsenderen.
+            </p>
+          ) : (
+            <>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={custom}
+                  onChange={(e) => {
+                    setCustom(e.target.checked);
+                    if (e.target.checked && !form?.customFrom)
+                      change({ customFrom: 'faktura@' + domains[0] });
+                    setDirty(true);
+                  }}
+                />
+                Send fra en adresse på et af jeres domæner
+              </label>
+              {custom && (
+                <div className="flex flex-wrap items-center gap-1 text-sm">
+                  <Input
+                    aria-label="Adresse før @"
+                    className="max-w-48"
+                    value={address.local}
+                    placeholder="faktura"
+                    onChange={(e) =>
+                      change({
+                        customFrom:
+                          e.target.value.trim() + '@' + address.domain,
+                      })
+                    }
+                  />
+                  <span>@</span>
+                  <select
+                    aria-label="Domæne"
+                    className="h-8 rounded-lg border bg-white px-2"
+                    value={address.domain}
+                    onChange={(e) =>
+                      change({
+                        customFrom: address.local + '@' + e.target.value,
+                      })
+                    }
+                  >
+                    {domains.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Domænerne er godkendt under Indstillinger → Integrationer →
+                Cloudflare E-mail.
+              </p>
+            </>
+          )}
+        </div>
         <Button onClick={() => void save()} disabled={!dirty}>
           {busy ? 'Arbejder…' : 'Gem afsender'}
         </Button>
@@ -284,8 +275,7 @@ export function InvoiceSender({
         </p>
         {saved?.customFrom && (
           <p className="text-sm">
-            Testen sendes fra <strong>{saved.customFrom}</strong> og
-            kontrollerer samtidig Cloudflare-forbindelsen.
+            Testen sendes fra <strong>{saved.effectiveFrom}</strong>.
           </p>
         )}
         <label className="block max-w-md text-sm">
@@ -313,131 +303,6 @@ export function InvoiceSender({
           </p>
         )}
       </div>
-      <Dialog open={guide} onOpenChange={setGuide}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Send fra dit eget domæne</DialogTitle>
-            <DialogDescription>
-              Du skal bruge din fakturaadresse, Cloudflare Account ID og et
-              API-token med Email Sending: Edit. Brug den Cloudflare-konto, som
-              dit afsenderdomæne ligger på.
-            </DialogDescription>
-          </DialogHeader>
-          <ol className="list-decimal space-y-4 pl-5 text-sm leading-relaxed">
-            <li>
-              <strong>Aktivér mailafsendelse for domænet.</strong> Domænet skal
-              bruge Cloudflare DNS. Åbn Cloudflare → Compute → Email Service →
-              Email Sending → Onboard Domain, og vælg domænet til din
-              fakturaadresse. Gennemgå DNS-posterne til MX, SPF, DKIM og DMARC,
-              og vent på godkendelsen. Har domænet allerede mail, bør din
-              mailansvarlige kontrollere posterne, så den eksisterende
-              mailopsætning bevares.
-            </li>
-            <li>
-              <strong>Find Cloudflare Account ID.</strong> Vælg den rigtige
-              konto i Cloudflare. Åbn søgningen med Ctrl+K (⌘K på Mac), skriv{' '}
-              <span className="font-medium">Copy account ID</span>, og vælg
-              resultatet. Indsæt værdien i feltet{' '}
-              <span className="font-medium">Cloudflare Account ID</span> her på
-              siden. Det er kontoens ID, ikke domænets Zone ID.{' '}
-              <a
-                className="underline"
-                href="https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Se, hvor du finder ID’et ↗
-              </a>
-            </li>
-            <li>
-              <strong>Opret et separat token.</strong> Åbn{' '}
-              <a
-                className="underline"
-                href="https://dash.cloudflare.com/profile/api-tokens"
-                target="_blank"
-                rel="noreferrer"
-              >
-                My Profile → API Tokens ↗
-              </a>
-              . Vælg{' '}
-              <span className="font-medium">
-                Create Token → Create Custom Token
-              </span>
-              . Giv det fx navnet{' '}
-              <span className="font-medium">WebshopToolbox mail</span>.
-            </li>
-            <li>
-              <strong>Vælg den præcise rettighed.</strong> Under{' '}
-              <span className="font-medium">Permissions</span> vælger du de tre
-              felter:{' '}
-              <span className="block rounded-lg bg-muted px-3 py-2 font-semibold">
-                Account → Email Sending → Edit
-              </span>{' '}
-              Det er Email Sending, ikke Email Routing. Denne opsætning kræver
-              ingen DNS- eller Worker-rettigheder på tokenet.
-            </li>
-            <li>
-              <strong>Afgræns tokenet til kontoen.</strong> Under{' '}
-              <span className="font-medium">Account Resources</span> vælger du{' '}
-              <span className="font-medium">Include → Specific account</span> og
-              kontoen fra trin 2. Den skal være den samme konto, som har fået
-              afsenderdomænet godkendt.
-            </li>
-            <li>
-              <strong>Opret og kopiér tokenværdien.</strong> Vælg{' '}
-              <span className="font-medium">
-                Continue to summary → Create Token
-              </span>
-              . Kopiér selve tokenværdien til feltet{' '}
-              <span className="font-medium">API-token</span> her på siden.
-              Cloudflare viser værdien én gang; har du ikke gemt den, skal du
-              oprette et nyt token. Tokenets navn eller ID kan ikke bruges som
-              tokenværdi.
-            </li>
-            <li>
-              <strong>Gem afsenderen i WebshopToolbox.</strong> Luk guiden,
-              markér{' '}
-              <span className="font-medium">Brug mit eget afsenderdomæne</span>,
-              og udfyld fakturaadresse, Account ID og API-token. Vælg{' '}
-              <span className="font-medium">Gem afsender</span>. Et allerede
-              gemt token bevares, når tokenfeltet står tomt.
-            </li>
-            <li>
-              <strong>Kontrollér med en testmail.</strong> Vælg{' '}
-              <span className="font-medium">
-                Send testmail med eksempelfaktura
-              </span>
-              . Når Cloudflare accepterer testen, vises egen afsender som
-              godkendt. Kontrollér også din indbakke og spammappe. Hvis testen
-              fejler, kontrollér konto, tokenrettighed og domænets godkendelse.
-              Testen indeholder kun demo-data.
-            </li>
-          </ol>
-          <p className="text-sm">
-            Toolbox ændrer ikke din DNS. Standardafsenderen bruges, indtil egen
-            afsender er godkendt. Du kan også bruge standardafsenderen med din
-            egen svaradresse.
-          </p>
-          <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-            <a
-              className="underline"
-              href="https://developers.cloudflare.com/fundamentals/api/get-started/create-token/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Cloudflares tokenvejledning ↗
-            </a>
-            <a
-              className="underline"
-              href="https://developers.cloudflare.com/email-service/get-started/send-emails/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Cloudflares mailvejledning ↗
-            </a>
-          </div>
-        </DialogContent>
-      </Dialog>
     </section>
   );
 }
