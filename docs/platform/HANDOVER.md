@@ -21,7 +21,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 1. Branch fra en frisk main, og opret en lille PR.
 2. CI skal være grøn: tests, begge typechecks, `npm run lint` (lint og formatering må kun blive bedre), Tier 1-build og portalens browsertest.
 3. Squash-merge.
-4. Er der en migration, køres den først med workflowet *Vedligehold: D1-migrering* (dev, derefter prod). Seneste migration er `0053_review_invitations.sql` (Trustpilot-invitationer, november 2026; ikke kørt endnu). Forrige: `0052_order_payments.sql`.
+4. Er der en migration, køres den først med workflowet *Vedligehold: D1-migrering* (dev, derefter prod). Seneste migration er `0054_mail_connections.sql` (Cloudflare E-mail som integration, november 2026; ikke kørt endnu). Forrige: `0053_review_invitations.sql` (ikke kørt endnu).
 5. Udgiv: `node scripts/platform-release.mjs dev --sha <sha>`, derefter `prod`. Udgivelsen genbruger den grønne testkørsel for samme commit.
 6. Skriv en note i CHANGELOG.md.
 
@@ -71,6 +71,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 
 - **Kursdifferencer på Shopify Payments-udbetalinger (udgivet 17. november 2026, dev og prod, run 44017102965, main `c58b32d`):** valgfri konto til kursdifferencer; udbetalingsbilaget flytter forskellen pr. udenlandsk ordre fra mellemregningskontoen dertil. Kræver, at kontoen vælges under kontoplanen. Ikke afprøvet mod rigtig Shopify eller Dinero.
 
+- **Cloudflare E-mail som integration (ikke udgivet, migration 0054):** egen afsender opsættes én gang under Integrationer; Faktura-afsendelse og Anmeldelser vælger adresse på et godkendt domæne. Eksisterende godkendte afsendere flyttes automatisk ved første læsning ([MAIL-SENDERS.md](MAIL-SENDERS.md)). Domæneopslaget mod Cloudflare er ikke afprøvet med et rigtigt token.
 - **Trustpilot-invitationer (ikke udgivet, migration 0053):** Tools → Anmeldelser med egne invitationsmails på dansk og svensk, visuel editor og testmail ([REVIEW-INVITATIONS.md](REVIEW-INVITATIONS.md)). Trustpilots egne automatiske invitationer skal slås fra, når den slås til. Ikke afprøvet mod rigtig Shopify eller mailafsendelse.
 
 **Mangler**

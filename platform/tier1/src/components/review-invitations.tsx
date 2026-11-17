@@ -70,7 +70,7 @@ type Info = {
   domain: string;
   senders: Record<
     ReviewLocale,
-    { from: string; name: string; domain: string | null; store: string }
+    { from: string; name: string; domains: string[]; store: string }
   >;
   counts: { sent: number; recent: number; uncertain: number };
   log: LogRow[];
@@ -935,7 +935,11 @@ function ReviewPage() {
     );
   const template = settings.templates[locale],
     sender = info.senders[locale],
-    language = localeNames[locale].toLowerCase();
+    language = localeNames[locale].toLowerCase(),
+    // A Swedish mail suggests the .se domain, a Danish one the .dk domain, when both are approved.
+    suggested =
+      sender.domains.find((d) => d.endsWith(locale === 'sv' ? '.se' : '.dk')) ||
+      sender.domains[0];
   return (
     <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 md:py-9">
       {dialog}
@@ -1149,18 +1153,16 @@ function ReviewPage() {
             <Field
               label="Afsenderadresse"
               hint={
-                sender.domain
-                  ? `Tom = ${sender.from}. Skal være på det godkendte domæne ${sender.domain}.`
-                  : `Sendes fra ${sender.from}. For at vælge en anden adresse skal dit eget domæne først opsættes og testes under Indstillinger → Faktura-afsendelse${locale === 'sv' ? ' (fanen for dit svenske marked)' : ''}.`
+                sender.domains.length
+                  ? `Tom = ${sender.from}. Skal være på et godkendt domæne: ${sender.domains.join(', ')}.`
+                  : `Sendes fra ${sender.from}. For at vælge en anden adresse skal jeres domæne først godkendes under Indstillinger → Integrationer → Cloudflare E-mail.`
               }
             >
               <Input
                 type="email"
                 value={template.fromAddress ?? ''}
-                placeholder={
-                  sender.domain ? `kontakt@${sender.domain}` : sender.from
-                }
-                disabled={!sender.domain && !template.fromAddress}
+                placeholder={suggested ? `kontakt@${suggested}` : sender.from}
+                disabled={!sender.domains.length && !template.fromAddress}
                 onChange={(e) =>
                   setTemplate({
                     ...template,

@@ -2,6 +2,20 @@
 
 Implementeret 14. september 2026 på den separate platform.
 
+## Cloudflare E-mail som integration (17. november 2026)
+Egen afsender er flyttet til **Indstillinger → Integrationer → Cloudflare E-mail** (katalog-id `cloudflare`, `platform/mail-connection.ts`, migration `0054_mail_connections.sql`). Virksomheden forbinder én Cloudflare-konto (Account ID og API-token med *Account → Email Sending → Edit*). Tokenet kontrolleres mod `/accounts/{id}/tokens/verify` (ellers `/user/tokens/verify`) og gemmes krypteret med scope `[virksomhed, 'mail-connection', konto]`; det returneres eller logges aldrig.
+
+Godkendte domæner står i `mail_domains`:
+- `cloudflare`: hentet fra `GET /zones?account.id=…` og `GET /zones/{zone}/email/sending/subdomains` (kun hvis tokenet også har *Zone → Zone → Read*; ellers `discovery=0`).
+- `test`: en testmail fra en adresse på domænet til brugerens egen loginadresse blev bekræftet af Cloudflare (`POST …/mail/connection/test`, samme idempotens og 60-sekunders cooldown som de andre testmails; et uafklaret resultat godkender intet og gentages ikke).
+- `migrated`: flyttet fra en ældre afsender.
+
+Faktura-afsendelse og Anmeldelser vælger kun adresse og navn på et godkendt domæne og har ingen Cloudflare-felter. Afsendelsen vælger transport i `resolveSender` (`platform/mail.ts`): adresse på et godkendt domæne → forbindelsens token; ellers en ældre godkendt afsender med egne credentials → dens token; ellers standardafsenderen. API'et accepterer fortsat `accountId`/`apiToken` på `PUT …/sender` for ældre klienter.
+
+**Flytning af eksisterende afsendere:** Første gang virksomhedens forbindelse læses, og den ikke findes, flyttes den første godkendte ældre afsender (company_mail, derefter webshop_mail, market_mail) automatisk: tokenet dekrypteres med det gamle scope og krypteres igen under forbindelsen, og domænerne for alle godkendte afsendere på samme konto bliver godkendt (`migrated`). Integrationen tilføjes også på Integrationer. De gamle rækker bevares uændret; afsendere på en anden konto fortsætter med deres egne credentials. Kan tokenet ikke dekrypteres, flyttes intet.
+
+**Afbryd forbindelse** sletter forbindelsen og domænerne og nulstiller også de ældre afsenderes credentials, så intet flyttes tilbage; alle mails går derefter fra standardafsenderen. Endpoints (Tier 1, kun administrator, ikke support): `GET/PUT/DELETE /api/platform/tier1/shops/{shop}/mail/connection`, `POST …/mail/connection/refresh`, `POST …/mail/connection/test`, `DELETE …/mail/connection/domain`.
+
 ## Kundens forløb
 Under Tier 1 → Indstillinger → Mailafsender kan virksomhedsadministratoren gemme afsendernavn og svaradresse. Standardafsenderen er faktura@webshoptoolbox.dk, konfigureret på serveren. Ingen egen domæneopsætning er nødvendig for standardafsenderen.
 

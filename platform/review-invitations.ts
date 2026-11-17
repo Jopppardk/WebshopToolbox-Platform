@@ -115,16 +115,10 @@ const overrideOf = (t: ReviewTemplate) => ({
   ...(t.fromAddress ? { from: t.fromAddress } : {}),
   ...(t.fromName ? { name: t.fromName } : {}),
 });
-/** Why a chosen sender address cannot be used: its domain must be the verified domain of the language's sender. */
-function senderProblem(
-  t: ReviewTemplate,
-  domain: string | null,
-  locale: ReviewLocale,
-  market: boolean,
-) {
-  if (!t.fromAddress || (domain && domainOf(t.fromAddress) === domain))
-    return null;
-  return `Domænet ${domainOf(t.fromAddress)} er ikke tilknyttet den ${localeNames[locale].toLowerCase()}e afsender${domain ? ` (godkendt domæne: ${domain})` : ''}. Opsæt og test en egen afsender på domænet under Indstillinger → Faktura-afsendelse${market ? ' (markedets fane)' : ''} først.`;
+/** Why a chosen sender address cannot be used: its domain must be approved for sending (see currentSender). */
+function senderProblem(t: ReviewTemplate, domains: string[]) {
+  if (!t.fromAddress || domains.includes(domainOf(t.fromAddress))) return null;
+  return `Domænet ${domainOf(t.fromAddress)} er ikke godkendt til afsendelse. Forbind Cloudflare E-mail under Integrationer og godkend domænet først${domains.length ? ` (godkendte domæner: ${domains.join(', ')})` : ''}.`;
 }
 /** Whether real invitations are mailed from this deployment (production with customer mail switched on). */
 const customerMail = (env: PlatformEnv) =>
@@ -142,7 +136,7 @@ async function info(
     row = await savedRow(env, company, shop);
   const senders: Record<
     string,
-    { from: string; name: string; domain: string | null; store: string }
+    { from: string; name: string; domains: string[]; store: string }
   > = {};
   for (const locale of reviewLocales) {
     const market = await localeMarket(env, company, shop, locale);
@@ -211,12 +205,7 @@ async function save(
   for (const locale of reviewLocales) {
     const market = await localeMarket(env, company, shop, locale),
       sender = await currentSender(env, company, scopeOf(shop, market)),
-      problem = senderProblem(
-        settings.templates[locale],
-        sender.domain,
-        locale,
-        !!market,
-      );
+      problem = senderProblem(settings.templates[locale], sender.domains);
     if (problem) throw new HttpError(400, problem);
   }
   const revision = Number(body.revision),
@@ -304,7 +293,7 @@ async function testMail(
     ),
     template = settings.templates[locale],
     current = await currentSender(env, company, scope),
-    problem = senderProblem(template, current.domain, locale, !!market);
+    problem = senderProblem(template, current.domains);
   if (problem) throw new HttpError(409, problem);
   const sender = { from: template.fromAddress || current.from };
   const message = {
@@ -672,8 +661,8 @@ export async function sendReviewInvitations(
       locale,
     );
     const scope = scopeOf(shop, market),
-      domain = (await currentSender(env, company, scope)).domain;
-    if (senderProblem(template, domain, locale, !!market)) {
+      domains = (await currentSender(env, company, scope)).domains;
+    if (senderProblem(template, domains)) {
       // The chosen address lost its domain: the order waits (unclaimed) until the sender is fixed.
       senderBlocked = template.fromAddress;
       continue;

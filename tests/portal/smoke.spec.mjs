@@ -237,6 +237,20 @@ test('Indstillinger: the Swedish tab mirrors Danmark, and Tilføj webshop opens 
     '3. Afsender og testmail',
   ])
     await expect(page.locator('main')).toContainText(text);
+  // The sender is chosen on a domain approved in Integrationer → Cloudflare E-mail.
+  await page
+    .getByRole('checkbox', {
+      name: /Send fra en adresse på et af jeres domæner/,
+    })
+    .check();
+  await expect(page.getByRole('combobox', { name: 'Domæne' })).toContainText(
+    'sabeln.se',
+  );
+  await page
+    .getByRole('checkbox', {
+      name: /Send fra en adresse på et af jeres domæner/,
+    })
+    .uncheck();
   // Saving the design first and then the mail text once failed with "ændret i en anden fane".
   await page.getByRole('button', { name: 'Gem fakturadesign' }).click();
   await expect(page.locator('main')).toContainText(/gemt/i);
@@ -281,6 +295,10 @@ test('Indstillinger: the Swedish tab mirrors Danmark, and Tilføj webshop opens 
   // In this test because logins are rate limited.
   await nav(page, 'Indstillinger').click();
   await page.getByRole('tab', { name: /Integrationer/ }).click();
+  await page.getByRole('button', { name: /Cloudflare E-mail/ }).click();
+  const mailPanel = page.locator('#mail-connection-panel');
+  await expect(mailPanel).toContainText('sablen.dk');
+  await expect(mailPanel).toContainText('godkendt med testmail');
   await page.getByRole('button', { name: 'Tilføj webshop' }).click();
   const region = page.getByRole('region', { name: 'Ny webshop' });
   await expect(region).toContainText('Tilføj en ny webshop');
