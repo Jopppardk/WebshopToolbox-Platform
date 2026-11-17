@@ -222,7 +222,10 @@ async function info(
   const approved =
     !!settings?.custom_from &&
     (domains.includes(domainOf(settings.custom_from)) ||
-      legacyApproved(settings));
+      (legacyApproved(settings) &&
+        !(await verifiedDomains(env, company)).includes(
+          domainOf(settings.custom_from),
+        )));
   return {
     senderName: settings?.sender_name || fallbackName,
     replyTo: settings?.reply_to || '',
@@ -465,11 +468,18 @@ export async function handleMail(
   if (custom && kind === 'standard') {
     // An older sender not yet approved is approved by this test; an address on a domain the integration has not
     // approved cannot be tested here.
-    if (!settings?.custom_from || !settings.credentials_encrypted)
+    // A domain the integration knows (limited to other webshops) is never tested with older credentials either.
+    if (
+      !settings?.custom_from ||
+      !settings.credentials_encrypted ||
+      (await verifiedDomains(env, company)).includes(
+        domainOf(settings.custom_from),
+      )
+    )
       throw new HttpError(
         400,
         settings?.custom_from
-          ? `Domænet ${domainOf(settings.custom_from)} er ikke godkendt i Integrationer → Cloudflare E-mail.`
+          ? `Domænet ${domainOf(settings.custom_from)} er ikke godkendt til denne afsender i Integrationer → Cloudflare E-mail.`
           : 'Gem din egen afsender først.',
       );
     kind = 'legacy';
