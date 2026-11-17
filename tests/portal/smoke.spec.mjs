@@ -181,9 +181,15 @@ test('every page of the portal renders', async ({ page }) => {
   await expect(
     page.getByText('Vælg et billede i panelet til højre'),
   ).toBeVisible();
+  // The sender address: the part before @ is typed, the domain chosen among the approved ones.
+  await page.getByLabel('Afsenderadresse før @').fill('kontakt');
+  await page
+    .getByRole('combobox', { name: 'Domæne' })
+    .selectOption('sablen.dk');
   await expect(page.getByText('Ikke gemt')).toBeVisible();
   await page.getByRole('button', { name: 'Gem', exact: true }).click();
   await expect(page.getByText('Ikke gemt')).toHaveCount(0);
+  await expect(page.getByLabel('Afsenderadresse før @')).toHaveValue('kontakt');
   await page.reload();
   await nav(page, 'Anmeldelser').click();
   await expect(page.locator('main')).toContainText('Tak for handlen!');

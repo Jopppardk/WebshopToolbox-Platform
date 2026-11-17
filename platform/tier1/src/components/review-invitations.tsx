@@ -194,6 +194,65 @@ function BlockView({
   );
 }
 
+/**
+ * An own sender address: the part before @ is typed, the domain is chosen among the approved ones. An empty first
+ * part sends from the language's standard address.
+ */
+function SenderAddress({
+  value,
+  domains,
+  suggested,
+  fallback,
+  onChange,
+}: {
+  value: string;
+  domains: string[];
+  suggested?: string;
+  fallback: string;
+  onChange: (address: string) => void;
+}) {
+  const at = value.lastIndexOf('@'),
+    local = at < 0 ? value : value.slice(0, at);
+  const [domain, setDomain] = useState(
+    at < 0 ? suggested || domains[0] || '' : value.slice(at + 1),
+  );
+  // A saved address on a domain that is no longer approved stays visible, so it can be changed or cleared.
+  const options =
+    domain && !domains.includes(domain) ? [domain, ...domains] : domains;
+  const set = (nextLocal: string, nextDomain: string) =>
+    onChange(nextLocal ? nextLocal + '@' + nextDomain : '');
+  return (
+    <span className="flex flex-wrap items-center gap-1">
+      <Input
+        aria-label="Afsenderadresse før @"
+        value={local}
+        placeholder={options.length ? 'kontakt' : fallback}
+        disabled={!options.length}
+        onChange={(e) =>
+          set(e.target.value.replace(/[@\s]/g, '').toLowerCase(), domain)
+        }
+        className="h-9 max-w-48"
+      />
+      <span>@</span>
+      <select
+        aria-label="Domæne"
+        className="h-9 rounded-lg border bg-white px-2 text-sm"
+        value={domain}
+        disabled={!options.length}
+        onChange={(e) => {
+          setDomain(e.target.value);
+          set(local, e.target.value);
+        }}
+      >
+        {options.map((d) => (
+          <option key={d} value={d}>
+            {d}
+          </option>
+        ))}
+      </select>
+    </span>
+  );
+}
 function Field({
   label,
   children,
@@ -1154,22 +1213,19 @@ function ReviewPage() {
               label="Afsenderadresse"
               hint={
                 sender.domains.length
-                  ? `Tom = ${sender.from}. Skal være på et godkendt domæne: ${sender.domains.join(', ')}.`
+                  ? `Vælg et af jeres godkendte domæner. Står feltet før @ tomt, sendes fra ${sender.from}.`
                   : `Sendes fra ${sender.from}. For at vælge en anden adresse skal jeres domæne først godkendes under Indstillinger → Integrationer → Cloudflare E-mail.`
               }
             >
-              <Input
-                type="email"
+              <SenderAddress
+                key={locale}
                 value={template.fromAddress ?? ''}
-                placeholder={suggested ? `kontakt@${suggested}` : sender.from}
-                disabled={!sender.domains.length && !template.fromAddress}
-                onChange={(e) =>
-                  setTemplate({
-                    ...template,
-                    fromAddress: e.target.value.trim(),
-                  })
+                domains={sender.domains}
+                suggested={suggested}
+                fallback={sender.from}
+                onChange={(fromAddress) =>
+                  setTemplate({ ...template, fromAddress })
                 }
-                className="h-9"
               />
             </Field>
           </div>
