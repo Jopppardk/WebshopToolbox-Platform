@@ -509,6 +509,18 @@ export const starLink = (trustpilot: string, stars: number) =>
   trustpilot + (trustpilot.includes('?') ? '&' : '?') + 'stars=' + stars;
 
 /**
+ * A block's own table: Outlook for Windows (Word's renderer) ignores padding and margin on div and a, and auto
+ * margins on tables, so spacing, alignment and colour sit on table cells and the align attribute.
+ */
+const box = (
+  content: string,
+  style: string,
+  alignTo: Align = 'left',
+  edit = false,
+) =>
+  `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse"><tr><td${edit ? ' data-edit="html"' : ''} align="${alignTo}" style="${style}">${content}</td></tr></table>`;
+
+/**
  * One block as mail HTML (a table row's content). With `editor`, the text a user edits in place carries
  * data-edit, so the editor can make exactly that element editable.
  */
@@ -528,11 +540,13 @@ export function renderBlock(
           ? `<div style="padding:24px;border:2px dashed #d8d2c7;border-radius:8px;text-align:center;color:#8a8f8b;font-family:${font};font-size:14px">Vælg et billede i panelet til højre</div>`
           : '';
       const img = `<img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt)}" width="${Math.round((536 * block.width) / 100)}" style="display:inline-block;width:${block.width}%;max-width:100%;height:auto;border:0;outline:none;text-decoration:none">`;
-      return `<div style="text-align:${block.align};line-height:0">${
+      return box(
         block.href && !editor
           ? `<a href="${escapeHtml(linkOf(block.href, tp))}" target="_blank">${img}</a>`
-          : img
-      }</div>`;
+          : img,
+        `text-align:${block.align};line-height:0;font-size:0`,
+        block.align,
+      );
     }
     case 'heading':
     case 'text': {
@@ -540,31 +554,53 @@ export function renderBlock(
       // A link to {{trustpilot}} in the text goes to the language's Trustpilot page.
       const fillText = (html: string) =>
         editor ? fill(html) : fill(trustpilotLinks(html, tp));
-      return `<div${editor ? ' data-edit="html"' : ''} style="margin:0;padding:6px 0;font-family:${font};font-size:${block.size}px;line-height:${heading ? 1.25 : 1.6};color:${block.color};text-align:${block.align};${heading ? 'font-weight:700;' : ''}">${fillText(block.html) || (editor ? '&nbsp;' : '')}</div>`;
+      return box(
+        fillText(block.html) || (editor ? '&nbsp;' : ''),
+        `padding:6px 0;font-family:${font};font-size:${block.size}px;line-height:${heading ? 1.25 : 1.6};mso-line-height-rule:at-least;color:${block.color};text-align:${block.align};${heading ? 'font-weight:700;' : ''}`,
+        block.align,
+        editor,
+      );
     }
     case 'stars': {
+      const size = block.size;
       const cell = (n: number) =>
-        `<td style="padding:0 3px"><a href="${escapeHtml(editor ? '#' : starLink(tp, n))}" target="_blank" style="display:block;width:${block.size}px;height:${block.size}px;line-height:${block.size}px;background:${block.color};border-radius:4px;color:#ffffff;font-size:${Math.round(block.size * 0.72)}px;font-family:Arial,sans-serif;text-align:center;text-decoration:none">&#9733;</a></td>`;
+        `${n > 1 ? '<td width="6" style="width:6px;font-size:1px;line-height:1px">&nbsp;</td>' : ''}<td width="${size}" height="${size}" align="center" valign="middle" bgcolor="${block.color}" style="width:${size}px;height:${size}px;background:${block.color};border-radius:4px;text-align:center;vertical-align:middle"><a href="${escapeHtml(editor ? '#' : starLink(tp, n))}" target="_blank" style="display:block;width:${size}px;height:${size}px;line-height:${size}px;color:#ffffff;font-size:${Math.round(size * 0.72)}px;font-family:Arial,sans-serif;text-align:center;text-decoration:none;mso-line-height-rule:exactly">&#9733;</a></td>`;
       const margin =
         block.align === 'left'
           ? '0 auto 0 0'
           : block.align === 'right'
             ? '0 0 0 auto'
             : '0 auto';
-      return `<div style="padding:8px 0">${
-        block.caption
-          ? `<div style="font-family:${font};font-size:14px;color:#6b736e;text-align:${block.align};padding-bottom:10px">${fill(escapeHtml(block.caption))}</div>`
-          : ''
-      }<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:${margin}"><tr>${[1, 2, 3, 4, 5].map(cell).join('')}</tr></table></div>`;
+      return box(
+        `${
+          block.caption
+            ? `<div style="font-family:${font};font-size:14px;line-height:1.4;color:#6b736e;text-align:${block.align};padding-bottom:10px">${fill(escapeHtml(block.caption))}</div>`
+            : ''
+        }<table role="presentation" align="${block.align}" cellpadding="0" cellspacing="0" border="0" style="margin:${margin};border-collapse:separate"><tr>${[1, 2, 3, 4, 5].map(cell).join('')}</tr></table>`,
+        `padding:8px 0;text-align:${block.align}`,
+        block.align,
+      );
     }
     case 'button': {
       const href = editor ? '#' : linkOf(block.href, tp);
-      return `<div style="text-align:${block.align};padding:12px 0"><a href="${escapeHtml(href)}" target="_blank" style="display:inline-block;background:${block.background};color:${block.color};font-family:${font};font-size:16px;font-weight:700;line-height:1;text-decoration:none;padding:16px 32px;border-radius:${block.radius}px">${fill(escapeHtml(block.text))}</a></div>`;
+      // The padding sits on the link (the whole button is clickable); Outlook, which ignores it there, uses
+      // mso-padding-alt on the cell instead.
+      return box(
+        `<table role="presentation" align="${block.align}" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate"><tr><td align="center" bgcolor="${block.background}" style="background:${block.background};border-radius:${block.radius}px;mso-padding-alt:16px 32px"><a href="${escapeHtml(href)}" target="_blank" style="display:inline-block;background:${block.background};color:${block.color};font-family:${font};font-size:16px;font-weight:700;line-height:20px;text-decoration:none;padding:16px 32px;border-radius:${block.radius}px;mso-padding-alt:0">${fill(escapeHtml(block.text))}</a></td></tr></table>`,
+        `padding:12px 0;text-align:${block.align}`,
+        block.align,
+      );
     }
     case 'divider':
-      return `<div style="padding:12px 0"><div style="height:1px;line-height:1px;font-size:1px;background:${block.color}">&nbsp;</div></div>`;
+      return box(
+        `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%"><tr><td height="1" bgcolor="${block.color}" style="height:1px;line-height:1px;font-size:1px;background:${block.color}">&nbsp;</td></tr></table>`,
+        'padding:12px 0',
+      );
     case 'spacer':
-      return `<div style="height:${block.height}px;line-height:${block.height}px;font-size:1px">&nbsp;</div>`;
+      return box(
+        '&nbsp;',
+        `height:${block.height}px;line-height:${block.height}px;font-size:1px;mso-line-height-rule:exactly`,
+      ).replace('<td align', `<td height="${block.height}" align`);
   }
 }
 
@@ -591,10 +627,13 @@ export function renderReviewMail(
   const rows = template.blocks
     .map((b) => renderBlock(b, template, vars))
     .filter(Boolean)
-    .map((html) => `<tr><td style="padding:0 32px">${html}</td></tr>`)
+    .map(
+      (html) =>
+        `<tr><td style="padding:0 32px;font-family:${fonts[template.design.font]}">${html}</td></tr>`,
+    )
     .join('');
   const { design } = template;
-  const html = `<!DOCTYPE html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting"><title>${escapeHtml(subject)}</title></head><body style="margin:0;padding:0;background:${design.background};color:${design.text}">${
+  const html = `<!DOCTYPE html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting"><title>${escapeHtml(subject)}</title><!--[if mso]><style>table,td,div,p,a{font-family:${design.font === 'serif' ? 'Georgia,serif' : 'Arial,sans-serif'} !important}</style><![endif]--></head><body style="margin:0;padding:0;background:${design.background};color:${design.text}">${
     preheader
       ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px;color:${design.background}">${escapeHtml(preheader)}</div>`
       : ''
