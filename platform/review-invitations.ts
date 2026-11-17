@@ -9,6 +9,7 @@ import { jsonBody } from './invitations';
 import {
   currentSender,
   deliverMail,
+  domainOf,
   mailAddress,
   type MailScope,
 } from './mail';
@@ -25,6 +26,7 @@ import {
   sampleVars,
   type ReviewLocale,
   type ReviewSettings,
+  type ReviewTemplate,
 } from './tier1/src/lib/review-mail';
 
 type SettingsRow = {
@@ -108,6 +110,22 @@ function audit(
     JSON.stringify(details),
   );
 }
+/** The language's own sender address and name, when chosen on the page. */
+const overrideOf = (t: ReviewTemplate) => ({
+  ...(t.fromAddress ? { from: t.fromAddress } : {}),
+  ...(t.fromName ? { name: t.fromName } : {}),
+});
+/** Why a chosen sender address cannot be used: its domain must be the verified domain of the language's sender. */
+function senderProblem(
+  t: ReviewTemplate,
+  domain: string | null,
+  locale: ReviewLocale,
+  market: boolean,
+) {
+  if (!t.fromAddress || (domain && domainOf(t.fromAddress) === domain))
+    return null;
+  return `Domænet ${domainOf(t.fromAddress)} er ikke tilknyttet den ${localeNames[locale].toLowerCase()}e afsender${domain ? ` (godkendt domæne: ${domain})` : ''}. Opsæt og test en egen afsender på domænet under Indstillinger → Faktura-afsendelse${market ? ' (markedets fane)' : ''} først.`;
+}
 /** Whether real invitations are mailed from this deployment (production with customer mail switched on). */
 const customerMail = (env: PlatformEnv) =>
   env.PLATFORM_ENV === 'production' &&
@@ -122,8 +140,10 @@ async function info(
   const db = env.PLATFORM_DB,
     w = await webshop(env, company, shop),
     row = await savedRow(env, company, shop);
-  const senders: Record<string, { from: string; name: string; store: string }> =
-    {};
+  const senders: Record<
+    string,
+    { from: string; name: string; domain: string | null; store: string }
+  > = {};
   for (const locale of reviewLocales) {
     const market = await localeMarket(env, company, shop, locale);
     senders[locale] = {
@@ -186,6 +206,18 @@ async function save(
     if (error instanceof ReviewTemplateError)
       throw new HttpError(400, error.message);
     throw error;
+  }
+  // A chosen sender address must be on the verified domain of the language's own sender (checked again when sending).
+  for (const locale of reviewLocales) {
+    const market = await localeMarket(env, company, shop, locale),
+      sender = await currentSender(env, company, scopeOf(shop, market)),
+      problem = senderProblem(
+        settings.templates[locale],
+        sender.domain,
+        locale,
+        !!market,
+      );
+    if (problem) throw new HttpError(400, problem);
   }
   const revision = Number(body.revision),
     row = await savedRow(env, company, shop);
@@ -270,7 +302,11 @@ async function testMail(
       sampleVars(market?.store_name || w.name),
       locale,
     ),
-    sender = await currentSender(env, company, scope);
+    template = settings.templates[locale],
+    current = await currentSender(env, company, scope),
+    problem = senderProblem(template, current.domain, locale, !!market);
+  if (problem) throw new HttpError(409, problem);
+  const sender = { from: template.fromAddress || current.from };
   const message = {
     to: recipient,
     subject: '[TEST] ' + mail.subject,
@@ -324,7 +360,13 @@ async function testMail(
     });
   }
   try {
-    const sent = await deliverMail(env, company, scope, message);
+    const sent = await deliverMail(
+      env,
+      company,
+      scope,
+      message,
+      overrideOf(template),
+    );
     await db.batch([
       db
         .prepare(
@@ -542,7 +584,8 @@ export async function sendReviewInvitations(
   let access: Access | null = null,
     sent = 0,
     uncertain = 0,
-    lookupFailed = 0;
+    lookupFailed = 0,
+    senderBlocked = '';
   for (const c of candidates) {
     if (sent + uncertain >= sendsPerRun) break;
     const order = JSON.parse(c.payload_json),
@@ -571,7 +614,11 @@ export async function sendReviewInvitations(
       continue;
     }
     if (Date.parse(c.shipped_at) + template.delayDays * day > now) continue;
-    if (Number(order.currentTotalPriceSet?.shopMoney?.amount) === 0) {
+    // Fully refunded (with or without a cancellation): Shopify's status says so; partly refunded orders are invited.
+    if (
+      order.displayFinancialStatus === 'REFUNDED' ||
+      Number(order.currentTotalPriceSet?.shopMoney?.amount) === 0
+    ) {
       await skip(c, name, locale, 'Ordren er refunderet.');
       continue;
     }
@@ -624,6 +671,13 @@ export async function sendReviewInvitations(
       },
       locale,
     );
+    const scope = scopeOf(shop, market),
+      domain = (await currentSender(env, company, scope)).domain;
+    if (senderProblem(template, domain, locale, !!market)) {
+      // The chosen address lost its domain: the order waits (unclaimed) until the sender is fixed.
+      senderBlocked = template.fromAddress;
+      continue;
+    }
     await owns();
     // Claimed before it is sent: a second run, or a repeat of this one, never mails the order again.
     const claim = await db
@@ -637,8 +691,9 @@ export async function sendReviewInvitations(
       const result = await deliverMail(
         env,
         company,
-        market ? { shop, market: market.market_id } : { shop },
+        scope,
         { to: recipient, ...mail },
+        overrideOf(template),
       );
       await db
         .prepare(
@@ -662,7 +717,7 @@ export async function sendReviewInvitations(
       uncertain++;
     }
   }
-  if (uncertain || lookupFailed)
+  if (uncertain || lookupFailed || senderBlocked)
     throw new HttpError(
       409,
       [
@@ -671,6 +726,9 @@ export async function sendReviewInvitations(
           : '',
         lookupFailed
           ? `${lookupFailed} ordre${lookupFailed === 1 ? '' : 'r'} kunne ikke hentes fra Shopify og prøves igen ved næste kørsel.`
+          : '',
+        senderBlocked
+          ? `Afsenderadressen ${senderBlocked} er ikke længere på et godkendt domæne. Invitationerne venter, til afsenderen er rettet under Anmeldelser eller Faktura-afsendelse.`
           : '',
       ]
         .filter(Boolean)

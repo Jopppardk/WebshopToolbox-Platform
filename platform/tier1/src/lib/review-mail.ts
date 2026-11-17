@@ -58,6 +58,10 @@ export type ReviewTemplate = {
   subject: string;
   preheader: string;
   trustpilotUrl: string;
+  /** Own sender address on the verified domain of the language's invoice sender; '' uses that sender as is. */
+  fromAddress: string;
+  /** Sender name in the inbox; '' uses the invoice sender's name. */
+  fromName: string;
   design: ReviewDesign;
   blocks: ReviewBlock[];
 };
@@ -305,6 +309,8 @@ export function defaultTemplate(
       ? 'Dela din upplevelse på Trustpilot – det tar bara en minut.'
       : 'Del din oplevelse på Trustpilot – det tager kun et minut.',
     trustpilotUrl: trustpilotEvaluateUrl(locale, domain),
+    fromAddress: '',
+    fromName: '',
     design: {
       background: '#f4efe7',
       card: '#ffffff',
@@ -369,6 +375,17 @@ export function normalizeTemplate(
   const trustpilotUrl = safeUrl(t.trustpilotUrl, 'image');
   if (!trustpilotUrl || !trustpilotUrl.startsWith('https://'))
     fail(`Angiv et Trustpilot-link (https://…) til den ${name}e mail.`);
+  const fromAddress = plain(t.fromAddress, 254).trim().toLowerCase();
+  if (
+    fromAddress &&
+    !/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(
+      fromAddress,
+    )
+  )
+    fail(`Angiv en gyldig afsenderadresse til den ${name}e mail.`);
+  const fromName = plain(t.fromName, 120).trim();
+  if (/[<>"]/.test(fromName))
+    fail(`Afsendernavnet i den ${name}e mail må ikke indeholde < > eller ".`);
   const d = (t.design || {}) as Record<string, unknown>;
   const blocks: unknown[] = Array.isArray(t.blocks) ? t.blocks : [];
   if (!blocks.length) fail(`Den ${name}e mail har intet indhold.`);
@@ -443,6 +460,8 @@ export function normalizeTemplate(
     subject,
     preheader: plain(t.preheader, 200).trim(),
     trustpilotUrl,
+    fromAddress,
+    fromName,
     design: {
       background: color(d.background, '#f4efe7'),
       card: color(d.card, '#ffffff'),
@@ -478,6 +497,11 @@ export function fillVars(html: string, vars: ReviewVars) {
     .replace(/\{\{\s*ordrenummer\s*\}\}/gi, escapeHtml(vars.orderName))
     .replace(/\{\{\s*butik\s*\}\}/gi, escapeHtml(vars.store));
 }
+const trustpilotLinks = (html: string, trustpilot: string) =>
+  html.replace(
+    /href="\{\{trustpilot\}\}"/g,
+    `href="${escapeHtml(trustpilot)}"`,
+  );
 const linkOf = (href: string, trustpilot: string) =>
   href === '{{trustpilot}}' ? trustpilot : href;
 /** A star link: Trustpilot's review form opens with that many stars chosen. */
@@ -513,7 +537,10 @@ export function renderBlock(
     case 'heading':
     case 'text': {
       const heading = block.type === 'heading';
-      return `<div${editor ? ' data-edit="html"' : ''} style="margin:0;padding:6px 0;font-family:${font};font-size:${block.size}px;line-height:${heading ? 1.25 : 1.6};color:${block.color};text-align:${block.align};${heading ? 'font-weight:700;' : ''}">${fill(block.html) || (editor ? '&nbsp;' : '')}</div>`;
+      // A link to {{trustpilot}} in the text goes to the language's Trustpilot page.
+      const fillText = (html: string) =>
+        editor ? fill(html) : fill(trustpilotLinks(html, tp));
+      return `<div${editor ? ' data-edit="html"' : ''} style="margin:0;padding:6px 0;font-family:${font};font-size:${block.size}px;line-height:${heading ? 1.25 : 1.6};color:${block.color};text-align:${block.align};${heading ? 'font-weight:700;' : ''}">${fillText(block.html) || (editor ? '&nbsp;' : '')}</div>`;
     }
     case 'stars': {
       const cell = (n: number) =>
@@ -575,7 +602,11 @@ export function renderReviewMail(
   const lines: string[] = [];
   for (const b of template.blocks) {
     if (b.type === 'heading' || b.type === 'text')
-      lines.push(textOf(fillVars(b.html, vars)).trim());
+      lines.push(
+        textOf(
+          fillVars(trustpilotLinks(b.html, template.trustpilotUrl), vars),
+        ).trim(),
+      );
     else if (b.type === 'stars')
       lines.push(
         (b.caption

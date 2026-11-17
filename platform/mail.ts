@@ -662,17 +662,31 @@ export async function deliverMail(
   company: string,
   scope: MailScope,
   message: { to: string; subject: string; html: string; text: string },
+  override: { from?: string; name?: string } = {},
 ): Promise<{ from: string; receipt: string }> {
   const recipient = mailAddress(message.to),
     { settings, own } = await senderSettings(env, company, scope),
-    from = effectiveSender(settings, standardFrom(env));
+    verified = effectiveSender(settings, standardFrom(env));
+  const custom = !!settings?.custom_from && verified === settings.custom_from;
+  // Another address is only used on the domain of the scope's own, verified sender (same Cloudflare account).
+  let from = verified;
+  if (override.from) {
+    const wanted = mailAddress(override.from);
+    if (!custom || domainOf(wanted) !== domainOf(settings!.custom_from))
+      throw new HttpError(
+        409,
+        `Afsenderadressen ${wanted} er ikke på et godkendt domæne.`,
+      );
+    from = wanted;
+  }
   const name =
-    settings?.sender_name || (await defaultSenderName(env, company, own));
-  const custom = !!settings?.custom_from && from === settings.custom_from;
+    override.name ||
+    settings?.sender_name ||
+    (await defaultSenderName(env, company, own));
   if (custom) {
     const secret = await unseal(
       env,
-      [company, 'mail', from, settings!.account_id],
+      [company, 'mail', settings!.custom_from, settings!.account_id],
       settings!.credentials_encrypted!,
     );
     const response = await fetch(
@@ -735,8 +749,16 @@ export async function currentSender(
   scope: MailScope,
 ) {
   const { settings, own } = await senderSettings(env, company, scope);
+  const from = effectiveSender(settings, standardFrom(env));
   return {
-    from: effectiveSender(settings, standardFrom(env)),
+    from,
     name: settings?.sender_name || (await defaultSenderName(env, company, own)),
+    // The domain of the scope's own verified sender: other addresses on it can be chosen for a mail.
+    domain:
+      settings?.custom_from && from === settings.custom_from
+        ? domainOf(from)
+        : null,
   };
 }
+export const domainOf = (address: string) =>
+  address.slice(address.lastIndexOf('@') + 1).toLowerCase();

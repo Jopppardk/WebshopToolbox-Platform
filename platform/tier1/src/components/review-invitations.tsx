@@ -68,7 +68,10 @@ type Info = {
   startAt: string | null;
   store: string;
   domain: string;
-  senders: Record<ReviewLocale, { from: string; name: string; store: string }>;
+  senders: Record<
+    ReviewLocale,
+    { from: string; name: string; domain: string | null; store: string }
+  >;
   counts: { sent: number; recent: number; uncertain: number };
   log: LogRow[];
   testRecipient: string;
@@ -1103,26 +1106,21 @@ function ReviewPage() {
               <span className="text-sm text-muted-foreground">dage</span>
             </span>
           </Field>
-          <Field
-            label="Trustpilot-link"
-            hint={`Siden hvor kunden skriver anmeldelsen. Fx https://${locale === 'sv' ? 'se' : 'dk'}.trustpilot.com/evaluate/${info.domain}`}
-          >
-            <Input
-              value={template.trustpilotUrl}
-              onChange={(e) =>
-                setTemplate({ ...template, trustpilotUrl: e.target.value })
-              }
-              className="h-9 text-xs"
-            />
-          </Field>
-          <Field
-            label="Afsender"
-            hint="Ændres under Indstillinger → Faktura-afsendelse."
-          >
-            <span className="truncate rounded-lg bg-[#faf7f2] px-3 py-2 text-xs">
-              {sender.name} &lt;{sender.from}&gt;
-            </span>
-          </Field>
+          <div className="xl:col-span-2">
+            <Field
+              label="Trustpilot-link"
+              hint={`Siden hvor kunden skriver anmeldelsen. Fx https://${locale === 'sv' ? 'se' : 'dk'}.trustpilot.com/evaluate/${info.domain}`}
+            >
+              <Input
+                value={template.trustpilotUrl}
+                onChange={(e) =>
+                  setTemplate({ ...template, trustpilotUrl: e.target.value })
+                }
+                className="h-9 text-xs"
+              />
+            </Field>
+          </div>
+
           <div className="md:col-span-2">
             <Field label="Emne">
               <Input
@@ -1143,6 +1141,45 @@ function ReviewPage() {
                   setTemplate({ ...template, preheader: e.target.value })
                 }
                 maxLength={200}
+                className="h-9"
+              />
+            </Field>
+          </div>
+          <div className="md:col-span-2">
+            <Field
+              label="Afsenderadresse"
+              hint={
+                sender.domain
+                  ? `Tom = ${sender.from}. Skal være på det godkendte domæne ${sender.domain}.`
+                  : `Sendes fra ${sender.from}. For at vælge en anden adresse skal dit eget domæne først opsættes og testes under Indstillinger → Faktura-afsendelse${locale === 'sv' ? ' (fanen for dit svenske marked)' : ''}.`
+              }
+            >
+              <Input
+                type="email"
+                value={template.fromAddress ?? ''}
+                placeholder={
+                  sender.domain ? `kontakt@${sender.domain}` : sender.from
+                }
+                disabled={!sender.domain && !template.fromAddress}
+                onChange={(e) =>
+                  setTemplate({
+                    ...template,
+                    fromAddress: e.target.value.trim(),
+                  })
+                }
+                className="h-9"
+              />
+            </Field>
+          </div>
+          <div className="md:col-span-2">
+            <Field label="Afsendernavn" hint={`Tom = ${sender.name}.`}>
+              <Input
+                value={template.fromName ?? ''}
+                placeholder={sender.name}
+                maxLength={120}
+                onChange={(e) =>
+                  setTemplate({ ...template, fromName: e.target.value })
+                }
                 className="h-9"
               />
             </Field>

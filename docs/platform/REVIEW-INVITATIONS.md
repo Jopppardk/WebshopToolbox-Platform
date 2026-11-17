@@ -14,8 +14,8 @@ Webshoppens egne mails, der beder kunden anmelde butikken på Trustpilot, i sted
 - Den automatiske kørsel (`auto.reviews` i `production-jobs.ts`) sender kun i prod med kundemail slået til, når invitationerne er slået til for webshoppen.
 - Kun ordrer afsendt (seneste fulfilment) efter tidspunktet, hvor invitationerne blev slået til. Slås de fra og til igen, starter de forfra fra det nye tidspunkt. Ingen ordrer fra historikken.
 - Sprog: ordrens marked (`webshop_markets.locale`), ellers Sverige → svensk og Danmark → dansk. Andre lande og slåede-fra sprog springes over (vises i listen). Ordrer, hvis marked endnu ikke er kendt, venter.
-- Ordren hentes frisk fra Shopify (mail, fornavn, annullering). Annullerede, fuldt refunderede, testordrer og ordrer uden mail springes over.
-- Afsender: samme som fakturaerne for markedet (Indstillinger → Faktura-afsendelse), egen verificeret adresse eller standardafsenderen.
+- Ordren hentes frisk fra Shopify (mail, fornavn, annullering). Annullerede, fuldt refunderede (status REFUNDED), testordrer og ordrer uden mail springes over.
+- Afsender: som standard samme som fakturaerne for markedet (Indstillinger → Faktura-afsendelse). Pr. sprog kan man vælge en anden afsenderadresse (fx kontakt@sablen.dk og kontakt@sabeln.se) og et afsendernavn. Adressen skal ligge på domænet for sprogets egen, godkendte afsender (samme Cloudflare-konto); det kontrolleres ved gem, testmail og afsendelse. Mister domænet godkendelsen, venter invitationerne, og kørslen melder hvorfor.
 - Højst 10 mails pr. webshop pr. kørsel. Hver ordre gemmes i `review_invitations`, før den sendes: en ordre mailes højst én gang, og en ubekræftet afsendelse står som uafklaret og sendes aldrig igen automatisk.
 
 ## Billeder
