@@ -19,6 +19,7 @@ import { requireCompany, requireWebshop } from './auth';
 import { financeService } from './finance-source';
 import { handleTier1Settings } from './tier1-settings';
 import { handleMarkets } from './markets';
+import { handleReviews } from './review-invitations';
 import { handleLabel, handleLabelPrinter } from './shipmondo-labels';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 
@@ -66,6 +67,8 @@ export async function handleTier1(
       shop,
       path,
     );
+  if (path === '/reviews' || path.startsWith('/reviews/'))
+    return handleReviews(request, env, actor, company.company_id, shop, path);
   if (path === '/markets/settings')
     return handleMarkets(request, env, actor, company.company_id, shop);
   if (path === '/shipmondo/printer')

@@ -30,6 +30,9 @@ import type { PlatformEnv } from './types';
 
 // Children before parents, so foreign keys hold. The company, user and webshop rows are kept.
 export const demoTables = [
+  'review_mail_images',
+  'review_invitations',
+  'review_invitation_settings',
   'shop_sync_variants',
   'shop_sync_collections',
   'shop_sync_products',

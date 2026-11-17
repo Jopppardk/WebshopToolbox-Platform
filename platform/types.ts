@@ -28,6 +28,7 @@ export interface PlatformEnv {
       replyTo?: string;
       subject: string;
       text: string;
+      html?: string;
       attachments?: {
         content: ArrayBuffer;
         filename: string;

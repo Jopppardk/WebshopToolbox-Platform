@@ -21,7 +21,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 1. Branch fra en frisk main, og opret en lille PR.
 2. CI skal være grøn: tests, begge typechecks, `npm run lint` (lint og formatering må kun blive bedre), Tier 1-build og portalens browsertest.
 3. Squash-merge.
-4. Er der en migration, køres den først med workflowet *Vedligehold: D1-migrering* (dev, derefter prod). Seneste migration er `0052_order_payments.sql` (indbetalinger på B2B-fakturaer, oktober 2026).
+4. Er der en migration, køres den først med workflowet *Vedligehold: D1-migrering* (dev, derefter prod). Seneste migration er `0053_review_invitations.sql` (Trustpilot-invitationer, november 2026; ikke kørt endnu). Forrige: `0052_order_payments.sql`.
 5. Udgiv: `node scripts/platform-release.mjs dev --sha <sha>`, derefter `prod`. Udgivelsen genbruger den grønne testkørsel for samme commit.
 6. Skriv en note i CHANGELOG.md.
 
@@ -70,6 +70,8 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 - **B2B-kunder, der betaler på faktura (udgivet 29. oktober 2026, dev og prod, run 40860338370, main `d0d700c`, migration 0052 kørt):** debitorkonto, bogføring af salg på betalingsbetingelser på den, automatiske indbetalingsbilag (bank eller mellemregning mod debitor) og forfaldsdato/betalingsoplysninger på fakturaen. Slås til ved at vælge debitorkontoen; kræver read_payment_terms i kundens Shopify-app. Ikke afprøvet mod rigtig Shopify B2B eller Dinero.
 
 - **Kursdifferencer på Shopify Payments-udbetalinger (udgivet 17. november 2026, dev og prod, run 44017102965, main `c58b32d`):** valgfri konto til kursdifferencer; udbetalingsbilaget flytter forskellen pr. udenlandsk ordre fra mellemregningskontoen dertil. Kræver, at kontoen vælges under kontoplanen. Ikke afprøvet mod rigtig Shopify eller Dinero.
+
+- **Trustpilot-invitationer (ikke udgivet, migration 0053):** Tools → Anmeldelser med egne invitationsmails på dansk og svensk, visuel editor og testmail ([REVIEW-INVITATIONS.md](REVIEW-INVITATIONS.md)). Trustpilots egne automatiske invitationer skal slås fra, når den slås til. Ikke afprøvet mod rigtig Shopify eller mailafsendelse.
 
 **Mangler**
 - **Svenske produktnavne på fakturaer:** kræver read_translations i kundens Shopify-app; ellers danske navne.
