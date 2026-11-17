@@ -305,6 +305,8 @@ test('Indstillinger: the Swedish tab mirrors Danmark, and Tilføj webshop opens 
   const mailPanel = page.locator('#mail-connection-panel');
   await expect(mailPanel).toContainText('sablen.dk');
   await expect(mailPanel).toContainText('godkendt med testmail');
+  // Each domain can be limited to some of the company's webshops.
+  await expect(mailPanel).toContainText('Alle webshops');
   await page.getByRole('button', { name: 'Tilføj webshop' }).click();
   const region = page.getByRole('region', { name: 'Ny webshop' });
   await expect(region).toContainText('Tilføj en ny webshop');

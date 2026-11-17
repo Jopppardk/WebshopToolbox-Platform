@@ -201,14 +201,23 @@ const stored = (env: PlatformEnv, company: string) =>
 export async function mailConnection(env: PlatformEnv, company: string) {
   return (await stored(env, company)) || migrateLegacy(env, company);
 }
-/** The domains the company may send from with its connection (none without a connection). */
-export async function verifiedDomains(env: PlatformEnv, company: string) {
+/**
+ * The domains the company may send from with its connection (none without a connection). With a webshop, only the
+ * domains that are not limited to other webshops; without one (the company's shared sender), all of them.
+ */
+export async function verifiedDomains(
+  env: PlatformEnv,
+  company: string,
+  shop?: string,
+) {
   if (!(await mailConnection(env, company))) return [];
   return (
     await env.PLATFORM_DB.prepare(
-      'SELECT domain FROM mail_domains WHERE company_id=? ORDER BY domain',
+      shop
+        ? 'SELECT d.domain FROM mail_domains d WHERE d.company_id=? AND (NOT EXISTS(SELECT 1 FROM mail_domain_webshops w WHERE w.company_id=d.company_id AND w.domain=d.domain) OR EXISTS(SELECT 1 FROM mail_domain_webshops w WHERE w.company_id=d.company_id AND w.domain=d.domain AND w.webshop_id=?)) ORDER BY d.domain'
+        : 'SELECT domain FROM mail_domains WHERE company_id=? ORDER BY domain',
     )
-      .bind(company)
+      .bind(company, ...(shop ? [shop] : []))
       .all<{ domain: string }>()
   ).results.map((r) => r.domain);
 }
@@ -217,11 +226,12 @@ export async function connectionSender(
   env: PlatformEnv,
   company: string,
   address: string,
+  shop?: string,
 ) {
   const connection = await mailConnection(env, company);
   if (
     !connection ||
-    !(await verifiedDomains(env, company)).includes(domainOf(address))
+    !(await verifiedDomains(env, company, shop)).includes(domainOf(address))
   )
     return null;
   // Opened only when a mail is sent.
@@ -290,12 +300,28 @@ async function info(env: PlatformEnv, company: string, actor: Actor) {
   const domains = connection
     ? (
         await env.PLATFORM_DB.prepare(
-          'SELECT domain,source,verified_at FROM mail_domains WHERE company_id=? ORDER BY domain',
+          "SELECT d.domain,d.source,d.verified_at,COALESCE((SELECT json_group_array(w.webshop_id) FROM mail_domain_webshops w WHERE w.company_id=d.company_id AND w.domain=d.domain),'[]') AS webshops FROM mail_domains d WHERE d.company_id=? ORDER BY d.domain",
         )
           .bind(company)
-          .all<{ domain: string; source: string; verified_at: string }>()
-      ).results
+          .all<{
+            domain: string;
+            source: string;
+            verified_at: string;
+            webshops: string;
+          }>()
+      ).results.map((d) => ({
+        ...d,
+        webshops: JSON.parse(d.webshops) as string[],
+      }))
     : [];
+  // The company's webshops, so a domain can be limited to some of them.
+  const webshops = (
+    await env.PLATFORM_DB.prepare(
+      "SELECT id,name FROM webshops WHERE company_id=? AND status='active' ORDER BY name,id",
+    )
+      .bind(company)
+      .all<{ id: string; name: string }>()
+  ).results;
   return {
     connected: !!connection,
     revision: connection?.revision ?? null,
@@ -304,6 +330,7 @@ async function info(env: PlatformEnv, company: string, actor: Actor) {
     discovery: !!connection?.discovery,
     updatedAt: connection?.updated_at ?? null,
     domains,
+    webshops,
     testRecipient: actor.email,
     localPreview: env.PLATFORM_ENV === 'local-test',
   };
@@ -393,6 +420,11 @@ export async function handleMailConnection(
         ? []
         : [
             db
+              .prepare(
+                `DELETE FROM mail_domain_webshops WHERE company_id=? AND ${won}`,
+              )
+              .bind(company, company, revision),
+            db
               .prepare(`DELETE FROM mail_domains WHERE company_id=? AND ${won}`)
               .bind(company, company, revision),
           ]),
@@ -419,6 +451,9 @@ export async function handleMailConnection(
     // Removing the connection also clears the older per-address credentials, so no mail is sent from the customer's
     // domains afterwards and nothing is moved back on the next read. Mails then go out from the standard sender.
     await db.batch([
+      db
+        .prepare('DELETE FROM mail_domain_webshops WHERE company_id=?')
+        .bind(company),
       db.prepare('DELETE FROM mail_domains WHERE company_id=?').bind(company),
       db
         .prepare(
@@ -437,10 +472,61 @@ export async function handleMailConnection(
     return reply(await info(env, company, actor));
   }
 
+  if (path === '/mail/connection/domain' && request.method === 'PUT') {
+    // Limits a domain to some webshops; an empty list lets every webshop use it.
+    const domain = domainName(body.domain);
+    if (
+      !domain ||
+      !(await db
+        .prepare('SELECT 1 FROM mail_domains WHERE company_id=? AND domain=?')
+        .bind(company, domain)
+        .first())
+    )
+      throw new HttpError(404, 'Domænet er ikke godkendt.');
+    const shops = Array.isArray(body.webshops)
+      ? [...new Set(body.webshops.map(String))]
+      : null;
+    if (!shops || shops.length > 100)
+      throw new HttpError(400, 'Vælg webshops.');
+    const known = new Set(
+      (
+        await db
+          .prepare(
+            "SELECT id FROM webshops WHERE company_id=? AND status='active'",
+          )
+          .bind(company)
+          .all<{ id: string }>()
+      ).results.map((r) => r.id),
+    );
+    if (shops.some((id) => !known.has(id)))
+      throw new HttpError(400, 'Vælg virksomhedens egne webshops.');
+    await db.batch([
+      db
+        .prepare(
+          'DELETE FROM mail_domain_webshops WHERE company_id=? AND domain=?',
+        )
+        .bind(company, domain),
+      ...shops.map((id) =>
+        db
+          .prepare(
+            'INSERT INTO mail_domain_webshops(company_id,domain,webshop_id) VALUES(?,?,?)',
+          )
+          .bind(company, domain, id),
+      ),
+      audit('mail.domain.webshops', { domain, webshops: shops }),
+    ]);
+    return reply(await info(env, company, actor));
+  }
+
   if (path === '/mail/connection/domain' && request.method === 'DELETE') {
     const domain = domainName(body.domain);
     if (!domain) throw new HttpError(400, 'Angiv et domæne.');
     await db.batch([
+      db
+        .prepare(
+          'DELETE FROM mail_domain_webshops WHERE company_id=? AND domain=?',
+        )
+        .bind(company, domain),
       db
         .prepare('DELETE FROM mail_domains WHERE company_id=? AND domain=?')
         .bind(company, domain),

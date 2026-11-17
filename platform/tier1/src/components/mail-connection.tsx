@@ -12,7 +12,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from './ui/dialog';
-type Domain = { domain: string; source: string; verified_at: string };
+type Domain = {
+  domain: string;
+  source: string;
+  verified_at: string;
+  // Empty: every webshop may use the domain.
+  webshops: string[];
+};
 type State = {
   connected: boolean;
   revision: string | null;
@@ -20,6 +26,7 @@ type State = {
   source: 'token' | 'migrated' | null;
   discovery: boolean;
   domains: Domain[];
+  webshops: Array<{ id: string; name: string }>;
   testRecipient: string;
   localPreview: boolean;
 };
@@ -169,34 +176,68 @@ export function MailConnection({
             {state?.domains.length ? (
               <ul className="divide-y rounded-xl border">
                 {state.domains.map((d) => (
-                  <li
-                    key={d.domain}
-                    className="flex items-center gap-2 px-3 py-2 text-sm"
-                  >
-                    <CheckCircle2
-                      aria-hidden="true"
-                      className="size-4 text-green-700"
-                    />
-                    <span className="flex-1 font-medium">{d.domain}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {sourceLabel[d.source] || d.source}
-                    </span>
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label={'Fjern ' + d.domain}
-                      disabled={busy}
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            `Fjern ${d.domain}? Mails fra adresser på domænet sendes så fra standardafsenderen.`,
+                  <li key={d.domain} className="px-3 py-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2
+                        aria-hidden="true"
+                        className="size-4 text-green-700"
+                      />
+                      <span className="flex-1 font-medium">{d.domain}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {sourceLabel[d.source] || d.source}
+                      </span>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={'Fjern ' + d.domain}
+                        disabled={busy}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Fjern ${d.domain}? Mails fra adresser på domænet sendes så fra standardafsenderen.`,
+                            )
                           )
-                        )
-                          void send('/domain', 'DELETE', { domain: d.domain });
-                      }}
-                    >
-                      <Trash2 />
-                    </Button>
+                            void send('/domain', 'DELETE', {
+                              domain: d.domain,
+                            });
+                        }}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </div>
+                    {(state.webshops?.length ?? 0) > 1 && (
+                      <fieldset className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 pl-6 text-xs">
+                        <legend className="sr-only">
+                          Webshops der må bruge {d.domain}
+                        </legend>
+                        <span className="text-muted-foreground">
+                          {d.webshops.length
+                            ? 'Kun for:'
+                            : 'Alle webshops · begræns til:'}
+                        </span>
+                        {state.webshops.map((w) => (
+                          <label
+                            key={w.id}
+                            className="inline-flex items-center gap-1"
+                          >
+                            <input
+                              type="checkbox"
+                              disabled={busy}
+                              checked={d.webshops.includes(w.id)}
+                              onChange={(e) =>
+                                void send('/domain', 'PUT', {
+                                  domain: d.domain,
+                                  webshops: e.target.checked
+                                    ? [...d.webshops, w.id]
+                                    : d.webshops.filter((id) => id !== w.id),
+                                })
+                              }
+                            />
+                            {w.name}
+                          </label>
+                        ))}
+                      </fieldset>
+                    )}
                   </li>
                 ))}
               </ul>

@@ -113,14 +113,22 @@ export async function resolveSender(
     transport: Transport = null,
     kind: 'connection' | 'legacy' | 'standard' = 'standard';
   if (address) {
-    const connection = await connectionSender(env, company, address);
+    // Domains limited to other webshops are not used here, also when the webshop sends as the company.
+    const connection = await connectionSender(
+      env,
+      company,
+      address,
+      scope?.shop,
+    );
     if (connection) {
       from = address;
       transport = connection;
       kind = 'connection';
     } else if (
       legacyApproved(settings) &&
-      domainOf(address) === domainOf(settings!.custom_from)
+      domainOf(address) === domainOf(settings!.custom_from) &&
+      // A domain the integration knows (but limits to other webshops) never falls back to older credentials.
+      !(await verifiedDomains(env, company)).includes(domainOf(address))
     ) {
       from = address;
       transport = legacyTransport(env, company, settings!);
@@ -207,7 +215,7 @@ async function info(
     settings = own;
   const fallbackName = await defaultSenderName(env, company, scope);
   const from = standardFrom(env),
-    domains = await verifiedDomains(env, company);
+    domains = await verifiedDomains(env, company, scope?.shop);
   const allowed = (env.PLATFORM_MAIL_TEST_RECIPIENTS || '')
     .split(',')
     .includes(actor.email.toLowerCase());
@@ -306,7 +314,11 @@ export async function handleMail(
       verified: string | null = null;
     if (custom && !legacyInput) {
       // The address is on a domain approved in Integrationer → Cloudflare E-mail; that connection sends it.
-      if ((await verifiedDomains(env, company)).includes(domainOf(custom)))
+      if (
+        (await verifiedDomains(env, company, scope?.shop)).includes(
+          domainOf(custom),
+        )
+      )
         verified = revision;
       else if (
         current?.custom_from === custom &&
@@ -717,7 +729,7 @@ export async function currentSender(
     company,
     scope,
   );
-  const domains = await verifiedDomains(env, company);
+  const domains = await verifiedDomains(env, company, scope?.shop);
   if (kind === 'legacy' && !domains.includes(domainOf(settings!.custom_from)))
     domains.push(domainOf(settings!.custom_from));
   return { from, name, domains };

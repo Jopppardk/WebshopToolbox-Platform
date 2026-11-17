@@ -14,6 +14,8 @@ Faktura-afsendelse og Anmeldelser vælger kun adresse og navn på et godkendt do
 
 **Flytning af eksisterende afsendere:** Første gang virksomhedens forbindelse læses, og den ikke findes, flyttes den første godkendte ældre afsender (company_mail, derefter webshop_mail, market_mail) automatisk: tokenet dekrypteres med det gamle scope og krypteres igen under forbindelsen, og domænerne for alle godkendte afsendere på samme konto bliver godkendt (`migrated`). Integrationen tilføjes også på Integrationer. De gamle rækker bevares uændret; afsendere på en anden konto fortsætter med deres egne credentials. Kan tokenet ikke dekrypteres, flyttes intet.
 
+**Domæner pr. webshop** (migration `0055_mail_domain_webshops.sql`): et domæne kan begrænses til bestemte webshops (`mail_domain_webshops`; ingen rækker = alle webshops). `verifiedDomains(env, company, shop)` udelader domæner, der er begrænset til andre webshops, også når webshoppen sender som virksomheden; et domæne, integrationen kender, falder aldrig tilbage til en ældre afsenders egne credentials.
+
 **Afbryd forbindelse** sletter forbindelsen og domænerne og nulstiller også de ældre afsenderes credentials, så intet flyttes tilbage; alle mails går derefter fra standardafsenderen. Endpoints (Tier 1, kun administrator, ikke support): `GET/PUT/DELETE /api/platform/tier1/shops/{shop}/mail/connection`, `POST …/mail/connection/refresh`, `POST …/mail/connection/test`, `DELETE …/mail/connection/domain`.
 
 ## Kundens forløb
