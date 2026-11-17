@@ -192,7 +192,7 @@ export function InvoiceSender({
               </span>
             )}
           </div>
-          {!domains.length ? (
+          {!domains.length && !custom ? (
             <p className="text-sm text-muted-foreground">
               Forbind Cloudflare E-mail under Indstillinger → Integrationer for
               at sende fra jeres eget domæne, fx faktura@jeresbutik.dk. Indtil
@@ -213,7 +213,14 @@ export function InvoiceSender({
                 />
                 Send fra en adresse på et af jeres domæner
               </label>
-              {custom && (
+              {custom && !domains.length && (
+                <p className="text-sm text-amber-700">
+                  {form?.customFrom} er ikke længere på et godkendt domæne.
+                  Fjern fluebenet for at bruge standardafsenderen, eller godkend
+                  domænet under Integrationer.
+                </p>
+              )}
+              {custom && !!domains.length && (
                 <div className="flex flex-wrap items-center gap-1 text-sm">
                   <Input
                     aria-label="Adresse før @"

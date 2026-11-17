@@ -369,38 +369,47 @@ export async function handleMailConnection(
     }
     // Domains approved on another account do not carry over.
     const keep = current?.account_id === account;
+    // Saved only over the revision checked above (the token check and lookup take time); the domain changes only
+    // apply when this save won.
+    const revision = crypto.randomUUID(),
+      won =
+        'EXISTS(SELECT 1 FROM mail_connections WHERE company_id=? AND revision=?)';
     await db.batch([
       db
         .prepare(
           `INSERT INTO mail_connections(company_id,account_id,credentials_encrypted,revision,source,discovery) VALUES(?,?,?,?,'token',?)
-           ON CONFLICT(company_id) DO UPDATE SET account_id=excluded.account_id,credentials_encrypted=excluded.credentials_encrypted,revision=excluded.revision,source='token',discovery=excluded.discovery,updated_at=CURRENT_TIMESTAMP`,
+           ON CONFLICT(company_id) DO UPDATE SET account_id=excluded.account_id,credentials_encrypted=excluded.credentials_encrypted,revision=excluded.revision,source='token',discovery=excluded.discovery,updated_at=CURRENT_TIMESTAMP
+           WHERE mail_connections.revision IS ?`,
         )
         .bind(
           company,
           account,
           await seal(env, connectionScope(company, account), { token }),
-          crypto.randomUUID(),
+          revision,
           discovered ? 1 : 0,
+          current?.revision ?? null,
         ),
       ...(keep
         ? []
         : [
             db
-              .prepare('DELETE FROM mail_domains WHERE company_id=?')
-              .bind(company),
+              .prepare(`DELETE FROM mail_domains WHERE company_id=? AND ${won}`)
+              .bind(company, company, revision),
           ]),
       ...(discovered || []).map((d) =>
         db
           .prepare(
-            "INSERT INTO mail_domains(company_id,domain,source) VALUES(?,?,'cloudflare') ON CONFLICT DO NOTHING",
+            `INSERT INTO mail_domains(company_id,domain,source) SELECT ?,?,'cloudflare' WHERE ${won} ON CONFLICT DO NOTHING`,
           )
-          .bind(company, d),
+          .bind(company, d, company, revision),
       ),
       audit('mail.connection.saved', {
         discovery: !!discovered,
         domains: discovered?.length ?? 0,
       }),
     ]);
+    if ((await stored(env, company))?.revision !== revision)
+      throw new HttpError(409, 'Forbindelsen er ændret. Genindlæs siden.');
     return reply(await info(env, company, actor));
   }
   if (!current)
@@ -435,6 +444,14 @@ export async function handleMailConnection(
       db
         .prepare('DELETE FROM mail_domains WHERE company_id=? AND domain=?')
         .bind(company, domain),
+      // An older sender on the domain (e.g. the one it was moved from) stops too, so mails go from the standard sender.
+      ...['company_mail', 'webshop_mail', 'market_mail'].map((t) =>
+        db
+          .prepare(
+            `UPDATE ${t} SET credentials_encrypted=NULL,verified_revision=NULL WHERE company_id=? AND credentials_encrypted IS NOT NULL AND substr(custom_from,instr(custom_from,'@')+1)=?`,
+          )
+          .bind(company, domain),
+      ),
       audit('mail.domain.removed', { domain }),
     ]);
     return reply(await info(env, company, actor));
@@ -448,16 +465,19 @@ export async function handleMailConnection(
         current.credentials_encrypted,
       )) as { token: string };
       const discovered = await discoverDomains(current.account_id, token);
+      // Only for the connection that was looked up: a token or account saved meanwhile keeps its own domains.
       await db.batch([
         db
-          .prepare('UPDATE mail_connections SET discovery=? WHERE company_id=?')
-          .bind(discovered ? 1 : 0, company),
+          .prepare(
+            'UPDATE mail_connections SET discovery=? WHERE company_id=? AND revision=?',
+          )
+          .bind(discovered ? 1 : 0, company, current.revision),
         ...(discovered || []).map((d) =>
           db
             .prepare(
-              "INSERT INTO mail_domains(company_id,domain,source) VALUES(?,?,'cloudflare') ON CONFLICT DO NOTHING",
+              "INSERT INTO mail_domains(company_id,domain,source) SELECT ?,?,'cloudflare' WHERE EXISTS(SELECT 1 FROM mail_connections WHERE company_id=? AND revision=?) ON CONFLICT DO NOTHING",
             )
-            .bind(company, d),
+            .bind(company, d, company, current.revision),
         ),
       ]);
     }
