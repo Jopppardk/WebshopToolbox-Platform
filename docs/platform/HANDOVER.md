@@ -2,7 +2,7 @@
 
 Aktuel status på én side. Læs den før hver opgave. Historikken står i [CHANGELOG.md](CHANGELOG.md), planen i [ROADMAP.md](ROADMAP.md) og arbejdsreglerne i [AGENTS.md](../../AGENTS.md). Opdatér denne side, når status eller åbne punkter ændrer sig. Skriv selve ændringen som en note øverst i CHANGELOG.md.
 
-_Senest opdateret 12. november 2026._
+_Senest opdateret 17. november 2026._
 
 ## Miljøer
 
@@ -69,7 +69,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 
 - **B2B-kunder, der betaler på faktura (udgivet 29. oktober 2026, dev og prod, run 40860338370, main `d0d700c`, migration 0052 kørt):** debitorkonto, bogføring af salg på betalingsbetingelser på den, automatiske indbetalingsbilag (bank eller mellemregning mod debitor) og forfaldsdato/betalingsoplysninger på fakturaen. Slås til ved at vælge debitorkontoen; kræver read_payment_terms i kundens Shopify-app. Ikke afprøvet mod rigtig Shopify B2B eller Dinero.
 
-- **Kursdifferencer på Shopify Payments-udbetalinger (ikke udgivet):** valgfri konto til kursdifferencer; udbetalingsbilaget flytter forskellen pr. udenlandsk ordre fra mellemregningskontoen dertil. Kræver, at kontoen vælges under kontoplanen. Ikke afprøvet mod rigtig Shopify eller Dinero.
+- **Kursdifferencer på Shopify Payments-udbetalinger (udgivet 17. november 2026, dev og prod, run 44017102965, main `c58b32d`):** valgfri konto til kursdifferencer; udbetalingsbilaget flytter forskellen pr. udenlandsk ordre fra mellemregningskontoen dertil. Kræver, at kontoen vælges under kontoplanen. Ikke afprøvet mod rigtig Shopify eller Dinero.
 
 - **Trustpilot-invitationer (ikke udgivet, migration 0053):** Tools → Anmeldelser med egne invitationsmails på dansk og svensk, visuel editor og testmail ([REVIEW-INVITATIONS.md](REVIEW-INVITATIONS.md)). Trustpilots egne automatiske invitationer skal slås fra, når den slås til. Ikke afprøvet mod rigtig Shopify eller mailafsendelse.
 
