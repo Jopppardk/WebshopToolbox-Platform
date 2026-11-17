@@ -26,6 +26,7 @@ type RawTransaction = {
   source_type?: string;
   source_order_id?: number | string | null;
   processed_at?: string;
+  source_order_transaction_id?: number | string | null;
   adjustment_reason?: string | null;
   adjustment_order_transactions?: Array<{
     order?: { id?: number | string; name?: string };
@@ -167,6 +168,23 @@ export async function fetchPayoutTransactions(
   expectedNet: number,
   access: { shop: string; accessToken: string },
 ) {
+  return (
+    await fetchPayoutTransactionsWithSources(
+      payoutGid,
+      currency,
+      expectedNet,
+      access,
+    )
+  ).transactions;
+}
+
+/** The payout's transactions and, per transaction ID, the Shopify order transaction it settles (when Shopify names one). */
+export async function fetchPayoutTransactionsWithSources(
+  payoutGid: string,
+  currency: string,
+  expectedNet: number,
+  access: { shop: string; accessToken: string },
+) {
   const payoutId = payoutGid.split('/').pop() || '';
   if (!/^\d+$/.test(payoutId)) throw new Error('Ugyldigt udbetalings-ID.');
   const { shop, accessToken } = access;
@@ -221,11 +239,17 @@ export async function fetchPayoutTransactions(
     ),
   ];
   const names = await orderNames(shop, accessToken, ids);
-  return validatePayoutTransactions(
+  const transactions = validatePayoutTransactions(
     all,
     payoutId,
     currency,
     expectedNet,
     names,
   );
+  const sources = new Map<string, string>();
+  for (const item of all) {
+    const source = String(item.source_order_transaction_id ?? '');
+    if (/^\d{1,30}$/.test(source)) sources.set(String(item.id), source);
+  }
+  return { transactions, sources };
 }

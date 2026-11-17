@@ -28,6 +28,7 @@ export const accountKeys = [
   'inventory',
   'inventoryAdjustment',
   'receivables',
+  'exchangeDifferences',
 ];
 export async function handleAccounting(
   request: Request,
