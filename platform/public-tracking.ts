@@ -1,5 +1,10 @@
 import { bringConnection, fetchBringTracking } from './bring-tracking';
-import { fetchDaoTracking, fetchGlsTracking, notYet } from './carrier-tracking';
+import {
+  blocked,
+  fetchDaoTracking,
+  fetchGlsTracking,
+  notYet,
+} from './carrier-tracking';
 import { HttpError } from './types';
 import type { PlatformEnv } from './types';
 import type {
@@ -291,6 +296,10 @@ const safeError =
 // Not a failure the user can act on: the public page only links on to the carrier. Shown calmly, and Opdatér skips it.
 const redirectedError =
   'Shipmondo viser ikke længere status for dette fragtfirma. Følg pakken via trackinglinket.';
+// DAO has refused automatic lookups since 16 November 2026. The last known status is kept and the parcel is checked
+// again as usual, so tracking resumes by itself if DAO lifts the check.
+const blockedError =
+  'DAO afviser nu automatiske opslag. Senest kendte oplysninger vises; følg pakken via trackinglinket.';
 // GLS and DAO parcels Shipmondo forwarded before they were read from the carriers are looked up again at once,
 // instead of waiting up to six hours for their next check.
 const retryForwarded = (db: D1Database, company?: string, shop?: string) =>
@@ -400,7 +409,9 @@ async function refreshRow(env: PlatformEnv, row: Row, manual = false) {
           ? null
           : error instanceof Error && error.message === 'redirect'
             ? redirectedError
-            : safeError,
+            : error instanceof Error && error.message === blocked
+              ? blockedError
+              : safeError,
         now + checkInterval,
         ...suffix,
       )

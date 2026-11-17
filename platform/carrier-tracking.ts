@@ -8,6 +8,8 @@ import { trackingTime, type PublicTracking } from './public-tracking';
 
 // The lookup found no parcel yet (GLS answers once the parcel is scanned, DAO once it is registered). Not an error.
 export const notYet = 'not yet';
+// The carrier refuses automatic lookups (DAO's bot check since 16 November 2026). Not passed by imitating a browser.
+export const blocked = 'blocked';
 
 const text = (value: unknown, max: number) =>
   typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -194,8 +196,12 @@ export function parseDaoTracking(
 
 export async function fetchDaoTracking(number: string, shippedAt: string) {
   if (!/^\d{8,30}$/.test(number)) throw Error('number');
-  const { data } = await readJson(
+  const { status, data } = await readJson(
     'https://dao.as/wp-json/dao-wp/v1/track-parcel?lang=DA&barcode=' + number,
+    [403],
   );
+  // {"code":"dao_bot_check_failed","data":{"status":403}}: DAO only answers its own page in a browser.
+  if (status === 403)
+    throw Error(data?.code === 'dao_bot_check_failed' ? blocked : 'response');
   return parseDaoTracking(data, number, shippedAt);
 }
