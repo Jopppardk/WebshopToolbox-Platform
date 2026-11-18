@@ -37,6 +37,7 @@ type SettingsRow = {
 };
 const day = 86400000,
   sendsPerRun = 10,
+  queueLimit = 1000,
   maxImageBytes = 2_000_000,
   maxImages = 300;
 const imageTypes: Record<string, (b: Uint8Array) => boolean> = {
@@ -571,7 +572,8 @@ export async function invitationQueue(
   row: SettingsRow | null,
   settings: ReviewSettings,
 ) {
-  if (!row?.enabled || !row.start_at) return { queued: 0, ready: 0 };
+  if (!row?.enabled || !row.start_at)
+    return { queued: 0, ready: 0, queueCapped: false };
   const db = env.PLATFORM_DB,
     now = Date.now();
   const orders = await pendingOrders(
@@ -580,8 +582,11 @@ export async function invitationQueue(
     shop,
     row.start_at,
     new Date(now).toISOString(),
-    1000,
+    queueLimit + 1,
   );
+  // More than the limit waiting (a long delay on a busy shop): the counts cover the oldest and say so.
+  const queueCapped = orders.length > queueLimit;
+  if (queueCapped) orders.length = queueLimit;
   let queued = 0,
     ready = 0;
   for (const c of orders) {
@@ -604,7 +609,7 @@ export async function invitationQueue(
     )
       ready++;
   }
-  return { queued, ready };
+  return { queued, ready, queueCapped };
 }
 
 /**

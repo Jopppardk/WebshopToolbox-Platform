@@ -78,6 +78,7 @@ type Info = {
     uncertain: number;
     queued: number;
     ready: number;
+    queueCapped: boolean;
   };
   log: LogRow[];
   testRecipient: string;
@@ -1095,18 +1096,20 @@ function ReviewPage() {
                   ? `I kø · ${info.counts.ready.toLocaleString('da-DK')} klar`
                   : 'I kø',
                 info.counts.queued,
+                info.counts.queueCapped,
               ],
               ['Sendt, 30 dage', info.counts.recent],
               ['Sendt i alt', info.counts.sent],
               ['Uafklarede', info.counts.uncertain],
-            ] as [string, number][]
-          ).map(([name, value]) => (
+            ] as [string, number, boolean?][]
+          ).map(([name, value, more]) => (
             <div
               key={name}
               className="min-w-24 rounded-xl bg-[#faf7f2] px-3 py-2.5"
             >
               <dd className="text-xl font-semibold tabular-nums">
                 {value.toLocaleString('da-DK')}
+                {more ? '+' : ''}
               </dd>
               <dt className="text-[11px] text-muted-foreground">{name}</dt>
             </div>
