@@ -72,7 +72,14 @@ type Info = {
     ReviewLocale,
     { from: string; name: string; domains: string[]; store: string }
   >;
-  counts: { sent: number; recent: number; uncertain: number };
+  counts: {
+    sent: number;
+    recent: number;
+    uncertain: number;
+    queued: number;
+    ready: number;
+    queueCapped: boolean;
+  };
   log: LogRow[];
   testRecipient: string;
   customerMail: boolean;
@@ -1081,20 +1088,28 @@ function ReviewPage() {
             </p>
           </div>
         </div>
-        <dl className="grid grid-cols-3 gap-3 text-center">
+        <dl className="grid grid-cols-2 gap-3 text-center sm:grid-cols-4">
           {(
             [
+              [
+                info.counts.ready
+                  ? `I kø · ${info.counts.ready.toLocaleString('da-DK')} klar`
+                  : 'I kø',
+                info.counts.queued,
+                info.counts.queueCapped,
+              ],
               ['Sendt, 30 dage', info.counts.recent],
               ['Sendt i alt', info.counts.sent],
               ['Uafklarede', info.counts.uncertain],
-            ] as const
-          ).map(([name, value]) => (
+            ] as [string, number, boolean?][]
+          ).map(([name, value, more]) => (
             <div
               key={name}
               className="min-w-24 rounded-xl bg-[#faf7f2] px-3 py-2.5"
             >
               <dd className="text-xl font-semibold tabular-nums">
                 {value.toLocaleString('da-DK')}
+                {more ? '+' : ''}
               </dd>
               <dt className="text-[11px] text-muted-foreground">{name}</dt>
             </div>
