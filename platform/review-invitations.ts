@@ -169,14 +169,18 @@ async function info(
     )
     .bind(company, shop)
     .first<{ sent: number; recent: number; uncertain: number }>();
+  const settings = settingsOf(row, w.domain);
   return {
-    settings: settingsOf(row, w.domain),
+    settings,
     revision: row?.revision ?? 0,
     startAt: row?.enabled ? row.start_at : null,
     store: w.name,
     domain: w.domain,
     senders,
-    counts: counts || { sent: 0, recent: 0, uncertain: 0 },
+    counts: {
+      ...(counts || { sent: 0, recent: 0, uncertain: 0 }),
+      ...(await invitationQueue(env, company, shop, row, settings)),
+    },
     log,
     testRecipient: actor.email,
     customerMail: customerMail(env),
@@ -514,6 +518,96 @@ function localeOf(market: WebshopMarket | null, country: string | null) {
 }
 
 /**
+ * Orders waiting for an invitation: shipped (last fulfilment) after the start and no later than `until`, not
+ * cancelled, not a test, and not invited or skipped before. Orders are looked up by creation time first (index),
+ * at most 120 days back.
+ */
+function pendingOrders(
+  db: D1Database,
+  company: string,
+  shop: string,
+  startAt: string,
+  until: string,
+  limit: number,
+) {
+  return db
+    .prepare(
+      `SELECT * FROM (SELECT s.external_id,s.payload_json,m.country,m.external_id IS NOT NULL has_market,
+ (SELECT max(json_extract(f.value,'$.createdAt')) FROM json_each(s.payload_json,'$.fulfillments') f) shipped_at
+ FROM operation_snapshots s LEFT JOIN order_markets m ON m.company_id=s.company_id AND m.webshop_id=s.webshop_id AND m.external_id=s.external_id
+ WHERE s.company_id=? AND s.webshop_id=? AND s.module='orders' AND s.occurred_at>=?
+ AND json_extract(s.payload_json,'$.displayFulfillmentStatus')='FULFILLED' AND json_extract(s.payload_json,'$.cancelledAt') IS NULL
+ AND COALESCE(json_extract(s.payload_json,'$.test'),0)=0
+ AND NOT EXISTS(SELECT 1 FROM review_invitations r WHERE r.company_id=s.company_id AND r.webshop_id=s.webshop_id AND r.external_id=s.external_id))
+ WHERE shipped_at>=? AND shipped_at<=? ORDER BY shipped_at LIMIT ?`,
+    )
+    .bind(
+      company,
+      shop,
+      new Date(Date.parse(startAt) - 120 * day).toISOString(),
+      startAt,
+      until,
+      limit,
+    )
+    .all<Candidate>()
+    .then((r) => r.results);
+}
+const refunded = (order: {
+  displayFinancialStatus?: string;
+  currentTotalPriceSet?: { shopMoney?: { amount?: string } };
+}) =>
+  order.displayFinancialStatus === 'REFUNDED' ||
+  Number(order.currentTotalPriceSet?.shopMoney?.amount) === 0;
+
+/**
+ * The queue shown on the page: shipped orders that will get an invitation, and how many of them have waited their
+ * language's delay (sent by the next runs). Orders that will be skipped (no language, language switched off,
+ * refunded) are left out; the live check in Shopify happens only when sending.
+ */
+export async function invitationQueue(
+  env: PlatformEnv,
+  company: string,
+  shop: string,
+  row: SettingsRow | null,
+  settings: ReviewSettings,
+) {
+  if (!row?.enabled || !row.start_at) return { queued: 0, ready: 0 };
+  const db = env.PLATFORM_DB,
+    now = Date.now();
+  const orders = await pendingOrders(
+    db,
+    company,
+    shop,
+    row.start_at,
+    new Date(now).toISOString(),
+    1000,
+  );
+  let queued = 0,
+    ready = 0;
+  for (const c of orders) {
+    if (refunded(JSON.parse(c.payload_json))) continue;
+    // The language as the run finds it; a Danish order has no market. Before the market is known, the country.
+    const locale =
+      c.has_market && c.country && c.country !== 'DK'
+        ? localeOf(
+            await orderMarketSettings(db, company, shop, c.external_id),
+            c.country,
+          )
+        : localeOf(null, c.country);
+    if (!locale || !settings.templates[locale].enabled) continue;
+    queued++;
+    // Without a known market the run waits for it, so such an order is not ready yet.
+    if (
+      c.has_market &&
+      Date.parse(c.shipped_at) + settings.templates[locale].delayDays * day <=
+        now
+    )
+      ready++;
+  }
+  return { queued, ready };
+}
+
+/**
  * The scheduled step: mails the invitations that are due for one webshop, a few per run. `owns` throws when the
  * run lost its lease, so nothing is mailed after another run took over.
  */
@@ -534,29 +628,14 @@ export async function sendReviewInvitations(
     minDelay = Math.min(
       ...reviewLocales.map((l) => settings.templates[l].delayDays),
     );
-  // Shipped (last fulfilment) after the start and at least the shortest delay ago, not cancelled, not a test, and
-  // not invited or skipped before. Orders are looked up by creation time first (index), at most 120 days back.
-  const candidates = (
-    await db
-      .prepare(
-        `SELECT * FROM (SELECT s.external_id,s.payload_json,m.country,m.external_id IS NOT NULL has_market,
- (SELECT max(json_extract(f.value,'$.createdAt')) FROM json_each(s.payload_json,'$.fulfillments') f) shipped_at
- FROM operation_snapshots s LEFT JOIN order_markets m ON m.company_id=s.company_id AND m.webshop_id=s.webshop_id AND m.external_id=s.external_id
- WHERE s.company_id=? AND s.webshop_id=? AND s.module='orders' AND s.occurred_at>=?
- AND json_extract(s.payload_json,'$.displayFulfillmentStatus')='FULFILLED' AND json_extract(s.payload_json,'$.cancelledAt') IS NULL
- AND COALESCE(json_extract(s.payload_json,'$.test'),0)=0
- AND NOT EXISTS(SELECT 1 FROM review_invitations r WHERE r.company_id=s.company_id AND r.webshop_id=s.webshop_id AND r.external_id=s.external_id))
- WHERE shipped_at>=? AND shipped_at<=? ORDER BY shipped_at LIMIT 200`,
-      )
-      .bind(
-        company,
-        shop,
-        new Date(Date.parse(row.start_at) - 120 * day).toISOString(),
-        row.start_at,
-        new Date(now - minDelay * day).toISOString(),
-      )
-      .all<Candidate>()
-  ).results;
+  const candidates = await pendingOrders(
+    db,
+    company,
+    shop,
+    row.start_at,
+    new Date(now - minDelay * day).toISOString(),
+    200,
+  );
   if (!candidates.length || !enabled.length) return { sent: 0 };
   const skip = (
     c: Candidate,
@@ -604,10 +683,7 @@ export async function sendReviewInvitations(
     }
     if (Date.parse(c.shipped_at) + template.delayDays * day > now) continue;
     // Fully refunded (with or without a cancellation): Shopify's status says so; partly refunded orders are invited.
-    if (
-      order.displayFinancialStatus === 'REFUNDED' ||
-      Number(order.currentTotalPriceSet?.shopMoney?.amount) === 0
-    ) {
+    if (refunded(order)) {
       await skip(c, name, locale, 'Ordren er refunderet.');
       continue;
     }
