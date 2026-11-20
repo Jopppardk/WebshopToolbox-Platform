@@ -1,10 +1,5 @@
 import { bringConnection, fetchBringTracking } from './bring-tracking';
-import {
-  blocked,
-  fetchDaoTracking,
-  fetchGlsTracking,
-  notYet,
-} from './carrier-tracking';
+import { fetchGlsTracking, notYet } from './carrier-tracking';
 import { HttpError } from './types';
 import type { PlatformEnv } from './types';
 import type {
@@ -296,16 +291,16 @@ const safeError =
 // Not a failure the user can act on: the public page only links on to the carrier. Shown calmly, and Opdatér skips it.
 const redirectedError =
   'Shipmondo viser ikke længere status for dette fragtfirma. Følg pakken via trackinglinket.';
-// DAO has refused automatic lookups since 16 November 2026. The last known status is kept and the parcel is checked
-// again as usual, so tracking resumes by itself if DAO lifts the check.
-const blockedError =
-  'DAO afviser nu automatiske opslag. Senest kendte oplysninger vises; følg pakken via trackinglinket.';
-// GLS and DAO parcels Shipmondo forwarded before they were read from the carriers are looked up again at once,
+// DAO's tracking lookup has refused automatic requests since 16 November 2026 ("dao_bot_check_failed"), and DAO
+// gives René no API access. DAO parcels are therefore never looked up; they show this text and the tracking link.
+const daoText =
+  'DAO-pakker kan ikke følges i WebshopToolbox. Følg pakken hos DAO via trackinglinket.';
+// GLS parcels Shipmondo forwarded before they were read from the carriers are looked up again at once,
 // instead of waiting up to six hours for their next check.
 const retryForwarded = (db: D1Database, company?: string, shop?: string) =>
   db
     .prepare(
-      "UPDATE shipment_tracking_cache SET next_check=0,attempted_at=NULL,error=NULL WHERE error=? AND data_json IS NULL AND terminal=0 AND carrier IN ('gls','dao') AND (? IS NULL OR (company_id=? AND webshop_id=?))",
+      "UPDATE shipment_tracking_cache SET next_check=0,attempted_at=NULL,error=NULL WHERE error=? AND data_json IS NULL AND terminal=0 AND carrier='gls' AND (? IS NULL OR (company_id=? AND webshop_id=?))",
     )
     .bind(redirectedError, company ?? null, company ?? null, shop ?? null)
     .run();
@@ -367,16 +362,14 @@ async function refreshRow(env: PlatformEnv, row: Row, manual = false) {
               row.shipped_at,
               previous?.confirmedBy ? null : previous,
             )
-          : row.carrier === 'dao'
-            ? await fetchDaoTracking(row.tracking_number, row.shipped_at)
-            : await fetchPublicTracking(
-                {
-                  url: row.url,
-                  carrier: row.carrier,
-                  number: row.tracking_number,
-                },
-                row.shipped_at,
-              );
+          : await fetchPublicTracking(
+              {
+                url: row.url,
+                carrier: row.carrier,
+                number: row.tracking_number,
+              },
+              row.shipped_at,
+            );
     // GLS gives only a delivery time, which can precede when an earlier status was first seen here.
     if (
       row.carrier !== 'gls' &&
@@ -409,9 +402,7 @@ async function refreshRow(env: PlatformEnv, row: Row, manual = false) {
           ? null
           : error instanceof Error && error.message === 'redirect'
             ? redirectedError
-            : error instanceof Error && error.message === blocked
-              ? blockedError
-              : safeError,
+            : safeError,
         now + checkInterval,
         ...suffix,
       )
@@ -449,6 +440,17 @@ export function applyPublicTracking(
         error: null,
         state: 'unavailable',
         text: 'Automatisk tracking er ikke tilgængelig for dette pakkenummer.',
+      },
+    };
+  if (target.carrier === 'dao')
+    return {
+      ...s,
+      trackingUrl: s.trackingUrl || target.url,
+      publicTracking: {
+        checkedAt: null,
+        error: null,
+        state: 'unavailable',
+        text: daoText,
       },
     };
   if (!row?.data_json && row?.error === redirectedError)
@@ -588,6 +590,12 @@ export async function enrichPublicTracking(
       409,
       'Forbind Bring under Integrationer for at hente tracking på Bring-pakker.',
     );
+  if (
+    manualId !== undefined &&
+    trackingTarget(list.shipments.find((s) => s.id === manualId)!)!.carrier ===
+      'dao'
+  )
+    throw new HttpError(409, daoText);
   await db
     .prepare(
       'DELETE FROM shipment_tracking_cache WHERE company_id=? AND webshop_id=? AND source_key<>? AND terminal=0',
@@ -659,6 +667,7 @@ export async function enrichPublicTracking(
               (r) =>
                 needed.has(r.parcel_key) &&
                 !r.terminal &&
+                r.carrier !== 'dao' &&
                 (bring || r.carrier !== 'bring') &&
                 r.next_check <= Date.now() &&
                 (!r.attempted_at ||
@@ -708,7 +717,7 @@ export async function refreshPublicTracking(env: PlatformEnv) {
  JOIN companies c ON c.id=t.company_id AND c.status='active' AND c.demo=0
  JOIN webshops w ON w.company_id=t.company_id AND w.id=t.webshop_id AND w.status='active'
  JOIN webshop_connections k ON k.company_id=t.company_id AND k.webshop_id=t.webshop_id AND k.provider='shopify'
- WHERE t.terminal=0 AND t.next_check<=?
+ WHERE t.terminal=0 AND t.carrier<>'dao' AND t.next_check<=?
  AND (t.carrier<>'bring' OR EXISTS(SELECT 1 FROM carrier_connections b WHERE b.company_id=t.company_id AND b.webshop_id=t.webshop_id AND b.provider='bring')) AND t.lease_until<=? AND COALESCE(unixepoch(t.attempted_at)*1000,0)<=? AND NOT EXISTS(SELECT 1 FROM public_signups p WHERE p.company_id=t.company_id AND p.trial_ends_at<=unixepoch())
  ORDER BY t.next_check,t.company_id,t.webshop_id LIMIT 40`)
       .bind(now, now, now - checkInterval)

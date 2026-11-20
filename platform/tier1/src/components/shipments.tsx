@@ -195,7 +195,9 @@ function TrackingNotice({ s }: { s: Shipment }) {
   return (
     <p className="rounded-lg border p-3 text-xs text-muted-foreground">
       <strong>
-        Tracking via {s.carrier === 'bring' ? 'Bring' : 'Shipmondo'}
+        {s.carrier === 'dao'
+          ? 'Tracking'
+          : `Tracking via ${s.carrier === 'bring' ? 'Bring' : s.carrier === 'gls' ? 'GLS' : 'Shipmondo'}`}
       </strong>{' '}
       · {t.text}
       {t.checkedAt
