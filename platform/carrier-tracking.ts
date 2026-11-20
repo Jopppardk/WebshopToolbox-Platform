@@ -1,12 +1,13 @@
 import type { ShipmentEvent } from './tier1/src/lib/shipments';
 import { trackingTime, type PublicTracking } from './public-tracking';
 
-// GLS and DAO read from the carriers' own open lookups. Shipmondo's public pages only link on to them since 29
-// October 2026, the Shipment Monitor webhook needs a Shipmondo plan above Essentials, and the carriers' APIs need
-// customer agreements René does not have. Neither lookup is documented, so any change in layout is rejected and the
+// GLS is read from GLS' own open lookup. Shipmondo's public pages only link on to the carrier since 29 October 2026,
+// the Shipment Monitor webhook needs a Shipmondo plan above Essentials, and the carriers' APIs need customer
+// agreements René does not have. DAO's lookup has refused automatic requests since 16 November 2026, so DAO parcels
+// are not tracked (see public-tracking.ts). The lookup is not documented, so any change in layout is rejected and the
 // last good snapshot is kept, as for Shipmondo's page.
 
-// The lookup found no parcel yet (GLS answers once the parcel is scanned, DAO once it is registered). Not an error.
+// The lookup found no parcel yet (GLS answers once the parcel is scanned). Not an error.
 export const notYet = 'not yet';
 
 const text = (value: unknown, max: number) =>
@@ -51,16 +52,6 @@ type GlsAnswer = {
     };
   }>;
 };
-type DaoAnswer = {
-  found?: unknown;
-  parcel?: {
-    barcode?: unknown;
-    events?: Array<{
-      raw?: { tidspunkt?: unknown; haendelse?: unknown; beskrivelse?: unknown };
-    }>;
-  };
-};
-
 /**
  * GLS' open lookup (rstt029) gives the current status and, once delivered, its time; not the scans. A new status is
  * therefore timed when it is first seen (or at GLS' delivery time), and earlier statuses are kept from the snapshot.
@@ -123,79 +114,4 @@ export async function fetchGlsTracking(
   if (status === 404)
     throw Error(data?.lastError === 'E206' ? notYet : 'response');
   return parseGlsTracking(data, shippedAt, previous);
-}
-
-// DAO event codes ("haendelse") seen on DAO's own tracking page. Unknown codes are read from their description;
-// anything else stays raw and is shown as a problem with DAO's text.
-const daoCodes: Record<string, string> = Object.assign(Object.create(null), {
-  '1': 'INFORMED',
-  '11': 'EN_ROUTE',
-  '12': 'EN_ROUTE',
-  '16': 'EN_ROUTE',
-  '23': 'EN_ROUTE',
-  '25': 'EN_ROUTE',
-  '26': 'EN_ROUTE',
-  '32': 'READY_FOR_PICKUP',
-  '51': 'DELIVERED',
-});
-function daoStatus(code: string, description: string) {
-  if (daoCodes[code]) return daoCodes[code];
-  if (/ikke|fejl|retur|skade|forsink|adresse/i.test(description))
-    return 'DAO-' + code;
-  if (/^(pakken er )?(udleveret|leveret)\b/i.test(description))
-    return 'DELIVERED';
-  if (/klar til afhentning/i.test(description)) return 'READY_FOR_PICKUP';
-  if (
-    /på vej|sorteret|ankommet|indleveret|afhentet|under levering|ude at køre/i.test(
-      description,
-    )
-  )
-    return 'EN_ROUTE';
-  return 'DAO-' + code;
-}
-
-/** DAO's own tracking page lookup. Only the events are kept; the recipient and parcel shop in the answer are not. */
-export function parseDaoTracking(
-  data: DaoAnswer | null | undefined,
-  number: string,
-  shippedAt: string,
-): PublicTracking {
-  if (data?.found === false) throw Error(notYet);
-  const parcel = data?.parcel;
-  if (data?.found !== true || parcel?.barcode !== number)
-    throw Error('mismatch');
-  if (!parcel || !Array.isArray(parcel.events) || !parcel.events.length)
-    throw Error(notYet);
-  if (parcel.events.length > 300) throw Error('size');
-  // DAO lists the newest event first. Reversed before the stable sort, events with the same time keep DAO's order.
-  const events: ShipmentEvent[] = [...parcel.events]
-    .reverse()
-    .map((e) => {
-      const code = text(e?.raw?.haendelse, 10),
-        label = text(e?.raw?.beskrivelse, 400);
-      if (!/^\d{1,4}$/.test(code) || !label) throw Error('event');
-      return {
-        status: daoStatus(code, label),
-        label,
-        at: trackingTime(e.raw?.tidspunkt),
-        message: null,
-      };
-    })
-    .sort((a: ShipmentEvent, b: ShipmentEvent) => a.at.localeCompare(b.at));
-  if (Date.parse(events.at(-1)!.at) < Date.parse(shippedAt) - 86400000)
-    throw Error('old parcel');
-  return {
-    status: events.at(-1)!.status,
-    text: events.at(-1)!.label,
-    shipmentId: '',
-    events,
-  };
-}
-
-export async function fetchDaoTracking(number: string, shippedAt: string) {
-  if (!/^\d{8,30}$/.test(number)) throw Error('number');
-  const { data } = await readJson(
-    'https://dao.as/wp-json/dao-wp/v1/track-parcel?lang=DA&barcode=' + number,
-  );
-  return parseDaoTracking(data, number, shippedAt);
 }
