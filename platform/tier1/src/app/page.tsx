@@ -8,7 +8,7 @@ import {
   CustomAppsNav,
   useCustomApps,
 } from '@/components/custom-apps';
-import { Rss, Truck } from 'lucide-react';
+import { Rss, Star, Truck } from 'lucide-react';
 import {
   CustomerIdentity,
   PageTitle,
@@ -113,6 +113,11 @@ const Invoices = lazy(() =>
     default: m.Invoices,
   })),
 );
+const ReviewInvitations = lazy(() =>
+  import('@/components/review-invitations').then((m) => ({
+    default: m.ReviewInvitations,
+  })),
+);
 const Settings = lazy(() =>
   import('@/components/settings-page').then((m) => ({ default: m.Settings })),
 );
@@ -186,6 +191,7 @@ export default function Home() {
     | 'feeds'
     | 'performance'
     | 'shipments'
+    | 'reviews'
     | 'settings'
     | 'custom-app'
   >(adding ? 'settings' : 'dashboard');
@@ -522,6 +528,16 @@ export default function Home() {
             <Rss />
             Produktfeeds
           </button>
+          <button
+            className={`nav-item w-full ${view === 'reviews' ? 'active' : ''}`}
+            onClick={() => {
+              setMobileOpen(false);
+              setView('reviews');
+            }}
+          >
+            <Star />
+            Anmeldelser
+          </button>
           <CustomAppsNav
             apps={customApps}
             active={view === 'custom-app' ? customAppId : null}
@@ -700,6 +716,16 @@ export default function Home() {
                   >
                     <Rss />
                     Produktfeeds
+                  </button>
+                  <button
+                    className={`nav-item w-full ${view === 'reviews' ? 'active' : ''}`}
+                    onClick={() => {
+                      setMobileOpen(false);
+                      setView('reviews');
+                    }}
+                  >
+                    <Star />
+                    Anmeldelser
                   </button>
                   <CustomAppsNav
                     apps={customApps}
@@ -1027,6 +1053,9 @@ export default function Home() {
                 setView('settings');
               }}
             />
+          )}
+          {view === 'reviews' && integrationAvailable('reviews') && (
+            <ReviewInvitations />
           )}
           {view === 'support' && <Support />}
           {view === 'settings' && (

@@ -77,6 +77,17 @@ export const catalog = [
     booking: false,
   },
   {
+    id: 'cloudflare',
+    name: 'Cloudflare E-mail',
+    category: 'Mail',
+    description:
+      'Mails fra egne domæner (fakturaer og anmeldelser) via Cloudflare Email Sending.',
+    kind: 'mail',
+    optional: true,
+    history: false,
+    booking: false,
+  },
+  {
     id: 'emballage',
     name: 'Emballage Indberetning',
     category: 'Producentansvar',
@@ -108,6 +119,7 @@ const endpoints: Record<(typeof catalog)[number]['id'], string> = {
   viabill: 'https://secure.viabill.com/api',
   pensopay: 'https://api.pensopay.com/v2/ping',
   emballage: 'https://app.emballageindberetning.dk/api/public/v1',
+  cloudflare: 'https://api.cloudflare.com/client/v4',
 };
 
 // Any HTTP answer (also 401/404) proves the API can be reached from the platform; 5xx is an error at the provider.
@@ -149,7 +161,8 @@ export async function integrationUsage(db: D1Database) {
     (${active('accounting_connections')}) AS dinero,
     (${active('payment_connections', " AND t.provider='flatpay'")}) AS flatpay,
     (${active('payment_connections', " AND t.provider='viabill'")}) AS viabill,
-    (${active('emballage_connections')}) AS emballage`)
+    (${active('emballage_connections')}) AS emballage,
+    (${active('mail_connections')}) AS cloudflare`)
     .first<Record<string, number>>();
   const selected = (
     await db

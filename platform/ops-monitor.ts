@@ -67,6 +67,7 @@ const moduleName = (module: string) =>
       'auto.invoice.queue': 'Fakturamails',
       'auto.credit.queue': 'Kreditnotamails',
       'auto.reports': 'Udbetalingsrapporter',
+      'auto.reviews': 'Trustpilot-invitationer',
       'auto.packaging.history': 'Emballagehistorik',
     }) as Record<string, string>
   )[module] || module;

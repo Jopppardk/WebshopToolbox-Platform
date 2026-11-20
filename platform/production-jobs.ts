@@ -21,6 +21,10 @@ import {
   syncOrderRefunds,
 } from './order-refunds';
 import { sendCreditNote } from './credit-notes';
+import {
+  reviewInvitationsDue,
+  sendReviewInvitations,
+} from './review-invitations';
 import { receivableSaleSql, syncOrderPayments } from './order-payments';
 import { productionWrites, bookingDate } from './production-policy';
 import { dataStartDate, historyPolicy, providerStart } from './tier1-history';
@@ -905,6 +909,15 @@ async function runShop(
           false,
           (externalId) => sendCreditNote(env, actor, company, id, externalId),
         ),
+      );
+    // Trustpilot-invitationer (Tools → Anmeldelser) for shipped orders, when switched on for the webshop.
+    if (
+      mode === 'scheduled' &&
+      shop.shopify &&
+      (await reviewInvitationsDue(env, company, id))
+    )
+      await run('auto.reviews', () =>
+        sendReviewInvitations(env, company, id, owns),
       );
     return summary;
   } finally {

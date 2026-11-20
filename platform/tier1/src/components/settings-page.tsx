@@ -19,6 +19,7 @@ import { IntegrationCard } from '@/components/integration-card';
 import { FlatpayConnection } from '@/components/flatpay-connection';
 import { EmballageConnection } from '@/components/emballage-connection';
 import { BringConnection } from '@/components/bring-connection';
+import { MailConnection } from '@/components/mail-connection';
 import { ShipmondoConnection } from '@/components/shipmondo-connection';
 import { ViaBillConnection } from '@/components/viabill-connection';
 import { PensopayConnection } from '@/components/pensopay-connection';
@@ -109,6 +110,7 @@ export function Settings({
   const library = useIntegrationLibrary();
   const [expandedShipmondo, setExpandedShipmondo] = useState(false);
   const [expandedBring, setExpandedBring] = useState(false);
+  const [expandedMail, setExpandedMail] = useState(false);
   const [expandedEmballage, setExpandedEmballage] = useState(
     initialIntegration === 'emballage',
   );
@@ -814,6 +816,7 @@ export function Settings({
             onAdded={(id) => {
               if (id === 'shipmondo') setExpandedShipmondo(true);
               else if (id === 'bring') setExpandedBring(true);
+              else if (id === 'cloudflare') setExpandedMail(true);
               else if (id === 'flatpay') setExpandedFlatpay(true);
               else if (id === 'viabill') setExpandedViaBill(true);
               else if (id === 'pensopay') setExpandedPensopay(true);
@@ -872,6 +875,12 @@ export function Settings({
                   void library.refresh();
                   void onConnectionsChanged();
                 }}
+              />
+            )}
+            {library.selection?.selected.includes('cloudflare') && (
+              <MailConnection
+                initialExpanded={expandedMail}
+                onConnected={() => void library.refresh()}
               />
             )}
             {library.selection?.selected.includes('bring') && (

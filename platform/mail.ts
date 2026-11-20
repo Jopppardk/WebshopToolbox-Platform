@@ -6,9 +6,19 @@ import {
 } from './production-receipts';
 import { requireCompany, requireWebshop } from './auth';
 import { seal, unseal } from './connections';
+import {
+  cloudflareSend,
+  connectionSender,
+  domainOf,
+  mailAddress,
+  mailConnection,
+  verifiedDomains,
+} from './mail-connection';
 import { jsonBody } from './invitations';
 import { webshopInvoiceRow } from './invoice-profiles';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
+
+export { domainOf, mailAddress };
 
 type MailRow = {
   company_id: string;
@@ -20,18 +30,6 @@ type MailRow = {
   revision: string;
   verified_revision: string | null;
 };
-export function mailAddress(value: unknown, optional = false) {
-  const s = typeof value === 'string' ? value.trim().toLowerCase() : '';
-  if (optional && !s) return '';
-  if (
-    s.length > 254 ||
-    !/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(
-      s,
-    )
-  )
-    throw new HttpError(400, 'Angiv en gyldig mailadresse.');
-  return s;
-}
 function senderName(value: unknown) {
   if (
     typeof value !== 'string' ||
@@ -89,12 +87,101 @@ export async function senderSettings(
 function standardFrom(env: PlatformEnv) {
   return mailAddress(env.PLATFORM_MAIL_FROM || 'faktura@webshoptoolbox.dk');
 }
-export function effectiveSender(settings: MailRow | null, standard: string) {
-  return settings?.custom_from &&
-    settings.credentials_encrypted &&
-    settings.verified_revision === settings.revision
-    ? settings.custom_from
-    : standard;
+/** Whether the scope's older sender, saved with its own Cloudflare credentials, is approved. */
+const legacyApproved = (s: MailRow | null) =>
+  !!s?.custom_from &&
+  !!s.credentials_encrypted &&
+  s.verified_revision === s.revision;
+/** Opens the Cloudflare account and token an own address is sent with; null is the standard sender. */
+type Transport = (() => Promise<{ account: string; token: string }>) | null;
+/**
+ * The address and name a scope's mails go out with, and how they are sent: an own address on a domain approved in
+ * Integrationer → Cloudflare E-mail (with that account), an older approved sender with its own credentials, or the
+ * standard sender. `wanted` asks for another address; it must be on an approved domain (or the older sender's domain).
+ */
+export async function resolveSender(
+  env: PlatformEnv,
+  company: string,
+  scope: MailScope,
+  wanted?: string,
+) {
+  const { settings, own } = await senderSettings(env, company, scope);
+  const name =
+    settings?.sender_name || (await defaultSenderName(env, company, own));
+  const address = wanted ? mailAddress(wanted) : settings?.custom_from || '';
+  let from = standardFrom(env),
+    transport: Transport = null,
+    kind: 'connection' | 'legacy' | 'standard' = 'standard';
+  if (address) {
+    const connection = await connectionSender(env, company, address);
+    if (connection) {
+      from = address;
+      transport = connection;
+      kind = 'connection';
+    } else if (
+      legacyApproved(settings) &&
+      domainOf(address) === domainOf(settings!.custom_from)
+    ) {
+      from = address;
+      transport = legacyTransport(env, company, settings!);
+      kind = 'legacy';
+    } else if (wanted)
+      throw new HttpError(
+        409,
+        `Afsenderadressen ${address} er ikke på et godkendt domæne.`,
+      );
+  }
+  return { settings, own, from, name, transport, kind };
+}
+function legacyTransport(
+  env: PlatformEnv,
+  company: string,
+  settings: MailRow,
+): Transport {
+  return async () => {
+    const { token } = (await unseal(
+      env,
+      [company, 'mail', settings.custom_from, settings.account_id],
+      settings.credentials_encrypted!,
+    )) as { token: string };
+    return { account: settings.account_id, token };
+  };
+}
+/** Sends one mail with Cloudflare (own domain) or the standard binding; returns the receipt or throws when unconfirmed. */
+async function sendVia(
+  env: PlatformEnv,
+  transport: Transport,
+  message: {
+    from: string;
+    name: string;
+    to: string;
+    replyTo?: string;
+    subject: string;
+    text: string;
+    html?: string;
+    attachments?: {
+      content: ArrayBuffer;
+      filename: string;
+      type: string;
+      disposition: 'attachment';
+    }[];
+  },
+) {
+  if (transport) {
+    const { account, token } = await transport();
+    return cloudflareSend(account, token, message);
+  }
+  const result = await env.PLATFORM_MAIL_TEST!.send({
+    from: { email: message.from, name: message.name },
+    to: message.to,
+    ...(message.replyTo ? { replyTo: message.replyTo } : {}),
+    subject: message.subject,
+    text: message.text,
+    ...(message.html ? { html: message.html } : {}),
+    ...(message.attachments ? { attachments: message.attachments } : {}),
+  });
+  if (!result?.messageId) throw Error('Missing receipt');
+  return result.messageId;
 }
 async function defaultSenderName(
   env: PlatformEnv,
@@ -119,10 +206,15 @@ async function info(
   const own = await row(env, company, scope),
     settings = own;
   const fallbackName = await defaultSenderName(env, company, scope);
-  const from = standardFrom(env);
+  const from = standardFrom(env),
+    domains = await verifiedDomains(env, company);
   const allowed = (env.PLATFORM_MAIL_TEST_RECIPIENTS || '')
     .split(',')
     .includes(actor.email.toLowerCase());
+  const approved =
+    !!settings?.custom_from &&
+    (domains.includes(domainOf(settings.custom_from)) ||
+      legacyApproved(settings));
   return {
     senderName: settings?.sender_name || fallbackName,
     replyTo: settings?.reply_to || '',
@@ -131,11 +223,14 @@ async function info(
     credentialsSaved: !!settings?.credentials_encrypted,
     status: !settings?.custom_from
       ? 'standard'
-      : settings.verified_revision === settings.revision
+      : approved
         ? 'verified'
         : 'pending',
+    // Domains approved in Integrationer → Cloudflare E-mail; an own address is chosen on one of them.
+    connected: !!(await mailConnection(env, company)),
+    domains,
     standardFrom: from,
-    effectiveFrom: effectiveSender(settings, from),
+    effectiveFrom: approved ? settings!.custom_from : from,
     testRecipient: actor.email,
     testEnabled:
       !actor.support && (env.PLATFORM_ENV === 'local-test' || allowed),
@@ -200,16 +295,38 @@ export async function handleMail(
       name = senderName(input.senderName),
       replyTo = mailAddress(input.replyTo, true),
       custom = mailAddress(input.customFrom, true);
-    const account =
-      custom && typeof input.accountId === 'string'
-        ? input.accountId.trim()
-        : '';
-    if (custom && !/^[a-f0-9]{32}$/.test(account))
-      throw new HttpError(400, 'Angiv Cloudflare Account ID (32 tegn).');
     const token =
       typeof input.apiToken === 'string' ? input.apiToken.trim() : '';
-    let credentials: string | null = null;
-    if (custom) {
+    const legacyInput =
+      !!token ||
+      (typeof input.accountId === 'string' && !!input.accountId.trim());
+    const revision = crypto.randomUUID();
+    let account = '',
+      credentials: string | null = null,
+      verified: string | null = null;
+    if (custom && !legacyInput) {
+      // The address is on a domain approved in Integrationer → Cloudflare E-mail; that connection sends it.
+      if ((await verifiedDomains(env, company)).includes(domainOf(custom)))
+        verified = revision;
+      else if (
+        current?.custom_from === custom &&
+        current.credentials_encrypted
+      ) {
+        // An older sender with its own credentials keeps them until its domain is approved in the integration.
+        account = current.account_id;
+        credentials = current.credentials_encrypted;
+        verified =
+          current.verified_revision === current.revision ? revision : null;
+      } else
+        throw new HttpError(
+          400,
+          `Domænet ${domainOf(custom)} er ikke godkendt. Forbind Cloudflare E-mail under Integrationer og godkend domænet først.`,
+        );
+    } else if (custom) {
+      account =
+        typeof input.accountId === 'string' ? input.accountId.trim() : '';
+      if (!/^[a-f0-9]{32}$/.test(account))
+        throw new HttpError(400, 'Angiv Cloudflare Account ID (32 tegn).');
       if (token) {
         if (!/^[A-Za-z0-9_-]{20,256}$/.test(token))
           throw new HttpError(400, 'Angiv et gyldigt Cloudflare API-token.');
@@ -226,16 +343,14 @@ export async function handleMail(
           400,
           'Indtast et API-token til kundens Cloudflare Email Sending.',
         );
+      verified =
+        current?.custom_from === custom &&
+        current.account_id === account &&
+        !token &&
+        current.verified_revision === current.revision
+          ? revision
+          : null;
     }
-    const revision = crypto.randomUUID();
-    const verified =
-      custom &&
-      current?.custom_from === custom &&
-      current.account_id === account &&
-      !token &&
-      current.verified_revision === current.revision
-        ? revision
-        : null;
     await env.PLATFORM_DB.batch([
       scope?.market
         ? env.PLATFORM_DB.prepare(`INSERT INTO market_mail(company_id,webshop_id,market_id,sender_name,reply_to,custom_from,account_id,credentials_encrypted,revision,verified_revision) VALUES(?,?,?,?,?,?,?,?,?,?)
@@ -331,18 +446,28 @@ export async function handleMail(
       throw new HttpError(409, 'Testmailen tilhører en anden session.');
     return reply(previous);
   }
-  const { settings, own } = await senderSettings(env, company, scope),
-    custom = input.mode === 'custom';
-  if (custom && (!settings?.custom_from || !settings.credentials_encrypted))
-    throw new HttpError(
-      400,
-      'Gem din egen afsender og Cloudflare-oplysninger først.',
-    );
+  const custom = input.mode === 'custom',
+    resolved = await resolveSender(env, company, scope),
+    { settings, own, name } = resolved;
+  let { transport, kind } = resolved;
+  if (custom && kind === 'standard') {
+    // An older sender not yet approved is approved by this test; an address on a domain the integration has not
+    // approved cannot be tested here.
+    if (!settings?.custom_from || !settings.credentials_encrypted)
+      throw new HttpError(
+        400,
+        settings?.custom_from
+          ? `Domænet ${domainOf(settings.custom_from)} er ikke godkendt i Integrationer → Cloudflare E-mail.`
+          : 'Gem din egen afsender først.',
+      );
+    kind = 'legacy';
+    transport = legacyTransport(env, company, settings);
+  }
+  if (!custom) transport = null;
   const from = custom ? settings!.custom_from : standardFrom(env);
-  const name =
-    settings?.sender_name || (await defaultSenderName(env, company, own));
   const message = {
-    from: { email: from, name },
+    from,
+    name,
     to: recipient,
     ...(settings?.reply_to ? { replyTo: settings.reply_to } : {}),
     subject: 'Testmail fra ' + name + ' · WebshopToolbox',
@@ -352,13 +477,6 @@ export async function handleMail(
     message.subject = invoice.subject;
     message.text = invoice.text;
   }
-  let secret: { token: string } | undefined;
-  if (custom && !local)
-    secret = await unseal(
-      env,
-      [company, 'mail', from, settings!.account_id],
-      settings!.credentials_encrypted!,
-    );
   const now = Math.floor(Date.now() / 1000);
   // Atomic claim and company-wide cooldown serialize concurrent tabs and hold uncertain sends.
   const claim =
@@ -394,77 +512,37 @@ export async function handleMail(
       preview: message,
     });
   }
+  if (local) {
+    await env.PLATFORM_DB.prepare(
+      "UPDATE mail_test_deliveries SET status='preview' WHERE company_id=? AND request_id=?",
+    )
+      .bind(company, id)
+      .run();
+    return reply({
+      status: 'preview',
+      recipient,
+      sender: from,
+      preview: {
+        from: { email: from, name },
+        to: recipient,
+        ...(message.replyTo ? { replyTo: message.replyTo } : {}),
+        subject: message.subject,
+        text: message.text,
+      },
+    });
+  }
+  // Only an older sender's own credentials are approved by its test; a connection domain is approved in the integration.
+  const legacy = custom && kind === 'legacy';
   try {
-    let receipt: string;
-    if (custom) {
-      // Customer-supplied account credentials authorize only this fixed Cloudflare endpoint; never follow redirects.
-      const response = await fetch(
-        `https://api.cloudflare.com/client/v4/accounts/${settings!.account_id}/email/sending/send`,
-        {
-          method: 'POST',
-          redirect: 'manual',
-          signal: AbortSignal.timeout(15000),
-          headers: {
-            Authorization: 'Bearer ' + secret!.token,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            ...(invoice
-              ? {
-                  attachments: [
-                    {
-                      ...invoice.attachment,
-                      content: btoa(
-                        Array.from(
-                          new Uint8Array(invoice.attachment.content),
-                          (b) => String.fromCharCode(b),
-                        ).join(''),
-                      ),
-                    },
-                  ],
-                }
-              : {}),
-            from: { address: from, name },
-            to: recipient,
-            subject: message.subject,
-            text: message.text,
-            ...(settings?.reply_to ? { reply_to: settings.reply_to } : {}),
-          }),
-        },
-      );
-      const result = (await response.json()) as {
-        success?: boolean;
-        result?: {
-          delivered?: string[];
-          queued?: string[];
-          permanent_bounces?: string[];
-        };
-      };
-      if (
-        !response.ok ||
-        result.success !== true ||
-        !result.result ||
-        result.result.permanent_bounces?.includes(recipient) ||
-        !(
-          result.result.delivered?.includes(recipient) ||
-          result.result.queued?.includes(recipient)
-        )
-      )
-        throw Error('Unconfirmed delivery');
-      receipt = JSON.stringify(result.result);
-    } else {
-      const result = await env.PLATFORM_MAIL_TEST!.send({
-        ...message,
-        ...(invoice ? { attachments: [invoice.attachment] } : {}),
-      });
-      if (!result?.messageId) throw Error('Missing receipt');
-      receipt = result.messageId;
-    }
+    const receipt = await sendVia(env, transport, {
+      ...message,
+      ...(invoice ? { attachments: [invoice.attachment] } : {}),
+    });
     await env.PLATFORM_DB.batch([
       env.PLATFORM_DB.prepare(
         "UPDATE mail_test_deliveries SET status='accepted',receipt=? WHERE company_id=? AND request_id=?",
       ).bind(receipt, company, id),
-      ...(custom
+      ...(legacy
         ? [
             env.PLATFORM_DB.prepare(
               `UPDATE ${mailTable(own)} SET verified_revision=revision WHERE ${mailWhere(own)} AND revision=?`,
@@ -479,8 +557,9 @@ export async function handleMail(
     ]);
     return reply({ status: 'accepted', recipient, sender: from });
   } catch {
-    // Any send may have been accepted. Keep the durable claim and invalidate custom selection until an explicit new test succeeds.
-    if (custom)
+    // Any send may have been accepted. Keep the durable claim and invalidate an older custom sender until an explicit
+    // new test succeeds.
+    if (legacy)
       await env.PLATFORM_DB.prepare(
         `UPDATE ${mailTable(own)} SET verified_revision=NULL WHERE ${mailWhere(own)} AND revision=?`,
       )
@@ -533,10 +612,11 @@ export async function sendCustomerInvoice(
         : 'Den genererede faktura findes ikke i webshoppen.',
     );
   const recipient = mailAddress(recipientValue),
-    { settings, own } = await senderSettings(env, company, scope),
-    from = effectiveSender(settings, standardFrom(env));
-  const name =
-    settings?.sender_name || (await defaultSenderName(env, company, own));
+    { settings, from, name, transport } = await resolveSender(
+      env,
+      company,
+      scope,
+    );
   const key: ReceiptKey = {
     company,
     shop,
@@ -558,15 +638,7 @@ export async function sendCustomerInvoice(
       409,
       'Fakturamailen er allerede under afsendelse eller har et uafklaret resultat. Den genafsendes ikke automatisk.',
     );
-  const custom = !!settings?.custom_from && from === settings.custom_from;
-  const secret = custom
-    ? await unseal(
-        env,
-        [company, 'mail', from, settings!.account_id],
-        settings!.credentials_encrypted!,
-      )
-    : null;
-  if (!custom && !env.PLATFORM_MAIL_TEST)
+  if (!transport && !env.PLATFORM_MAIL_TEST)
     throw new HttpError(503, 'Mailtjenesten er ikke konfigureret.');
   current = await saveReceipt(env, key, null, 'sending', {
     recipient,
@@ -575,68 +647,15 @@ export async function sendCustomerInvoice(
     actorId: actor.id,
   });
   try {
-    let receipt: string;
-    if (custom) {
-      const response = await fetch(
-        `https://api.cloudflare.com/client/v4/accounts/${settings!.account_id}/email/sending/send`,
-        {
-          method: 'POST',
-          redirect: 'manual',
-          signal: AbortSignal.timeout(15000),
-          headers: {
-            Authorization: 'Bearer ' + secret!.token,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            from: { address: from, name },
-            to: recipient,
-            subject,
-            text,
-            ...(settings?.reply_to ? { reply_to: settings.reply_to } : {}),
-            attachments: [
-              {
-                ...attachment,
-                content: btoa(
-                  Array.from(new Uint8Array(attachment.content), (b) =>
-                    String.fromCharCode(b),
-                  ).join(''),
-                ),
-              },
-            ],
-          }),
-        },
-      );
-      const result = (await response.json()) as {
-        success?: boolean;
-        result?: {
-          delivered?: string[];
-          queued?: string[];
-          permanent_bounces?: string[];
-        };
-      };
-      if (
-        !response.ok ||
-        !result.success ||
-        result.result?.permanent_bounces?.includes(recipient) ||
-        !(
-          result.result?.delivered?.includes(recipient) ||
-          result.result?.queued?.includes(recipient)
-        )
-      )
-        throw Error('Unconfirmed');
-      receipt = JSON.stringify(result.result);
-    } else {
-      const result = await env.PLATFORM_MAIL_TEST!.send({
-        from: { email: from, name },
-        to: recipient,
-        ...(settings?.reply_to ? { replyTo: settings.reply_to } : {}),
-        subject,
-        text,
-        attachments: [attachment],
-      });
-      if (!result?.messageId) throw Error('Unconfirmed');
-      receipt = result.messageId;
-    }
+    const receipt = await sendVia(env, transport, {
+      from,
+      name,
+      to: recipient,
+      ...(settings?.reply_to ? { replyTo: settings.reply_to } : {}),
+      subject,
+      text,
+      attachments: [attachment],
+    });
     current = await saveReceipt(env, key, current, 'accepted', {
       ...current.payload,
       receipt,
@@ -649,4 +668,57 @@ export async function sendCustomerInvoice(
     );
   }
   return reply({ sent: true, recipient, status: 'accepted' });
+}
+
+/**
+ * Sends one HTML mail (with a plain text version) from the sender of the scope (see resolveSender): its own address via its
+ * Cloudflare account, otherwise the standard sender. Returns the sender and the provider's receipt, and throws when
+ * the provider did not confirm the mail: the caller then treats the send as uncertain and never repeats it on its own.
+ * Callers check access, recipient and whether customer mail is allowed before calling this.
+ */
+export async function deliverMail(
+  env: PlatformEnv,
+  company: string,
+  scope: MailScope,
+  message: { to: string; subject: string; html: string; text: string },
+  override: { from?: string; name?: string } = {},
+): Promise<{ from: string; receipt: string }> {
+  const recipient = mailAddress(message.to),
+    { settings, from, name, transport } = await resolveSender(
+      env,
+      company,
+      scope,
+      override.from,
+    );
+  if (!transport && !env.PLATFORM_MAIL_TEST)
+    throw new HttpError(503, 'Mailtjenesten er ikke konfigureret.');
+  const receipt = await sendVia(env, transport, {
+    from,
+    name: override.name || name,
+    to: recipient,
+    ...(settings?.reply_to ? { replyTo: settings.reply_to } : {}),
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+  });
+  return { from, receipt };
+}
+/**
+ * The address a scope's mails go out from now, and the domains another address may be chosen on: those approved in
+ * Integrationer → Cloudflare E-mail, and the domain of an older approved sender of the scope.
+ */
+export async function currentSender(
+  env: PlatformEnv,
+  company: string,
+  scope: MailScope,
+) {
+  const { settings, from, name, kind } = await resolveSender(
+    env,
+    company,
+    scope,
+  );
+  const domains = await verifiedDomains(env, company);
+  if (kind === 'legacy' && !domains.includes(domainOf(settings!.custom_from)))
+    domains.push(domainOf(settings!.custom_from));
+  return { from, name, domains };
 }

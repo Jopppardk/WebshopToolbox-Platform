@@ -58,6 +58,10 @@ export async function connectedIntegrations(
             .bind(company, shop)
             .all<{ provider: string }>()
         ).results;
+  const mail = await db
+    .prepare('SELECT account_id FROM mail_connections WHERE company_id=?')
+    .bind(company)
+    .first();
   const packaging =
     shop === 'none'
       ? null
@@ -74,6 +78,9 @@ export async function connectedIntegrations(
     })),
     ...(packaging
       ? [{ provider: 'emballage', display_name: 'Emballage Indberetning' }]
+      : []),
+    ...(mail
+      ? [{ provider: 'cloudflare', display_name: 'Cloudflare E-mail' }]
       : []),
     ...(accounting
       ? [{ provider: 'dinero', display_name: accounting.organization_id }]
@@ -164,6 +171,15 @@ export async function handleTier1Connections(
           409,
           'Afbryd Shipmondo på virksomhedens webshops først.',
         );
+      if (
+        b.action === 'remove' &&
+        b.provider === 'cloudflare' &&
+        (await db
+          .prepare('SELECT 1 FROM mail_connections WHERE company_id=? LIMIT 1')
+          .bind(company)
+          .first())
+      )
+        throw new HttpError(409, 'Fjern Cloudflare-forbindelsen først.');
       if (
         b.action === 'remove' &&
         b.provider === 'bring' &&
