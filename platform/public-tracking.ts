@@ -445,10 +445,12 @@ export function applyPublicTracking(
     };
   if (target.carrier === 'dao') {
     // Without tracking there are no steps to show: one bar, amber while under way, green once Shopify reports the
-    // parcel delivered or 10 days after it was sent (DAO parcels are normally collected well within that).
+    // parcel delivered or 10 days after it was sent (DAO parcels are normally collected well within that). A problem
+    // Shopify reports (s.issue) is kept and keeps the bar amber.
     const assumed =
       s.delivered ||
-      Date.now() - Date.parse(s.shippedAt) >= daoAssumedDeliveredMs;
+      (!s.issue &&
+        Date.now() - Date.parse(s.shippedAt) >= daoAssumedDeliveredMs);
     return {
       ...s,
       current: assumed ? 'delivered' : 'transit',
@@ -467,7 +469,6 @@ export function applyPublicTracking(
               reached: true,
             },
       ],
-      issue: null,
       trackingUrl: s.trackingUrl || target.url,
       publicTracking: {
         checkedAt: null,
