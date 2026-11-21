@@ -293,6 +293,7 @@ const redirectedError =
   'Shipmondo viser ikke længere status for dette fragtfirma. Følg pakken via trackinglinket.';
 // DAO's tracking lookup has refused automatic requests since 16 November 2026 ("dao_bot_check_failed"), and DAO
 // gives René no API access. DAO parcels are therefore never looked up; they show this text and the tracking link.
+const daoAssumedDeliveredMs = 10 * 86400000;
 const daoText =
   'DAO-pakker kan ikke følges i WebshopToolbox. Følg pakken hos DAO via trackinglinket.';
 // GLS parcels Shipmondo forwarded before they were read from the carriers are looked up again at once,
@@ -442,9 +443,32 @@ export function applyPublicTracking(
         text: 'Automatisk tracking er ikke tilgængelig for dette pakkenummer.',
       },
     };
-  if (target.carrier === 'dao')
+  if (target.carrier === 'dao') {
+    // Without tracking there are no steps to show: one bar, amber while under way, green once Shopify reports the
+    // parcel delivered or 10 days after it was sent (DAO parcels are normally collected well within that). A problem
+    // Shopify reports (s.issue) is kept and keeps the bar amber.
+    const assumed =
+      s.delivered ||
+      (!s.issue &&
+        Date.now() - Date.parse(s.shippedAt) >= daoAssumedDeliveredMs);
     return {
       ...s,
+      current: assumed ? 'delivered' : 'transit',
+      steps: [
+        assumed
+          ? {
+              key: 'delivered',
+              label: s.delivered ? 'Leveret' : 'Formodet leveret',
+              at: s.delivered ? s.deliveredAt : null,
+              reached: true,
+            }
+          : {
+              key: 'transit',
+              label: 'Sendt med DAO',
+              at: s.shippedAt,
+              reached: true,
+            },
+      ],
       trackingUrl: s.trackingUrl || target.url,
       publicTracking: {
         checkedAt: null,
@@ -453,6 +477,7 @@ export function applyPublicTracking(
         text: daoText,
       },
     };
+  }
   if (!row?.data_json && row?.error === redirectedError)
     return {
       ...s,
