@@ -2,6 +2,8 @@
 
 Nyeste først. Skriv en ny note øverst for hver udgivet ændring: dato, hvem (Codex/Claude), hvad, filer/endpoints, migrering og hvad der ikke er verificeret. Indtil 6. oktober 2026 hed filen HANDOVER.md; noterne og de historiske afsnit nedenfor er flyttet hertil uændret. Aktuel status står i [HANDOVER.md](HANDOVER.md).
 
+> 21. november 2026 – Udgivet (Claude): PR #217 (DAO-pakker vises med én streg, grøn efter 10 dage) er udgivet på dev og prod fra main `f2660cd395662d74175578806b8f74ba1e141338` (workflow-run 44917531761, grøn). Ingen migrering. Ikke set på Forsendelser i prod efter udgivelsen.
+
 > 21. november 2026 – DAO-pakker vises med én streg (Claude): efter PR #208 stod indikatoren på 1/5 på alle DAO-pakker, hvilket så forkert ud. `applyPublicTracking` (`platform/public-tracking.ts`) giver nu DAO-pakker ét trin: "Sendt med DAO" (gul) indtil 10 dage efter afsendelse, derefter "Formodet leveret" (grøn); melder Shopify pakken leveret, står der "Leveret". En leveringsfejl, som Shopify melder, vises stadig og holder stregen gul. `current` sættes tilsvarende, så pakken efter 10 dage ikke længere står under filteret "undervejs"; `delivered` ændres ikke. Ingen migrering. Ikke udgivet.
 
 > 21. november 2026 – Udgivet (Claude): PR #218 (Anmeldelser: se ordrerne i kø og ekskluder en ordre) er udgivet på dev og prod fra main `60e44b9296e9e713fc90be8538127f153d00e373` (workflow-run 44913759489, grøn). Ingen migrering. Ikke set på Anmeldelser i prod efter udgivelsen.
