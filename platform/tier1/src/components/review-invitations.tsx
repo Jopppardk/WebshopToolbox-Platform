@@ -1023,7 +1023,17 @@ function ReviewPage() {
         '/' + action,
         json('POST', { orderId: order.orderId }),
       );
-      setInfo(next);
+      // Only the queue, the list and the counts: the revision stays with the settings it belongs to, so a save
+      // after another tab changed them is still refused.
+      setInfo(
+        (current) =>
+          current && {
+            ...current,
+            queue: next.queue,
+            log: next.log,
+            counts: next.counts,
+          },
+      );
       setMessage({
         ok: true,
         text:
