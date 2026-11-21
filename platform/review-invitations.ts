@@ -40,6 +40,8 @@ const day = 86400000,
   queueLimit = 1000,
   maxImageBytes = 2_000_000,
   maxImages = 300;
+/** The reason on an order taken out of the queue on the page; only such orders can be put back. */
+export const excludedReason = 'Ekskluderet manuelt fra køen.';
 const imageTypes: Record<string, (b: Uint8Array) => boolean> = {
   'image/png': (b) =>
     b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47,
@@ -155,6 +157,7 @@ async function info(
       .all<Record<string, string | null>>()
   ).results.map((r) => ({
     orderId: r.external_id,
+    excluded: r.status === 'skipped' && r.reason === excludedReason,
     orderName: r.order_name,
     locale: r.locale,
     recipient: r.recipient,
@@ -170,7 +173,14 @@ async function info(
     )
     .bind(company, shop)
     .first<{ sent: number; recent: number; uncertain: number }>();
-  const settings = settingsOf(row, w.domain);
+  const settings = settingsOf(row, w.domain),
+    { orders, ...queue } = await invitationQueue(
+      env,
+      company,
+      shop,
+      row,
+      settings,
+    );
   return {
     settings,
     revision: row?.revision ?? 0,
@@ -180,8 +190,9 @@ async function info(
     senders,
     counts: {
       ...(counts || { sent: 0, recent: 0, uncertain: 0 }),
-      ...(await invitationQueue(env, company, shop, row, settings)),
+      ...queue,
     },
+    queue: orders,
     log,
     testRecipient: actor.email,
     customerMail: customerMail(env),
@@ -427,6 +438,85 @@ async function uploadImage(
   return reply({ url: `${url.origin}/mail-images/${id}` }, 201);
 }
 
+/** The order in this webshop's imported orders (never another webshop's order with the same Shopify ID). */
+async function shopOrder(
+  env: PlatformEnv,
+  company: string,
+  shop: string,
+  value: unknown,
+) {
+  const id = typeof value === 'string' ? value : '';
+  if (!/^gid:\/\/shopify\/Order\/\d{1,20}$/.test(id))
+    throw new HttpError(400, 'Vælg en ordre.');
+  const row = await env.PLATFORM_DB.prepare(
+    "SELECT json_extract(payload_json,'$.name') name FROM operation_snapshots WHERE company_id=? AND webshop_id=? AND module='orders' AND external_id=?",
+  )
+    .bind(company, shop, id)
+    .first<{ name: string | null }>();
+  if (!row) throw new HttpError(404, 'Ordren findes ikke i webshoppen.');
+  return { id, name: row.name || '#' + id.split('/').pop() };
+}
+
+/**
+ * POST /reviews/exclude: takes an order out of the queue for good. It is stored like a skipped order, so the run
+ * never invites it; an order the run has already claimed or handled cannot be excluded.
+ */
+async function exclude(
+  request: Request,
+  env: PlatformEnv,
+  actor: Actor,
+  company: string,
+  shop: string,
+) {
+  const order = await shopOrder(
+    env,
+    company,
+    shop,
+    (await jsonBody(request)).orderId,
+  );
+  const result = await env.PLATFORM_DB.prepare(
+    "INSERT INTO review_invitations(company_id,webshop_id,external_id,order_name,status,reason) VALUES(?,?,?,?,'skipped',?) ON CONFLICT DO NOTHING",
+  )
+    .bind(company, shop, order.id, order.name, excludedReason)
+    .run();
+  if (result.meta.changes !== 1)
+    throw new HttpError(
+      409,
+      `Ordre ${order.name} er allerede behandlet og er ikke længere i køen.`,
+    );
+  await audit(env, actor, company, 'reviews.order.excluded', shop, {
+    order: order.id,
+  }).run();
+  return reply(await info(env, actor, company, shop));
+}
+
+/** POST /reviews/include: puts an order excluded on the page back in the queue (no other skipped order). */
+async function include(
+  request: Request,
+  env: PlatformEnv,
+  actor: Actor,
+  company: string,
+  shop: string,
+) {
+  const order = await shopOrder(
+    env,
+    company,
+    shop,
+    (await jsonBody(request)).orderId,
+  );
+  const result = await env.PLATFORM_DB.prepare(
+    "DELETE FROM review_invitations WHERE company_id=? AND webshop_id=? AND external_id=? AND status='skipped' AND reason=?",
+  )
+    .bind(company, shop, order.id, excludedReason)
+    .run();
+  if (result.meta.changes !== 1)
+    throw new HttpError(409, `Ordre ${order.name} er ikke ekskluderet.`);
+  await audit(env, actor, company, 'reviews.order.included', shop, {
+    order: order.id,
+  }).run();
+  return reply(await info(env, actor, company, shop));
+}
+
 export async function handleReviews(
   request: Request,
   env: PlatformEnv,
@@ -451,6 +541,10 @@ export async function handleReviews(
     return testMail(request, env, actor, company, shop);
   if (path === '/reviews/images' && request.method === 'POST')
     return uploadImage(request, env, actor, company, shop);
+  if (path === '/reviews/exclude' && request.method === 'POST')
+    return exclude(request, env, actor, company, shop);
+  if (path === '/reviews/include' && request.method === 'POST')
+    return include(request, env, actor, company, shop);
   throw new HttpError(404, 'Funktionen findes ikke.');
 }
 
@@ -497,6 +591,16 @@ type Candidate = {
   country: string | null;
   has_market: number;
   shipped_at: string;
+};
+export type QueuedOrder = {
+  orderId: string;
+  orderName: string;
+  locale: ReviewLocale;
+  country: string | null;
+  shippedAt: string;
+  dueAt: string;
+  ready: boolean;
+  waitsForMarket: boolean;
 };
 type LiveOrder = {
   id: string;
@@ -561,9 +665,9 @@ const refunded = (order: {
   Number(order.currentTotalPriceSet?.shopMoney?.amount) === 0;
 
 /**
- * The queue shown on the page: shipped orders that will get an invitation, and how many of them have waited their
- * language's delay (sent by the next runs). Orders that will be skipped (no language, language switched off,
- * refunded) are left out; the live check in Shopify happens only when sending.
+ * The queue shown on the page: shipped orders that will get an invitation, when each is due, and how many of them
+ * have waited their language's delay (sent by the next runs). Orders that will be skipped (no language, language
+ * switched off, refunded) are left out; the live check in Shopify happens only when sending.
  */
 export async function invitationQueue(
   env: PlatformEnv,
@@ -572,8 +676,9 @@ export async function invitationQueue(
   row: SettingsRow | null,
   settings: ReviewSettings,
 ) {
+  const list: QueuedOrder[] = [];
   if (!row?.enabled || !row.start_at)
-    return { queued: 0, ready: 0, queueCapped: false };
+    return { queued: 0, ready: 0, queueCapped: false, orders: list };
   const db = env.PLATFORM_DB,
     now = Date.now();
   const orders = await pendingOrders(
@@ -587,10 +692,10 @@ export async function invitationQueue(
   // More than the limit waiting (a long delay on a busy shop): the counts cover the oldest and say so.
   const queueCapped = orders.length > queueLimit;
   if (queueCapped) orders.length = queueLimit;
-  let queued = 0,
-    ready = 0;
+  let ready = 0;
   for (const c of orders) {
-    if (refunded(JSON.parse(c.payload_json))) continue;
+    const order = JSON.parse(c.payload_json);
+    if (refunded(order)) continue;
     // The language as the run finds it; a Danish order has no market. Before the market is known, the country.
     const locale =
       c.has_market && c.country && c.country !== 'DK'
@@ -600,16 +705,26 @@ export async function invitationQueue(
           )
         : localeOf(null, c.country);
     if (!locale || !settings.templates[locale].enabled) continue;
-    queued++;
+    const due =
+      Date.parse(c.shipped_at) + settings.templates[locale].delayDays * day;
     // Without a known market the run waits for it, so such an order is not ready yet.
-    if (
-      c.has_market &&
-      Date.parse(c.shipped_at) + settings.templates[locale].delayDays * day <=
-        now
-    )
-      ready++;
+    const isReady = !!c.has_market && due <= now;
+    if (isReady) ready++;
+    list.push({
+      orderId: c.external_id,
+      orderName: String(order.name || '#' + c.external_id.split('/').pop()),
+      locale,
+      country: c.country,
+      shippedAt: c.shipped_at,
+      dueAt: new Date(due).toISOString(),
+      ready: isReady,
+      // Due, but the run waits until the order's market is known.
+      waitsForMarket: !c.has_market && due <= now,
+    });
   }
-  return { queued, ready, queueCapped };
+  // Next to be invited first.
+  list.sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+  return { queued: list.length, ready, queueCapped, orders: list };
 }
 
 /**
