@@ -21,8 +21,10 @@ import {
   Star,
   Trash2,
   Type,
+  Undo2,
   Underline,
   Upload,
+  X,
 } from 'lucide-react';
 import { tier1Fetch } from '@/platform/transport';
 import { PageTitle, useWorkspace } from '@/platform/workspace';
@@ -32,7 +34,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { CountryFlag } from '@/components/country-flag';
 import { useConfirm } from '@/components/confirm-dialog';
-import { formatDateTime } from '@/lib/format';
+import { formatDate, formatDateTime } from '@/lib/format';
 import {
   blockId,
   localeCountry,
@@ -53,6 +55,8 @@ import {
 
 type LogRow = {
   orderId: string;
+  /** Taken out of the queue on this page; can be put back. */
+  excluded: boolean;
   orderName: string;
   locale: ReviewLocale | null;
   recipient: string | null;
@@ -61,6 +65,16 @@ type LogRow = {
   reason: string | null;
   createdAt: string;
   sentAt: string | null;
+};
+type QueuedOrder = {
+  orderId: string;
+  orderName: string;
+  locale: ReviewLocale;
+  country: string | null;
+  shippedAt: string;
+  dueAt: string;
+  ready: boolean;
+  waitsForMarket: boolean;
 };
 type Info = {
   settings: ReviewSettings;
@@ -80,6 +94,7 @@ type Info = {
     ready: number;
     queueCapped: boolean;
   };
+  queue: QueuedOrder[];
   log: LogRow[];
   testRecipient: string;
   customerMail: boolean;
@@ -905,6 +920,7 @@ function ReviewPage() {
     [locale, setLocale] = useState<ReviewLocale>('da'),
     [dirty, setDirty] = useState(false),
     [busy, setBusy] = useState<'' | 'save' | 'test'>(''),
+    [orderBusy, setOrderBusy] = useState(''),
     [message, setMessage] = useState<{ ok: boolean; text: string } | null>(
       null,
     ),
@@ -983,6 +999,52 @@ function ReviewPage() {
       setMessage({ ok: false, text: (e as Error).message });
     } finally {
       setBusy('');
+    }
+  };
+  // Excluding or putting back an order changes only the queue and the list; unsaved mail changes are kept.
+  const queueAction = async (
+    action: 'exclude' | 'include',
+    order: { orderId: string; orderName: string },
+  ) => {
+    if (
+      action === 'exclude' &&
+      !(await confirm({
+        title: `Ekskluder ordre ${order.orderName}?`,
+        message:
+          'Kunden får ingen Trustpilot-invitation for ordren. Du kan fortryde under Seneste invitationer.',
+        confirmLabel: 'Ekskluder',
+      }))
+    )
+      return;
+    setOrderBusy(order.orderId);
+    setMessage(null);
+    try {
+      const next = await api<Info>(
+        '/' + action,
+        json('POST', { orderId: order.orderId }),
+      );
+      // Only the queue, the list and the counts: the revision stays with the settings it belongs to, so a save
+      // after another tab changed them is still refused.
+      setInfo(
+        (current) =>
+          current && {
+            ...current,
+            queue: next.queue,
+            log: next.log,
+            counts: next.counts,
+          },
+      );
+      setMessage({
+        ok: true,
+        text:
+          action === 'exclude'
+            ? `Ordre ${order.orderName} er taget ud af køen.`
+            : `Ordre ${order.orderName} er sat tilbage i køen.`,
+      });
+    } catch (e) {
+      setMessage({ ok: false, text: (e as Error).message });
+    } finally {
+      setOrderBusy('');
     }
   };
   if (!info || !settings)
@@ -1307,6 +1369,91 @@ function ReviewPage() {
 
       <section className="mt-6 overflow-hidden rounded-2xl border border-[#e9e2d7] bg-white">
         <div className="border-b border-[#f0ece6] px-5 py-4 sm:px-6">
+          <p className="font-semibold">
+            Ordrer i kø
+            {info.queue.length > 0 && (
+              <span className="ml-2 font-normal text-muted-foreground tabular-nums">
+                {info.queue.length.toLocaleString('da-DK')}
+                {info.counts.queueCapped ? '+' : ''}
+              </span>
+            )}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Afsendte ordrer, der får en invitation, når ventetiden er gået.
+            Ekskluderer du en ordre, får kunden ingen invitation.
+            {info.counts.queueCapped && ' Listen viser de 1.000 ældste.'}
+          </p>
+        </div>
+        {info.queue.length ? (
+          <div className="max-h-[480px] overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-white text-left text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-5 py-2.5 font-medium sm:px-6">Ordre</th>
+                  <th className="px-3 py-2.5 font-medium">Sprog</th>
+                  <th className="px-3 py-2.5 font-medium">Afsendt</th>
+                  <th className="px-3 py-2.5 font-medium">Invitation</th>
+                  <th className="px-5 py-2.5 sm:px-6">
+                    <span className="sr-only">Handling</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {info.queue.map((row) => (
+                  <tr key={row.orderId} className="border-t border-[#f4f0ea]">
+                    <td className="px-5 py-2.5 font-medium sm:px-6">
+                      {row.orderName}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <CountryFlag code={localeCountry[row.locale]} />
+                    </td>
+                    <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground">
+                      {formatDate(row.shippedAt)}
+                    </td>
+                    <td className="px-3 py-2.5 text-muted-foreground">
+                      {row.ready ? (
+                        <span className="rounded-full bg-[#e3f3ea] px-2 py-0.5 text-xs font-medium text-[#1f6b45]">
+                          Klar til afsendelse
+                        </span>
+                      ) : row.waitsForMarket ? (
+                        'Venter på ordrens marked'
+                      ) : (
+                        `Sendes ${formatDate(row.dueAt)}`
+                      )}
+                    </td>
+                    <td className="px-5 py-1.5 text-right sm:px-6">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 rounded-lg text-muted-foreground"
+                        disabled={!!orderBusy}
+                        onClick={() => queueAction('exclude', row)}
+                        aria-label={`Ekskluder ordre ${row.orderName}`}
+                      >
+                        {orderBusy === row.orderId ? (
+                          <LoaderCircle className="size-3.5 animate-spin" />
+                        ) : (
+                          <X className="size-3.5" />
+                        )}
+                        Ekskluder
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="px-5 py-8 text-center text-sm text-muted-foreground sm:px-6">
+            {info.startAt
+              ? 'Ingen ordrer i kø.'
+              : 'Ingen kø, fordi invitationerne er slået fra.'}
+          </p>
+        )}
+      </section>
+
+      <section className="mt-6 overflow-hidden rounded-2xl border border-[#e9e2d7] bg-white">
+        <div className="border-b border-[#f0ece6] px-5 py-4 sm:px-6">
           <p className="font-semibold">Seneste invitationer</p>
         </div>
         {info.log.length ? (
@@ -1320,6 +1467,9 @@ function ReviewPage() {
                   <th className="px-3 py-2.5 font-medium">Status</th>
                   <th className="px-3 py-2.5 font-medium">Tidspunkt</th>
                   <th className="px-3 py-2.5 font-medium">Bemærkning</th>
+                  <th className="px-5 py-2.5 sm:px-6">
+                    <span className="sr-only">Handling</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -1340,9 +1490,11 @@ function ReviewPage() {
                     </td>
                     <td className="px-3 py-2.5">
                       <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadge[row.status][1]}`}
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${statusBadge[row.status][1]}`}
                       >
-                        {statusBadge[row.status][0]}
+                        {row.excluded
+                          ? 'Ekskluderet'
+                          : statusBadge[row.status][0]}
                       </span>
                     </td>
                     <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground">
@@ -1350,6 +1502,25 @@ function ReviewPage() {
                     </td>
                     <td className="px-3 py-2.5 text-xs text-muted-foreground">
                       {row.reason || ''}
+                    </td>
+                    <td className="px-5 py-1.5 text-right sm:px-6">
+                      {row.excluded && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 rounded-lg text-muted-foreground"
+                          disabled={!!orderBusy}
+                          onClick={() => queueAction('include', row)}
+                          aria-label={`Sæt ordre ${row.orderName} tilbage i køen`}
+                        >
+                          {orderBusy === row.orderId ? (
+                            <LoaderCircle className="size-3.5 animate-spin" />
+                          ) : (
+                            <Undo2 className="size-3.5" />
+                          )}
+                          Fortryd
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}
