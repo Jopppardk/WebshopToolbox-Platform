@@ -172,6 +172,10 @@ test('every page of the portal renders', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
     'Anmeldelser for Webshop A1',
   );
+  // The queue is listed on the page; nothing waits while the invitations are switched off.
+  await expect(page.locator('main')).toContainText(
+    'Ingen kø, fordi invitationerne er slået fra.',
+  );
   // Write directly in the mail's heading, then add an image below it.
   const heading = page.getByRole('group', { name: 'Overskrift' }).nth(1);
   await heading.locator('[data-edit]').click();

@@ -9,6 +9,7 @@ Webshoppens egne mails, der beder kunden anmelde butikken på Trustpilot, i sted
 - Visuel editor: mailen vises, som kunden ser den; tekst skrives direkte i mailen (fed, kursiv, understreget, link og felterne `{{fornavn}}`, `{{ordrenummer}}`, `{{butik}}`). Elementer: overskrift, tekst, billede (upload eller adresse, bredde, link), Trustpilot-stjerner (hver stjerne åbner Trustpilot med det antal stjerner valgt), knap, streg og luft. Flyt, kopiér og slet; baggrund, indholdsfelt og skrifttype.
 - Testmail: den gemte mail med eksempeldata (Anna, ordre #1001) til en valgfri adresse; ændringer gemmes først. Lokalt dannes mailen kun.
 - Status: antal sendte, uafklarede og de seneste 50 invitationer med grund for dem, der ikke blev sendt.
+- Ordrer i kø: hver afsendt ordre, der venter på en invitation, med sprog, afsendt dato og hvornår den sendes (højst de 1.000 ældste). **Ekskluder** tager en ordre ud af køen for altid (gemmes som sprunget over med grunden "Ekskluderet manuelt fra køen."); under seneste invitationer kan den sættes tilbage med **Fortryd**. En ordre, kørslen allerede har taget, kan ikke ekskluderes.
 
 ## Afsendelse
 - Den automatiske kørsel (`auto.reviews` i `production-jobs.ts`) sender kun i prod med kundemail slået til, når invitationerne er slået til for webshoppen.
