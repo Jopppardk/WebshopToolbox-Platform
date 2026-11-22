@@ -8,7 +8,7 @@ import {
   CustomAppsNav,
   useCustomApps,
 } from '@/components/custom-apps';
-import { Rss, Star, Truck } from 'lucide-react';
+import { Rss, Signpost, Star, Truck } from 'lucide-react';
 import {
   CustomerIdentity,
   PageTitle,
@@ -96,6 +96,9 @@ const ProductFeeds = lazy(() =>
 );
 const Performance = lazy(() =>
   import('@/components/performance').then((m) => ({ default: m.Performance })),
+);
+const Traffic = lazy(() =>
+  import('@/components/traffic').then((m) => ({ default: m.Traffic })),
 );
 const Shipments = lazy(() =>
   import('@/components/shipments').then((m) => ({ default: m.Shipments })),
@@ -190,6 +193,7 @@ export default function Home() {
     | 'support'
     | 'feeds'
     | 'performance'
+    | 'traffic'
     | 'shipments'
     | 'reviews'
     | 'settings'
@@ -499,6 +503,16 @@ export default function Home() {
             Performance
           </button>
           <button
+            className={`nav-item w-full ${view === 'traffic' ? 'active' : ''}`}
+            onClick={() => {
+              setMobileOpen(false);
+              setView('traffic');
+            }}
+          >
+            <Signpost />
+            Trafikkilder
+          </button>
+          <button
             className={`nav-item w-full ${view === 'shipments' ? 'active' : ''}`}
             onClick={() => {
               setMobileOpen(false);
@@ -688,6 +702,16 @@ export default function Home() {
                     Performance
                   </button>
                   <button
+                    className={`nav-item w-full ${view === 'traffic' ? 'active' : ''}`}
+                    onClick={() => {
+                      setMobileOpen(false);
+                      setView('traffic');
+                    }}
+                  >
+                    <Signpost />
+                    Trafikkilder
+                  </button>
+                  <button
                     className={`nav-item w-full ${view === 'shipments' ? 'active' : ''}`}
                     onClick={() => {
                       setMobileOpen(false);
@@ -789,6 +813,15 @@ export default function Home() {
           {customApp && <CustomAppPage key={customApp.id} app={customApp} />}
           {view === 'performance' && (
             <Performance
+              onIntegrations={() => {
+                setIntegrationTarget(null);
+                setSettingsTab('integrations');
+                setView('settings');
+              }}
+            />
+          )}
+          {view === 'traffic' && (
+            <Traffic
               onIntegrations={() => {
                 setIntegrationTarget(null);
                 setSettingsTab('integrations');

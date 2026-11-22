@@ -112,6 +112,7 @@ test('every page of the portal renders', async ({ page }) => {
     ['Fakturaer', /Fakturaer/],
     ['Udbetalingsrapporter', /Udbetalingsrapporter/],
     ['Performance', /Performance/],
+    ['Trafikkilder', /Trafikkilder/],
     ['Forsendelser', /Forsendelser/],
     ['Emballage', /Emballage/],
     ['Produktfeeds', /Produktfeeds/],
@@ -211,6 +212,7 @@ const withRefresh = [
   'Lager',
   'Fakturaer',
   'Performance',
+  'Trafikkilder',
   'Forsendelser',
   'Emballage',
 ];

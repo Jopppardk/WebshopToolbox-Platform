@@ -22,6 +22,18 @@ import {
   type RawOrder,
   type ShipmentList,
 } from './tier1/src/lib/shipments';
+import {
+  describeCampaign,
+  describeChannel,
+  describeCountry,
+  describeDevice,
+  describeLandingPage,
+  describeReferrer,
+  mergeTraffic,
+  trafficRange,
+  type Describe,
+} from './traffic-calculations';
+import type { TrafficPeriod, TrafficReport } from './tier1/src/lib/traffic';
 import { HttpError, reply, type PlatformEnv } from './types';
 
 export const DEMO_EMAIL = 'demo@webshoptoolbox.dk';
@@ -778,6 +790,151 @@ export function demoDailySales(
     missingDays: missingDays(year, month, today, days),
   };
 }
+// Trafikkilder: fictitious visitors and orders per source; the same merge as the real report.
+export function demoTraffic(
+  period: TrafficPeriod,
+  today = danishDate(),
+): TrafficReport {
+  const { start } = demoLedger(today),
+    range = trafficRange(period, today, start),
+    days = (Date.parse(range.to) - Date.parse(range.from)) / 864e5 + 1,
+    visits = Math.round(310 * days),
+    rand = random(period);
+  // [dimensions, share of visits, conversion rate, average order excl. VAT in kr.]
+  type Fixture = [string[], number, number, number];
+  const build = (fixtures: Fixture[]) => {
+    const sessions = [],
+      orders = [];
+    for (const [dims, share, rate, average] of fixtures) {
+      const s = Math.round(visits * share * (0.92 + rand() * 0.16)),
+        checkouts = Math.round(s * rate),
+        sales = Math.round(checkouts * average * (0.9 + rand() * 0.2) * 100);
+      sessions.push({
+        dims,
+        values: { sessions: s, sessions_that_completed_checkout: checkouts },
+      });
+      if (checkouts)
+        orders.push({
+          dims,
+          values: {
+            orders: checkouts,
+            total_sales: Math.round(sales * 1.25),
+            taxes: Math.round(sales * 0.25),
+          },
+        });
+    }
+    return { sessions, orders };
+  };
+  const sets: Array<[keyof TrafficReport, Describe, Fixture[], boolean]> = [
+    [
+      'channels',
+      describeChannel,
+      [
+        [['direct'], 0.34, 0.031, 640],
+        [['search'], 0.41, 0.024, 590],
+        [['social'], 0.17, 0.009, 470],
+        [['email'], 0.06, 0.052, 710],
+        [['unknown'], 0.02, 0.01, 520],
+      ],
+      true,
+    ],
+    [
+      'referrers',
+      describeReferrer,
+      [
+        [['', ''], 0.36, 0.029, 640],
+        [['search', 'Google'], 0.37, 0.025, 600],
+        [['search', 'Bing'], 0.04, 0.02, 560],
+        [['social', 'Facebook'], 0.09, 0.011, 480],
+        [['social', 'Instagram'], 0.07, 0.007, 450],
+        [['social', 'Pinterest'], 0.01, 0.004, 430],
+        [['email', 'Klaviyo'], 0.06, 0.052, 710],
+      ],
+      true,
+    ],
+    [
+      'campaigns',
+      describeCampaign,
+      [
+        [['', '', ''], 0.71, 0.023, 600],
+        [['google', 'cpc', 'shopping-alle-produkter'], 0.09, 0.029, 610],
+        [['facebook', 'paid', 'black-friday'], 0.07, 0.014, 520],
+        [['klaviyo', 'email', 'nyhedsbrev-uge-47'], 0.05, 0.055, 720],
+        [['instagram', 'social', 'efterar-kollektion'], 0.05, 0.006, 470],
+        [['partnerads', 'affiliate', '52762'], 0.03, 0.034, 560],
+      ],
+      true,
+    ],
+    [
+      'countries',
+      describeCountry,
+      [
+        [['DK'], 0.74, 0.027, 610],
+        [['SE'], 0.12, 0.019, 650],
+        [['NO'], 0.05, 0.012, 700],
+        [['DE'], 0.04, 0.006, 590],
+        [['US'], 0.03, 0, 0],
+        [['NL'], 0.02, 0.004, 560],
+      ],
+      true,
+    ],
+    [
+      'landingPages',
+      describeLandingPage,
+      [
+        [['/'], 0.42, 0.021, 0],
+        [['/collections/nyheder'], 0.16, 0.026, 0],
+        [['/products/uldplaid-graa'], 0.11, 0.041, 0],
+        [['/collections/udsalg'], 0.1, 0.033, 0],
+        [['/blogs/inspiration/efterarets-farver'], 0.08, 0.008, 0],
+        [['/products/keramikkop-saet'], 0.07, 0.038, 0],
+        [['/pages/om-os'], 0.06, 0.004, 0],
+      ],
+      false,
+    ],
+    [
+      'devices',
+      describeDevice,
+      [
+        [['mobile'], 0.63, 0.019, 0],
+        [['desktop'], 0.33, 0.034, 0],
+        [['tablet'], 0.04, 0.022, 0],
+      ],
+      false,
+    ],
+  ];
+  const built = sets.map(([, , fixtures]) => build(fixtures)),
+    channel = built[0];
+  const sum = (rows: Array<{ values: Record<string, number> }>, key: string) =>
+    rows.reduce((s, r) => s + r.values[key], 0);
+  const totals = {
+    sessions: sum(channel.sessions, 'sessions'),
+    checkouts: sum(channel.sessions, 'sessions_that_completed_checkout'),
+    orders: sum(channel.orders, 'orders'),
+    sales: sum(channel.orders, 'total_sales') - sum(channel.orders, 'taxes'),
+  };
+  return {
+    period,
+    ...range,
+    checkedAt: new Date().toISOString(),
+    startDate: start,
+    timezone: 'Europe/Copenhagen',
+    currency: 'DKK',
+    totals,
+    ...Object.fromEntries(
+      sets.map(([name, describe, , withOrders], i) => [
+        name,
+        mergeTraffic(
+          { rows: built[i].sessions, complete: true },
+          withOrders ? { rows: built[i].orders, complete: true } : null,
+          describe,
+          // Every fixture source is listed, so there is no "Øvrige".
+          { sessions: null, checkouts: null, orders: null, sales: null },
+        ),
+      ]),
+    ),
+  } as TrafficReport;
+}
 // Forsendelser: fictitious tracking for the fulfilled demo orders, spread over every step and carrier,
 // including parcels waiting in a parcel shop close to being returned.
 export function demoShipments(
@@ -1114,6 +1271,12 @@ export async function demoTier1(
       )
         throw new HttpError(400, 'Vælg en måned fra 1 til 12.');
       return reply(demoDailySales(year, month, today));
+    }
+    if (path === '/traffic') {
+      const days = Number(url.searchParams.get('days') || 30);
+      if (![7, 30, 90, 365].includes(days))
+        throw new HttpError(400, 'Vælg 7, 30, 90 eller 365 dage.');
+      return reply(demoTraffic(days as TrafficPeriod));
     }
     if (path === '/shipments') {
       const days = Number(url.searchParams.get('days') || 30);
