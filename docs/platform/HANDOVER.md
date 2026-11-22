@@ -2,7 +2,7 @@
 
 Aktuel status på én side. Læs den før hver opgave. Historikken står i [CHANGELOG.md](CHANGELOG.md), planen i [ROADMAP.md](ROADMAP.md) og arbejdsreglerne i [AGENTS.md](../../AGENTS.md). Opdatér denne side, når status eller åbne punkter ændrer sig. Skriv selve ændringen som en note øverst i CHANGELOG.md.
 
-_Senest opdateret 17. november 2026._
+_Senest opdateret 22. november 2026._
 
 ## Miljøer
 
@@ -71,6 +71,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 
 - **Kursdifferencer på Shopify Payments-udbetalinger (udgivet 17. november 2026, dev og prod, run 44017102965, main `c58b32d`):** valgfri konto til kursdifferencer; udbetalingsbilaget flytter forskellen pr. udenlandsk ordre fra mellemregningskontoen dertil. Kræver, at kontoen vælges under kontoplanen. Ikke afprøvet mod rigtig Shopify eller Dinero.
 
+- **Trafikkilder (udgivet 22. november 2026, dev og prod, run 45066028690, main `e2ba3c2`):** Tools → Trafikkilder viser besøg og ordrer pr. kanal, henviser, UTM-kampagne, land, landingsside og enhed fra Shopify Analytics (read_reports, ingen nye scopes) ([TRAFFIC.md](TRAFFIC.md)). Kun set med testdata.
 - **Cloudflare E-mail som integration (udgivet 17. november 2026, migration 0054):** egen afsender opsættes én gang under Integrationer; Faktura-afsendelse og Anmeldelser vælger adresse på et godkendt domæne. Eksisterende godkendte afsendere flyttes automatisk ved første læsning ([MAIL-SENDERS.md](MAIL-SENDERS.md)). Domæneopslaget mod Cloudflare er ikke afprøvet med et rigtigt token.
 - **Trustpilot-invitationer (udgivet 17. november 2026, migration 0053):** Tools → Anmeldelser med egne invitationsmails på dansk og svensk, visuel editor og testmail ([REVIEW-INVITATIONS.md](REVIEW-INVITATIONS.md)). Trustpilots egne automatiske invitationer skal slås fra, når den slås til. Ikke afprøvet mod rigtig Shopify eller mailafsendelse.
 
