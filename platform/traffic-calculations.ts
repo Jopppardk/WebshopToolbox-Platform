@@ -159,7 +159,11 @@ export function mergeTraffic(
     orders: rest(totals.orders, 'orders', orders),
     sales: rest(totals.sales, 'sales', orders),
   };
-  const remaining = (other.sessions ?? 0) > 0 || (other.orders ?? 0) > 0;
+  // A return on a source Shopify left out has sales but no visits or orders; the row stays.
+  const remaining =
+    (other.sessions ?? 0) > 0 ||
+    (other.orders ?? 0) > 0 ||
+    (other.sales ?? 0) !== 0;
   return {
     rows: list,
     other: remaining
