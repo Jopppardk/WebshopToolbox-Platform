@@ -111,15 +111,20 @@ export async function companyInventory(
     dkk: reads.every((r) => r.rows.every((x) => x.currency === 'DKK')),
   };
 }
+// Items without quantity or cost count as 0 kr. only when the user accepted exactly that number of them;
+// if the number changes after the proposal, the regulation is refused, so a new proposal shows it again.
 export function assertReconcilable(
   all: Awaited<ReturnType<typeof companyInventory>>,
+  acceptedIncomplete = 0,
 ) {
   if (!all.dkk)
     throw new HttpError(409, 'Lagerregulering kræver kostpriser i DKK.');
-  if (all.incomplete)
+  if (all.incomplete && all.incomplete !== acceptedIncomplete)
     throw new HttpError(
       409,
-      `${all.incomplete} lagerstyrede varer mangler lagerantal eller kostpris i Shopify. Ret dem, før Dinero reguleres.`,
+      acceptedIncomplete
+        ? `Antallet af varer uden lagerantal eller kostpris er ændret til ${all.incomplete}. Opdatér siden.`
+        : `${all.incomplete} lagerstyrede varer mangler lagerantal eller kostpris i Shopify. Ret dem, eller godkend at de tæller som 0 kr., før Dinero reguleres.`,
     );
 }
 // A regulation still in flight, uncertain or lying as a draft is not yet in Dinero's balance; another one would count the difference twice.
@@ -261,7 +266,7 @@ export async function commitStocktake(
     reconcile = value.kind === 'reconcile';
   if (reconcile) {
     const all = await companyInventory(env, company, shop, fresh);
-    assertReconcilable(all);
+    assertReconcilable(all, Number(value.acceptedIncomplete) || 0);
     if (all.valueMinor !== value.shopifyValueMinor)
       throw new HttpError(
         409,

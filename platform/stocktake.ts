@@ -226,6 +226,14 @@ export async function handleStocktake(
     const shown = [b.shopifyValueMinor, b.dineroValueMinor];
     if (!shown.every(Number.isSafeInteger))
       throw new HttpError(400, 'Angiv de viste lagerværdier.');
+    const acceptedIncomplete =
+      b.acceptIncomplete === undefined ? 0 : Number(b.acceptIncomplete);
+    if (
+      typeof (b.acceptIncomplete ?? 0) !== 'number' ||
+      !Number.isSafeInteger(acceptedIncomplete) ||
+      acceptedIncomplete < 0
+    )
+      throw new HttpError(400, 'Ugyldigt antal ufuldstændige varer.');
     const account = await accounts(db, company),
       [inventory, dinero] = await Promise.all([
         companyInventory(env, company, shop),
@@ -239,7 +247,7 @@ export async function handleStocktake(
         409,
         'Regnskabsopsætningen er ændret. Opdatér siden.',
       );
-    assertReconcilable(inventory);
+    assertReconcilable(inventory, acceptedIncomplete);
     if (inventory.valueMinor !== shown[0] || dinero.balanceMinor !== shown[1])
       throw new HttpError(
         409,
@@ -304,6 +312,7 @@ export async function handleStocktake(
       adjustmentMinor,
       shopifyValueMinor: inventory.valueMinor,
       webshops: inventory.shops,
+      acceptedIncomplete: inventory.incomplete,
       dineroValueMinor: dinero.balanceMinor,
       voucher,
       expiresAt: Date.now() + 600000,
@@ -363,7 +372,7 @@ export async function handleStocktake(
     const fresh = await readInventory(env, company, shop);
     if (value.kind === 'reconcile') {
       const all = await companyInventory(env, company, shop, fresh);
-      assertReconcilable(all);
+      assertReconcilable(all, Number(value.acceptedIncomplete) || 0);
       if (all.valueMinor !== value.shopifyValueMinor)
         throw new HttpError(
           409,
