@@ -3,6 +3,7 @@ import { handleShipmondo } from './shipmondo';
 import { handleTier1CustomApps } from './custom-apps';
 import { paymentProviderPattern } from './catalog';
 import { handlePerformance } from './performance-source';
+import { handleTraffic } from './traffic-source';
 import { handleShipments } from './shipments-source';
 import { handleShopFinance } from './dashboard-shop';
 import { demoTier1, isDemoCompany } from './demo';
@@ -91,6 +92,8 @@ export async function handleTier1(
       shop,
       path,
     );
+  if (path === '/traffic')
+    return handleTraffic(request, env, actor, company.company_id, shop);
   if (path === '/dashboard/shop')
     return handleShopFinance(request, env, actor, company.company_id, shop);
   if (path === '/shipments' || path === '/shipments/refresh')

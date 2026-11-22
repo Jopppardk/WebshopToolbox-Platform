@@ -56,6 +56,7 @@ Den oprindelige Sablen-løsning er lukket ned. Platformen er nu den eneste køre
 - [RECORD-HISTORY.md](RECORD-HISTORY.md): posthistorik.
 - [PRODUCT-FEEDS.md](PRODUCT-FEEDS.md): produktfeeds.
 - [PERFORMANCE.md](PERFORMANCE.md): performance.
+- [TRAFFIC.md](TRAFFIC.md): trafikkilder (hvor besøgende og kunder kommer fra).
 - [SHIPMENTS.md](SHIPMENTS.md): forsendelser.
 - [SHIPMONDO.md](SHIPMONDO.md): Shipmondo.
 - [PUBLIC-TRACKING.md](PUBLIC-TRACKING.md): offentlig tracking.
