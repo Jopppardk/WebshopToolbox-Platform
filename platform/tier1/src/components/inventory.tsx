@@ -120,13 +120,13 @@ export function Inventory() {
     data?.company && 'valueMinor' in data.company ? data.company : null;
   const difference =
     company && dinero ? company.valueMinor - dinero.valueMinor : null;
-  const blocked = !company
-    ? ''
-    : !company.dkk
-      ? 'Regulering kræver kostpriser i DKK.'
-      : company.incomplete
-        ? `${company.incomplete} varer mangler lagerantal eller kostpris i Shopify. Ret dem før regulering.`
-        : '';
+  const blocked =
+    company && !company.dkk ? 'Regulering kræver kostpriser i DKK.' : '';
+  // Items without quantity or cost count as 0 kr.; the user approves that in the dialog.
+  const incomplete = company?.incomplete || 0;
+  const incompleteNote = incomplete
+    ? ` ${incomplete} lagerstyrede varer mangler lagerantal eller kostpris i Shopify og tæller som 0 kr.`
+    : '';
   // Prepare on the server, show the exact amount, and only then commit (or simulate in the test environment).
   const run = async (
     body: Record<string, unknown>,
@@ -207,17 +207,18 @@ export function Inventory() {
             action: 'prepare-reconcile',
             shopifyValueMinor: company.valueMinor,
             dineroValueMinor: dinero.valueMinor,
+            ...(incomplete ? { acceptIncomplete: incomplete } : {}),
           },
           (amount, direction) =>
             runtime.bookkeeping
               ? {
                   title: 'Regulér lagerkonto i Dinero',
-                  message: `Der oprettes et finansbilag med ${direction} på ${amount} af lagerkonto ${dinero.account}, så den svarer til ${company.shops > 1 ? `lagerværdien i virksomhedens ${company.shops} webshops` : 'webshoppens lagerværdi'}. Lagerantal i Shopify ændres ikke.`,
+                  message: `Der oprettes et finansbilag med ${direction} på ${amount} af lagerkonto ${dinero.account}, så den svarer til ${company.shops > 1 ? `lagerværdien i virksomhedens ${company.shops} webshops` : 'webshoppens lagerværdi'}. Lagerantal i Shopify ændres ikke.${incompleteNote}`,
                   confirmLabel: 'Opret finansbilag',
                 }
               : {
                   title: 'Simulér regulering i Dinero',
-                  message: `Finansbilag: ${direction} på ${amount} af lagerkonto ${dinero.account}. Intet sendes til Dinero.`,
+                  message: `Finansbilag: ${direction} på ${amount} af lagerkonto ${dinero.account}. Intet sendes til Dinero.${incompleteNote}`,
                   confirmLabel: 'Simulér',
                 },
         )
@@ -374,22 +375,30 @@ export function Inventory() {
                     blocked ? (
                       <p className="mt-1 text-xs text-amber-800">{blocked}</p>
                     ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="mt-2"
-                        onClick={reconcile}
-                        disabled={busy || !!changes.length}
-                        title={
-                          changes.length
-                            ? 'Gem eller fortryd optællingen først.'
-                            : undefined
-                        }
-                      >
-                        {runtime.bookkeeping
-                          ? 'Regulér Dinero'
-                          : 'Simulér regulering'}
-                      </Button>
+                      <>
+                        {incomplete ? (
+                          <p className="mt-1 text-xs text-amber-800">
+                            {incomplete} varer mangler lagerantal eller kostpris
+                            i Shopify og tæller som 0 kr. ved regulering.
+                          </p>
+                        ) : null}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="mt-2"
+                          onClick={reconcile}
+                          disabled={busy || !!changes.length}
+                          title={
+                            changes.length
+                              ? 'Gem eller fortryd optællingen først.'
+                              : undefined
+                          }
+                        >
+                          {runtime.bookkeeping
+                            ? 'Regulér Dinero'
+                            : 'Simulér regulering'}
+                        </Button>
+                      </>
                     )
                   ) : (
                     <p className="mt-1 text-xs text-muted-foreground">
