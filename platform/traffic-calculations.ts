@@ -163,7 +163,8 @@ export function mergeTraffic(
   const remaining =
     (other.sessions ?? 0) > 0 ||
     (other.orders ?? 0) > 0 ||
-    (other.sales ?? 0) !== 0;
+    // Only when Shopify cut the list off: per-row rounding must not create an "Øvrige" of a few øre.
+    (orders !== null && 'rows' in orders && !orders.complete && !!other.sales);
   return {
     rows: list,
     other: remaining
