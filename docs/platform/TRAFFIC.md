@@ -1,6 +1,6 @@
 # Trafikkilder
 
-Status 22. november 2026: implementeret og testet lokalt (Claude). Ikke udgivet. Ingen migration.
+Status 22. november 2026: implementeret, testet og udgivet på dev og prod (Claude, PR #223, main `e2ba3c2`, workflow-run 45066028690). Ingen migration.
 
 ## Funktion
 
