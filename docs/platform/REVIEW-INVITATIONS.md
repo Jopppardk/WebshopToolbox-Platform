@@ -1,6 +1,6 @@
 # Trustpilot-invitationer (Tools → Anmeldelser)
 
-Implementeret 17. november 2026 (Claude). Ikke udgivet.
+Implementeret og udgivet 17. november 2026 (Claude). Tidspunkt for afsendelse udgivet 23. november 2026 (PR #225).
 
 Webshoppens egne mails, der beder kunden anmelde butikken på Trustpilot, i stedet for Trustpilots automatiske invitationer (AFS). Danske kunder får den danske mail, svenske kunder den svenske.
 

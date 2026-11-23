@@ -2,7 +2,7 @@
 
 Aktuel status på én side. Læs den før hver opgave. Historikken står i [CHANGELOG.md](CHANGELOG.md), planen i [ROADMAP.md](ROADMAP.md) og arbejdsreglerne i [AGENTS.md](../../AGENTS.md). Opdatér denne side, når status eller åbne punkter ændrer sig. Skriv selve ændringen som en note øverst i CHANGELOG.md.
 
-_Senest opdateret 22. november 2026._
+_Senest opdateret 23. november 2026._
 
 ## Miljøer
 
@@ -48,6 +48,7 @@ Lokalt: `npm run platform:init`, `npm run platform:seed` og `npm run platform:de
 ## Åbne punkter
 
 **Ikke verificeret i drift**
+- **Tidspunkt for anmeldelsesmails (udgivet 23. november 2026, dev og prod, run 45262153356, main `b8d00cf`):** invitationer sendes fra det valgte klokkeslæt (standard kl. 10 dansk tid) og 3 timer frem. Første afsendelse i vinduet er ikke set.
 - **Annullerede, ubetalte ordrer krediteres (udgivet 12. november 2026, dev og prod, run 43232474096, main `8aee838`):** en ordre annulleret efter bogføring uden gennemført betaling krediteres fuldt via `order_refund` (kun annulleringer fra de seneste 30 dage automatisk, beløbet skal svare til det bogførte salg, kreditnotaen mailes aldrig), og en ordre, hvor betalingen ikke kunne hæves, faktureres og bogføres ikke. Fra PR #202 (run 43245801775, main `ea2cb03`) føres vareforbruget også tilbage, når Shopify har lagt varerne på lager igen. #2731 er krediteret i Dinero (bekræftet af René); dens vareforbrug på 69 kr. rettes manuelt eller via Lagerregulering.
 - **Ekstern overvågning af den automatiske kørsel:** workflowet *Overvågning: automatisk kørsel i prod* (`.github/workflows/platform-scheduler-watch.yml`, `scripts/scheduler-watch.mjs`) kalder `/healthz/scheduler` hvert 15. minut og fejler, når cron ikke har gennemført en kørsel i 30 minutter, så GitHub mailer den, der senest har ændret workflowets tidsplan. GitHub kan forsinke planlagte kørsler, så alarmen kommer typisk efter 30-45 minutter. Første kørsel og mailen er ikke set.
 - **Driftsoverblikkets "venter på nyt forsøg" (udgivet 14. oktober 2026, dev og prod, run 38523869306, main `e4d9081`):** afviste poster, senere bogførte poster og annullerede, fuldt refunderede ordrer, der ikke nåede Dinero, tælles ikke længere med i morgenmailen og Tier 0 → Driftsoverblik.
