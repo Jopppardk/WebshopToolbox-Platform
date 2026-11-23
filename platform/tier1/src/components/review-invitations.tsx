@@ -40,7 +40,9 @@ import {
   localeCountry,
   localeNames,
   newBlock,
+  recommendedSendHour,
   renderBlock,
+  sendWindowHours,
   reviewLocales,
   reviewVariables,
   sanitizeRich,
@@ -1246,6 +1248,33 @@ function ReviewPage() {
               <span className="text-sm text-muted-foreground">dage</span>
             </span>
           </Field>
+          <Field
+            label="Tidspunkt"
+            hint={`Dansk tid. Mails, der er klar, sendes fra dette tidspunkt og de følgende ${sendWindowHours} timer. Anbefalet: kl. ${String(recommendedSendHour).padStart(2, '0')}.00, hvor flest svarer på en anmeldelsesmail.`}
+          >
+            <select
+              aria-label="Tidspunkt"
+              className="h-9 rounded-lg border bg-white px-2 text-sm"
+              value={
+                template.sendHour === null ? '' : String(template.sendHour)
+              }
+              onChange={(e) =>
+                setTemplate({
+                  ...template,
+                  sendHour:
+                    e.target.value === '' ? null : Number(e.target.value),
+                })
+              }
+            >
+              <option value="">Straks, når ventetiden er gået</option>
+              {Array.from({ length: 24 }, (_, h) => (
+                <option key={h} value={h}>
+                  kl. {String(h).padStart(2, '0')}.00
+                  {h === recommendedSendHour ? ' (anbefalet)' : ''}
+                </option>
+              ))}
+            </select>
+          </Field>
           <div className="xl:col-span-2">
             <Field
               label="Trustpilot-link"
@@ -1418,7 +1447,7 @@ function ReviewPage() {
                       ) : row.waitsForMarket ? (
                         'Venter på ordrens marked'
                       ) : (
-                        `Sendes ${formatDate(row.dueAt)}`
+                        `Sendes ${info.settings.templates[row.locale].sendHour === null ? formatDate(row.dueAt) : formatDateTime(row.dueAt)}`
                       )}
                     </td>
                     <td className="px-5 py-1.5 text-right sm:px-6">

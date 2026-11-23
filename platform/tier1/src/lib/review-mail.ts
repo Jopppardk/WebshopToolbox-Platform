@@ -55,6 +55,8 @@ export type ReviewDesign = {
 export type ReviewTemplate = {
   enabled: boolean;
   delayDays: number;
+  /** Hour of day (Danish time) the invitations go out; null sends as soon as the delay has passed. */
+  sendHour: number | null;
   subject: string;
   preheader: string;
   trustpilotUrl: string;
@@ -119,6 +121,76 @@ const number = (value: unknown, min: number, max: number, fallback: number) =>
   typeof value === 'number' && Number.isFinite(value)
     ? Math.min(max, Math.max(min, Math.round(value)))
     : fallback;
+/**
+ * The default hour for new and older templates: mid-morning on the day the delay ends. Review platforms report the
+ * most answers to product review requests around 10 (Feefo) and 10-12 (Kudobuzz); see docs/platform/REVIEW-INVITATIONS.md.
+ */
+export const recommendedSendHour = 10;
+/** A saved hour (0-23), null for "as soon as the delay has passed", or the recommended hour when never chosen. */
+export const sendHourOf = (value: unknown): number | null =>
+  value === null
+    ? null
+    : typeof value === 'number' && Number.isInteger(value)
+      ? Math.min(23, Math.max(0, value))
+      : recommendedSendHour;
+/** Hours after the chosen hour in which the runs still send (a busy shop sends at most a few mails per run). */
+export const sendWindowHours = 3;
+const zone = 'Europe/Copenhagen',
+  zoneParts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: zone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+/** Danish calendar date and hour of an instant. */
+function danish(ms: number) {
+  const p = Object.fromEntries(
+    zoneParts.formatToParts(ms).map((x) => [x.type, Number(x.value)]),
+  );
+  return { y: p.year, m: p.month, d: p.day, h: p.hour, min: p.minute };
+}
+/** The instant of a Danish date (the day may run past the month) at the given hour. */
+function danishAt(y: number, m: number, d: number, hour: number) {
+  const wanted = Date.UTC(y, m - 1, d, hour);
+  let guess = wanted;
+  for (let i = 0; i < 3; i++) {
+    const l = danish(guess);
+    guess -= Date.UTC(l.y, l.m - 1, l.d, l.h, l.min) - wanted;
+  }
+  return guess;
+}
+/**
+ * When an order's invitation is due: the delay counted in Danish calendar days from the shipping day, at the chosen
+ * hour; without an hour, exactly the delay after shipping.
+ */
+export function invitationDueAt(
+  shippedMs: number,
+  delayDays: number,
+  sendHour: number | null,
+) {
+  if (sendHour === null) return shippedMs + delayDays * 86400000;
+  const l = danish(shippedMs);
+  return danishAt(l.y, l.m, l.d + delayDays, sendHour);
+}
+/** Whether the runs may send at this instant: within the window after the chosen hour (any time without one). */
+export function inSendWindow(nowMs: number, sendHour: number | null) {
+  return (
+    sendHour === null ||
+    (danish(nowMs).h - sendHour + 24) % 24 < sendWindowHours
+  );
+}
+/** When a due invitation goes out: now within the window, otherwise when the window next opens. */
+export function nextSendAt(nowMs: number, sendHour: number | null) {
+  if (inSendWindow(nowMs, sendHour)) return nowMs;
+  const l = danish(nowMs),
+    today = danishAt(l.y, l.m, l.d, sendHour as number);
+  return today > nowMs
+    ? today
+    : danishAt(l.y, l.m, l.d + 1, sendHour as number);
+}
 const align = (value: unknown): Align =>
   value === 'left' || value === 'right' ? value : 'center';
 const plain = (value: unknown, max: number) =>
@@ -302,6 +374,7 @@ export function defaultTemplate(
   return {
     enabled: true,
     delayDays: sv ? 7 : 5,
+    sendHour: recommendedSendHour,
     subject: sv
       ? 'Hur var din upplevelse hos {{butik}}?'
       : 'Hvordan var din oplevelse hos {{butik}}?',
@@ -457,6 +530,7 @@ export function normalizeTemplate(
   return {
     enabled: t.enabled !== false,
     delayDays: number(t.delayDays, 0, 60, locale === 'sv' ? 7 : 5),
+    sendHour: sendHourOf(t.sendHour),
     subject,
     preheader: plain(t.preheader, 200).trim(),
     trustpilotUrl,

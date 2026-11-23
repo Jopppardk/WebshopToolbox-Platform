@@ -18,12 +18,16 @@ import { orderQuery, shopAccess, type Access } from './invoice-source';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 import {
   defaultSettings,
+  inSendWindow,
+  invitationDueAt,
   localeNames,
+  nextSendAt,
   normalizeSettings,
   renderReviewMail,
   reviewLocales,
   ReviewTemplateError,
   sampleVars,
+  sendHourOf,
   type ReviewLocale,
   type ReviewSettings,
   type ReviewTemplate,
@@ -37,6 +41,9 @@ type SettingsRow = {
 };
 const day = 86400000,
   sendsPerRun = 10,
+  // The run reads waiting orders a page at a time, at most this many pages, until it has sent its share.
+  candidatePage = 200,
+  candidatePages = 5,
   queueLimit = 1000,
   maxImageBytes = 2_000_000,
   maxImages = 300;
@@ -70,10 +77,14 @@ async function savedRow(env: PlatformEnv, company: string, shop: string) {
 }
 function settingsOf(row: SettingsRow | null, domain: string): ReviewSettings {
   if (!row) return defaultSettings(domain);
-  return {
-    enabled: row.enabled === 1,
-    templates: JSON.parse(row.templates_json),
-  };
+  const templates = JSON.parse(row.templates_json);
+  // Templates saved before the send time existed get the recommended hour.
+  for (const locale of reviewLocales)
+    templates[locale] = {
+      ...templates[locale],
+      sendHour: sendHourOf(templates[locale]?.sendHour),
+    };
+  return { enabled: row.enabled === 1, templates };
 }
 /** The enabled market whose invoices are in this language (e.g. Sverige on sabeln.se), if the webshop has one. */
 async function localeMarket(
@@ -634,6 +645,7 @@ function pendingOrders(
   startAt: string,
   until: string,
   limit: number,
+  offset = 0,
 ) {
   return db
     .prepare(
@@ -644,7 +656,7 @@ function pendingOrders(
  AND json_extract(s.payload_json,'$.displayFulfillmentStatus')='FULFILLED' AND json_extract(s.payload_json,'$.cancelledAt') IS NULL
  AND COALESCE(json_extract(s.payload_json,'$.test'),0)=0
  AND NOT EXISTS(SELECT 1 FROM review_invitations r WHERE r.company_id=s.company_id AND r.webshop_id=s.webshop_id AND r.external_id=s.external_id))
- WHERE shipped_at>=? AND shipped_at<=? ORDER BY shipped_at LIMIT ?`,
+ WHERE shipped_at>=? AND shipped_at<=? ORDER BY shipped_at,external_id LIMIT ? OFFSET ?`,
     )
     .bind(
       company,
@@ -653,6 +665,7 @@ function pendingOrders(
       startAt,
       until,
       limit,
+      offset,
     )
     .all<Candidate>()
     .then((r) => r.results);
@@ -664,6 +677,18 @@ const refunded = (order: {
   order.displayFinancialStatus === 'REFUNDED' ||
   Number(order.currentTotalPriceSet?.shopMoney?.amount) === 0;
 
+const settingsWithHours = (settings: ReviewSettings): ReviewSettings => ({
+  ...settings,
+  templates: Object.fromEntries(
+    reviewLocales.map((l) => [
+      l,
+      {
+        ...settings.templates[l],
+        sendHour: sendHourOf(settings.templates[l].sendHour),
+      },
+    ]),
+  ) as ReviewSettings['templates'],
+});
 /**
  * The queue shown on the page: shipped orders that will get an invitation, when each is due, and how many of them
  * have waited their language's delay (sent by the next runs). Orders that will be skipped (no language, language
@@ -677,6 +702,7 @@ export async function invitationQueue(
   settings: ReviewSettings,
 ) {
   const list: QueuedOrder[] = [];
+  settings = settingsWithHours(settings);
   if (!row?.enabled || !row.start_at)
     return { queued: 0, ready: 0, queueCapped: false, orders: list };
   const db = env.PLATFORM_DB,
@@ -705,10 +731,12 @@ export async function invitationQueue(
           )
         : localeOf(null, c.country);
     if (!locale || !settings.templates[locale].enabled) continue;
-    const due =
-      Date.parse(c.shipped_at) + settings.templates[locale].delayDays * day;
-    // Without a known market the run waits for it, so such an order is not ready yet.
-    const isReady = !!c.has_market && due <= now;
+    const t = settings.templates[locale],
+      due = invitationDueAt(Date.parse(c.shipped_at), t.delayDays, t.sendHour);
+    // Without a known market the run waits for it, so such an order is not ready yet. A due order outside the send
+    // window waits for the window to open.
+    const isReady =
+      !!c.has_market && due <= now && inSendWindow(now, t.sendHour);
     if (isReady) ready++;
     list.push({
       orderId: c.external_id,
@@ -716,7 +744,9 @@ export async function invitationQueue(
       locale,
       country: c.country,
       shippedAt: c.shipped_at,
-      dueAt: new Date(due).toISOString(),
+      dueAt: new Date(
+        due <= now ? nextSendAt(now, t.sendHour) : due,
+      ).toISOString(),
       ready: isReady,
       // Due, but the run waits until the order's market is known.
       waitsForMarket: !c.has_market && due <= now,
@@ -748,15 +778,13 @@ export async function sendReviewInvitations(
     minDelay = Math.min(
       ...reviewLocales.map((l) => settings.templates[l].delayDays),
     );
-  const candidates = await pendingOrders(
-    db,
-    company,
-    shop,
-    row.start_at,
-    new Date(now - minDelay * day).toISOString(),
-    200,
-  );
-  if (!candidates.length || !enabled.length) return { sent: 0 };
+  // Nothing can go out while every language's send window is closed (orders without a language wait too).
+  if (!enabled.some((l) => inSendWindow(now, settings.templates[l].sendHour)))
+    return { sent: 0 };
+  // With a send hour the delay counts calendar days, so an order shipped late on a day can be due a day early.
+  const until = new Date(
+    Math.min(now, now - (minDelay - 1) * day),
+  ).toISOString();
   const skip = (
     c: Candidate,
     name: string,
@@ -774,133 +802,177 @@ export async function sendReviewInvitations(
     uncertain = 0,
     lookupFailed = 0,
     senderBlocked = '';
-  for (const c of candidates) {
+  // Orders that wait (not due, outside their language's window, no market yet) stay in the result, so the next page
+  // starts after them; handled orders leave it. A language waiting for its window never blocks another's due orders.
+  let waiting = 0;
+  for (let page = 0; page < candidatePages; page++) {
     if (sent + uncertain >= sendsPerRun) break;
-    const order = JSON.parse(c.payload_json),
-      name = String(order.name || c.external_id.split('/').pop());
-    // The market is filled shortly after the order is imported; wait for it rather than guess the language.
-    if (!c.has_market) continue;
-    const market = await orderMarketSettings(db, company, shop, c.external_id),
-      locale = localeOf(market, c.country);
-    if (!locale) {
-      await skip(
-        c,
-        name,
-        null,
-        `Ingen invitation på sproget for ${c.country}.`,
-      );
-      continue;
-    }
-    const template = settings.templates[locale];
-    if (!template.enabled) {
-      await skip(
-        c,
-        name,
-        locale,
-        `${localeNames[locale]}e invitationer var slået fra.`,
-      );
-      continue;
-    }
-    if (Date.parse(c.shipped_at) + template.delayDays * day > now) continue;
-    // Fully refunded (with or without a cancellation): Shopify's status says so; partly refunded orders are invited.
-    if (refunded(order)) {
-      await skip(c, name, locale, 'Ordren er refunderet.');
-      continue;
-    }
-    let live: LiveOrder | null;
-    try {
-      access ??= await shopAccess(env, company, shop);
-      live = (
-        await orderQuery<{ order: LiveOrder | null }>(
-          access,
-          reviewOrderQuery,
-          {
-            id: c.external_id,
-          },
-        )
-      ).order;
-    } catch {
-      // Read-only and nothing claimed: the order is tried again in the next run.
-      lookupFailed++;
-      continue;
-    }
-    if (!live || live.id !== c.external_id) {
-      await skip(c, name, locale, 'Ordren findes ikke længere i Shopify.');
-      continue;
-    }
-    if (live.cancelledAt) {
-      await skip(c, name, locale, 'Ordren er annulleret.');
-      continue;
-    }
-    let recipient: string;
-    try {
-      recipient = mailAddress(live.email);
-    } catch {
-      await skip(c, name, locale, 'Ordren har ingen gyldig mailadresse.');
-      continue;
-    }
-    const firstName = (
-      live.customer?.firstName ||
-      live.shippingAddress?.firstName ||
-      live.billingAddress?.firstName ||
-      ''
-    )
-      .trim()
-      .slice(0, 60);
-    const mail = renderReviewMail(
-      template,
-      {
-        firstName,
-        orderName: live.name || name,
-        store: market?.store_name || w.name,
-      },
-      locale,
+    const candidates = await pendingOrders(
+      db,
+      company,
+      shop,
+      row.start_at,
+      until,
+      candidatePage,
+      waiting,
     );
-    const scope = scopeOf(shop, market),
-      domains = (await currentSender(env, company, scope)).domains;
-    if (senderProblem(template, domains)) {
-      // The chosen address lost its domain: the order waits (unclaimed) until the sender is fixed.
-      senderBlocked = template.fromAddress;
-      continue;
-    }
-    await owns();
-    // Claimed before it is sent: a second run, or a repeat of this one, never mails the order again.
-    const claim = await db
-      .prepare(
-        "INSERT INTO review_invitations(company_id,webshop_id,external_id,order_name,locale,recipient,status) VALUES(?,?,?,?,?,?,'sending') ON CONFLICT DO NOTHING",
-      )
-      .bind(company, shop, c.external_id, live.name || name, locale, recipient)
-      .run();
-    if (claim.meta.changes !== 1) continue;
-    try {
-      const result = await deliverMail(
-        env,
-        company,
-        scope,
-        { to: recipient, ...mail },
-        overrideOf(template),
-      );
-      await db
-        .prepare(
-          "UPDATE review_invitations SET status='sent',sender=?,receipt=?,sent_at=CURRENT_TIMESTAMP WHERE company_id=? AND webshop_id=? AND external_id=? AND status='sending'",
-        )
-        .bind(result.from, result.receipt, company, shop, c.external_id)
-        .run();
-      sent++;
-    } catch {
-      await db
-        .prepare(
-          "UPDATE review_invitations SET status='uncertain',reason=? WHERE company_id=? AND webshop_id=? AND external_id=? AND status='sending'",
-        )
-        .bind(
-          'Afsendelsen blev ikke bekræftet. Den sendes ikke igen automatisk.',
+    for (const c of candidates) {
+      if (sent + uncertain >= sendsPerRun) break;
+      const order = JSON.parse(c.payload_json),
+        name = String(order.name || c.external_id.split('/').pop());
+      // The market is filled shortly after the order is imported; wait for it rather than guess the language.
+      if (!c.has_market) {
+        waiting++;
+        continue;
+      }
+      const market = await orderMarketSettings(
+          db,
           company,
           shop,
           c.external_id,
+        ),
+        locale = localeOf(market, c.country);
+      if (!locale) {
+        await skip(
+          c,
+          name,
+          null,
+          `Ingen invitation på sproget for ${c.country}.`,
+        );
+        continue;
+      }
+      const template = settings.templates[locale];
+      if (!template.enabled) {
+        await skip(
+          c,
+          name,
+          locale,
+          `${localeNames[locale]}e invitationer var slået fra.`,
+        );
+        continue;
+      }
+      // Not due yet, or due but outside the chosen hour's window: it waits (unclaimed) for a later run.
+      if (
+        invitationDueAt(
+          Date.parse(c.shipped_at),
+          template.delayDays,
+          template.sendHour,
+        ) > now ||
+        !inSendWindow(now, template.sendHour)
+      ) {
+        waiting++;
+        continue;
+      }
+      // Fully refunded (with or without a cancellation): Shopify's status says so; partly refunded orders are invited.
+      if (refunded(order)) {
+        await skip(c, name, locale, 'Ordren er refunderet.');
+        continue;
+      }
+      let live: LiveOrder | null;
+      try {
+        access ??= await shopAccess(env, company, shop);
+        live = (
+          await orderQuery<{ order: LiveOrder | null }>(
+            access,
+            reviewOrderQuery,
+            {
+              id: c.external_id,
+            },
+          )
+        ).order;
+      } catch {
+        // Read-only and nothing claimed: the order is tried again in the next run.
+        lookupFailed++;
+        waiting++;
+        continue;
+      }
+      if (!live || live.id !== c.external_id) {
+        await skip(c, name, locale, 'Ordren findes ikke længere i Shopify.');
+        continue;
+      }
+      if (live.cancelledAt) {
+        await skip(c, name, locale, 'Ordren er annulleret.');
+        continue;
+      }
+      let recipient: string;
+      try {
+        recipient = mailAddress(live.email);
+      } catch {
+        await skip(c, name, locale, 'Ordren har ingen gyldig mailadresse.');
+        continue;
+      }
+      const firstName = (
+        live.customer?.firstName ||
+        live.shippingAddress?.firstName ||
+        live.billingAddress?.firstName ||
+        ''
+      )
+        .trim()
+        .slice(0, 60);
+      const mail = renderReviewMail(
+        template,
+        {
+          firstName,
+          orderName: live.name || name,
+          store: market?.store_name || w.name,
+        },
+        locale,
+      );
+      const scope = scopeOf(shop, market),
+        domains = (await currentSender(env, company, scope)).domains;
+      if (senderProblem(template, domains)) {
+        // The chosen address lost its domain: the order waits (unclaimed) until the sender is fixed.
+        senderBlocked = template.fromAddress;
+        waiting++;
+        continue;
+      }
+      await owns();
+      // Claimed before it is sent: a second run, or a repeat of this one, never mails the order again.
+      const claim = await db
+        .prepare(
+          "INSERT INTO review_invitations(company_id,webshop_id,external_id,order_name,locale,recipient,status) VALUES(?,?,?,?,?,?,'sending') ON CONFLICT DO NOTHING",
+        )
+        .bind(
+          company,
+          shop,
+          c.external_id,
+          live.name || name,
+          locale,
+          recipient,
         )
         .run();
-      uncertain++;
+      if (claim.meta.changes !== 1) continue;
+      try {
+        const result = await deliverMail(
+          env,
+          company,
+          scope,
+          { to: recipient, ...mail },
+          overrideOf(template),
+        );
+        await db
+          .prepare(
+            "UPDATE review_invitations SET status='sent',sender=?,receipt=?,sent_at=CURRENT_TIMESTAMP WHERE company_id=? AND webshop_id=? AND external_id=? AND status='sending'",
+          )
+          .bind(result.from, result.receipt, company, shop, c.external_id)
+          .run();
+        sent++;
+      } catch {
+        await db
+          .prepare(
+            "UPDATE review_invitations SET status='uncertain',reason=? WHERE company_id=? AND webshop_id=? AND external_id=? AND status='sending'",
+          )
+          .bind(
+            'Afsendelsen blev ikke bekræftet. Den sendes ikke igen automatisk.',
+            company,
+            shop,
+            c.external_id,
+          )
+          .run();
+        uncertain++;
+      }
     }
+    if (candidates.length < candidatePage) break;
   }
   if (uncertain || lookupFailed || senderBlocked)
     throw new HttpError(
