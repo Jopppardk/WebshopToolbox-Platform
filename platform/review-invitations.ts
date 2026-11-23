@@ -18,12 +18,16 @@ import { orderQuery, shopAccess, type Access } from './invoice-source';
 import { HttpError, reply, type Actor, type PlatformEnv } from './types';
 import {
   defaultSettings,
+  inSendWindow,
+  invitationDueAt,
   localeNames,
+  nextSendAt,
   normalizeSettings,
   renderReviewMail,
   reviewLocales,
   ReviewTemplateError,
   sampleVars,
+  sendHourOf,
   type ReviewLocale,
   type ReviewSettings,
   type ReviewTemplate,
@@ -70,10 +74,14 @@ async function savedRow(env: PlatformEnv, company: string, shop: string) {
 }
 function settingsOf(row: SettingsRow | null, domain: string): ReviewSettings {
   if (!row) return defaultSettings(domain);
-  return {
-    enabled: row.enabled === 1,
-    templates: JSON.parse(row.templates_json),
-  };
+  const templates = JSON.parse(row.templates_json);
+  // Templates saved before the send time existed get the recommended hour.
+  for (const locale of reviewLocales)
+    templates[locale] = {
+      ...templates[locale],
+      sendHour: sendHourOf(templates[locale]?.sendHour),
+    };
+  return { enabled: row.enabled === 1, templates };
 }
 /** The enabled market whose invoices are in this language (e.g. Sverige on sabeln.se), if the webshop has one. */
 async function localeMarket(
@@ -664,6 +672,18 @@ const refunded = (order: {
   order.displayFinancialStatus === 'REFUNDED' ||
   Number(order.currentTotalPriceSet?.shopMoney?.amount) === 0;
 
+const settingsWithHours = (settings: ReviewSettings): ReviewSettings => ({
+  ...settings,
+  templates: Object.fromEntries(
+    reviewLocales.map((l) => [
+      l,
+      {
+        ...settings.templates[l],
+        sendHour: sendHourOf(settings.templates[l].sendHour),
+      },
+    ]),
+  ) as ReviewSettings['templates'],
+});
 /**
  * The queue shown on the page: shipped orders that will get an invitation, when each is due, and how many of them
  * have waited their language's delay (sent by the next runs). Orders that will be skipped (no language, language
@@ -677,6 +697,7 @@ export async function invitationQueue(
   settings: ReviewSettings,
 ) {
   const list: QueuedOrder[] = [];
+  settings = settingsWithHours(settings);
   if (!row?.enabled || !row.start_at)
     return { queued: 0, ready: 0, queueCapped: false, orders: list };
   const db = env.PLATFORM_DB,
@@ -705,10 +726,12 @@ export async function invitationQueue(
           )
         : localeOf(null, c.country);
     if (!locale || !settings.templates[locale].enabled) continue;
-    const due =
-      Date.parse(c.shipped_at) + settings.templates[locale].delayDays * day;
-    // Without a known market the run waits for it, so such an order is not ready yet.
-    const isReady = !!c.has_market && due <= now;
+    const t = settings.templates[locale],
+      due = invitationDueAt(Date.parse(c.shipped_at), t.delayDays, t.sendHour);
+    // Without a known market the run waits for it, so such an order is not ready yet. A due order outside the send
+    // window waits for the window to open.
+    const isReady =
+      !!c.has_market && due <= now && inSendWindow(now, t.sendHour);
     if (isReady) ready++;
     list.push({
       orderId: c.external_id,
@@ -716,7 +739,9 @@ export async function invitationQueue(
       locale,
       country: c.country,
       shippedAt: c.shipped_at,
-      dueAt: new Date(due).toISOString(),
+      dueAt: new Date(
+        due <= now ? nextSendAt(now, t.sendHour) : due,
+      ).toISOString(),
       ready: isReady,
       // Due, but the run waits until the order's market is known.
       waitsForMarket: !c.has_market && due <= now,
@@ -748,12 +773,13 @@ export async function sendReviewInvitations(
     minDelay = Math.min(
       ...reviewLocales.map((l) => settings.templates[l].delayDays),
     );
+  // With a send hour the delay counts calendar days, so an order shipped late on a day can be due a day early.
   const candidates = await pendingOrders(
     db,
     company,
     shop,
     row.start_at,
-    new Date(now - minDelay * day).toISOString(),
+    new Date(Math.min(now, now - (minDelay - 1) * day)).toISOString(),
     200,
   );
   if (!candidates.length || !enabled.length) return { sent: 0 };
@@ -801,7 +827,16 @@ export async function sendReviewInvitations(
       );
       continue;
     }
-    if (Date.parse(c.shipped_at) + template.delayDays * day > now) continue;
+    // Not due yet, or due but outside the chosen hour's window: it waits (unclaimed) for a later run.
+    if (
+      invitationDueAt(
+        Date.parse(c.shipped_at),
+        template.delayDays,
+        template.sendHour,
+      ) > now ||
+      !inSendWindow(now, template.sendHour)
+    )
+      continue;
     // Fully refunded (with or without a cancellation): Shopify's status says so; partly refunded orders are invited.
     if (refunded(order)) {
       await skip(c, name, locale, 'Ordren er refunderet.');
